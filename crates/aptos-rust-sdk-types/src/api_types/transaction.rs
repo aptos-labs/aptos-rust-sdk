@@ -1,22 +1,20 @@
-use serde::{Deserialize, Serialize};
-use tokio::sync::OnceCell;
 use crate::api_types::address::AccountAddress;
 use crate::api_types::chain_id::ChainId;
 use crate::api_types::event::ContractEvent;
 use crate::api_types::hash::HashValue;
-use crate::api_types::identifier::Identifier;
 use crate::api_types::module_id::ModuleId;
 use crate::api_types::numbers::U64;
 use crate::api_types::transaction_authenticator::TransactionAuthenticator;
 use crate::api_types::type_tag::TypeTag;
 use crate::api_types::write_set::WriteSet;
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum TransactionData {
     /// A committed transaction
     OnChain(TransactionOnChainData),
     /// A transaction currently sitting in mempool
-    Pending(Box<SignedTransaction>),
+    Pending(SignedTransaction),
 }
 
 /// A committed transaction
@@ -46,7 +44,7 @@ pub struct TransactionOnChainData {
 /// **IMPORTANT:** The signature of a `SignedTransaction` is not guaranteed to be verified. For a
 /// transaction whose signature is statically guaranteed to be verified, see
 /// [`SignatureCheckedTransaction`].
-#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Debug)]
 pub struct SignedTransaction {
     /// The raw transaction
     raw_txn: RawTransaction,
@@ -58,14 +56,16 @@ pub struct SignedTransaction {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Transaction {
-    PendingTransaction(PendingTransaction),
-    UserTransaction(Box<UserTransaction>),
-    GenesisTransaction(GenesisTransaction),
-    BlockMetadataTransaction(BlockMetadataTransaction),
-    StateCheckpointTransaction(StateCheckpointTransaction),
-    ValidatorTransaction(ValidatorTransaction),
+    UserTransaction(UserTransaction),
 }
 
+// TODO: Create other transaction types, handle serialization
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UserTransaction {
+    info: TransactionInfo,
+    payload: TransactionPayload,
+    authenticator: TransactionAuthenticator,
+}
 
 /// Information related to how a transaction affected the state of the blockchain
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -92,8 +92,7 @@ pub struct TransactionInfo {
 }
 
 /// RawTransaction is the portion of a transaction that a client signs.
-#[derive(
-Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub struct RawTransaction {
     /// Sender's address.
     sender: AccountAddress,
@@ -162,7 +161,7 @@ pub enum TransactionArgument {
 #[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub struct EntryFunction {
     module: ModuleId,
-    function: Identifier,
+    function: String,
     ty_args: Vec<TypeTag>,
     #[serde(with = "vec_bytes")]
     args: Vec<Vec<u8>>,
@@ -196,9 +195,7 @@ pub struct ChangeSet {
     events: Vec<ContractEvent>,
 }
 
-#[derive(
-Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize,
-)]
+#[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub enum RawTransactionWithData {
     MultiAgent {
         raw_txn: RawTransaction,

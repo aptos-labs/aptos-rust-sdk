@@ -3,7 +3,8 @@ use serde_bytes::Serialize;
 use std::fmt::{Debug, Display};
 use std::str::FromStr;
 
-#[derive(Debug, Clone, Copy, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
+#[repr(u8)]
 pub enum ChainId {
     Mainnet = 0,
     Testnet = 1,

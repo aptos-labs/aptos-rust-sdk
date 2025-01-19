@@ -1,5 +1,4 @@
 use crate::api_types::address::AccountAddress;
-use crate::api_types::identifier::String;
 use crate::api_types::module_id::ModuleId;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;

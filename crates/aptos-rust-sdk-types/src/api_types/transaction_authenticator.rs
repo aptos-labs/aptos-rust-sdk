@@ -3,10 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::api_types::address::AccountAddress;
+use crate::api_types::transaction::{RawTransaction, RawTransactionWithData};
 use crate::crypto::ed25519::public_key::Ed25519PublicKey;
 use crate::crypto::ed25519::signature::Ed25519Signature;
 use crate::crypto::hash::HashValue;
-use anyhow::{anyhow, bail, ensure};
+use anyhow::{bail, ensure};
 use rand::rngs::OsRng;
 use rand::Rng;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -14,7 +15,6 @@ use std::fmt;
 use std::hash::Hash;
 use std::str::FromStr;
 use thiserror::Error;
-use crate::api_types::transaction::{RawTransaction, RawTransactionWithData};
 
 /// Maximum number of signatures supported in `TransactionAuthenticator`,
 /// across all `AccountAuthenticator`s included.
@@ -25,6 +25,12 @@ pub const MAX_NUM_OF_SIGS: usize = 32;
 pub enum AuthenticationError {
     /// The number of signatures exceeds the maximum supported.
     MaxSignaturesExceeded,
+}
+
+impl fmt::Display for AuthenticationError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
 }
 
 /// Each transaction submitted to the Aptos blockchain contains a `TransactionAuthenticator`. During
@@ -647,7 +653,7 @@ pub struct MultiKeyAuthenticator {
 impl MultiKeyAuthenticator {
     pub fn new(
         public_keys: MultiKey,
-        signatures: Vec<(u8, AnySignature)>,
+        _signatures: Vec<(u8, AnySignature)>,
     ) -> Result<Self, anyhow::Error> {
         ensure!(
             public_keys.len() < (u8::MAX as usize),
@@ -655,7 +661,7 @@ impl MultiKeyAuthenticator {
             public_keys.len(),
         );
         unimplemented!("Needs aptos bitvec");
-        //let mut signatures_bitmap = aptos_bitvec::BitVec::with_num_bits(public_keys.len() as u16);
+        /*let mut signatures_bitmap = aptos_bitvec::BitVec::with_num_bits(public_keys.len() as u16);
         let mut any_signatures = vec![];
 
         for (idx, signature) in signatures {
@@ -678,7 +684,7 @@ impl MultiKeyAuthenticator {
             public_keys,
             signatures: any_signatures,
             signatures_bitmap,
-        })
+        })*/
     }
 
     pub fn public_keys(&self) -> &MultiKey {

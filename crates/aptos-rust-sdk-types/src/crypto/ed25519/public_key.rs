@@ -2,11 +2,32 @@ use crate::crypto::common::to_hex_string;
 use crate::crypto::ed25519::signature::Ed25519Signature;
 use crate::crypto::traits::PublicKey;
 use ed25519_dalek::{Verifier, VerifyingKey};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt::{Debug, Display, Formatter};
-use serde::{Deserialize, Serialize};
 
-#[derive(Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Hash, Serialize)]
 pub struct Ed25519PublicKey(VerifyingKey);
+
+impl Serialize for Ed25519PublicKey {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.0.as_bytes().serialize(serializer)
+    }
+}
+
+impl Deserialize for Ed25519PublicKey {
+    fn deserialize<'de, D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let vec = Vec::<u8>::deserialize(deserializer)?;
+        VerifyingKey::try_from(vec.as_slice())
+            .map(|inner| Ed25519PublicKey(inner))
+            .map_err(serde::de::Error::custom)
+    }
+}
 
 impl From<VerifyingKey> for Ed25519PublicKey {
     fn from(value: VerifyingKey) -> Self {

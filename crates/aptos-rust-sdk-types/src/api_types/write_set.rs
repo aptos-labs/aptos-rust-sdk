@@ -1,5 +1,4 @@
 use std::collections::{btree_map, BTreeMap};
-use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 use crate::api_types::state_key::StateKey;
 
