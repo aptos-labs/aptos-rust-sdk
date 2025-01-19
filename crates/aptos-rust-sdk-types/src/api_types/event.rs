@@ -8,13 +8,13 @@ pub struct EventKey {
     account_address: AccountAddress,
 }
 
-#[derive(Hash, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Hash, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub enum ContractEvent {
     V1(ContractEventV1),
     V2(ContractEventV2),
 }
 
-#[derive(Hash, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Hash, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ContractEventV1 {
     /// The unique key that the event was emitted to
     key: EventKey,
@@ -28,7 +28,7 @@ pub struct ContractEventV1 {
 }
 
 /// Entry produced via a call to the `emit` builtin.
-#[derive(Hash, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Hash, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct ContractEventV2 {
     /// The type of the data
     type_tag: TypeTag,

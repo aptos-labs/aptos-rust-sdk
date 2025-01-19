@@ -135,7 +135,7 @@ pub enum TransactionPayload {
     Multisig(Multisig),
 }
 
-#[derive(Clone, Hash, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Script {
     #[serde(with = "serde_bytes")]
     code: Vec<u8>,
@@ -143,7 +143,7 @@ pub struct Script {
     args: Vec<TransactionArgument>,
 }
 
-#[derive(Clone, Hash, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub enum TransactionArgument {
     U8(u8),
     U64(u64),
@@ -163,7 +163,7 @@ pub struct EntryFunction {
     module: ModuleId,
     function: String,
     ty_args: Vec<TypeTag>,
-    #[serde(with = "vec_bytes")]
+    // TODO: #[serde(with = "vec_bytes")]
     args: Vec<Vec<u8>>,
 }
 

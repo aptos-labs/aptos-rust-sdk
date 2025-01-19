@@ -1,8 +1,8 @@
-use serde::{Deserialize, Deserializer, Serializer};
-use serde_bytes::Serialize;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt::{Debug, Display};
 use std::str::FromStr;
 
+// TODO: Handle plaintext deserialize / serialize
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
 #[repr(u8)]
 pub enum ChainId {
@@ -53,11 +53,11 @@ impl<'de> Deserialize<'de> for ChainId {
         D: Deserializer<'de>,
     {
         let str = String::deserialize(deserializer)?;
-        Ok(match &str {
+        Ok(match str.as_str() {
             MAINNET => ChainId::Mainnet,
             TESTNET => ChainId::Testnet,
             TESTING => ChainId::Testing,
-            other => ChainId::Other(u8::from_str(other)?),
+            other => ChainId::Other(u8::from_str(other).map_err(serde::de::Error::custom)?),
         })
     }
 }

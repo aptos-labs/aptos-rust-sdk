@@ -1,6 +1,9 @@
 use crate::crypto::traits::Signature;
+use crate::serializable::SerializableFixedBytes;
 use anyhow::anyhow;
 use ed25519_dalek::ed25519::SignatureBytes;
+use serde::de::Error;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::cmp::Ordering;
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::{Hash, Hasher};
@@ -57,6 +60,32 @@ impl Debug for Ed25519Signature {
 impl Display for Ed25519Signature {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "0x{}", hex::encode(self.0.to_bytes().as_slice()))
+    }
+}
+
+impl Serialize for Ed25519Signature {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        SerializableFixedBytes(self.inner().to_bytes()).serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for Ed25519Signature {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        SerializableFixedBytes::<64>::deserialize(deserializer)
+            .map_err(Error::custom)
+            .and_then(|bytes| Ed25519Signature::try_from(bytes.0).map_err(Error::custom))
+    }
+}
+
+impl Into<Vec<u8>> for &Ed25519Signature {
+    fn into(self) -> Vec<u8> {
+        self.0.to_vec()
     }
 }
 
