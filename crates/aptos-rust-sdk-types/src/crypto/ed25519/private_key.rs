@@ -21,8 +21,8 @@ impl From<SigningKey> for Ed25519PrivateKey {
 }
 
 impl PrivateKey<Ed25519PublicKey, Ed25519Signature> for Ed25519PrivateKey {
-    fn sign(&self, bytes: &[u8]) -> Ed25519Signature {
-        let signature = self.0.sign(bytes);
+    fn sign<T: AsRef<[u8]>>(&self, bytes: T) -> Ed25519Signature {
+        let signature = self.0.sign(bytes.as_ref());
         Ed25519Signature::from(signature)
     }
 

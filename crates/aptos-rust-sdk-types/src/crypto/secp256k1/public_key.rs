@@ -23,7 +23,11 @@ impl TryFrom<&[u8; 65]> for Secp256k1PublicKey {
 }
 
 impl PublicKey<Secp256k1Signature> for Secp256k1PublicKey {
-    fn verify(&self, message: &[u8], signature: &Secp256k1Signature) -> anyhow::Result<()> {
+    fn verify<T: AsRef<[u8]>>(
+        &self,
+        message: T,
+        signature: &Secp256k1Signature,
+    ) -> anyhow::Result<()> {
         // Prevent malleability attacks, low order only. The library only signs in low
         // order, so this was done intentionally.
 

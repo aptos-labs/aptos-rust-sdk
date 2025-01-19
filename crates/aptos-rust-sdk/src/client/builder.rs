@@ -1,7 +1,5 @@
 use crate::client::config::AptosNetwork;
 use crate::client::rest_api::AptosFullnodeClient;
-use crate::headers::X_APTOS_CLIENT;
-use crate::AptosResult;
 use reqwest::{
     header::{self, HeaderMap, HeaderName, HeaderValue},
     Client as ReqwestClient, ClientBuilder as ReqwestClientBuilder,
@@ -9,6 +7,8 @@ use reqwest::{
 use std::env;
 use std::str::FromStr;
 use std::time::Duration;
+use aptos_rust_sdk_types::AptosResult;
+use aptos_rust_sdk_types::headers::X_APTOS_CLIENT;
 
 const X_APTOS_SDK_HEADER_VALUE: &str = concat!("aptos-rust-sdk/", env!("CARGO_PKG_VERSION"));
 const DEFAULT_REQUEST_TIMEOUT_SECONDS: u64 = 5;

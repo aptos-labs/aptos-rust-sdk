@@ -1,13 +1,13 @@
 use crate::client::builder::AptosClientBuilder;
 use crate::client::config::AptosNetwork;
 use crate::client::response::{FullnodeResponse, ParsableResponse};
-use crate::mime_types::{ACCEPT_BCS, JSON};
-use crate::state::State;
-use crate::AptosResult;
 use reqwest::header::ACCEPT;
 use reqwest::Client as ReqwestClient;
 use serde::de::DeserializeOwned;
 use url::Url;
+use aptos_rust_sdk_types::AptosResult;
+use aptos_rust_sdk_types::mime_types::{ACCEPT_BCS, JSON};
+use aptos_rust_sdk_types::state::State;
 
 /// The Aptos client used for interacting with the blockchain
 #[derive(Debug, Clone)]

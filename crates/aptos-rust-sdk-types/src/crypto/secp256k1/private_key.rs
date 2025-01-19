@@ -24,7 +24,7 @@ impl From<SecretKey> for Secp256k1PrivateKey {
 }
 
 impl PrivateKey<Secp256k1PublicKey, Secp256k1Signature> for Secp256k1PrivateKey {
-    fn sign(&self, bytes: &[u8]) -> Secp256k1Signature {
+    fn sign<T: AsRef<[u8]>>(&self, bytes: T) -> Secp256k1Signature {
         let message = bytes_to_message(bytes).expect("SHA3-256 should never fail");
         let (signature, _) = libsecp256k1::sign(&message, &self.0);
         Secp256k1Signature::from(signature)
@@ -58,8 +58,8 @@ impl FromStr for Secp256k1PrivateKey {
     }
 }
 
-pub fn bytes_to_message(message: &[u8]) -> anyhow::Result<libsecp256k1::Message> {
-    let message_digest = HashValue::sha3_256(message);
+pub fn bytes_to_message<T: AsRef<[u8]>>(message: T) -> anyhow::Result<libsecp256k1::Message> {
+    let message_digest = HashValue::sha3_256(message.as_ref());
     Ok(libsecp256k1::Message::parse_slice(
         message_digest.as_slice(),
     )?)

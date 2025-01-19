@@ -123,15 +123,10 @@ impl TransactionAuthenticator {
         }
         match self {
             Self::Ed25519 {
-                public_key,
-                signature,
+                ..
             } => unimplemented!("TODO"), //signature.verify(raw_txn, public_key),
             Self::FeePayer {
-                sender,
-                secondary_signer_addresses,
-                secondary_signers,
-                fee_payer_address,
-                fee_payer_signer,
+                ..
             } => {
                 // In the fee payer model, the fee payer address can be optionally signed. We
                 // realized when we designed the fee payer model, that we made it too restrictive
@@ -174,9 +169,7 @@ impl TransactionAuthenticator {
                 unimplemented!("TODO")
             }
             Self::MultiAgent {
-                sender,
-                secondary_signer_addresses,
-                secondary_signers,
+                ..
             } => {
                 /*let message = RawTransactionWithData::new_multi_agent(
                     raw_txn.clone(),
@@ -470,8 +463,7 @@ impl AccountAuthenticator {
     pub fn verify<T: Serialize + Hash>(&self, message: &T) -> Result<(), anyhow::Error> {
         match self {
             Self::Ed25519 {
-                public_key,
-                signature,
+                ..
             } => unimplemented!("TODO"), //signature.verify(message, public_key),
             Self::SingleKey { authenticator } => authenticator.verify(message),
             Self::MultiKey { authenticator } => authenticator.verify(message),

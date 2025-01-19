@@ -1,12 +1,12 @@
 // Copyright © Aptos Foundation
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::error::{AptosError, RestError};
-use crate::state::State;
-use crate::AptosResult;
 use reqwest::StatusCode;
 use serde::de::DeserializeOwned;
 use std::fmt::Debug;
+use aptos_rust_sdk_types::AptosResult;
+use aptos_rust_sdk_types::error::{AptosError, RestError};
+use aptos_rust_sdk_types::state::State;
 
 /// A response type to hold fullnode responses with strong typing
 #[derive(Debug)]

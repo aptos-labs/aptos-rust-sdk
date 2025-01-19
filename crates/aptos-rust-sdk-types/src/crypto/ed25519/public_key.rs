@@ -65,8 +65,8 @@ impl TryFrom<&[u8; 32]> for Ed25519PublicKey {
 }
 
 impl PublicKey<Ed25519Signature> for Ed25519PublicKey {
-    fn verify(&self, message: &[u8], signature: &Ed25519Signature) -> anyhow::Result<()> {
-        Ok(self.0.verify(message, signature.inner())?)
+    fn verify<T: AsRef<[u8]>>(&self, message: T, signature: &Ed25519Signature) -> anyhow::Result<()> {
+        Ok(self.0.verify(message.as_ref(), signature.inner())?)
     }
 }
 
@@ -78,7 +78,7 @@ impl Debug for Ed25519PublicKey {
 
 impl Display for Ed25519PublicKey {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&to_hex_string(self.0.as_bytes()))
+        f.write_str(&to_hex_string(self))
     }
 }
 
