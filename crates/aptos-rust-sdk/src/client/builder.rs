@@ -23,7 +23,7 @@ pub struct AptosClientBuilder {
 
 impl AptosClientBuilder {
     /// A hidden constructor, please use `AptosClient::builder()` to create
-    pub(crate) fn new(network: AptosNetwork) -> Self {
+    pub fn new(network: AptosNetwork) -> Self {
         let mut headers = HeaderMap::new();
         headers.insert(
             X_APTOS_CLIENT,

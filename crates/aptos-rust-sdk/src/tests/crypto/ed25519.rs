@@ -1,9 +1,9 @@
-use crate::crypto::ed25519::private_key::Ed25519PrivateKey;
-use crate::crypto::ed25519::public_key::Ed25519PublicKey;
-use crate::crypto::ed25519::signature::{
-    check_signature_canonical, non_canonical_signature, Ed25519Signature,
+use aptos_rust_sdk_types::crypto::ed25519::private_key::Ed25519PrivateKey;
+use aptos_rust_sdk_types::crypto::ed25519::public_key::Ed25519PublicKey;
+use aptos_rust_sdk_types::crypto::ed25519::signature::{
+    check_signature_canonical, Ed25519Signature,
 };
-use crate::crypto::traits::{PrivateKey, PublicKey};
+use aptos_rust_sdk_types::crypto::traits::{PrivateKey, PublicKey};
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use rand::rngs::OsRng;
 use std::str::FromStr;
@@ -85,6 +85,7 @@ fn test_public_key_load() {
 
 #[test]
 fn test_signature_malleability() {
+    use aptos_rust_sdk_types::crypto::ed25519::signature::non_canonical_signature;
     let non_canonical = non_canonical_signature();
     assert!(!check_signature_canonical(&non_canonical));
 

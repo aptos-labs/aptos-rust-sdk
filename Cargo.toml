@@ -2,7 +2,8 @@
 resolver = "2"
 
 members = [
-    "crates/aptos-rust-sdk", "crates/aptos-rust-sdk-types",
+    "crates/aptos-rust-sdk",
+    "crates/aptos-rust-sdk-types",
     "crates/examples"
 ]
 
@@ -12,7 +13,8 @@ members = [
 #
 # For more, see the "Conditional compilation for tests" section in documentation/coding_guidelines.md.
 default-members = [
-    "crates/aptos-rust-sdk"
+    "crates/aptos-rust-sdk",
+    "crates/aptos-rust-sdk-types"
 ]
 
 # All workspace members should inherit these keys
@@ -30,6 +32,7 @@ rust-version = "1.83.0"
 # Internal crate dependencies.
 # Please do not add any test features here: they should be declared by the individual crate.
 aptos-rust-sdk = { path = "crates/aptos-rust-sdk" }
+aptos-rust-sdk-types = { path = "crates/aptos-rust-sdk-types" }
 
 # External crate dependencies.
 # Please do not add any test features here: they should be declared by the individual crate.

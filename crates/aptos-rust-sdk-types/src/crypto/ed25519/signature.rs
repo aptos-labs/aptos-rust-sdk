@@ -101,7 +101,6 @@ pub fn check_signature_canonical(s: &[u8]) -> bool {
     false
 }
 
-#[cfg(test)]
 pub fn non_canonical_signature() -> [u8; 64] {
     let vec: Vec<u8> = vec![L, L].into_iter().flatten().collect();
     vec.try_into().unwrap()
