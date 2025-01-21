@@ -5,3 +5,5 @@ edition = "2021"
 
 [dependencies]
 aptos-rust-sdk = { workspace = true }
+aptos-rust-sdk-types = { workspace = true }
+tokio = { workspace = true }
