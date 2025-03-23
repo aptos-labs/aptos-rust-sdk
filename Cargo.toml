@@ -60,7 +60,7 @@ hex = { version = "0.4.3", features = ["serde"] }
 hkdf = "0.10.0"
 libsecp256k1 = "0.7.0"
 more-asserts = "0.3.0"
-neptune = { version = "13.0.0", default_features = false }
+neptune = { version = "13.0.0", default-features = false }
 num = "0.4.0"
 num-bigint = { version = "0.3.2", features = ["rand"] }
 num-integer = "0.1.42"
@@ -88,15 +88,15 @@ serde_json = { version = "1.0.81", features = [
     "preserve_order",
     "arbitrary_precision",
 ] } # Note: arbitrary_precision is required to parse u256 in JSON
-serde-name = "0.1.1"
+serde-name = "0.2.1"
 static_assertions = "1.1.0"
 syn = { version = "1.0.92", features = ["derive", "extra-traits"] }
-thiserror = "1.0.37"
+thiserror = "2.0.12"
 tiny-keccak = { version = "2.0.2", features = ["keccak", "sha3"] }
-trybuild = "1.0.80"
-tokio = { version = "1.35.1", features = ["full"] }
-typenum = "1.17.0"
-url = { version = "2.4.0", features = ["serde"] }
+trybuild = "1.0.104"
+tokio = { version = "1.44.1", features = ["full"] }
+typenum = "1.18.0"
+url = { version = "2.5.4", features = ["serde"] }
 
 [profile.release]
 debug = false
