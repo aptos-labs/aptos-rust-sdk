@@ -90,7 +90,7 @@ serde_json = { version = "1.0.81", features = [
 ] } # Note: arbitrary_precision is required to parse u256 in JSON
 serde-name = "0.2.1"
 static_assertions = "1.1.0"
-syn = { version = "1.0.92", features = ["derive", "extra-traits"] }
+syn = { version = "1.0.109", features = ["derive", "extra-traits"] }
 thiserror = "2.0.12"
 tiny-keccak = { version = "2.0.2", features = ["keccak", "sha3"] }
 trybuild = "1.0.104"
