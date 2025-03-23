@@ -112,7 +112,7 @@ dependencies = [
  "proptest",
  "proptest-derive",
  "rand 0.7.3",
- "rand_core 0.5.1",
+ "rand_core 0.9.3",
  "serde",
  "serde-name",
  "serde_bytes",
@@ -2096,6 +2096,12 @@ checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
 dependencies = [
  "getrandom 0.2.15",
 ]
+
+[[package]]
+name = "rand_core"
+version = "0.9.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "99d9a13982dcf210057a8a78572b2217b667c3beacbf3a0d8b454f6f82837d38"
 
 [[package]]
 name = "rand_hc"

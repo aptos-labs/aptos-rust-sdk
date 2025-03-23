@@ -8,16 +8,16 @@ use crate::{
     validatable::{Validatable, Validate},
     Signature, SigningKey, Uniform,
 };
-use rand::{distributions::Alphanumeric, Rng};
-use rand_core::OsRng;
+use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use std::{convert::TryFrom, iter::zip};
+use rand::rngs::ThreadRng;
 
 /// Tests that an individual signature share computed correctly on a message m passes verification on m.
 /// Tests that a signature share computed on a different message m' fails verification on m.
 /// Tests that a signature share fails verification under the wrong public key.
 #[test]
 fn bls12381_sigshare_verify() {
-    let mut rng = OsRng;
+    let mut rng = thread_rng();
 
     let message = b"Hello world";
     let message_wrong = b"Wello Horld";
@@ -58,7 +58,7 @@ fn bls12381_sigshare_verify() {
 /// Tests that a PoP for PK 1 does NOT verify under PK 2.
 #[test]
 fn bls12381_pop_verify() {
-    let mut rng = OsRng;
+    let mut rng = thread_rng();
 
     let keypair1 = KeyPair::<PrivateKey, PublicKey>::generate(&mut rng);
 
@@ -85,7 +85,7 @@ fn bls12381_pop_verify() {
 }
 
 /// Generates `num_signers` BLS key-pairs.
-fn bls12381_keygen(num_signers: usize, mut rng: &mut OsRng) -> Vec<KeyPair<PrivateKey, PublicKey>> {
+fn bls12381_keygen(num_signers: usize, mut rng: &mut ThreadRng) -> Vec<KeyPair<PrivateKey, PublicKey>> {
     let mut key_pairs = vec![];
     for _ in 0..num_signers {
         key_pairs.push(KeyPair::<PrivateKey, PublicKey>::generate(&mut rng));
@@ -94,7 +94,7 @@ fn bls12381_keygen(num_signers: usize, mut rng: &mut OsRng) -> Vec<KeyPair<Priva
 }
 
 /// Returns a 256-character unique string that can be signed by the BLS API.
-fn random_message_for_signing(rng: &mut OsRng) -> TestAptosCrypto {
+fn random_message_for_signing(rng: &mut ThreadRng) -> TestAptosCrypto {
     TestAptosCrypto(
         rng.sample_iter(&Alphanumeric)
             .take(256)
@@ -104,7 +104,7 @@ fn random_message_for_signing(rng: &mut OsRng) -> TestAptosCrypto {
 }
 
 /// Returns several 256-character unique strings that can be aggregate-signed by the BLS API.
-fn random_messages_for_signing(rng: &mut OsRng, n: usize) -> Vec<TestAptosCrypto> {
+fn random_messages_for_signing(rng: &mut ThreadRng, n: usize) -> Vec<TestAptosCrypto> {
     (0..n)
         .map(|_| random_message_for_signing(rng))
         .collect::<Vec<TestAptosCrypto>>()
@@ -114,7 +114,7 @@ fn random_messages_for_signing(rng: &mut OsRng, n: usize) -> Vec<TestAptosCrypto
 /// correctly on m but fails verification on a different m'.
 #[test]
 fn bls12381_multisig_should_verify() {
-    let mut rng = OsRng;
+    let mut rng = thread_rng();
 
     let message = random_message_for_signing(&mut rng);
     let message_wrong = random_message_for_signing(&mut rng);
@@ -145,7 +145,7 @@ fn bls12381_multisig_should_verify() {
 /// Tests signature (de)serialization
 #[test]
 fn bls12381_serialize_sig() {
-    let mut rng = OsRng;
+    let mut rng = thread_rng();
     let message = b"Hello world";
     let key_pair = KeyPair::<PrivateKey, PublicKey>::generate(&mut rng);
     let signature = key_pair.private_key.sign_arbitrary_message(message);
@@ -160,7 +160,7 @@ fn bls12381_serialize_sig() {
 /// Tests that an aggregate signature on `n` different messages verifies correctly.
 #[test]
 fn bls12381_aggsig_should_verify() {
-    let mut rng = OsRng;
+    let mut rng = thread_rng();
     let num_signers = 1000;
 
     let messages = random_messages_for_signing(&mut rng, num_signers);
@@ -193,7 +193,7 @@ fn bls12381_aggsig_should_verify() {
 /// Tests that an aggregate signature on 0 messages or PKs does NOT verify.
 #[test]
 fn bls12381_aggsig_zero_messages_or_pks_does_not_verify() {
-    let mut rng = OsRng;
+    let mut rng = thread_rng();
 
     let message = random_message_for_signing(&mut rng);
 
@@ -225,7 +225,7 @@ fn bls12381_aggsig_zero_messages_or_pks_does_not_verify() {
 /// NOT verify.
 #[test]
 fn bls12381_multisig_wrong_messages_aggregated() {
-    let mut rng = OsRng;
+    let mut rng = thread_rng();
 
     let message = random_message_for_signing(&mut rng);
     let message_wrong = random_message_for_signing(&mut rng);
@@ -258,7 +258,7 @@ fn bls12381_multisig_wrong_messages_aggregated() {
 
 /// Returns two different sets of signer IDs (i.e., numbers in 0..num_signers)
 pub fn random_different_signer_sets(
-    rng: &mut OsRng,
+    rng: &mut ThreadRng,
     num_signers: usize,
     subset_size: usize,
 ) -> (Vec<usize>, Vec<usize>) {
@@ -276,7 +276,7 @@ pub fn random_different_signer_sets(
 /// aggregated from a different set B of signers.
 #[test]
 fn bls12381_multisig_wrong_pks_aggregated() {
-    let mut rng = OsRng;
+    let mut rng = thread_rng();
 
     let message1 = random_message_for_signing(&mut rng);
     let message2 = random_message_for_signing(&mut rng);
@@ -323,7 +323,7 @@ fn bls12381_multisig_wrong_pks_aggregated() {
 /// Tests that a randomly generated multisig does not verify under a randomly generated PK.
 #[test]
 fn bls12381_random_multisig_dont_verify_with_random_pk() {
-    let mut rng = OsRng;
+    let mut rng = thread_rng();
 
     let message = random_message_for_signing(&mut rng);
     let keypair = KeyPair::<PrivateKey, PublicKey>::generate(&mut rng);
@@ -340,7 +340,7 @@ fn bls12381_random_multisig_dont_verify_with_random_pk() {
 
 #[test]
 fn bls12381_validatable_pk() {
-    let mut rng = OsRng;
+    let mut rng = thread_rng();
 
     // Test that prime-order points pass the validate() call
     let keypair = KeyPair::<PrivateKey, PublicKey>::generate(&mut rng);
@@ -381,7 +381,7 @@ fn bls12381_validatable_pk() {
 /// Not an actual test: only used to generate test cases for testing the BLS Move module in
 /// aptos-move/framework/move-stdlib/sources/signer.move
 fn bls12381_sample_pop() {
-    let mut rng = OsRng;
+    let mut rng = thread_rng();
 
     let num = 5;
 
@@ -412,7 +412,7 @@ fn bls12381_sample_pop() {
 /// message `m` rather than on its hash derived using the `CryptoHasher` trait. This makes it easier
 /// to verify the signature in our Move code, which uses `verify_arbitrary_message`.
 fn bls12381_sample_signature() {
-    let mut rng = OsRng;
+    let mut rng = thread_rng();
 
     let keypair = KeyPair::<PrivateKey, PublicKey>::generate(&mut rng);
     let sk = keypair.private_key;
@@ -449,7 +449,7 @@ fn bls12381_sample_signature_verifies() {
 #[test]
 #[ignore]
 fn bls12381_sample_doc_test_for_normal_sigs() {
-    let mut rng = OsRng;
+    let mut rng = thread_rng();
 
     // A signer locally generated their own BLS key-pair via:
     let kp = KeyPair::<PrivateKey, PublicKey>::generate(&mut rng);
@@ -481,7 +481,7 @@ fn bls12381_sample_doc_test_for_normal_sigs() {
 /// Not an actual test: only used to generate test cases for testing the BLS Move module in
 /// aptos-move/framework/move-stdlib/sources/signer.move
 fn bls12381_sample_aggregate_pk_and_aggsig() {
-    let mut rng = OsRng;
+    let mut rng = thread_rng();
 
     let num = 5;
     let mut messages = vec![];
@@ -535,7 +535,7 @@ fn bls12381_sample_aggregate_pk_and_aggsig() {
 /// Not an actual test: only used to generate test cases for testing the BLS Move module in
 /// aptos-move/framework/move-stdlib/sources/signer.move
 fn bls12381_sample_aggregate_pk_and_multisig() {
-    let mut rng = OsRng;
+    let mut rng = thread_rng();
 
     let num = 5;
     let message = b"Hello, Aptoverse!";
@@ -584,7 +584,7 @@ fn bls12381_sample_aggregate_pk_and_multisig() {
 /// Not an actual test: only used to generate test cases for testing the BLS Move module in
 /// aptos-move/framework/move-stdlib/sources/signer.move
 fn bls12381_sample_aggregate_sigs() {
-    let mut rng = OsRng;
+    let mut rng = thread_rng();
 
     let num = 5;
     let message = b"Hello, Aptoverse!";

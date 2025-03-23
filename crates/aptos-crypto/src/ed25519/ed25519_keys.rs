@@ -18,6 +18,7 @@ use ed25519_dalek::ExpandedSecretKey;
 use proptest::prelude::*;
 use serde::Serialize;
 use std::fmt;
+use rand::CryptoRng;
 
 /// An Ed25519 private key
 #[derive(DeserializeKey, SerializeKey, SilentDebug, SilentDisplay)]
@@ -148,7 +149,7 @@ impl SigningKey for Ed25519PrivateKey {
 impl Uniform for Ed25519PrivateKey {
     fn generate<R>(rng: &mut R) -> Self
     where
-        R: ::rand::RngCore + ::rand::CryptoRng + ::rand_core::CryptoRng + ::rand_core::RngCore,
+        R: rand::RngCore + CryptoRng
     {
         Ed25519PrivateKey(ed25519_dalek::SecretKey::generate(rng))
     }

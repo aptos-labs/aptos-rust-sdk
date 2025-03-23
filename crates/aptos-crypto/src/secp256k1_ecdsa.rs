@@ -11,6 +11,7 @@ use crate::{
 use anyhow::{anyhow, Result};
 use aptos_crypto_derive::{key_name, DeserializeKey, SerializeKey, SilentDebug, SilentDisplay};
 use core::convert::TryFrom;
+use rand::{CryptoRng, RngCore};
 use serde::Serialize;
 
 /// libsecp256k1 expects pre-hashed messages of 32-bytes.
@@ -104,7 +105,7 @@ impl traits::SigningKey for PrivateKey {
 impl traits::Uniform for PrivateKey {
     fn generate<R>(rng: &mut R) -> Self
     where
-        R: ::rand::RngCore + ::rand::CryptoRng + ::rand_core::CryptoRng + ::rand_core::RngCore,
+        R: RngCore + CryptoRng
     {
         loop {
             let mut ret = [0u8; PRIVATE_KEY_LENGTH];

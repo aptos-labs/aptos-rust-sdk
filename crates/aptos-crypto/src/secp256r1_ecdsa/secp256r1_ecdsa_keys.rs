@@ -19,6 +19,7 @@ use p256::{self, ecdsa::signature::Signer};
 use proptest::prelude::*;
 use serde::Serialize;
 use std::fmt;
+use rand::CryptoRng;
 
 /// A secp256r1_ecdsa private key
 #[derive(DeserializeKey, SerializeKey, SilentDebug, SilentDisplay)]
@@ -134,7 +135,7 @@ impl Uniform for PrivateKey {
     // `RustCrypto` RngCore trait
     fn generate<R>(rng: &mut R) -> Self
     where
-        R: ::rand::RngCore + ::rand::CryptoRng + ::rand_core::CryptoRng + ::rand_core::RngCore,
+        R: rand::RngCore + CryptoRng
     {
         let mut bytes = [0u8; PRIVATE_KEY_LENGTH * 2];
         rng.fill_bytes(&mut bytes);

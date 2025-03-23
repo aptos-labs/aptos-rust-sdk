@@ -1,19 +1,19 @@
 // Copyright © Aptos Foundation
 // SPDX-License-Identifier: Apache-2.0
 
+use rand::thread_rng;
 use crate::{
     secp256k1_ecdsa::{self, PrivateKey, PublicKey},
     test_utils::KeyPair,
     Signature, SigningKey, Uniform,
 };
-use rand_core::OsRng;
 
 /// Tests that an individual signature share computed correctly on a message m passes verification on m.
 /// Tests that a signature share computed on a different message m' fails verification on m.
 /// Tests that a signature share fails verification under the wrong public key.
 #[test]
 fn basic() {
-    let mut rng = OsRng;
+    let mut rng = thread_rng();
 
     let message = b"Hello world";
     let message_wrong = b"Wello Horld";
@@ -53,7 +53,7 @@ fn basic() {
 /// Tests signature (de)serialization
 #[test]
 fn serialization() {
-    let mut rng = OsRng;
+    let mut rng = thread_rng();
     let message = b"Hello world";
     let key_pair = KeyPair::<PrivateKey, PublicKey>::generate(&mut rng);
 
@@ -81,7 +81,7 @@ fn serialization() {
 /// Tests malleability
 #[test]
 fn malleability() {
-    let mut rng = OsRng;
+    let mut rng = thread_rng();
     let message = b"Hello world";
     let key_pair = KeyPair::<PrivateKey, PublicKey>::generate(&mut rng);
 
