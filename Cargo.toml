@@ -57,7 +57,7 @@ digest = "0.9.0"
 ed25519-dalek = { version = "1.0.1", features = ["std", "serde"] }
 ff = { version = "0.13.1", features = ["derive"] }
 hex = { version = "0.4.3", features = ["serde"] }
-hkdf = "0.10.0"
+hkdf = "0.11.0"
 libsecp256k1 = "0.7.0"
 more-asserts = "0.3.0"
 neptune = { version = "13.0.0", default-features = false }
