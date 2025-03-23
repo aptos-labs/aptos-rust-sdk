@@ -5,10 +5,13 @@
 //! in different formats used by the blockchain.
 
 use crate::{traits::ValidCryptoMaterialStringExt, ValidCryptoMaterial};
+use base64::engine::{GeneralPurpose, GeneralPurposeConfig};
+use base64::Engine;
 use core::{
     fmt::{Display, Formatter},
     str::FromStr,
 };
+use once_cell::sync::Lazy;
 use std::{fmt::Debug, path::Path};
 use thiserror::Error;
 
@@ -47,6 +50,9 @@ pub enum EncodingType {
     Base64,
 }
 
+const BASE_64_ENCODER: Lazy<GeneralPurpose> =
+    Lazy::new(|| GeneralPurpose::new(&base64::alphabet::STANDARD, GeneralPurposeConfig::new()));
+
 impl EncodingType {
     /// Encodes `Key` into one of the `EncodingType`s
     pub fn encode_key<Key: ValidCryptoMaterial>(
@@ -57,7 +63,7 @@ impl EncodingType {
         Ok(match self {
             EncodingType::Hex => hex::encode_upper(key.to_bytes()).into_bytes(),
             EncodingType::BCS => bcs::to_bytes(key).map_err(|err| EncodingError::BCS(name, err))?,
-            EncodingType::Base64 => base64::encode(key.to_bytes()).into_bytes(),
+            EncodingType::Base64 => BASE_64_ENCODER.encode(key.to_bytes()).into_bytes(),
         })
     }
 
@@ -87,7 +93,8 @@ impl EncodingType {
             }
             EncodingType::Base64 => {
                 let string = String::from_utf8(data)?;
-                let bytes = base64::decode(string.trim())
+                let bytes = BASE_64_ENCODER
+                    .decode(string.trim())
                     .map_err(|err| EncodingError::UnableToParse(name, err.to_string()))?;
                 Key::try_from(bytes.as_slice()).map_err(|err| {
                     EncodingError::UnableToParse(name, format!("Failed to parse key {:?}", err))
