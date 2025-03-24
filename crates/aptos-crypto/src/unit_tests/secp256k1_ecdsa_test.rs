@@ -1,12 +1,12 @@
 // Copyright © Aptos Foundation
 // SPDX-License-Identifier: Apache-2.0
 
-use rand::thread_rng;
 use crate::{
     secp256k1_ecdsa::{self, PrivateKey, PublicKey},
     test_utils::KeyPair,
     Signature, SigningKey, Uniform,
 };
+use rand::thread_rng;
 
 /// Tests that an individual signature share computed correctly on a message m passes verification on m.
 /// Tests that a signature share computed on a different message m' fails verification on m.

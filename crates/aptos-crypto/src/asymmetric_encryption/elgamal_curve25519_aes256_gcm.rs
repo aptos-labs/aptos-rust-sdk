@@ -136,10 +136,10 @@ impl AsymmetricEncryption for ElGamalCurve25519Aes256Gcm {
 
 #[cfg(test)]
 mod tests {
-    use rand::thread_rng;
     use crate::asymmetric_encryption::{
         elgamal_curve25519_aes256_gcm::ElGamalCurve25519Aes256Gcm, AsymmetricEncryption,
     };
+    use rand::thread_rng;
 
     #[test]
     fn gen_enc_dec() {

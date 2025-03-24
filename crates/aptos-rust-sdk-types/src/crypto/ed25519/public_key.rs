@@ -65,7 +65,11 @@ impl TryFrom<&[u8; 32]> for Ed25519PublicKey {
 }
 
 impl PublicKey<Ed25519Signature> for Ed25519PublicKey {
-    fn verify<T: AsRef<[u8]>>(&self, message: T, signature: &Ed25519Signature) -> anyhow::Result<()> {
+    fn verify<T: AsRef<[u8]>>(
+        &self,
+        message: T,
+        signature: &Ed25519Signature,
+    ) -> anyhow::Result<()> {
         Ok(self.0.verify(message.as_ref(), signature.inner())?)
     }
 }

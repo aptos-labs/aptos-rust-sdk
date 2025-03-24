@@ -105,7 +105,7 @@ impl traits::SigningKey for PrivateKey {
 impl traits::Uniform for PrivateKey {
     fn generate<R>(rng: &mut R) -> Self
     where
-        R: RngCore + CryptoRng
+        R: RngCore + CryptoRng,
     {
         loop {
             let mut ret = [0u8; PRIVATE_KEY_LENGTH];

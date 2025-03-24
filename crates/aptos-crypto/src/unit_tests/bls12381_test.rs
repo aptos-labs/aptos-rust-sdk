@@ -8,9 +8,9 @@ use crate::{
     validatable::{Validatable, Validate},
     Signature, SigningKey, Uniform,
 };
+use rand::rngs::ThreadRng;
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use std::{convert::TryFrom, iter::zip};
-use rand::rngs::ThreadRng;
 
 /// Tests that an individual signature share computed correctly on a message m passes verification on m.
 /// Tests that a signature share computed on a different message m' fails verification on m.
@@ -85,7 +85,10 @@ fn bls12381_pop_verify() {
 }
 
 /// Generates `num_signers` BLS key-pairs.
-fn bls12381_keygen(num_signers: usize, mut rng: &mut ThreadRng) -> Vec<KeyPair<PrivateKey, PublicKey>> {
+fn bls12381_keygen(
+    num_signers: usize,
+    mut rng: &mut ThreadRng,
+) -> Vec<KeyPair<PrivateKey, PublicKey>> {
     let mut key_pairs = vec![];
     for _ in 0..num_signers {
         key_pairs.push(KeyPair::<PrivateKey, PublicKey>::generate(&mut rng));

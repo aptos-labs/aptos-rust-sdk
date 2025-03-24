@@ -1,7 +1,7 @@
 use crate::crypto::ed25519::public_key::Ed25519PublicKey;
 use crate::crypto::ed25519::signature::Ed25519Signature;
 use crate::crypto::traits::PrivateKey;
-use ed25519_dalek::{Signer};
+use ed25519_dalek::Signer;
 use hex::FromHex;
 use std::fmt::{Debug, Display, Formatter};
 use std::str::FromStr;

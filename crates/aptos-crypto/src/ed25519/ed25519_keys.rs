@@ -16,9 +16,9 @@ use curve25519_dalek::{edwards::CompressedEdwardsY, scalar::Scalar};
 use ed25519_dalek::ExpandedSecretKey;
 #[cfg(any(test, feature = "fuzzing"))]
 use proptest::prelude::*;
+use rand::CryptoRng;
 use serde::Serialize;
 use std::fmt;
-use rand::CryptoRng;
 
 /// An Ed25519 private key
 #[derive(DeserializeKey, SerializeKey, SilentDebug, SilentDisplay)]
@@ -149,7 +149,7 @@ impl SigningKey for Ed25519PrivateKey {
 impl Uniform for Ed25519PrivateKey {
     fn generate<R>(rng: &mut R) -> Self
     where
-        R: rand::RngCore + CryptoRng
+        R: rand::RngCore + CryptoRng,
     {
         Ed25519PrivateKey(ed25519_dalek::SecretKey::generate(rng))
     }
