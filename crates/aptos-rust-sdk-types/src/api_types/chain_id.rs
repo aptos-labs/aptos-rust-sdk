@@ -6,9 +6,9 @@ use std::str::FromStr;
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
 #[repr(u8)]
 pub enum ChainId {
-    Mainnet = 0,
-    Testnet = 1,
-    Testing = 2,
+    Mainnet = 1,
+    Testnet = 2,
+    Testing = 3,
     Other(u8),
 }
 
@@ -39,10 +39,10 @@ impl Serialize for ChainId {
         S: Serializer,
     {
         match self {
-            ChainId::Mainnet => serializer.serialize_str(MAINNET),
-            ChainId::Testnet => serializer.serialize_str(TESTNET),
-            ChainId::Testing => serializer.serialize_str(TESTING),
-            ChainId::Other(inner) => serializer.serialize_str(&inner.to_string()),
+            ChainId::Mainnet => serializer.serialize_u8(1),
+            ChainId::Testnet => serializer.serialize_u8(2),
+            ChainId::Testing => serializer.serialize_u8(3),
+            ChainId::Other(inner) => serializer.serialize_u8(*inner),
         }
     }
 }

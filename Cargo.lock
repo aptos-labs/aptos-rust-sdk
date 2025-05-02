@@ -954,8 +954,14 @@ dependencies = [
 name = "examples"
 version = "0.1.0"
 dependencies = [
+ "aptos-crypto",
  "aptos-rust-sdk",
  "aptos-rust-sdk-types",
+ "bcs",
+ "ed25519-dalek 1.0.1",
+ "hex",
+ "rand 0.7.3",
+ "serde",
  "tokio",
 ]
 

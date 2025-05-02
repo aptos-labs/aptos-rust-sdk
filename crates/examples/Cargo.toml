@@ -6,6 +6,12 @@ edition = "2021"
 [dependencies]
 aptos-rust-sdk = { workspace = true }
 aptos-rust-sdk-types = { workspace = true }
+aptos-crypto = { workspace = true }
+bcs = { workspace = true }
+hex.workspace = true
+rand.workspace = true
+ed25519-dalek.workspace = true
+serde.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true }

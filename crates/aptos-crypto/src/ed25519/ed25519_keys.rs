@@ -67,6 +67,10 @@ impl Ed25519PrivateKey {
         }
     }
 
+    pub fn sign_message(&self, message: &[u8]) -> Ed25519Signature {
+        Self::sign_arbitrary_message(self, message)
+    }
+
     /// Private function aimed at minimizing code duplication between sign
     /// methods of the SigningKey implementation. This should remain private.
     fn sign_arbitrary_message(&self, message: &[u8]) -> Ed25519Signature {

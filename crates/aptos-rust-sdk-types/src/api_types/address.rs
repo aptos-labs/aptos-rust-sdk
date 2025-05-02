@@ -46,6 +46,14 @@ impl AccountAddress {
         addr[AccountAddress::LENGTH - 1] = byte;
         Self(addr)
     }
+
+    pub const fn to_bytes(&self) -> &[u8; Self::LENGTH] {
+        &self.0
+    }
+
+    pub fn to_vec(&self) -> Vec<u8> {
+        self.0.to_vec()
+    }
 }
 
 impl Debug for AccountAddress {

@@ -7,6 +7,7 @@ use crate::api_types::numbers::U64;
 use crate::api_types::transaction_authenticator::TransactionAuthenticator;
 use crate::api_types::type_tag::TypeTag;
 use crate::api_types::write_set::WriteSet;
+use aptos_crypto_derive::{CryptoHasher, BCSCryptoHash};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -92,7 +93,7 @@ pub struct TransactionInfo {
 }
 
 /// RawTransaction is the portion of a transaction that a client signs.
-#[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize, CryptoHasher, BCSCryptoHash)]
 pub struct RawTransaction {
     /// Sender's address.
     sender: AccountAddress,
@@ -206,4 +207,42 @@ pub enum RawTransactionWithData {
         secondary_signer_addresses: Vec<AccountAddress>,
         fee_payer_address: AccountAddress,
     },
+}
+
+impl RawTransaction {
+    pub fn new(
+        sender: AccountAddress,
+        sequence_number: u64,
+        payload: TransactionPayload,
+        max_gas_amount: u64,
+        gas_unit_price: u64,
+        expiration_timestamp_secs: u64,
+        chain_id: ChainId,
+    ) -> Self {
+        Self {
+            sender,
+            sequence_number,
+            payload,
+            max_gas_amount,
+            gas_unit_price,
+            expiration_timestamp_secs,
+            chain_id,
+        }
+    }
+}
+
+impl EntryFunction {
+    pub fn new(
+        module: ModuleId,
+        function: String,
+        ty_args: Vec<TypeTag>,
+        args: Vec<Vec<u8>>,
+    ) -> Self {
+        Self {
+            module,
+            function,
+            ty_args,
+            args,
+        }
+    }
 }
