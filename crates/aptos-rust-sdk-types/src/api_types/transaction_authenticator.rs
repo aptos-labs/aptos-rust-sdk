@@ -44,6 +44,7 @@ pub enum TransactionAuthenticator {
         public_key: Ed25519PublicKey,
         signature: Ed25519Signature,
     },
+    MultiEd25519 {},
     /// Multi-agent transaction.
     MultiAgent {
         sender: AccountAuthenticator,
@@ -60,7 +61,7 @@ pub enum TransactionAuthenticator {
     },
     SingleSender {
         sender: AccountAuthenticator,
-    },
+    }
 }
 
 impl TransactionAuthenticator {
@@ -121,7 +122,7 @@ impl TransactionAuthenticator {
             ));
         }
         match self {
-            Self::Ed25519 { .. } => unimplemented!("TODO"), //signature.verify(raw_txn, public_key),
+            Self::Ed25519 { .. } | Self::MultiEd25519 { .. } => unimplemented!("TODO"), //signature.verify(raw_txn, public_key),
             Self::FeePayer { .. } => {
                 // In the fee payer model, the fee payer address can be optionally signed. We
                 // realized when we designed the fee payer model, that we made it too restrictive
@@ -185,6 +186,7 @@ impl TransactionAuthenticator {
                 public_key,
                 signature,
             } => AccountAuthenticator::ed25519(public_key.clone(), signature.clone()),
+            Self::MultiEd25519 { .. } => { unimplemented!("TODO") }
             Self::FeePayer { sender, .. } => sender.clone(),
             Self::MultiAgent { sender, .. } => sender.clone(),
             Self::SingleSender { sender } => sender.clone(),
@@ -193,7 +195,7 @@ impl TransactionAuthenticator {
 
     pub fn secondary_signer_addresses(&self) -> Vec<AccountAddress> {
         match self {
-            Self::Ed25519 { .. } | Self::SingleSender { .. } => {
+            Self::Ed25519 { .. } | Self::SingleSender { .. } | Self::MultiEd25519 { .. } => {
                 vec![]
             }
             Self::FeePayer {
@@ -211,7 +213,7 @@ impl TransactionAuthenticator {
 
     pub fn secondary_signers(&self) -> Vec<AccountAuthenticator> {
         match self {
-            Self::Ed25519 { .. } | Self::SingleSender { .. } => {
+            Self::Ed25519 { .. } | Self::SingleSender { .. } | Self::MultiEd25519 { .. } => {
                 vec![]
             }
             Self::FeePayer {
@@ -230,7 +232,7 @@ impl TransactionAuthenticator {
 
     pub fn fee_payer_address(&self) -> Option<AccountAddress> {
         match self {
-            Self::Ed25519 { .. } | Self::MultiAgent { .. } | Self::SingleSender { .. } => None,
+            Self::Ed25519 { .. } | Self::MultiAgent { .. } | Self::SingleSender { .. } | Self::MultiEd25519 { .. } => None,
             Self::FeePayer {
                 sender: _,
                 secondary_signer_addresses: _,
@@ -243,7 +245,7 @@ impl TransactionAuthenticator {
 
     pub fn fee_payer_signer(&self) -> Option<AccountAuthenticator> {
         match self {
-            Self::Ed25519 { .. } | Self::MultiAgent { .. } | Self::SingleSender { .. } => None,
+            Self::Ed25519 { .. } | Self::MultiAgent { .. } | Self::SingleSender { .. } | Self::MultiEd25519 { .. } | Self::MultiEd25519 { .. } => None,
             Self::FeePayer {
                 sender: _,
                 secondary_signer_addresses: _,
@@ -258,6 +260,7 @@ impl TransactionAuthenticator {
         match self {
             // This is to ensure that any new TransactionAuthenticator variant must update this function.
             Self::Ed25519 { .. }
+            | Self::MultiEd25519 { .. }
             | Self::MultiAgent { .. }
             | Self::FeePayer { .. }
             | Self::SingleSender { .. } => {
@@ -294,6 +297,16 @@ impl TransactionAuthenticator {
                 AccountAuthenticator::MultiKey { authenticator } => {
                     single_key_authenticators.extend(authenticator.to_single_key_authenticators()?);
                 }
+                AccountAuthenticator::NoAuthenticator {} => {
+                    return Err(anyhow::anyhow!(
+                        "No authenticator, no single key authenticators."
+                    ))
+                }
+                AccountAuthenticator::MultiEd25519 {} => {
+                    return Err(anyhow::anyhow!(
+                        "MultiEd25519 not supported for single key authenticators."
+                    ))
+                }
             };
         }
         Ok(single_key_authenticators)
@@ -309,6 +322,9 @@ impl fmt::Display for TransactionAuthenticator {
                     "TransactionAuthenticator[scheme: Ed25519, sender: {}]",
                     self.sender()
                 )
+            }
+            Self::MultiEd25519 { .. } => {
+                unimplemented!("TODO")
             }
             Self::FeePayer {
                 sender,
@@ -375,8 +391,11 @@ impl fmt::Display for TransactionAuthenticator {
 #[repr(u8)]
 pub enum Scheme {
     Ed25519 = 0,
+    MultiEd25519 = 1,
     SingleKey = 2,
     MultiKey = 3,
+    NoAccountAuthenticator = 4,
+    Abstraction = 5,
     /// Add new derived schemes below.
     DeriveAuid = 251,
     DeriveObjectAddressFromObject = 252,
@@ -389,8 +408,11 @@ impl fmt::Display for Scheme {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let display = match self {
             Scheme::Ed25519 => "Ed25519",
+            Scheme::MultiEd25519 => "MultiEd25519",
             Scheme::SingleKey => "SingleKey",
             Scheme::MultiKey => "MultiKey",
+            Scheme::NoAccountAuthenticator => "NoAccountAuthenticator",
+            Scheme::Abstraction => "Abstraction",
             Scheme::DeriveAuid => "DeriveAuid",
             Scheme::DeriveObjectAddressFromObject => "DeriveObjectAddressFromObject",
             Scheme::DeriveObjectAddressFromGuid => "DeriveObjectAddressFromGuid",
@@ -414,6 +436,7 @@ pub enum AccountAuthenticator {
         public_key: Ed25519PublicKey,
         signature: Ed25519Signature,
     },
+    MultiEd25519 {},
     /// Ed25519 K-of-N multisignature
     SingleKey {
         authenticator: SingleKeyAuthenticator,
@@ -421,6 +444,8 @@ pub enum AccountAuthenticator {
     MultiKey {
         authenticator: MultiKeyAuthenticator,
     },
+    /// No authenticator
+    NoAuthenticator {},
     // ... add more schemes here
 }
 
@@ -429,8 +454,10 @@ impl AccountAuthenticator {
     pub fn scheme(&self) -> Scheme {
         match self {
             Self::Ed25519 { .. } => Scheme::Ed25519,
+            Self::MultiEd25519 { .. } => Scheme::MultiEd25519,
             Self::SingleKey { .. } => Scheme::SingleKey,
             Self::MultiKey { .. } => Scheme::MultiKey,
+            Self::NoAuthenticator {} => Scheme::NoAccountAuthenticator,
         }
     }
 
@@ -452,12 +479,17 @@ impl AccountAuthenticator {
         Self::MultiKey { authenticator }
     }
 
+    pub fn no_authenticator() -> Self {
+        Self::NoAuthenticator {}
+    }
+
     /// Return Ok if the authenticator's public key matches its signature, Err otherwise
     pub fn verify<T: Serialize + Hash>(&self, message: &T) -> Result<(), anyhow::Error> {
         match self {
-            Self::Ed25519 { .. } => unimplemented!("TODO"), //signature.verify(message, public_key),
+            Self::Ed25519 { .. } | Self::MultiEd25519 { .. } => unimplemented!("TODO"), //signature.verify(message, public_key),
             Self::SingleKey { authenticator } => authenticator.verify(message),
             Self::MultiKey { authenticator } => authenticator.verify(message),
+            Self::NoAuthenticator {} =>  Ok(()),
         }
     }
 
@@ -465,8 +497,10 @@ impl AccountAuthenticator {
     pub fn public_key_bytes(&self) -> Vec<u8> {
         match self {
             Self::Ed25519 { public_key, .. } => public_key.to_bytes().to_vec(),
+            Self::MultiEd25519 { .. } => unimplemented!("TODO"),
             Self::SingleKey { authenticator } => authenticator.public_key_bytes(),
             Self::MultiKey { authenticator } => authenticator.public_key_bytes(),
+            Self::NoAuthenticator {} => panic!("No authenticator, no public key."),
         }
     }
 
@@ -474,8 +508,10 @@ impl AccountAuthenticator {
     pub fn signature_bytes(&self) -> Vec<u8> {
         match self {
             Self::Ed25519 { signature, .. } => signature.to_bytes().to_vec(),
+            Self::MultiEd25519 { .. } => unimplemented!("TODO"),
             Self::SingleKey { authenticator } => authenticator.signature_bytes(),
             Self::MultiKey { authenticator } => authenticator.signature_bytes(),
+            Self::NoAuthenticator {} => panic!("No authenticator, no signature."),
         }
     }
 
@@ -488,8 +524,10 @@ impl AccountAuthenticator {
     pub fn number_of_signatures(&self) -> usize {
         match self {
             Self::Ed25519 { .. } => 1,
+            Self::MultiEd25519 { .. } => 1,
             Self::SingleKey { .. } => 1,
             Self::MultiKey { authenticator } => authenticator.signatures.len(),
+            Self::NoAuthenticator {} => 0,
         }
     }
 }

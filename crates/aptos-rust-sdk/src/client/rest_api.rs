@@ -75,17 +75,33 @@ impl AptosFullnodeClient {
         self.rest_get(url).await
     }
 
+    /// submit a transaction to the network.  This is a blocking call and will wait for the
     pub async  fn submit_transaction(&self, raw_txn: RawTransaction, authenticator: TransactionAuthenticator) -> AptosResult<FullnodeResponse<serde_json::Value>> {
-        let url = self.build_rest_path("v1/transactions").unwrap();
-        let txn: SignedTransaction = SignedTransaction::new(raw_txn, authenticator);
+        let url = self.build_rest_path("v1/transactions")?;
         let response = self
             .rest_client
             .post(url)
             .header(CONTENT_TYPE, BCS_SIGNED_TRANSACTION)
             .header(ACCEPT, JSON)
-            .body(txn.to_vec())
+            .body(SignedTransaction::new(raw_txn, authenticator).to_vec())
             .send()
-            .await.unwrap();
+            .await?;
+
+        let parsable_response = ParsableResponse(response);
+        parsable_response.parse_response().await
+    }
+
+    /// simulate a transaction to the network.  This is a blocking call and will wait for the
+    pub async fn simulate_transaction(&self, raw_txn: RawTransaction, authenticator: TransactionAuthenticator) -> AptosResult<FullnodeResponse<serde_json::Value>> {
+        let url = self.build_rest_path("v1/transactions/simulate")?;
+        let response = self
+            .rest_client
+            .post(url)
+            .header(CONTENT_TYPE, BCS_SIGNED_TRANSACTION)
+            .header(ACCEPT, JSON)
+            .body(SignedTransaction::new(raw_txn, authenticator).to_vec())
+            .send()
+            .await?;
 
         let parsable_response = ParsableResponse(response);
         parsable_response.parse_response().await
