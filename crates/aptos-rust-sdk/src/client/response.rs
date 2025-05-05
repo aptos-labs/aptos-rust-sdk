@@ -83,6 +83,7 @@ impl ParsableResponse {
         self,
     ) -> AptosResult<FullnodeResponse<T>> {
         if !self.status().is_success() {
+            println!("Error: {:?}", self.status());
             Err(self.parse_error().await)
         } else {
             let state = self.state()?;

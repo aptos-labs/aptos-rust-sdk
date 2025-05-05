@@ -1,10 +1,13 @@
 use crate::client::builder::AptosClientBuilder;
 use crate::client::config::AptosNetwork;
 use crate::client::response::{FullnodeResponse, ParsableResponse};
-use aptos_rust_sdk_types::mime_types::{ACCEPT_BCS, JSON};
+use aptos_rust_sdk_types::api_types::account::AccountResource;
+use aptos_rust_sdk_types::api_types::transaction::{RawTransaction, SignedTransaction};
+use aptos_rust_sdk_types::api_types::transaction_authenticator::TransactionAuthenticator;
+use aptos_rust_sdk_types::mime_types::{ACCEPT_BCS, BCS_SIGNED_TRANSACTION, JSON};
 use aptos_rust_sdk_types::state::State;
 use aptos_rust_sdk_types::AptosResult;
-use reqwest::header::ACCEPT;
+use reqwest::header::{ACCEPT, CONTENT_TYPE};
 use reqwest::Client as ReqwestClient;
 use serde::de::DeserializeOwned;
 use url::Url;
@@ -63,6 +66,32 @@ impl AptosFullnodeClient {
         Ok(parsable_response.state()?)
     }
 
+    /// Account Resources
+    pub async fn get_account_resources(
+        &self,
+        address: String,
+    ) -> AptosResult<FullnodeResponse<Vec<AccountResource>>> {
+        let url = self.build_rest_path(&format!("v1/accounts/{}/resources", address))?;
+        self.rest_get(url).await
+    }
+
+    pub async  fn submit_transaction(&self, raw_txn: RawTransaction, authenticator: TransactionAuthenticator) -> AptosResult<FullnodeResponse<serde_json::Value>> {
+        let url = self.build_rest_path("v1/transactions").unwrap();
+        let txn: SignedTransaction = SignedTransaction::new(raw_txn, authenticator);
+        let response = self
+            .rest_client
+            .post(url)
+            .header(CONTENT_TYPE, BCS_SIGNED_TRANSACTION)
+            .header(ACCEPT, JSON)
+            .body(txn.to_vec())
+            .send()
+            .await.unwrap();
+
+        let parsable_response = ParsableResponse(response);
+        parsable_response.parse_response().await
+    }
+
+
     /// Private function that handles BCS underneath
     async fn rest_get<T: DeserializeOwned>(&self, url: Url) -> AptosResult<FullnodeResponse<T>> {
         let response = self
@@ -83,4 +112,5 @@ impl AptosFullnodeClient {
         let out = self.network.rest_url().join(path)?;
         Ok(out)
     }
+
 }

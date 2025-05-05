@@ -2,8 +2,10 @@
 mod tests {
     use std::str::FromStr;
     use aptos_crypto::compat::Sha3_256;
+    use aptos_rust_sdk_types::mime_types::JSON;
     use ed25519_dalek::Digest;
     use serde::ser::Serialize;
+    use serde::de::DeserializeOwned;
     use aptos_crypto::{PrivateKey, SigningKey};
     use aptos_rust_sdk::client::builder::AptosClientBuilder;
     use aptos_rust_sdk::client::config::AptosNetwork;
@@ -11,7 +13,7 @@ mod tests {
     use aptos_rust_sdk_types::api_types::chain_id::ChainId;
     use aptos_rust_sdk_types::api_types::module_id::ModuleId;
     use aptos_rust_sdk_types::api_types::transaction::{EntryFunction, RawTransaction, TransactionPayload};
-    use aptos_rust_sdk_types::api_types::transaction_authenticator::{AccountAuthenticator, AuthenticationKey};
+    use aptos_rust_sdk_types::api_types::transaction_authenticator::{AccountAuthenticator, AuthenticationKey, TransactionAuthenticator};
     use aptos_crypto::ed25519::{Ed25519PrivateKey, Ed25519PublicKey};
     use serde::Serializer;
 
@@ -31,7 +33,8 @@ mod tests {
         let auth_key= AuthenticationKey::ed25519(&Ed25519PublicKey::from(&key));
         let sender = auth_key.account_address();
         println!("Sender: {:?}", sender);
-        let sequence_number = 0;
+        let resource = client.get_account_resources(sender.to_string()).await.unwrap().into_inner();
+        let sequence_number =  resource.iter().find(|r|r.type_ == "0x1::account::Account").unwrap().data.get("sequence_number").unwrap().as_str().unwrap().parse::<u64>().unwrap();
         let payload = TransactionPayload::EntryFunction(
             EntryFunction::new(ModuleId::new(AccountAddress::ONE, "aptos_account".to_string()), "transfer".to_string(), vec![], vec![
                 AccountAddress::ONE.to_vec(), 1u64.to_le_bytes().to_vec()
@@ -39,11 +42,11 @@ mod tests {
         );
         let max_gas_amount = 11;
         let gas_unit_price = 100;
-        // let expiration_timestamp_secs = state.timestamp_usecs / 1000 / 1000 + 60 * 10;
-        let expiration_timestamp_secs = 1746174913;
+        let expiration_timestamp_secs = state.timestamp_usecs / 1000 / 1000 + 60 * 10;
+        // let expiration_timestamp_secs = 1746174913;
         let chain_id = ChainId::Testnet;
 
-        let raw_txn = RawTransaction::new(sender,    sequence_number, payload, max_gas_amount, gas_unit_price, expiration_timestamp_secs, chain_id);
+        let raw_txn = RawTransaction::new(sender, sequence_number, payload, max_gas_amount, gas_unit_price, expiration_timestamp_secs, chain_id);
         
         println!("Raw Transaction: {:?}", raw_txn);
 
@@ -59,5 +62,12 @@ mod tests {
         println!("Raw Transaction BCS: {:?}", hex::encode(&message));                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               
         let signature = key.sign_message( &message );
         println!("Signature: {:?}", signature);
+
+        let transaction = client.submit_transaction( 
+            raw_txn.clone(),
+            TransactionAuthenticator::ed25519(Ed25519PublicKey::from(&key), signature),
+        ).await;
+
+        println!("Transaction: {:?}", transaction);
     }
 }

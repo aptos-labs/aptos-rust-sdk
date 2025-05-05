@@ -209,6 +209,32 @@ pub enum RawTransactionWithData {
     },
 }
 
+impl SignedTransaction {
+    pub fn new(
+        raw_txn: RawTransaction,
+        authenticator: TransactionAuthenticator,
+    ) -> Self {
+        Self {
+            raw_txn,
+            authenticator,
+        }
+    }
+
+    pub fn raw_txn(&self) -> &RawTransaction {
+        &self.raw_txn
+    }
+
+    pub fn authenticator(&self) -> &TransactionAuthenticator {
+        &self.authenticator
+    }
+
+    pub fn to_vec(&self) -> Vec<u8> {
+        let mut bytes = vec![];
+        bcs::serialize_into(&mut bytes, self).unwrap();
+        bytes
+    }
+}
+
 impl RawTransaction {
     pub fn new(
         sender: AccountAddress,
@@ -229,6 +255,13 @@ impl RawTransaction {
             chain_id,
         }
     }
+
+    pub fn to_vec(&self) -> Vec<u8> {
+        let mut bytes = vec![];
+        bcs::serialize_into(&mut bytes, self).unwrap();
+        bytes
+    }
+
 }
 
 impl EntryFunction {
