@@ -7,7 +7,7 @@ use crate::api_types::numbers::U64;
 use crate::api_types::transaction_authenticator::TransactionAuthenticator;
 use crate::api_types::type_tag::TypeTag;
 use crate::api_types::write_set::WriteSet;
-use aptos_crypto_derive::{CryptoHasher, BCSCryptoHash};
+use aptos_crypto_derive::{BCSCryptoHash, CryptoHasher};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -93,7 +93,9 @@ pub struct TransactionInfo {
 }
 
 /// RawTransaction is the portion of a transaction that a client signs.
-#[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize, CryptoHasher, BCSCryptoHash)]
+#[derive(
+    Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize, CryptoHasher, BCSCryptoHash,
+)]
 pub struct RawTransaction {
     /// Sender's address.
     sender: AccountAddress,
@@ -210,10 +212,7 @@ pub enum RawTransactionWithData {
 }
 
 impl SignedTransaction {
-    pub fn new(
-        raw_txn: RawTransaction,
-        authenticator: TransactionAuthenticator,
-    ) -> Self {
+    pub fn new(raw_txn: RawTransaction, authenticator: TransactionAuthenticator) -> Self {
         Self {
             raw_txn,
             authenticator,
@@ -261,7 +260,6 @@ impl RawTransaction {
         bcs::serialize_into(&mut bytes, self).unwrap();
         bytes
     }
-
 }
 
 impl EntryFunction {

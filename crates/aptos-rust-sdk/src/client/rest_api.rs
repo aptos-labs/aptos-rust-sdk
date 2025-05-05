@@ -76,7 +76,11 @@ impl AptosFullnodeClient {
     }
 
     /// submit a transaction to the network.  This is a blocking call and will wait for the
-    pub async  fn submit_transaction(&self, raw_txn: RawTransaction, authenticator: TransactionAuthenticator) -> AptosResult<FullnodeResponse<serde_json::Value>> {
+    pub async fn submit_transaction(
+        &self,
+        raw_txn: RawTransaction,
+        authenticator: TransactionAuthenticator,
+    ) -> AptosResult<FullnodeResponse<serde_json::Value>> {
         let url = self.build_rest_path("v1/transactions")?;
         let response = self
             .rest_client
@@ -92,7 +96,11 @@ impl AptosFullnodeClient {
     }
 
     /// simulate a transaction to the network.  This is a blocking call and will wait for the
-    pub async fn simulate_transaction(&self, raw_txn: RawTransaction, authenticator: TransactionAuthenticator) -> AptosResult<FullnodeResponse<serde_json::Value>> {
+    pub async fn simulate_transaction(
+        &self,
+        raw_txn: RawTransaction,
+        authenticator: TransactionAuthenticator,
+    ) -> AptosResult<FullnodeResponse<serde_json::Value>> {
         let url = self.build_rest_path("v1/transactions/simulate")?;
         let response = self
             .rest_client
@@ -106,7 +114,6 @@ impl AptosFullnodeClient {
         let parsable_response = ParsableResponse(response);
         parsable_response.parse_response().await
     }
-
 
     /// Private function that handles BCS underneath
     async fn rest_get<T: DeserializeOwned>(&self, url: Url) -> AptosResult<FullnodeResponse<T>> {
@@ -128,5 +135,4 @@ impl AptosFullnodeClient {
         let out = self.network.rest_url().join(path)?;
         Ok(out)
     }
-
 }

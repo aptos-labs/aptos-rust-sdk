@@ -61,7 +61,7 @@ pub enum TransactionAuthenticator {
     },
     SingleSender {
         sender: AccountAuthenticator,
-    }
+    },
 }
 
 impl TransactionAuthenticator {
@@ -186,7 +186,9 @@ impl TransactionAuthenticator {
                 public_key,
                 signature,
             } => AccountAuthenticator::ed25519(public_key.clone(), signature.clone()),
-            Self::MultiEd25519 { .. } => { unimplemented!("TODO") }
+            Self::MultiEd25519 { .. } => {
+                unimplemented!("TODO")
+            }
             Self::FeePayer { sender, .. } => sender.clone(),
             Self::MultiAgent { sender, .. } => sender.clone(),
             Self::SingleSender { sender } => sender.clone(),
@@ -232,7 +234,10 @@ impl TransactionAuthenticator {
 
     pub fn fee_payer_address(&self) -> Option<AccountAddress> {
         match self {
-            Self::Ed25519 { .. } | Self::MultiAgent { .. } | Self::SingleSender { .. } | Self::MultiEd25519 { .. } => None,
+            Self::Ed25519 { .. }
+            | Self::MultiAgent { .. }
+            | Self::SingleSender { .. }
+            | Self::MultiEd25519 { .. } => None,
             Self::FeePayer {
                 sender: _,
                 secondary_signer_addresses: _,
@@ -245,7 +250,11 @@ impl TransactionAuthenticator {
 
     pub fn fee_payer_signer(&self) -> Option<AccountAuthenticator> {
         match self {
-            Self::Ed25519 { .. } | Self::MultiAgent { .. } | Self::SingleSender { .. } | Self::MultiEd25519 { .. } | Self::MultiEd25519 { .. } => None,
+            Self::Ed25519 { .. }
+            | Self::MultiAgent { .. }
+            | Self::SingleSender { .. }
+            | Self::MultiEd25519 { .. }
+            | Self::MultiEd25519 { .. } => None,
             Self::FeePayer {
                 sender: _,
                 secondary_signer_addresses: _,
@@ -489,7 +498,7 @@ impl AccountAuthenticator {
             Self::Ed25519 { .. } | Self::MultiEd25519 { .. } => unimplemented!("TODO"), //signature.verify(message, public_key),
             Self::SingleKey { authenticator } => authenticator.verify(message),
             Self::MultiKey { authenticator } => authenticator.verify(message),
-            Self::NoAuthenticator {} =>  Ok(()),
+            Self::NoAuthenticator {} => Ok(()),
         }
     }
 
