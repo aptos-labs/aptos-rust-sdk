@@ -2,24 +2,18 @@
 mod tests {
     use aptos_crypto::compat::Sha3_256;
     use aptos_crypto::ed25519::{Ed25519PrivateKey, Ed25519PublicKey};
-    use aptos_crypto::{PrivateKey, SigningKey};
     use aptos_rust_sdk::client::builder::AptosClientBuilder;
     use aptos_rust_sdk::client::config::AptosNetwork;
     use aptos_rust_sdk_types::api_types::address::AccountAddress;
     use aptos_rust_sdk_types::api_types::chain_id::ChainId;
     use aptos_rust_sdk_types::api_types::module_id::ModuleId;
     use aptos_rust_sdk_types::api_types::transaction::{
-        EntryFunction, RawTransaction, TransactionPayload,
+        EntryFunction, RawTransaction, SignedTransaction, TransactionPayload
     };
     use aptos_rust_sdk_types::api_types::transaction_authenticator::{
         AccountAuthenticator, AuthenticationKey, TransactionAuthenticator,
     };
-    use aptos_rust_sdk_types::mime_types::JSON;
     use ed25519_dalek::Digest;
-    use serde::de::DeserializeOwned;
-    use serde::ser::Serialize;
-    use serde::Serializer;
-    use std::str::FromStr;
 
     #[tokio::test]
     async fn submit_transaction() {
@@ -88,8 +82,10 @@ mod tests {
 
         let simulate_transaction = client
             .simulate_transaction(
-                raw_txn.clone(),
+                SignedTransaction::new(
+                    raw_txn.clone(),
                 TransactionAuthenticator::single_sender(AccountAuthenticator::no_authenticator()),
+                )
             )
             .await;
 
@@ -97,8 +93,10 @@ mod tests {
 
         let transaction = client
             .submit_transaction(
-                raw_txn.clone(),
-                TransactionAuthenticator::ed25519(Ed25519PublicKey::from(&key), signature),
+                SignedTransaction::new(
+                    raw_txn.clone(),
+                    TransactionAuthenticator::ed25519(Ed25519PublicKey::from(&key), signature),
+                )
             )
             .await;
 

@@ -253,7 +253,6 @@ impl TransactionAuthenticator {
             Self::Ed25519 { .. }
             | Self::MultiAgent { .. }
             | Self::SingleSender { .. }
-            | Self::MultiEd25519 { .. }
             | Self::MultiEd25519 { .. } => None,
             Self::FeePayer {
                 sender: _,

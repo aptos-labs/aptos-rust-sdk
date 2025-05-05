@@ -2,8 +2,7 @@ use crate::client::builder::AptosClientBuilder;
 use crate::client::config::AptosNetwork;
 use crate::client::response::{FullnodeResponse, ParsableResponse};
 use aptos_rust_sdk_types::api_types::account::AccountResource;
-use aptos_rust_sdk_types::api_types::transaction::{RawTransaction, SignedTransaction};
-use aptos_rust_sdk_types::api_types::transaction_authenticator::TransactionAuthenticator;
+use aptos_rust_sdk_types::api_types::transaction::SignedTransaction;
 use aptos_rust_sdk_types::mime_types::{ACCEPT_BCS, BCS_SIGNED_TRANSACTION, JSON};
 use aptos_rust_sdk_types::state::State;
 use aptos_rust_sdk_types::AptosResult;
@@ -78,8 +77,7 @@ impl AptosFullnodeClient {
     /// submit a transaction to the network.  This is a blocking call and will wait for the
     pub async fn submit_transaction(
         &self,
-        raw_txn: RawTransaction,
-        authenticator: TransactionAuthenticator,
+        signed_transaction: SignedTransaction,
     ) -> AptosResult<FullnodeResponse<serde_json::Value>> {
         let url = self.build_rest_path("v1/transactions")?;
         let response = self
@@ -87,7 +85,7 @@ impl AptosFullnodeClient {
             .post(url)
             .header(CONTENT_TYPE, BCS_SIGNED_TRANSACTION)
             .header(ACCEPT, JSON)
-            .body(SignedTransaction::new(raw_txn, authenticator).to_vec())
+            .body(signed_transaction.to_vec())
             .send()
             .await?;
 
@@ -98,8 +96,7 @@ impl AptosFullnodeClient {
     /// simulate a transaction to the network.  This is a blocking call and will wait for the
     pub async fn simulate_transaction(
         &self,
-        raw_txn: RawTransaction,
-        authenticator: TransactionAuthenticator,
+        signed_transaction: SignedTransaction,
     ) -> AptosResult<FullnodeResponse<serde_json::Value>> {
         let url = self.build_rest_path("v1/transactions/simulate")?;
         let response = self
@@ -107,7 +104,7 @@ impl AptosFullnodeClient {
             .post(url)
             .header(CONTENT_TYPE, BCS_SIGNED_TRANSACTION)
             .header(ACCEPT, JSON)
-            .body(SignedTransaction::new(raw_txn, authenticator).to_vec())
+            .body(signed_transaction.to_vec())
             .send()
             .await?;
 
