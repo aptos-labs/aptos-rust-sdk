@@ -8,7 +8,7 @@ mod tests {
     use aptos_rust_sdk_types::api_types::chain_id::ChainId;
     use aptos_rust_sdk_types::api_types::module_id::ModuleId;
     use aptos_rust_sdk_types::api_types::transaction::{
-        EntryFunction, RawTransaction, SignedTransaction, TransactionPayload
+        EntryFunction, RawTransaction, SignedTransaction, TransactionPayload,
     };
     use aptos_rust_sdk_types::api_types::transaction_authenticator::{
         AccountAuthenticator, AuthenticationKey, TransactionAuthenticator,
@@ -81,23 +81,19 @@ mod tests {
         let signature = key.sign_message(&message);
 
         let simulate_transaction = client
-            .simulate_transaction(
-                SignedTransaction::new(
-                    raw_txn.clone(),
+            .simulate_transaction(SignedTransaction::new(
+                raw_txn.clone(),
                 TransactionAuthenticator::single_sender(AccountAuthenticator::no_authenticator()),
-                )
-            )
+            ))
             .await;
 
         println!("Simulate Transaction: {:?}", simulate_transaction);
 
         let transaction = client
-            .submit_transaction(
-                SignedTransaction::new(
-                    raw_txn.clone(),
-                    TransactionAuthenticator::ed25519(Ed25519PublicKey::from(&key), signature),
-                )
-            )
+            .submit_transaction(SignedTransaction::new(
+                raw_txn.clone(),
+                TransactionAuthenticator::ed25519(Ed25519PublicKey::from(&key), signature),
+            ))
             .await;
 
         println!("Transaction: {:?}", transaction);
