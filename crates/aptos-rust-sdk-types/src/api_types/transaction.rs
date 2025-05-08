@@ -10,6 +10,8 @@ use crate::api_types::write_set::WriteSet;
 use aptos_crypto_derive::{BCSCryptoHash, CryptoHasher};
 use serde::{Deserialize, Serialize};
 
+use super::transaction_authenticator::{AccountAuthenticator, FeePayerAuthenticator};
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum TransactionData {
     /// A committed transaction
@@ -124,6 +126,36 @@ pub struct RawTransaction {
     chain_id: ChainId,
 }
 
+impl RawTransaction {
+    pub fn get_sender(&self) -> AccountAddress {
+        self.sender
+    }
+
+    pub fn get_sequence_number(&self) -> u64 {
+        self.sequence_number
+    }
+
+    pub fn get_payload(&self) -> &TransactionPayload {
+        &self.payload
+    }
+
+    pub fn get_max_gas_amount(&self) -> u64 {
+        self.max_gas_amount
+    }
+
+    pub fn get_gas_unit_price(&self) -> u64 {
+        self.gas_unit_price
+    }
+
+    pub fn get_expiration_timestamp_secs(&self) -> u64 {
+        self.expiration_timestamp_secs
+    }
+
+    pub fn get_chain_id(&self) -> ChainId {
+        self.chain_id
+    }
+}
+
 /// Different kinds of transactions.
 #[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub enum TransactionPayload {
@@ -217,6 +249,46 @@ impl SignedTransaction {
             raw_txn,
             authenticator,
         }
+    }
+
+    /// Create a new signed transaction with a fee payer. Use this as the fee payer, if
+    /// you are just creating a transaction to be signed by a fee payer later, use
+    /// `new_for_future_fee_payer`.
+    pub fn new_as_fee_payer(
+        raw_txn: RawTransaction,
+        sender: AccountAuthenticator,
+        secondary_signer_addresses: Vec<AccountAddress>,
+        secondary_signers: Vec<AccountAuthenticator>,
+        fee_payer_address: AccountAddress,
+        fee_payer_authenticator: AccountAuthenticator,
+    ) -> Self {
+        let authenticator = TransactionAuthenticator::FeePayer {
+            sender,
+            secondary_signer_addresses,
+            secondary_signers,
+            fee_payer: FeePayerAuthenticator {
+                address: fee_payer_address,
+                // This gets ignored for the gas station use case.
+                authenticator: fee_payer_authenticator,
+            },
+        };
+        SignedTransaction::new(raw_txn, authenticator)
+    }
+
+    /// Create a new signed transaction, indicating that a fee payer will be set later.
+    /// If you want to actually sign as a fee payer, use `new_as_fee_payer`.
+    pub fn new_for_future_fee_payer(raw_txn: RawTransaction, sender: AccountAuthenticator) -> Self {
+        let authenticator = TransactionAuthenticator::FeePayer {
+            sender,
+            secondary_signer_addresses: vec![],
+            secondary_signers: vec![],
+            fee_payer: FeePayerAuthenticator {
+                address: AccountAddress::ZERO,
+                // This gets ignored for the future fee payer use case.
+                authenticator: AccountAuthenticator::NoAuthenticator { },
+            },
+        };
+        SignedTransaction::new(raw_txn, authenticator)
     }
 
     pub fn raw_txn(&self) -> &RawTransaction {
