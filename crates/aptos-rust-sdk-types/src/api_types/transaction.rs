@@ -211,6 +211,30 @@ pub enum RawTransactionWithData {
     },
 }
 
+impl RawTransactionWithData {
+    pub fn new_multi_agent(
+        raw_txn: RawTransaction,
+        secondary_signer_addresses: Vec<AccountAddress>,
+    ) -> Self {
+        Self::MultiAgent {
+            raw_txn,
+            secondary_signer_addresses,
+        }
+    }
+
+    pub fn new_multi_agent_with_fee_payer(
+        raw_txn: RawTransaction,
+        secondary_signer_addresses: Vec<AccountAddress>,
+        fee_payer_address: AccountAddress,
+    ) -> Self {
+        Self::MultiAgentWithFeePayer {
+            raw_txn,
+            secondary_signer_addresses,
+            fee_payer_address,
+        }
+    }
+}
+
 impl SignedTransaction {
     pub fn new(raw_txn: RawTransaction, authenticator: TransactionAuthenticator) -> Self {
         Self {
