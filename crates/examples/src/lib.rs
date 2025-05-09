@@ -9,13 +9,15 @@ mod tests {
     use aptos_rust_sdk_types::api_types::chain_id::ChainId;
     use aptos_rust_sdk_types::api_types::module_id::ModuleId;
     use aptos_rust_sdk_types::api_types::transaction::{
-        EntryFunction, RawTransaction, SignedTransaction, TransactionPayload,
+        EntryFunction, RawTransaction, RawTransactionWithData, SignedTransaction,
+        TransactionPayload,
     };
     use aptos_rust_sdk_types::api_types::transaction_authenticator::{
         AccountAuthenticator, AuthenticationKey, TransactionAuthenticator,
     };
     use ed25519_dalek::Digest;
     use std::str::FromStr;
+    use std::vec;
 
     #[tokio::test]
     async fn submit_transaction() {
@@ -151,18 +153,20 @@ mod tests {
             chain_id,
         );
 
+        let raw_txn_with_data = RawTransactionWithData::new_multi_agent_with_fee_payer(
+            raw_txn.clone(),
+            vec![],
+            fee_payer_address,
+        );
+
         let mut sha3 = Sha3_256::new();
         sha3.update("APTOS::RawTransactionWithData".as_bytes());
         let hash = sha3.finalize().to_vec();
         let mut bytes = vec![];
-        bcs::serialize_into(&mut bytes, &raw_txn).unwrap();
+        bcs::serialize_into(&mut bytes, &raw_txn_with_data).unwrap();
         let mut message = vec![];
         message.extend(hash);
-        // FeePayerRawTransaction 1
-        message.extend(bcs::to_bytes(&1u8).unwrap());
         message.extend(bytes);
-        message.extend(bcs::to_bytes::<Vec<AccountAddress>>(&vec![]).unwrap());
-        message.extend(bcs::to_bytes::<AccountAddress>(&fee_payer_address).unwrap());
 
         let txn_sender_signature = txn_sender_key.sign_message(&message);
 
