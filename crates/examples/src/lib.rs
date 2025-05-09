@@ -1,6 +1,5 @@
 #[cfg(test)]
 mod tests {
-    use aptos_crypto::compat::Sha3_256;
     use aptos_crypto::ed25519::{Ed25519PrivateKey, Ed25519PublicKey};
     use aptos_crypto::Uniform;
     use aptos_rust_sdk::client::builder::AptosClientBuilder;
@@ -9,13 +8,12 @@ mod tests {
     use aptos_rust_sdk_types::api_types::chain_id::ChainId;
     use aptos_rust_sdk_types::api_types::module_id::ModuleId;
     use aptos_rust_sdk_types::api_types::transaction::{
-        EntryFunction, RawTransaction, RawTransactionWithData, SignedTransaction,
-        TransactionPayload,
+        EntryFunction, GenerateSigningMessage, RawTransaction, RawTransactionWithData,
+        SignedTransaction, TransactionPayload,
     };
     use aptos_rust_sdk_types::api_types::transaction_authenticator::{
         AccountAuthenticator, AuthenticationKey, TransactionAuthenticator,
     };
-    use ed25519_dalek::Digest;
     use std::str::FromStr;
     use std::vec;
 
@@ -73,14 +71,7 @@ mod tests {
             chain_id,
         );
 
-        let mut sha3 = Sha3_256::new();
-        sha3.update("APTOS::RawTransaction".as_bytes());
-        let hash = sha3.finalize().to_vec();
-        let mut bytes = vec![];
-        bcs::serialize_into(&mut bytes, &raw_txn).unwrap();
-        let mut message = vec![];
-        message.extend(hash);
-        message.extend(bytes);
+        let message = raw_txn.generate_signing_message().unwrap();
 
         let signature = key.sign_message(&message);
 
@@ -159,14 +150,7 @@ mod tests {
             fee_payer_address,
         );
 
-        let mut sha3 = Sha3_256::new();
-        sha3.update("APTOS::RawTransactionWithData".as_bytes());
-        let hash = sha3.finalize().to_vec();
-        let mut bytes = vec![];
-        bcs::serialize_into(&mut bytes, &raw_txn_with_data).unwrap();
-        let mut message = vec![];
-        message.extend(hash);
-        message.extend(bytes);
+        let message = raw_txn_with_data.generate_signing_message().unwrap();
 
         let txn_sender_signature = txn_sender_key.sign_message(&message);
 

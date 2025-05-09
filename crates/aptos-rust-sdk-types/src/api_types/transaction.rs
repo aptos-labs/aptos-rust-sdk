@@ -7,8 +7,15 @@ use crate::api_types::numbers::U64;
 use crate::api_types::transaction_authenticator::TransactionAuthenticator;
 use crate::api_types::type_tag::TypeTag;
 use crate::api_types::write_set::WriteSet;
+use anyhow::Error;
+use aptos_crypto::compat::Sha3_256;
 use aptos_crypto_derive::{BCSCryptoHash, CryptoHasher};
+use ed25519_dalek::Digest;
 use serde::{Deserialize, Serialize};
+
+pub trait GenerateSigningMessage {
+    fn generate_signing_message(&self) -> Result<Vec<u8>, Error>;
+}
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum TransactionData {
@@ -235,6 +242,20 @@ impl RawTransactionWithData {
     }
 }
 
+impl GenerateSigningMessage for RawTransactionWithData {
+    fn generate_signing_message(&self) -> Result<Vec<u8>, anyhow::Error> {
+        let mut sha3 = Sha3_256::new();
+        sha3.update("APTOS::RawTransactionWithData".as_bytes());
+        let hash = sha3.finalize().to_vec();
+        let mut bytes = vec![];
+        bcs::serialize_into(&mut bytes, &self)?;
+        let mut message = vec![];
+        message.extend(hash);
+        message.extend(bytes);
+        Ok(message)
+    }   
+}
+
 impl SignedTransaction {
     pub fn new(raw_txn: RawTransaction, authenticator: TransactionAuthenticator) -> Self {
         Self {
@@ -284,6 +305,21 @@ impl RawTransaction {
         bcs::serialize_into(&mut bytes, self).unwrap();
         bytes
     }
+}
+
+impl GenerateSigningMessage for RawTransaction {
+    fn generate_signing_message(&self) -> Result<Vec<u8>, anyhow::Error> {
+        let mut sha3 = Sha3_256::new();
+        sha3.update("APTOS::RawTransaction".as_bytes());
+        let hash = sha3.finalize().to_vec();
+        let mut bytes = vec![];
+        bcs::serialize_into(&mut bytes, &self)?;
+        let mut message = vec![];
+        message.extend(hash);
+        message.extend(bytes);
+        Ok(message)
+    }
+    
 }
 
 impl EntryFunction {
