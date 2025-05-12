@@ -56,12 +56,17 @@ pub enum TransactionAuthenticator {
         sender: AccountAuthenticator,
         secondary_signer_addresses: Vec<AccountAddress>,
         secondary_signers: Vec<AccountAuthenticator>,
-        fee_payer_address: AccountAddress,
-        fee_payer_signer: AccountAuthenticator,
+        fee_payer: FeePayerAuthenticator,
     },
     SingleSender {
         sender: AccountAuthenticator,
     },
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub struct FeePayerAuthenticator {
+    pub address: AccountAddress,
+    pub authenticator: AccountAuthenticator,
 }
 
 impl TransactionAuthenticator {
@@ -72,21 +77,18 @@ impl TransactionAuthenticator {
             signature,
         }
     }
-
     /// Create a (optional) multi-agent fee payer authenticator
     pub fn fee_payer(
         sender: AccountAuthenticator,
         secondary_signer_addresses: Vec<AccountAddress>,
         secondary_signers: Vec<AccountAuthenticator>,
-        fee_payer_address: AccountAddress,
-        fee_payer_signer: AccountAuthenticator,
+        fee_payer: FeePayerAuthenticator,
     ) -> Self {
         Self::FeePayer {
             sender,
             secondary_signer_addresses,
             secondary_signers,
-            fee_payer_address,
-            fee_payer_signer,
+            fee_payer,
         }
     }
 
@@ -242,25 +244,9 @@ impl TransactionAuthenticator {
                 sender: _,
                 secondary_signer_addresses: _,
                 secondary_signers: _,
-                fee_payer_address,
+                fee_payer,
                 ..
-            } => Some(*fee_payer_address),
-        }
-    }
-
-    pub fn fee_payer_signer(&self) -> Option<AccountAuthenticator> {
-        match self {
-            Self::Ed25519 { .. }
-            | Self::MultiAgent { .. }
-            | Self::SingleSender { .. }
-            | Self::MultiEd25519 { .. } => None,
-            Self::FeePayer {
-                sender: _,
-                secondary_signer_addresses: _,
-                secondary_signers: _,
-                fee_payer_address: _,
-                fee_payer_signer,
-            } => Some(fee_payer_signer.clone()),
+            } => Some(fee_payer.address),
         }
     }
 
@@ -275,9 +261,6 @@ impl TransactionAuthenticator {
                 let mut account_authenticators: Vec<AccountAuthenticator> = vec![];
                 account_authenticators.push(self.sender());
                 account_authenticators.extend(self.secondary_signers());
-                if let Some(fee_payer) = self.fee_payer_signer() {
-                    account_authenticators.push(fee_payer);
-                }
                 account_authenticators
             }
         }
@@ -338,8 +321,7 @@ impl fmt::Display for TransactionAuthenticator {
                 sender,
                 secondary_signer_addresses,
                 secondary_signers,
-                fee_payer_address,
-                fee_payer_signer,
+                fee_payer,
             } => {
                 let mut sec_addrs: String = "".to_string();
                 for sec_addr in secondary_signer_addresses {
@@ -356,9 +338,8 @@ impl fmt::Display for TransactionAuthenticator {
                         \tsender: {}\n\
                         \tsecondary signer addresses: {}\n\
                         \tsecondary signers: {}\n\n
-                        \tfee payer address: {}\n\n
-                        \tfee payer signer: {}]",
-                    sender, sec_addrs, sec_signers, fee_payer_address, fee_payer_signer,
+                        \tfee payer address: {}]",
+                    sender, sec_addrs, sec_signers, fee_payer.address,
                 )
             }
             Self::MultiAgent {
@@ -615,7 +596,7 @@ impl fmt::Display for AccountAuthenticator {
             "AccountAuthenticator[scheme id: {:?}, public key: {}, signature: {}]",
             self.scheme(),
             hex::encode(self.public_key_bytes()),
-            hex::encode(self.signature_bytes())
+            hex::encode(self.signature_bytes()),
         )
     }
 }
@@ -645,6 +626,8 @@ impl FromStr for AuthenticationKey {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, anyhow::Error> {
+        // Trim 0x from the start if present.
+        let s = if s.starts_with("0x") { &s[2..] } else { s };
         ensure!(
             !s.is_empty(),
             "authentication key string should not be empty.",

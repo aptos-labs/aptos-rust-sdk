@@ -1,7 +1,7 @@
 use crate::client::builder::AptosClientBuilder;
 use crate::client::config::AptosNetwork;
 use crate::client::response::{FullnodeResponse, ParsableResponse};
-use aptos_rust_sdk_types::api_types::account::AccountResource;
+use aptos_rust_sdk_types::api_types::account::{Account, AccountResource};
 use aptos_rust_sdk_types::api_types::transaction::SignedTransaction;
 use aptos_rust_sdk_types::mime_types::{ACCEPT_BCS, BCS_SIGNED_TRANSACTION, JSON};
 use aptos_rust_sdk_types::state::State;
@@ -31,7 +31,7 @@ impl AptosFullnodeClient {
         &self.network
     }
 
-    /// Retrieves the transaction by hash.  Note that pending transactions can only be retrieved by
+    /// Retrieves the transaction by hash. Note that pending transactions can only be retrieved by
     /// hash
     pub async fn get_transaction_by_hash(
         &self,
@@ -62,7 +62,26 @@ impl AptosFullnodeClient {
             .await?;
 
         let parsable_response = ParsableResponse(response);
-        Ok(parsable_response.state()?)
+        let state = match parsable_response.state() {
+            Ok(state) => state,
+            Err(e) => {
+                eprintln!(
+                    "Error parsing state: {:?} from this response: {:?}",
+                    e,
+                    parsable_response.0.text().await.unwrap_or_default()
+                );
+                return Err(e.into());
+            }
+        };
+        Ok(state)
+    }
+
+    pub async fn get_account_info(
+        &self,
+        address: String,
+    ) -> AptosResult<FullnodeResponse<Account>> {
+        let url = self.build_rest_path(&format!("v1/accounts/{}", address))?;
+        self.rest_get(url).await
     }
 
     /// Account Resources
@@ -120,8 +139,6 @@ impl AptosFullnodeClient {
             .header(ACCEPT, JSON)
             .send()
             .await?;
-
-        println!("{:?}", response);
 
         let parsable_response = ParsableResponse(response);
         parsable_response.parse_response().await
