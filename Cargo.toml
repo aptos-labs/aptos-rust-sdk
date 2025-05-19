@@ -2,10 +2,11 @@
 resolver = "2"
 
 members = [
-    "crates/aptos-rust-sdk",
-    "crates/aptos-rust-sdk-types",
     "crates/aptos-crypto",
     "crates/aptos-crypto-derive",
+    "crates/aptos-rust-sdk",
+    "crates/aptos-rust-sdk-types",
+    "crates/aptos-txn-worker",
     "crates/examples"
 ]
 
@@ -15,10 +16,11 @@ members = [
 #
 # For more, see the "Conditional compilation for tests" section in documentation/coding_guidelines.md.
 default-members = [
+    "crates/aptos-crypto",
+    "crates/aptos-crypto-derive",
     "crates/aptos-rust-sdk",
     "crates/aptos-rust-sdk-types",
-    "crates/aptos-crypto",
-    "crates/aptos-crypto-derive"
+    "crates/aptos-txn-worker",
 ]
 
 # All workspace members should inherit these keys
@@ -47,6 +49,7 @@ anyhow = "1.0.97"
 arbitrary = { version = "1.4.1", features = ["derive"] }
 ark-bn254 = "0.5.0"
 ark-ff = "0.5.0"
+async-trait = "0.1.88"
 base64 = "0.22.1"
 bcs = { git = "https://github.com/aptos-labs/bcs.git", rev = "d31fab9d81748e2594be5cd5cdf845786a30562d" }
 bitvec = "1.0.1"
@@ -93,8 +96,11 @@ static_assertions = "1.1.0"
 syn = { version = "1.0.109", features = ["derive", "extra-traits"] }
 thiserror = "2.0.12"
 tiny-keccak = { version = "2.0.2", features = ["keccak", "sha3"] }
+tracing = "0.1.41"
 trybuild = "1.0.104"
 tokio = { version = "1.44.1", features = ["full"] }
+tokio-util = { version = "0.7.9", features = ["rt"] }
+tokio-test = "0.4.3"
 typenum = "1.18.0"
 url = { version = "2.5.4", features = ["serde"] }
 

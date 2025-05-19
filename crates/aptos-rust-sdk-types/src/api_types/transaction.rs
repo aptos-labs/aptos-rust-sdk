@@ -131,6 +131,36 @@ pub struct RawTransaction {
     chain_id: ChainId,
 }
 
+impl RawTransaction {
+    pub fn get_sender(&self) -> AccountAddress {
+        self.sender
+    }
+
+    pub fn get_sequence_number(&self) -> u64 {
+        self.sequence_number
+    }
+
+    pub fn get_payload(&self) -> &TransactionPayload {
+        &self.payload
+    }
+
+    pub fn get_max_gas_amount(&self) -> u64 {
+        self.max_gas_amount
+    }
+
+    pub fn get_gas_unit_price(&self) -> u64 {
+        self.gas_unit_price
+    }
+
+    pub fn get_expiration_timestamp_secs(&self) -> u64 {
+        self.expiration_timestamp_secs
+    }
+
+    pub fn get_chain_id(&self) -> ChainId {
+        self.chain_id
+    }
+}
+
 /// Different kinds of transactions.
 #[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub enum TransactionPayload {
@@ -253,7 +283,7 @@ impl GenerateSigningMessage for RawTransactionWithData {
         message.extend(hash);
         message.extend(bytes);
         Ok(message)
-    }   
+    }
 }
 
 impl SignedTransaction {
@@ -319,7 +349,6 @@ impl GenerateSigningMessage for RawTransaction {
         message.extend(bytes);
         Ok(message)
     }
-    
 }
 
 impl EntryFunction {

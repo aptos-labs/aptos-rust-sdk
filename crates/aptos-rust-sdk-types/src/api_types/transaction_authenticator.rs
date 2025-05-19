@@ -649,6 +649,7 @@ impl FromStr for AuthenticationKey {
             !s.is_empty(),
             "authentication key string should not be empty.",
         );
+        let s = if s.starts_with("0x") { &s[2..] } else { s };
         let bytes_out = ::hex::decode(s)?;
         let key = AuthenticationKey::try_from(bytes_out.as_slice())?;
         Ok(key)
