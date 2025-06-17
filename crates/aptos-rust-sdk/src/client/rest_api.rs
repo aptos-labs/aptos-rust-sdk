@@ -65,12 +65,28 @@ impl AptosFullnodeClient {
         Ok(parsable_response.state()?)
     }
 
+    /// Estimate the gas price for a transaction
+    pub async fn get_estimate_gas_price(&self) -> AptosResult<FullnodeResponse<serde_json::Value>> {
+        let url = self.build_rest_path("v1/estimate_gas_price")?;
+        self.rest_get(url).await
+    }
+
     /// Account Resources
     pub async fn get_account_resources(
         &self,
         address: String,
     ) -> AptosResult<FullnodeResponse<Vec<AccountResource>>> {
         let url = self.build_rest_path(&format!("v1/accounts/{}/resources", address))?;
+        self.rest_get(url).await
+    }
+
+    pub async fn get_account_balance(
+        &self,
+        address: String,
+        asset_type: String,
+    ) -> AptosResult<FullnodeResponse<serde_json::Value>> {
+        let url =
+            self.build_rest_path(&format!("v1/accounts/{}/balance/{}", address, asset_type))?;
         self.rest_get(url).await
     }
 
