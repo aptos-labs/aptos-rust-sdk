@@ -248,7 +248,7 @@ impl GenerateSigningMessage for RawTransactionWithData {
         sha3.update("APTOS::RawTransactionWithData".as_bytes());
         let hash = sha3.finalize().to_vec();
         let mut bytes = vec![];
-        bcs::serialize_into(&mut bytes, &self)?;
+        aptos_bcs::serialize_into(&mut bytes, &self)?;
         let mut message = vec![];
         message.extend(hash);
         message.extend(bytes);
@@ -274,7 +274,7 @@ impl SignedTransaction {
 
     pub fn to_vec(&self) -> Vec<u8> {
         let mut bytes = vec![];
-        bcs::serialize_into(&mut bytes, self).unwrap();
+        aptos_bcs::serialize_into(&mut bytes, self).unwrap();
         bytes
     }
 }
@@ -302,7 +302,7 @@ impl RawTransaction {
 
     pub fn to_vec(&self) -> Vec<u8> {
         let mut bytes = vec![];
-        bcs::serialize_into(&mut bytes, self).unwrap();
+        aptos_bcs::serialize_into(&mut bytes, self).unwrap();
         bytes
     }
 }
@@ -313,7 +313,7 @@ impl GenerateSigningMessage for RawTransaction {
         sha3.update("APTOS::RawTransaction".as_bytes());
         let hash = sha3.finalize().to_vec();
         let mut bytes = vec![];
-        bcs::serialize_into(&mut bytes, &self)?;
+        aptos_bcs::serialize_into(&mut bytes, &self)?;
         let mut message = vec![];
         message.extend(hash);
         message.extend(bytes);

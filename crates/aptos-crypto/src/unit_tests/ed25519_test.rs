@@ -370,7 +370,7 @@ proptest! {
         // signature. It does not detect it.
         prop_assert!(dalek_sig.is_ok());
 
-        let msg_bytes = bcs::to_bytes(&message);
+        let msg_bytes = aptos_bcs::to_bytes(&message);
         prop_assert!(msg_bytes.is_ok());
 
         // ed25519_dalek verify will NOT accept the mauled signature

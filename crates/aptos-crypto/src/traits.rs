@@ -129,7 +129,7 @@ pub trait SigningKey:
     /// that we know how to serialize. There is no pre-hashing into a
     /// `HashValue` to be done by the caller.
     ///
-    /// Note: this assumes serialization is infallible. See crates::bcs::ser
+    /// Note: this assumes serialization is infallible. See crates::aptos_bcs::ser
     /// for a discussion of this assumption.
     fn sign<T: CryptoHash + Serialize>(
         &self,
@@ -152,7 +152,7 @@ pub fn signing_message<T: CryptoHash + Serialize>(
     message: &T,
 ) -> Result<Vec<u8>, CryptoMaterialError> {
     let mut bytes = <T::Hasher as CryptoHasher>::seed().to_vec();
-    bcs::serialize_into(&mut bytes, &message)
+    aptos_bcs::serialize_into(&mut bytes, &message)
         .map_err(|_| CryptoMaterialError::SerializationError)?;
     Ok(bytes)
 }

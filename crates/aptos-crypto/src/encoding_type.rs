@@ -20,7 +20,7 @@ use thiserror::Error;
 pub enum EncodingError {
     /// Error encoding or decoding BCS
     #[error("Error (de)serializing '{0}': {1}")]
-    BCS(&'static str, bcs::Error),
+    BCS(&'static str, aptos_bcs::Error),
     /// Error for unable to parse
     #[error("Unable to parse '{0}': error: {1}")]
     UnableToParse(&'static str, String),
@@ -62,7 +62,7 @@ impl EncodingType {
     ) -> Result<Vec<u8>, EncodingError> {
         Ok(match self {
             EncodingType::Hex => hex::encode_upper(key.to_bytes()).into_bytes(),
-            EncodingType::BCS => bcs::to_bytes(key).map_err(|err| EncodingError::BCS(name, err))?,
+            EncodingType::BCS => aptos_bcs::to_bytes(key).map_err(|err| EncodingError::BCS(name, err))?,
             EncodingType::Base64 => BASE_64_ENCODER.encode(key.to_bytes()).into_bytes(),
         })
     }
@@ -84,7 +84,7 @@ impl EncodingType {
     ) -> Result<Key, EncodingError> {
         match self {
             EncodingType::BCS => {
-                bcs::from_bytes(&data).map_err(|err| EncodingError::BCS(name, err))
+                aptos_bcs::from_bytes(&data).map_err(|err| EncodingError::BCS(name, err))
             }
             EncodingType::Hex => {
                 let hex_string = String::from_utf8(data)?;

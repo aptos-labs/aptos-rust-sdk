@@ -220,7 +220,7 @@ pub enum RestError {
     #[error("API error {0}")]
     Api(AptosErrorResponse),
     #[error("BCS ser/de error {0}")]
-    Bcs(bcs::Error),
+    Bcs(aptos_bcs::Error),
     #[error("JSON er/de error {0}")]
     Json(serde_json::Error),
     #[error("URL Parse error {0}")]
@@ -243,8 +243,8 @@ impl From<(AptosError, Option<State>, StatusCode)> for RestError {
     }
 }
 
-impl From<bcs::Error> for RestError {
-    fn from(err: bcs::Error) -> Self {
+impl From<aptos_bcs::Error> for RestError {
+    fn from(err: aptos_bcs::Error) -> Self {
         Self::Bcs(err)
     }
 }

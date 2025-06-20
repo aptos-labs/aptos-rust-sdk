@@ -495,7 +495,7 @@ impl Signature for MultiEd25519Signature {
         // NOTE: Public keys need not be validated because we use ed25519_dalek's verify_strict,
         // which checks for small order public keys.
         let mut bytes = <T as CryptoHash>::Hasher::seed().to_vec();
-        bcs::serialize_into(&mut bytes, &message)
+        aptos_bcs::serialize_into(&mut bytes, &message)
             .map_err(|_| CryptoMaterialError::SerializationError)?;
         Self::verify_arbitrary_msg(self, &bytes, public_key)
     }

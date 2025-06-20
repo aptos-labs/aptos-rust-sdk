@@ -20,7 +20,7 @@ aptos-crypto = { workspace = true }
 aptos-crypto-derive = { workspace = true }
 
 anyhow = { workspace = true }
-bcs = { workspace = true }
+aptos-bcs = { workspace = true }
 hex = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }

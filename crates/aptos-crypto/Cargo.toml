@@ -20,7 +20,7 @@ arbitrary = { workspace = true, features = ["derive"], optional = true }
 ark-bn254 = { workspace = true }
 ark-ff = { workspace = true }
 base64 = { workspace = true }
-bcs = { workspace = true }
+aptos-bcs = { workspace = true }
 blst = { workspace = true }
 bytes = { workspace = true }
 curve25519-dalek = { workspace = true }

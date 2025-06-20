@@ -783,7 +783,7 @@ impl MultiKeyAuthenticator {
     }
 
     pub fn signature_bytes(&self) -> Vec<u8> {
-        /*bcs::to_bytes(&(&self.signatures, &self.signatures_bitmap))
+        /*aptos_bcs::to_bytes(&(&self.signatures, &self.signatures_bitmap))
         .expect("Only unhandleable errors happen here.")*/
         unimplemented!("Needs aptos bitvec");
     }
@@ -835,7 +835,7 @@ impl MultiKey {
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
-        bcs::to_bytes(&self).expect("Only unhandleable errors happen here.")
+        aptos_bcs::to_bytes(&self).expect("Only unhandleable errors happen here.")
     }
 }
 
@@ -866,7 +866,7 @@ impl SingleKeyAuthenticator {
     }
 
     pub fn signature_bytes(&self) -> Vec<u8> {
-        bcs::to_bytes(&self.signature).expect("Only unhandleable errors happen here.")
+        aptos_bcs::to_bytes(&self.signature).expect("Only unhandleable errors happen here.")
     }
 
     pub fn verify<T: Serialize + Hash>(&self, message: &T) -> Result<(), anyhow::Error> {
@@ -909,7 +909,7 @@ impl AnyPublicKey {
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
-        bcs::to_bytes(self).expect("Only unhandleable errors happen here.")
+        aptos_bcs::to_bytes(self).expect("Only unhandleable errors happen here.")
     }
 }
 #[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
@@ -940,7 +940,7 @@ impl TryFrom<&[u8]> for EphemeralSignature {
     type Error = anyhow::Error;
 
     fn try_from(bytes: &[u8]) -> Result<Self, anyhow::Error> {
-        bcs::from_bytes::<EphemeralSignature>(bytes)
+        aptos_bcs::from_bytes::<EphemeralSignature>(bytes)
             .map_err(|_e| anyhow::anyhow!("Invalid signature"))
     }
 }
@@ -956,7 +956,7 @@ impl EphemeralPublicKey {
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
-        bcs::to_bytes(self).expect("Only unhandleable errors happen here.")
+        aptos_bcs::to_bytes(self).expect("Only unhandleable errors happen here.")
     }
 }
 
@@ -964,7 +964,7 @@ impl TryFrom<&[u8]> for EphemeralPublicKey {
     type Error = anyhow::Error;
 
     fn try_from(bytes: &[u8]) -> Result<Self, anyhow::Error> {
-        bcs::from_bytes::<EphemeralPublicKey>(bytes)
+        aptos_bcs::from_bytes::<EphemeralPublicKey>(bytes)
             .map_err(|_e| anyhow::Error::msg("Error deserializing ephemeral public key"))
     }
 }

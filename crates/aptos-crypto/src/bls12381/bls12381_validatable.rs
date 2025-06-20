@@ -152,12 +152,12 @@ mod test {
 
             // BCS - A non-human-readable format
             {
-                let serialized_valid = bcs::to_bytes(&valid).unwrap();
-                let serialized_unvalidated = bcs::to_bytes(&unvalidated).unwrap();
+                let serialized_valid = aptos_bcs::to_bytes(&valid).unwrap();
+                let serialized_unvalidated = aptos_bcs::to_bytes(&unvalidated).unwrap();
                 prop_assert_eq!(&serialized_valid, &serialized_unvalidated);
 
-                let deserialized_valid_from_unvalidated: PublicKey = bcs::from_bytes(&serialized_unvalidated).unwrap();
-                let deserialized_unvalidated_from_valid: UnvalidatedPublicKey = bcs::from_bytes(&serialized_valid).unwrap();
+                let deserialized_valid_from_unvalidated: PublicKey = aptos_bcs::from_bytes(&serialized_unvalidated).unwrap();
+                let deserialized_unvalidated_from_valid: UnvalidatedPublicKey = aptos_bcs::from_bytes(&serialized_valid).unwrap();
 
                 prop_assert_eq!(&valid, &deserialized_valid_from_unvalidated);
                 prop_assert_eq!(&unvalidated, &deserialized_unvalidated_from_valid);

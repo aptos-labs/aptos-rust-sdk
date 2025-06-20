@@ -88,17 +88,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e16d2d3311acee920a9eb8d33b8cbc1787ce4a264e85f964c2404b969bdcd487"
 
 [[package]]
+name = "aptos-bcs"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7ef2367d495719360c63badd2c85a1c001f8b3eaafca068bd505fc757ba7e1c8"
+dependencies = [
+ "serde",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "aptos-crypto"
 version = "0.0.3"
 dependencies = [
  "aes-gcm",
  "anyhow",
+ "aptos-bcs",
  "aptos-crypto-derive",
  "arbitrary",
  "ark-bn254",
  "ark-ff",
  "base64",
- "bcs",
  "bitvec",
  "blst",
  "bytes",
@@ -147,10 +157,10 @@ name = "aptos-rust-sdk"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "aptos-bcs",
  "aptos-crypto",
  "aptos-crypto-derive",
  "aptos-rust-sdk-types",
- "bcs",
  "ed25519-dalek 1.0.1",
  "ed25519-dalek 2.1.1",
  "hex",
@@ -168,9 +178,9 @@ name = "aptos-rust-sdk-types"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "aptos-bcs",
  "aptos-crypto",
  "aptos-crypto-derive",
- "bcs",
  "ed25519-dalek 1.0.1",
  "hex",
  "libsecp256k1",
@@ -373,15 +383,6 @@ name = "base64ct"
 version = "1.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "89e25b6adfb930f02d1981565a6e5d9c547ac15a96606256d3b59040e5cd4ca3"
-
-[[package]]
-name = "bcs"
-version = "0.1.4"
-source = "git+https://github.com/aptos-labs/bcs.git?rev=d31fab9d81748e2594be5cd5cdf845786a30562d#d31fab9d81748e2594be5cd5cdf845786a30562d"
-dependencies = [
- "serde",
- "thiserror 1.0.69",
-]
 
 [[package]]
 name = "bellpepper"
@@ -954,10 +955,10 @@ dependencies = [
 name = "examples"
 version = "0.1.0"
 dependencies = [
+ "aptos-bcs",
  "aptos-crypto",
  "aptos-rust-sdk",
  "aptos-rust-sdk-types",
- "bcs",
  "ed25519-dalek 1.0.1",
  "hex",
  "rand 0.7.3",

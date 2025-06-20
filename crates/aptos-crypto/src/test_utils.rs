@@ -72,8 +72,8 @@ where
     Pub: Serialize + for<'a> From<&'a Priv>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut v = bcs::to_bytes(&self.private_key).unwrap();
-        v.extend(&bcs::to_bytes(&self.public_key).unwrap());
+        let mut v = aptos_bcs::to_bytes(&self.private_key).unwrap();
+        v.extend(&aptos_bcs::to_bytes(&self.public_key).unwrap());
         write!(f, "{}", hex::encode(&v[..]))
     }
 }
@@ -300,7 +300,7 @@ impl crate::hash::CryptoHash for TestAptosCrypto {
     fn hash(&self) -> crate::hash::HashValue {
         use crate::hash::CryptoHasher;
         let mut state = Self::Hasher::default();
-        bcs::serialize_into(&mut state, &self)
+        aptos_bcs::serialize_into(&mut state, &self)
             .expect("BCS serialization of TestAptosCrypto should not fail");
         state.finish()
     }

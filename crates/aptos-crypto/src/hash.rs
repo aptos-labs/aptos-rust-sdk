@@ -719,7 +719,7 @@ pub trait TestOnlyHash {
 
 impl<T: ser::Serialize + ?Sized> TestOnlyHash for T {
     fn test_only_hash(&self) -> HashValue {
-        let bytes = bcs::to_bytes(self).expect("serialize failed during hash.");
+        let bytes = aptos_bcs::to_bytes(self).expect("serialize failed during hash.");
         let mut hasher = TestOnlyHasher::default();
         hasher.update(&bytes);
         hasher.finish()
