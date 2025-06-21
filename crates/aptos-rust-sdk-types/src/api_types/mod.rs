@@ -6,6 +6,7 @@ pub mod hash;
 pub mod identifier;
 pub mod module_id;
 pub mod numbers;
+pub mod parser;
 pub mod state_key;
 pub mod transaction;
 pub mod transaction_authenticator;

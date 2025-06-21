@@ -1,5 +1,6 @@
 use crate::api_types::address::AccountAddress;
 use crate::api_types::module_id::ModuleId;
+use crate::api_types::parser;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use std::str::FromStr;
@@ -68,9 +69,8 @@ impl TypeTag {
 impl FromStr for TypeTag {
     type Err = anyhow::Error;
 
-    fn from_str(_s: &str) -> Result<Self, Self::Err> {
-        //parse_type_tag(s)
-        unimplemented!("Need to implement parse type tag")
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        parser::parse_type_tag(s)
     }
 }
 
@@ -81,7 +81,7 @@ pub struct StructTag {
     pub name: String,
     // alias for compatibility with old json serialized data.
     #[serde(rename = "type_args", alias = "type_params")]
-    pub type_params: Vec<TypeTag>,
+    pub type_args: Vec<TypeTag>,
 }
 
 impl StructTag {
@@ -128,18 +128,24 @@ impl StructTag {
     /// Move native functions or the VM. By contrast, the `Display` implementation is subject
     /// to change and should not be used inside stable code.
     pub fn to_canonical_string(&self) -> String {
-        let mut generics = String::new();
-        if let Some(first_ty) = self.type_params.first() {
-            generics.push('<');
-            generics.push_str(&first_ty.to_canonical_string());
-            for ty in self.type_params.iter().skip(1) {
-                generics.push_str(&ty.to_canonical_string())
-            }
-            generics.push('>');
-        }
+        let generics = if self.type_args.is_empty() {
+            "".to_string()
+        } else {
+            format!(
+                "<{}>",
+                self.type_args
+                    .iter()
+                    .map(|t| t.to_canonical_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        };
         format!(
-            "{}::{}::{}{}",
-            self.address, self.module, self.name, generics
+            "0x{}::{}::{}{}",
+            self.address.short_str_lossless(),
+            self.module,
+            self.name,
+            generics
         )
     }
 }
@@ -147,8 +153,7 @@ impl StructTag {
 impl FromStr for StructTag {
     type Err = anyhow::Error;
 
-    fn from_str(_s: &str) -> Result<Self, Self::Err> {
-        // TODO
-        unimplemented!("Need to implement parse struct tag")
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        parser::parse_struct_tag(s)
     }
 }

@@ -16,3 +16,7 @@ serde_json.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true }
+
+[[bin]]
+name = "type_parsing_example"
+path = "src/type_parsing_example.rs"

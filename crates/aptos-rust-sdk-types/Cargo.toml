@@ -26,3 +26,4 @@ rand = { workspace = true }
 libsecp256k1 = { workspace = true }
 tiny-keccak = { workspace = true }
 serde_bytes = { workspace = true }
+nom = "7.1"

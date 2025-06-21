@@ -54,6 +54,41 @@ impl AccountAddress {
     pub fn to_vec(&self) -> Vec<u8> {
         self.0.to_vec()
     }
+
+    /// Returns a short string representation of the address.
+    /// For addresses that are less than 32 bytes when viewed as a big-endian integer,
+    /// this will omit leading zeros and return a shorter representation.
+    pub fn short_str_lossless(&self) -> String {
+        // Find the first non-zero byte
+        let mut start_idx = 0;
+        for (i, &byte) in self.0.iter().enumerate() {
+            if byte != 0 {
+                start_idx = i;
+                break;
+            }
+        }
+
+        // If all bytes are zero, return "0"
+        if start_idx == 0 && self.0[0] == 0 {
+            // Check if all bytes are zero
+            if self.0.iter().all(|&b| b == 0) {
+                return "0".to_string();
+            }
+        }
+
+        // Create hex string from the first non-zero byte onwards
+        let mut result = String::new();
+        for &byte in &self.0[start_idx..] {
+            if result.is_empty() && byte < 16 {
+                // For the first byte, don't pad if it's less than 16
+                result.push_str(&format!("{:x}", byte));
+            } else {
+                result.push_str(&format!("{:02x}", byte));
+            }
+        }
+
+        result
+    }
 }
 
 impl Debug for AccountAddress {
@@ -85,7 +120,7 @@ impl FromStr for AccountAddress {
             for _ in 0..Self::LENGTH * 2 - hex_len {
                 hex_str.push('0');
             }
-            hex_str.push_str(&literal[2..]);
+            hex_str.push_str(literal);
             hex_str
         } else {
             literal.to_string()

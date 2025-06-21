@@ -253,7 +253,7 @@ impl GenerateSigningMessage for RawTransactionWithData {
         message.extend(hash);
         message.extend(bytes);
         Ok(message)
-    }   
+    }
 }
 
 impl SignedTransaction {
@@ -319,7 +319,6 @@ impl GenerateSigningMessage for RawTransaction {
         message.extend(bytes);
         Ok(message)
     }
-    
 }
 
 impl EntryFunction {
