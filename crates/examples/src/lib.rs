@@ -189,4 +189,111 @@ mod tests {
             .await;
         println!("Transaction: {:?}", transaction);
     }
+
+    #[tokio::test]
+    async fn submit_multi_agent_transaction() {
+        let builder = AptosClientBuilder::new(AptosNetwork::testnet());
+        let client = builder.build();
+
+        let state = client.get_state().await.unwrap();
+
+        let seed_bytes =
+            hex::decode("4aeeeb3f286caa91984d4a16d424786c7aa26947050b00e84ab7033f2aab0c2d")
+                .unwrap();
+
+        let key = Ed25519PrivateKey::try_from(seed_bytes.as_slice()).unwrap();
+        let auth_key = AuthenticationKey::ed25519(&Ed25519PublicKey::from(&key));
+        let sender = auth_key.account_address();
+        println!("Sender: {:?}", sender);
+
+        // Generate a new key for the secondary signer
+        let secondary_key = Ed25519PrivateKey::generate(&mut rand::thread_rng());
+        let secondary_auth_key =
+            AuthenticationKey::ed25519(&Ed25519PublicKey::from(&secondary_key));
+        let secondary_address = secondary_auth_key.account_address();
+        println!("Secondary Address: {:?}", secondary_address);
+
+        let resource = client
+            .get_account_resources(sender.to_string())
+            .await
+            .unwrap()
+            .into_inner();
+
+        let sequence_number = resource
+            .iter()
+            .find(|r| r.type_ == "0x1::account::Account")
+            .unwrap()
+            .data
+            .get("sequence_number")
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .parse::<u64>()
+            .unwrap();
+
+        let payload = TransactionPayload::EntryFunction(EntryFunction::new(
+            ModuleId::new(
+                AccountAddress::from_str(
+                    "0x0d966e595a22a025302928fe9d6e3ac28c7f1b68c3a68015a4487f8a816ed239",
+                )
+                .unwrap(),
+                "txn".to_string(),
+            ),
+            "multiAgentTxn".to_string(),
+            vec![],
+            vec![],
+        ));
+
+        let max_gas_amount = 1000;
+        let gas_unit_price = 100;
+        let expiration_timestamp_secs = state.timestamp_usecs / 1000 / 1000 + 60 * 10;
+        let chain_id = ChainId::Testnet;
+
+        let raw_txn = RawTransactionWithData::new_multi_agent(
+            RawTransaction::new(
+                sender,
+                sequence_number,
+                payload,
+                max_gas_amount,
+                gas_unit_price,
+                expiration_timestamp_secs,
+                chain_id,
+            ),
+            vec![secondary_address],
+        );
+
+        let message = raw_txn.generate_signing_message().unwrap();
+
+        let signature = key.sign_message(&message);
+
+        let simulate_transaction = client
+            .simulate_transaction(SignedTransaction::new(
+                raw_txn.raw_txn().to_owned(),
+                TransactionAuthenticator::MultiAgent {
+                    sender: AccountAuthenticator::no_authenticator(),
+                    secondary_signer_addresses: vec![secondary_address],
+                    secondary_signers: vec![AccountAuthenticator::no_authenticator()],
+                },
+            ))
+            .await;
+        println!("Simulate Transaction: {:?}", simulate_transaction);
+
+        let transaction = client
+            .submit_transaction(SignedTransaction::new(
+                raw_txn.raw_txn().to_owned(),
+                TransactionAuthenticator::MultiAgent {
+                    sender: AccountAuthenticator::Ed25519 {
+                        public_key: Ed25519PublicKey::from(&key),
+                        signature,
+                    },
+                    secondary_signer_addresses: vec![secondary_address],
+                    secondary_signers: vec![AccountAuthenticator::Ed25519 {
+                        public_key: Ed25519PublicKey::from(&secondary_key),
+                        signature: secondary_key.sign_message(&message),
+                    }],
+                },
+            ))
+            .await;
+        println!("Transaction: {:?}", transaction);
+    }
 }

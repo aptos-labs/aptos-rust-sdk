@@ -240,6 +240,13 @@ impl RawTransactionWithData {
             fee_payer_address,
         }
     }
+
+    pub fn raw_txn(&self) -> &RawTransaction {
+        match self {
+            Self::MultiAgent { raw_txn, .. } => raw_txn,
+            Self::MultiAgentWithFeePayer { raw_txn, .. } => raw_txn,
+        }
+    }
 }
 
 impl GenerateSigningMessage for RawTransactionWithData {
