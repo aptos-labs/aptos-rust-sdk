@@ -6,14 +6,14 @@ use nom::{
     character::complete::{char, hex_digit1},
     combinator::{all_consuming, map, map_res, opt},
     multi::separated_list0,
-    sequence::{delimited, preceded, tuple},
-    IResult,
+    sequence::{delimited, preceded},
+    IResult, Parser,
 };
 use std::str::FromStr;
 
 /// Parse a type tag from a string representation
 pub fn parse_type_tag(input: &str) -> Result<TypeTag, anyhow::Error> {
-    match all_consuming(type_tag)(input) {
+    match all_consuming(type_tag).parse(input) {
         Ok((_, tag)) => Ok(tag),
         Err(e) => Err(anyhow::anyhow!("Failed to parse type tag: {}", e)),
     }
@@ -21,7 +21,7 @@ pub fn parse_type_tag(input: &str) -> Result<TypeTag, anyhow::Error> {
 
 /// Parse a struct tag from a string representation
 pub fn parse_struct_tag(input: &str) -> Result<StructTag, anyhow::Error> {
-    match all_consuming(struct_tag)(input) {
+    match all_consuming(struct_tag).parse(input) {
         Ok((_, tag)) => Ok(tag),
         Err(e) => Err(anyhow::anyhow!("Failed to parse struct tag: {}", e)),
     }
@@ -32,7 +32,8 @@ fn type_tag(input: &str) -> IResult<&str, TypeTag> {
         primitive_type,
         vector_type,
         map(struct_tag, |s| TypeTag::Struct(Box::new(s))),
-    ))(input)
+    ))
+    .parse(input)
 }
 
 fn primitive_type(input: &str) -> IResult<&str, TypeTag> {
@@ -46,19 +47,21 @@ fn primitive_type(input: &str) -> IResult<&str, TypeTag> {
         map(tag("u256"), |_| TypeTag::U256),
         map(tag("address"), |_| TypeTag::Address),
         map(tag("signer"), |_| TypeTag::Signer),
-    ))(input)
+    ))
+    .parse(input)
 }
 
 fn vector_type(input: &str) -> IResult<&str, TypeTag> {
     map(
         preceded(tag("vector"), delimited(char('<'), type_tag, char('>'))),
         |inner| TypeTag::Vector(Box::new(inner)),
-    )(input)
+    )
+    .parse(input)
 }
 
 fn struct_tag(input: &str) -> IResult<&str, StructTag> {
     map(
-        tuple((
+        (
             account_address,
             preceded(tag("::"), identifier),
             preceded(tag("::"), identifier),
@@ -82,27 +85,30 @@ fn struct_tag(input: &str) -> IResult<&str, StructTag> {
                     nom::character::complete::multispace0,
                 ),
             )),
-        )),
+        ),
         |(address, module, name, type_args)| StructTag {
             address,
             module,
             name,
             type_args: type_args.unwrap_or_default(),
         },
-    )(input)
+    )
+    .parse(input)
 }
 
 fn account_address(input: &str) -> IResult<&str, AccountAddress> {
     map_res(preceded(tag("0x"), hex_digit1), |hex_str: &str| {
         AccountAddress::from_str(&format!("0x{}", hex_str))
-    })(input)
+    })
+    .parse(input)
 }
 
 fn identifier(input: &str) -> IResult<&str, String> {
     map(
         take_while1(|c: char| c.is_alphanumeric() || c == '_'),
         |s: &str| s.to_string(),
-    )(input)
+    )
+    .parse(input)
 }
 
 #[cfg(test)]

@@ -3,7 +3,10 @@ use crate::client::config::AptosNetwork;
 use crate::client::response::{FullnodeResponse, ParsableResponse};
 use aptos_rust_sdk_types::api_types::account::AccountResource;
 use aptos_rust_sdk_types::api_types::transaction::SignedTransaction;
-use aptos_rust_sdk_types::mime_types::{ACCEPT_BCS, BCS_SIGNED_TRANSACTION, JSON};
+use aptos_rust_sdk_types::api_types::view::ViewRequest;
+use aptos_rust_sdk_types::mime_types::{
+    ACCEPT_BCS, BCS_SIGNED_TRANSACTION, BCS_VIEW_FUNCTION, JSON,
+};
 use aptos_rust_sdk_types::state::State;
 use aptos_rust_sdk_types::AptosResult;
 use reqwest::header::{ACCEPT, CONTENT_TYPE};
@@ -121,6 +124,25 @@ impl AptosFullnodeClient {
             .header(CONTENT_TYPE, BCS_SIGNED_TRANSACTION)
             .header(ACCEPT, JSON)
             .body(signed_transaction.to_vec())
+            .send()
+            .await?;
+
+        let parsable_response = ParsableResponse(response);
+        parsable_response.parse_response().await
+    }
+
+    pub async fn view_function(
+        &self,
+        view_request: ViewRequest,
+    ) -> AptosResult<FullnodeResponse<serde_json::Value>> {
+        let url = self.build_rest_path("v1/views/function")?;
+        let response = self
+            .rest_client
+            .post(url)
+            .header(CONTENT_TYPE, JSON)
+            .header(ACCEPT, JSON)
+            .header(ACCEPT, BCS_VIEW_FUNCTION)
+            .body(serde_json::to_string(&view_request)?)
             .send()
             .await?;
 

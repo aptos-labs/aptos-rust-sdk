@@ -11,4 +11,5 @@ pub mod state_key;
 pub mod transaction;
 pub mod transaction_authenticator;
 pub mod type_tag;
+pub mod view;
 pub mod write_set;
