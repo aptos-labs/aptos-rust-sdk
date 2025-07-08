@@ -135,7 +135,7 @@ impl AptosFullnodeClient {
         &self,
         view_request: ViewRequest,
     ) -> AptosResult<FullnodeResponse<serde_json::Value>> {
-        let url = self.build_rest_path("v1/views/function")?;
+        let url = self.build_rest_path("v1/view")?;
         let response = self
             .rest_client
             .post(url)
