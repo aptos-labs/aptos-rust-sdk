@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::api_types::type_tag::TypeTag;
 
@@ -6,5 +7,5 @@ use crate::api_types::type_tag::TypeTag;
 pub struct ViewRequest {
     pub function: String,
     pub type_arguments: Vec<TypeTag>,
-    pub arguments: Vec<Vec<u8>>,
+    pub arguments: Vec<Value>,
 }
