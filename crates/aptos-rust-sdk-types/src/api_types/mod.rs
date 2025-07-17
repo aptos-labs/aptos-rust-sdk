@@ -5,6 +5,7 @@ pub mod event;
 pub mod hash;
 pub mod identifier;
 pub mod module_id;
+pub mod move_types;
 pub mod numbers;
 pub mod parser;
 pub mod state_key;

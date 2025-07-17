@@ -1,3 +1,5 @@
+pub mod view_function_example;
+
 #[cfg(test)]
 mod tests {
     use aptos_crypto::ed25519::{Ed25519PrivateKey, Ed25519PublicKey};

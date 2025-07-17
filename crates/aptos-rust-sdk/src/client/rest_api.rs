@@ -171,3 +171,156 @@ impl AptosFullnodeClient {
         Ok(out)
     }
 }
+
+#[cfg(test)]
+mod view_function_tests {
+    use super::*;
+    use aptos_rust_sdk_types::api_types::move_types::{MoveStructTag, MoveType};
+    use serde_json::Value;
+
+    #[tokio::test]
+    async fn test_view_function_with_struct_type_argument() {
+        let builder = AptosClientBuilder::new(AptosNetwork::testnet());
+        let client = builder.build();
+
+        // Test view function with struct type argument (this is supported)
+        let view_request = ViewRequest {
+            function: "0x1::coin::balance".to_string(),
+            type_arguments: vec![MoveType::Struct(MoveStructTag {
+                address: "0x1".to_string(),
+                module: "aptos_coin".to_string(),
+                name: "AptosCoin".to_string(),
+                generic_type_params: vec![],
+            })],
+            arguments: vec![
+                Value::String(
+                    "0xcbed0130acb69de816dfe70e637116aeecde8f171441445d236f6b25665d62fa"
+                        .to_string(),
+                ), // Account address
+            ],
+        };
+
+        let result = client.view_function(view_request).await;
+        assert!(
+            result.is_ok(),
+            "View function call with struct type argument should succeed"
+        );
+
+        let response = result.unwrap();
+        let balance = response.into_inner();
+        let balance_value = serde_json::from_value::<Vec<String>>(balance).unwrap();
+        assert!(
+            balance_value.len() == 1,
+            "Balance should be a vector with one element"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_view_function_with_no_type_arguments() {
+        let builder = AptosClientBuilder::new(AptosNetwork::testnet());
+        let client = builder.build();
+
+        // Test view function with no type arguments
+        let view_request = ViewRequest {
+            function: "0x1::timestamp::now_seconds".to_string(),
+            type_arguments: vec![],
+            arguments: vec![],
+        };
+
+        let result = client.view_function(view_request).await;
+        assert!(
+            result.is_ok(),
+            "View function call with no type arguments should succeed"
+        );
+
+        let response = result.unwrap();
+        let timestamp = response.into_inner();
+        let timestamp_value = serde_json::from_value::<Vec<String>>(timestamp).unwrap();
+        let timestamp_value_str = timestamp_value[0].clone();
+        let timestamp_value_u64 = timestamp_value_str.parse::<u64>().unwrap();
+        assert!(
+            timestamp_value_u64 > 0,
+            "Timestamp should be a positive number"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_view_function_with_address_argument() {
+        let builder = AptosClientBuilder::new(AptosNetwork::testnet());
+        let client = builder.build();
+
+        // Test view function with address argument
+        let view_request = ViewRequest {
+            function: "0x1::account::get_sequence_number".to_string(),
+            type_arguments: vec![],
+            arguments: vec![
+                Value::String("0x1".to_string()), // Account address
+            ],
+        };
+
+        let result = client.view_function(view_request).await;
+        assert!(
+            result.is_ok(),
+            "View function call with address argument should succeed"
+        );
+
+        let response = result.unwrap();
+        let sequence_number = response.into_inner();
+        let sequence_number_value = serde_json::from_value::<Vec<String>>(sequence_number).unwrap();
+        let sequence_number_value_str = sequence_number_value[0].clone();
+        let sequence_number_value_u64 = sequence_number_value_str.parse::<u64>().unwrap();
+        assert!(
+            sequence_number_value_u64 == 0,
+            "Sequence number should be 0"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_view_function_with_account_exists_check() {
+        let builder = AptosClientBuilder::new(AptosNetwork::testnet());
+        let client = builder.build();
+
+        // Test view function to check if account exists
+        let view_request = ViewRequest {
+            function: "0x1::account::exists_at".to_string(),
+            type_arguments: vec![],
+            arguments: vec![
+                Value::String("0x1".to_string()), // Address as string
+            ],
+        };
+
+        let result = client.view_function(view_request).await;
+        assert!(
+            result.is_ok(),
+            "View function call to check account existence should succeed"
+        );
+
+        let response = result.unwrap();
+        let exists = response.into_inner();
+        assert!(exists.is_array(), "Exists should be an array");
+    }
+
+    #[tokio::test]
+    async fn test_view_function_error_handling() {
+        let builder = AptosClientBuilder::new(AptosNetwork::testnet());
+        let client = builder.build();
+
+        // Test with invalid function name
+        let view_request = ViewRequest {
+            function: "0x1::nonexistent::function".to_string(),
+            type_arguments: vec![],
+            arguments: vec![],
+        };
+
+        let result = client.view_function(view_request).await;
+        assert!(result.is_err(), "Invalid function should return error");
+    }
+
+    // Note: The following types are NOT supported in view functions due to API limitations:
+    // - MoveType::Vector (fails with Reference/GenericTypeParam conversion errors)
+    // - MoveType::Bool, MoveType::U64, MoveType::Address as type arguments (not expected by functions)
+    // - Functions with generic type parameters that resolve to references
+    //
+    // Only struct type arguments (like for coin::balance) and functions with no type arguments
+    // are reliably supported in the current API implementation.
+}

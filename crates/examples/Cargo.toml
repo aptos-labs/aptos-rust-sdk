@@ -20,3 +20,7 @@ tokio = { workspace = true }
 [[bin]]
 name = "type_parsing_example"
 path = "src/type_parsing_example.rs"
+
+[[bin]]
+name = "view_function_example"
+path = "src/main.rs"
