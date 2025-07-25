@@ -141,7 +141,6 @@ impl AptosFullnodeClient {
             .post(url)
             .header(CONTENT_TYPE, JSON)
             .header(ACCEPT, JSON)
-            .header(ACCEPT, BCS_VIEW_FUNCTION)
             .body(serde_json::to_string(&view_request)?)
             .send()
             .await?;
