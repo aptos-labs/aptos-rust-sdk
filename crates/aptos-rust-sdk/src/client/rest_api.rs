@@ -5,7 +5,7 @@ use aptos_rust_sdk_types::api_types::account::AccountResource;
 use aptos_rust_sdk_types::api_types::transaction::SignedTransaction;
 use aptos_rust_sdk_types::api_types::view::ViewRequest;
 use aptos_rust_sdk_types::mime_types::{
-    ACCEPT_BCS, BCS_SIGNED_TRANSACTION, BCS_VIEW_FUNCTION, JSON,
+    ACCEPT_BCS, BCS_SIGNED_TRANSACTION, JSON,
 };
 use aptos_rust_sdk_types::state::State;
 use aptos_rust_sdk_types::AptosResult;
@@ -39,7 +39,7 @@ impl AptosFullnodeClient {
     pub async fn get_transaction_by_hash(
         &self,
         hash: String,
-    ) -> AptosResult<FullnodeResponse<String>> {
+    ) -> AptosResult<FullnodeResponse<serde_json::Value>> {
         let url = self.build_rest_path(&format!("v1/transactions/by_hash/{}", hash))?;
         self.rest_get(url).await
     }
@@ -49,7 +49,7 @@ impl AptosFullnodeClient {
     pub async fn get_transaction_by_version(
         &self,
         version: u64,
-    ) -> AptosResult<FullnodeResponse<String>> {
+    ) -> AptosResult<FullnodeResponse<serde_json::Value>> {
         let url = self.build_rest_path(&format!("v1/transactions/by_version/{}", version))?;
         self.rest_get(url).await
     }

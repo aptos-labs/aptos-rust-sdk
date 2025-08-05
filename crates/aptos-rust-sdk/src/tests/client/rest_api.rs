@@ -16,7 +16,7 @@ async fn test_rest_client() {
 #[tokio::test]
 async fn test_get_by_version() {
     // TODO: Test against local testnet
-    let aptos_client = AptosFullnodeClient::builder(AptosNetwork::localnet()).build();
+    let aptos_client = AptosFullnodeClient::builder(AptosNetwork::testnet()).build();
 
     // Retrieve latest blockchain state
     let state = aptos_client
@@ -28,5 +28,17 @@ async fn test_get_by_version() {
     println!(
         "{:?}",
         aptos_client.get_transaction_by_version(state.version).await
+    );
+}
+
+#[tokio::test]
+async fn test_get_by_hash() {
+
+    let aptos_client = AptosFullnodeClient::builder(AptosNetwork::testnet()).build();
+
+    // Query transaction
+    println!(
+        "Full node response {:?}",
+        aptos_client.get_transaction_by_hash("0xd051f517d81f50e7b69a484bf6cea880c1a1f4a3e96cd5afdfd7a2e2a0cfc3b3".to_string()).await
     );
 }
