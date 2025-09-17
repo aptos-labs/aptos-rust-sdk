@@ -1,6 +1,5 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt::{Debug, Display};
-use std::str::FromStr;
 
 // TODO: Handle plaintext deserialize / serialize
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
@@ -52,12 +51,12 @@ impl<'de> Deserialize<'de> for ChainId {
     where
         D: Deserializer<'de>,
     {
-        let str = String::deserialize(deserializer)?;
-        Ok(match str.as_str() {
-            MAINNET => ChainId::Mainnet,
-            TESTNET => ChainId::Testnet,
-            TESTING => ChainId::Testing,
-            other => ChainId::Other(u8::from_str(other).map_err(serde::de::Error::custom)?),
+        let chain_id = u8::deserialize(deserializer)?;
+        Ok(match chain_id {
+            1 => ChainId::Mainnet,
+            2 => ChainId::Testnet,
+            3 => ChainId::Testing,
+            other => ChainId::Other(other),
         })
     }
 }
