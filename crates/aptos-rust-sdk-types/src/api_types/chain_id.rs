@@ -86,9 +86,15 @@ mod tests {
 
         for chain_id in test_cases {
             // Test BCS serialization/deserialization
-            let bcs_bytes = aptos_bcs::to_bytes(&chain_id).expect("BCS serialization should succeed");
-            let deserialized: ChainId = aptos_bcs::from_bytes(&bcs_bytes).expect("BCS deserialization should succeed");
-            assert_eq!(chain_id, deserialized, "ChainId should roundtrip correctly for {:?}", chain_id);
+            let bcs_bytes =
+                aptos_bcs::to_bytes(&chain_id).expect("BCS serialization should succeed");
+            let deserialized: ChainId =
+                aptos_bcs::from_bytes(&bcs_bytes).expect("BCS deserialization should succeed");
+            assert_eq!(
+                chain_id, deserialized,
+                "ChainId should roundtrip correctly for {:?}",
+                chain_id
+            );
         }
     }
 
@@ -106,14 +112,14 @@ mod tests {
         assert_eq!(MAINNET_ID, 1);
         assert_eq!(TESTNET_ID, 2);
         assert_eq!(TESTING_ID, 3);
-        
+
         // Test that BCS serialization produces the expected byte values
         let mainnet_bcs = aptos_bcs::to_bytes(&ChainId::Mainnet).unwrap();
         assert_eq!(mainnet_bcs, vec![MAINNET_ID]);
-        
+
         let testnet_bcs = aptos_bcs::to_bytes(&ChainId::Testnet).unwrap();
         assert_eq!(testnet_bcs, vec![TESTNET_ID]);
-        
+
         let testing_bcs = aptos_bcs::to_bytes(&ChainId::Testing).unwrap();
         assert_eq!(testing_bcs, vec![TESTING_ID]);
     }
@@ -139,7 +145,7 @@ mod tests {
         // Test that BCS serialization + deserialization equals the original value
         let original_chain_ids = vec![
             ChainId::Mainnet,
-            ChainId::Testnet, 
+            ChainId::Testnet,
             ChainId::Testing,
             ChainId::Other(0),
             ChainId::Other(42),
@@ -148,15 +154,19 @@ mod tests {
 
         for original in original_chain_ids {
             // Serialize to BCS
-            let bcs_bytes = aptos_bcs::to_bytes(&original).expect("BCS serialization should succeed");
-            
+            let bcs_bytes =
+                aptos_bcs::to_bytes(&original).expect("BCS serialization should succeed");
+
             // Deserialize from BCS
-            let deserialized: ChainId = aptos_bcs::from_bytes(&bcs_bytes).expect("BCS deserialization should succeed");
-            
+            let deserialized: ChainId =
+                aptos_bcs::from_bytes(&bcs_bytes).expect("BCS deserialization should succeed");
+
             // Verify they are equal
-            assert_eq!(original, deserialized, 
-                "Original ChainId {:?} should equal deserialized ChainId {:?} after BCS roundtrip", 
-                original, deserialized);
+            assert_eq!(
+                original, deserialized,
+                "Original ChainId {:?} should equal deserialized ChainId {:?} after BCS roundtrip",
+                original, deserialized
+            );
         }
     }
 }
