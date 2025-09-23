@@ -7,14 +7,14 @@ use std::fmt::{Debug, Display};
 pub enum ChainId {
     Mainnet = 1,
     Testnet = 2,
-    Testing = 3,
+    Testing = 4,
     Other(u8),
 }
 
 // Chain ID values
 const MAINNET_ID: u8 = 1;
 const TESTNET_ID: u8 = 2;
-const TESTING_ID: u8 = 3;
+const TESTING_ID: u8 = 4;
 
 // Chain name strings
 const MAINNET: &str = "mainnet";
@@ -113,7 +113,7 @@ mod tests {
         // Verify that the constants match the expected values
         assert_eq!(MAINNET_ID, 1);
         assert_eq!(TESTNET_ID, 2);
-        assert_eq!(TESTING_ID, 3);
+        assert_eq!(TESTING_ID, 4);
 
         // Test that BCS serialization produces the expected byte values
         let mainnet_bcs = aptos_bcs::to_bytes(&ChainId::Mainnet).unwrap();
@@ -135,7 +135,7 @@ mod tests {
         let testnet: ChainId = aptos_bcs::from_bytes(&[2]).unwrap();
         assert_eq!(testnet, ChainId::Testnet);
 
-        let testing: ChainId = aptos_bcs::from_bytes(&[3]).unwrap();
+        let testing: ChainId = aptos_bcs::from_bytes(&[4]).unwrap();
         assert_eq!(testing, ChainId::Testing);
 
         let other: ChainId = aptos_bcs::from_bytes(&[42]).unwrap();
