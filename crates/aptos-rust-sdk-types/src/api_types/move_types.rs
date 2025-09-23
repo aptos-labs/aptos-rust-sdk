@@ -1,4 +1,5 @@
 use crate::api_types::type_tag::{StructTag, TypeTag};
+use anyhow::format_err;
 use serde::{Deserialize, Serialize, Serializer};
 use std::convert::TryFrom;
 use std::fmt;
