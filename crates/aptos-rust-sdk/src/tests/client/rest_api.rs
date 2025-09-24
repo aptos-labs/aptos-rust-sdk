@@ -3,6 +3,9 @@ use crate::client::rest_api::AptosFullnodeClient;
 
 #[tokio::test]
 async fn test_rest_client() {
+    if std::env::var("SKIP_NETWORK_TESTS").is_ok() {
+        return;
+    }
     // TODO: Test against local testnet
     let aptos_client = AptosFullnodeClient::builder(AptosNetwork::localnet()).build();
     let state = aptos_client
@@ -15,6 +18,9 @@ async fn test_rest_client() {
 
 #[tokio::test]
 async fn test_get_by_version() {
+    if std::env::var("SKIP_NETWORK_TESTS").is_ok() {
+        return;
+    }
     // TODO: Test against local testnet
     let aptos_client = AptosFullnodeClient::builder(AptosNetwork::localnet()).build();
 

@@ -179,6 +179,9 @@ mod view_function_tests {
 
     #[tokio::test]
     async fn test_view_function_with_struct_type_argument() {
+        if std::env::var("SKIP_NETWORK_TESTS").is_ok() {
+            return;
+        }
         let builder = AptosClientBuilder::new(AptosNetwork::testnet());
         let client = builder.build();
 
@@ -216,6 +219,9 @@ mod view_function_tests {
 
     #[tokio::test]
     async fn test_view_function_with_no_type_arguments() {
+        if std::env::var("SKIP_NETWORK_TESTS").is_ok() {
+            return;
+        }
         let builder = AptosClientBuilder::new(AptosNetwork::testnet());
         let client = builder.build();
 
@@ -245,6 +251,9 @@ mod view_function_tests {
 
     #[tokio::test]
     async fn test_view_function_with_address_argument() {
+        if std::env::var("SKIP_NETWORK_TESTS").is_ok() {
+            return;
+        }
         let builder = AptosClientBuilder::new(AptosNetwork::testnet());
         let client = builder.build();
 
@@ -276,6 +285,9 @@ mod view_function_tests {
 
     #[tokio::test]
     async fn test_view_function_with_account_exists_check() {
+        if std::env::var("SKIP_NETWORK_TESTS").is_ok() {
+            return;
+        }
         let builder = AptosClientBuilder::new(AptosNetwork::testnet());
         let client = builder.build();
 
