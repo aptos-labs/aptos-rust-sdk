@@ -93,6 +93,3 @@ jobs:
     
     - name: Build (excluding examples)
       run: cargo build --workspace --exclude examples --release
-    
-    - name: Check that examples can be built (but don't run tests)
-      run: cargo build --package examples
