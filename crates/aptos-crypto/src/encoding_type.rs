@@ -62,7 +62,9 @@ impl EncodingType {
     ) -> Result<Vec<u8>, EncodingError> {
         Ok(match self {
             EncodingType::Hex => hex::encode_upper(key.to_bytes()).into_bytes(),
-            EncodingType::BCS => aptos_bcs::to_bytes(key).map_err(|err| EncodingError::BCS(name, err))?,
+            EncodingType::BCS => {
+                aptos_bcs::to_bytes(key).map_err(|err| EncodingError::BCS(name, err))?
+            }
             EncodingType::Base64 => BASE_64_ENCODER.encode(key.to_bytes()).into_bytes(),
         })
     }

@@ -38,7 +38,8 @@ fn ed25519_bcs_material() {
     assert_eq!(serialized_signature.len(), 1 + ED25519_SIGNATURE_LENGTH);
 
     // Ensure signature serialization - deserialization is stable and deterministic
-    let deserialized_signature: Ed25519Signature = aptos_bcs::from_bytes(&serialized_signature).unwrap();
+    let deserialized_signature: Ed25519Signature =
+        aptos_bcs::from_bytes(&serialized_signature).unwrap();
     assert_eq!(deserialized_signature, signature);
 
     // Verify signature
@@ -86,7 +87,8 @@ fn multi_ed25519_bcs_material() {
     let multi_signature_7of10: MultiEd25519Signature =
         multi_private_key_7of10.sign(&message).unwrap();
 
-    let serialized_multi_signature = aptos_bcs::to_bytes(&Cow::Borrowed(&multi_signature_7of10)).unwrap();
+    let serialized_multi_signature =
+        aptos_bcs::to_bytes(&Cow::Borrowed(&multi_signature_7of10)).unwrap();
     // Expected size due to specialization is
     // 2 bytes for BCS length prefix (due to ULEB128)
     // + 7 * single_signature_size bytes (each sig is of the form (R,s),
