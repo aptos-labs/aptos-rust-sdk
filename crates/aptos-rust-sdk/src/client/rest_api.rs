@@ -4,9 +4,7 @@ use crate::client::response::{FullnodeResponse, ParsableResponse};
 use aptos_rust_sdk_types::api_types::account::AccountResource;
 use aptos_rust_sdk_types::api_types::transaction::SignedTransaction;
 use aptos_rust_sdk_types::api_types::view::ViewRequest;
-use aptos_rust_sdk_types::mime_types::{
-    ACCEPT_BCS, BCS_SIGNED_TRANSACTION, BCS_VIEW_FUNCTION, JSON,
-};
+use aptos_rust_sdk_types::mime_types::{ACCEPT_BCS, BCS_SIGNED_TRANSACTION, JSON};
 use aptos_rust_sdk_types::state::State;
 use aptos_rust_sdk_types::AptosResult;
 use reqwest::header::{ACCEPT, CONTENT_TYPE};
@@ -313,6 +311,9 @@ mod view_function_tests {
 
     #[tokio::test]
     async fn test_view_function_error_handling() {
+        if std::env::var("SKIP_NETWORK_TESTS").is_ok() {
+            return;
+        }
         let builder = AptosClientBuilder::new(AptosNetwork::testnet());
         let client = builder.build();
 

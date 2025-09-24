@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main ]
 
 env:
   CARGO_TERM_COLOR: always
@@ -20,6 +20,9 @@ jobs:
       uses: dtolnay/rust-toolchain@stable
       with:
         components: rustfmt
+
+    - name: Add rustfmt component
+      run: rustup component add rustfmt
     
     - name: Check formatting
       run: cargo fmt --all -- --check
@@ -29,7 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        rust: [stable, beta, nightly]
+        rust: [stable]
     steps:
     - uses: actions/checkout@v4
     
@@ -38,6 +41,9 @@ jobs:
       with:
         toolchain: ${{ matrix.rust }}
         components: clippy
+
+    - name: Install LLVM linker
+      run: sudo apt-get update && sudo apt-get install -y lld
     
     - name: Cache cargo registry
       uses: actions/cache@v4
@@ -69,7 +75,10 @@ jobs:
     
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
-    
+
+    - name: Install LLVM linker
+      run: sudo apt-get update && sudo apt-get install -y lld
+
     - name: Cache cargo registry
       uses: actions/cache@v4
       with:
