@@ -3,23 +3,49 @@ use std::fmt::{Debug, Display};
 
 // TODO: Handle plaintext deserialize / serialize
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
-#[repr(u8)]
 pub enum ChainId {
-    Mainnet = 1,
-    Testnet = 2,
-    Testing = 4,
+    Mainnet,
+    Testnet,
+    Testing,
     Other(u8),
 }
 
-// Chain ID values
-const MAINNET_ID: u8 = 1;
-const TESTNET_ID: u8 = 2;
-const TESTING_ID: u8 = 4;
+impl ChainId {
+    pub const MAINNET_ID: u8 = 1;
+    pub const TESTNET_ID: u8 = 2;
+    pub const TESTING_ID: u8 = 4;
 
-// Chain name strings
-const MAINNET: &str = "mainnet";
-const TESTNET: &str = "testnet";
-const TESTING: &str = "testing";
+    const MAINNET_NAME: &'static str = "mainnet";
+    const TESTNET_NAME: &'static str = "testnet";
+    const TESTING_NAME: &'static str = "testing";
+
+    pub const fn from_u8(raw: u8) -> Self {
+        match raw {
+            Self::MAINNET_ID => Self::Mainnet,
+            Self::TESTNET_ID => Self::Testnet,
+            Self::TESTING_ID => Self::Testing,
+            other => Self::Other(other),
+        }
+    }
+
+    pub const fn as_u8(self) -> u8 {
+        match self {
+            Self::Mainnet => Self::MAINNET_ID,
+            Self::Testnet => Self::TESTNET_ID,
+            Self::Testing => Self::TESTING_ID,
+            Self::Other(other) => other,
+        }
+    }
+
+    fn as_known_name(self) -> Option<&'static str> {
+        match self {
+            Self::Mainnet => Some(Self::MAINNET_NAME),
+            Self::Testnet => Some(Self::TESTNET_NAME),
+            Self::Testing => Some(Self::TESTING_NAME),
+            Self::Other(_) => None,
+        }
+    }
+}
 
 impl Debug for ChainId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -29,11 +55,9 @@ impl Debug for ChainId {
 
 impl Display for ChainId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ChainId::Mainnet => write!(f, "{}", MAINNET),
-            ChainId::Testnet => write!(f, "{}", TESTNET),
-            ChainId::Testing => write!(f, "{}", TESTING),
-            ChainId::Other(other) => write!(f, "{}", other),
+        match self.as_known_name() {
+            Some(name) => write!(f, "{}", name),
+            None => write!(f, "{}", self.as_u8()),
         }
     }
 }
@@ -43,12 +67,7 @@ impl Serialize for ChainId {
     where
         S: Serializer,
     {
-        match self {
-            ChainId::Mainnet => serializer.serialize_u8(MAINNET_ID),
-            ChainId::Testnet => serializer.serialize_u8(TESTNET_ID),
-            ChainId::Testing => serializer.serialize_u8(TESTING_ID),
-            ChainId::Other(inner) => serializer.serialize_u8(*inner),
-        }
+        serializer.serialize_u8(self.as_u8())
     }
 }
 
@@ -59,13 +78,19 @@ impl<'de> Deserialize<'de> for ChainId {
     {
         // Deserialize as u8 (not string) - this is the correct format for ChainId
         // Previous implementation incorrectly used string deserialization
-        let chain_id = u8::deserialize(deserializer)?;
-        Ok(match chain_id {
-            MAINNET_ID => ChainId::Mainnet,
-            TESTNET_ID => ChainId::Testnet,
-            TESTING_ID => ChainId::Testing,
-            other => ChainId::Other(other),
-        })
+        Ok(Self::from_u8(u8::deserialize(deserializer)?))
+    }
+}
+
+impl From<ChainId> for u8 {
+    fn from(chain_id: ChainId) -> Self {
+        chain_id.as_u8()
+    }
+}
+
+impl From<u8> for ChainId {
+    fn from(raw: u8) -> Self {
+        ChainId::from_u8(raw)
     }
 }
 
@@ -111,19 +136,19 @@ mod tests {
     #[test]
     fn test_chain_id_constants_consistency() {
         // Verify that the constants match the expected values
-        assert_eq!(MAINNET_ID, 1);
-        assert_eq!(TESTNET_ID, 2);
-        assert_eq!(TESTING_ID, 4);
+        assert_eq!(ChainId::MAINNET_ID, 1);
+        assert_eq!(ChainId::TESTNET_ID, 2);
+        assert_eq!(ChainId::TESTING_ID, 4);
 
         // Test that BCS serialization produces the expected byte values
         let mainnet_bcs = aptos_bcs::to_bytes(&ChainId::Mainnet).unwrap();
-        assert_eq!(mainnet_bcs, vec![MAINNET_ID]);
+        assert_eq!(mainnet_bcs, vec![ChainId::MAINNET_ID]);
 
         let testnet_bcs = aptos_bcs::to_bytes(&ChainId::Testnet).unwrap();
-        assert_eq!(testnet_bcs, vec![TESTNET_ID]);
+        assert_eq!(testnet_bcs, vec![ChainId::TESTNET_ID]);
 
         let testing_bcs = aptos_bcs::to_bytes(&ChainId::Testing).unwrap();
-        assert_eq!(testing_bcs, vec![TESTING_ID]);
+        assert_eq!(testing_bcs, vec![ChainId::TESTING_ID]);
     }
 
     #[test]
