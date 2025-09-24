@@ -6,24 +6,24 @@ use std::fmt::{Debug, Display};
 pub enum ChainId {
     Mainnet,
     Testnet,
-    Testing,
+    Localnet,
     Other(u8),
 }
 
 impl ChainId {
     pub const MAINNET_ID: u8 = 1;
     pub const TESTNET_ID: u8 = 2;
-    pub const TESTING_ID: u8 = 4;
+    pub const LOCALNET_ID: u8 = 4;
 
     const MAINNET_NAME: &'static str = "mainnet";
     const TESTNET_NAME: &'static str = "testnet";
-    const TESTING_NAME: &'static str = "testing";
+    const LOCALNET_NAME: &'static str = "localnet";
 
     pub const fn from_u8(raw: u8) -> Self {
         match raw {
             Self::MAINNET_ID => Self::Mainnet,
             Self::TESTNET_ID => Self::Testnet,
-            Self::TESTING_ID => Self::Testing,
+            Self::LOCALNET_ID => Self::Localnet,
             other => Self::Other(other),
         }
     }
@@ -32,7 +32,7 @@ impl ChainId {
         match self {
             Self::Mainnet => Self::MAINNET_ID,
             Self::Testnet => Self::TESTNET_ID,
-            Self::Testing => Self::TESTING_ID,
+            Self::Localnet => Self::LOCALNET_ID,
             Self::Other(other) => other,
         }
     }
@@ -41,7 +41,7 @@ impl ChainId {
         match self {
             Self::Mainnet => Some(Self::MAINNET_NAME),
             Self::Testnet => Some(Self::TESTNET_NAME),
-            Self::Testing => Some(Self::TESTING_NAME),
+            Self::Localnet => Some(Self::LOCALNET_NAME),
             Self::Other(_) => None,
         }
     }
@@ -105,7 +105,7 @@ mod tests {
         let test_cases = vec![
             ChainId::Mainnet,
             ChainId::Testnet,
-            ChainId::Testing,
+            ChainId::Localnet,
             ChainId::Other(42),
             ChainId::Other(0),
             ChainId::Other(255),
@@ -129,7 +129,7 @@ mod tests {
     fn test_chain_id_display() {
         assert_eq!(format!("{}", ChainId::Mainnet), "mainnet");
         assert_eq!(format!("{}", ChainId::Testnet), "testnet");
-        assert_eq!(format!("{}", ChainId::Testing), "testing");
+        assert_eq!(format!("{}", ChainId::Localnet), "localnet");
         assert_eq!(format!("{}", ChainId::Other(42)), "42");
     }
 
@@ -138,7 +138,7 @@ mod tests {
         // Verify that the constants match the expected values
         assert_eq!(ChainId::MAINNET_ID, 1);
         assert_eq!(ChainId::TESTNET_ID, 2);
-        assert_eq!(ChainId::TESTING_ID, 4);
+        assert_eq!(ChainId::LOCALNET_ID, 4);
 
         // Test that BCS serialization produces the expected byte values
         let mainnet_bcs = aptos_bcs::to_bytes(&ChainId::Mainnet).unwrap();
@@ -147,8 +147,8 @@ mod tests {
         let testnet_bcs = aptos_bcs::to_bytes(&ChainId::Testnet).unwrap();
         assert_eq!(testnet_bcs, vec![ChainId::TESTNET_ID]);
 
-        let testing_bcs = aptos_bcs::to_bytes(&ChainId::Testing).unwrap();
-        assert_eq!(testing_bcs, vec![ChainId::TESTING_ID]);
+        let testing_bcs = aptos_bcs::to_bytes(&ChainId::Localnet).unwrap();
+        assert_eq!(testing_bcs, vec![ChainId::LOCALNET_ID]);
     }
 
     #[test]
@@ -160,8 +160,8 @@ mod tests {
         let testnet: ChainId = aptos_bcs::from_bytes(&[2]).unwrap();
         assert_eq!(testnet, ChainId::Testnet);
 
-        let testing: ChainId = aptos_bcs::from_bytes(&[4]).unwrap();
-        assert_eq!(testing, ChainId::Testing);
+        let localnet: ChainId = aptos_bcs::from_bytes(&[4]).unwrap();
+        assert_eq!(localnet, ChainId::Localnet);
 
         let other: ChainId = aptos_bcs::from_bytes(&[42]).unwrap();
         assert_eq!(other, ChainId::Other(42));
