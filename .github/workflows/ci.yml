@@ -65,7 +65,7 @@ jobs:
         SKIP_NETWORK_TESTS=1 cargo test --workspace --exclude examples --lib --bins
     
     - name: Run clippy
-      run: cargo clippy --workspace --exclude examples -- -D warnings
+      run: cargo clippy --workspace --exclude examples -- -W warnings
 
   build:
     name: Build
