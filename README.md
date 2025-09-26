@@ -22,8 +22,8 @@ The crates are not published to crates.io (`publish = false`), so depend on the 
 
 ```toml
 [dependencies]
-aptos-rust-sdk = { git = "https://github.com/aptos-labs/aptos-rust-sdk", package = "aptos-rust-sdk" , branch = "main"}
-aptos-rust-sdk-types = { git = "https://github.com/aptos-labs/aptos-rust-sdk", package = "aptos-rust-sdk-types" , branch = "main"}
+aptos-rust-sdk = { git = "https://github.com/aptos-labs/aptos-rust-sdk", package = "aptos-rust-sdk", branch = "main"}
+aptos-rust-sdk-types = { git = "https://github.com/aptos-labs/aptos-rust-sdk", package = "aptos-rust-sdk-types", branch = "main"}
 ```
 
 When working inside this workspace, use the shared dependency definitions from `[workspace.dependencies]`.
@@ -112,7 +112,7 @@ async fn main() -> anyhow::Result<()> {
         sender,
         sequence_number,
         payload,
-        11,                         // max_gas_amount
+        1500,                         // max_gas_amount
         100,                        // gas_unit_price
         state.timestamp_usecs / 1_000_000 + 600, // expiration timestamp (secs)
         aptos_rust_sdk_types::api_types::chain_id::ChainId::Testnet,
