@@ -108,12 +108,20 @@ async fn main() -> anyhow::Result<()> {
         ],
     ));
 
+    // Configure gas parameters. These values depend on network conditions and transaction complexity.
+    // See: https://aptos.dev/concepts/transactions/#gas for guidance.
+    // For testnet, typical values are:
+    //   - max_gas_amount: 1500 (maximum gas units to consume; 1500 is sufficient for most simple transactions)
+    //   - gas_unit_price: 100 (price per gas unit for transaction prioritization; 100 is the default when network is not congested, and there's usually no lower value; can be increased moderately if needed)
+    let MAX_GAS_AMOUNT: u64 = 1500;
+    let GAS_UNIT_PRICE: u64 = 100;
+
     let raw_txn = RawTransaction::new(
         sender,
         sequence_number,
         payload,
-        1500,                         // max_gas_amount
-        100,                        // gas_unit_price
+        MAX_GAS_AMOUNT,
+        GAS_UNIT_PRICE,
         state.timestamp_usecs / 1_000_000 + 600, // expiration timestamp (secs)
         aptos_rust_sdk_types::api_types::chain_id::ChainId::Testnet,
     );
