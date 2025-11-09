@@ -24,7 +24,7 @@ pub struct AptosFullnodeClient {
 impl AptosFullnodeClient {
     /// Create a builder for the `AptosClient`
     pub fn builder(network: AptosNetwork) -> AptosClientBuilder {
-        AptosClientBuilder::new(network)
+        AptosClientBuilder::new(network, None)
     }
 
     /// Retrieve the network information for the client
@@ -156,8 +156,6 @@ impl AptosFullnodeClient {
             .send()
             .await?;
 
-        println!("{:?}", response);
-
         let parsable_response = ParsableResponse(response);
         parsable_response.parse_response().await
     }
@@ -180,8 +178,8 @@ mod view_function_tests {
         if std::env::var("SKIP_NETWORK_TESTS").is_ok() {
             return;
         }
-        let builder = AptosClientBuilder::new(AptosNetwork::testnet());
-        let client = builder.build();
+        let builder = AptosClientBuilder::new(AptosNetwork::testnet(), None);
+        let client = builder.build().await.unwrap();
 
         // Test view function with struct type argument (this is supported)
         let view_request = ViewRequest {
@@ -220,8 +218,8 @@ mod view_function_tests {
         if std::env::var("SKIP_NETWORK_TESTS").is_ok() {
             return;
         }
-        let builder = AptosClientBuilder::new(AptosNetwork::testnet());
-        let client = builder.build();
+        let builder = AptosClientBuilder::new(AptosNetwork::testnet(), None);
+        let client = builder.build().await.unwrap();
 
         // Test view function with no type arguments
         let view_request = ViewRequest {
@@ -252,8 +250,8 @@ mod view_function_tests {
         if std::env::var("SKIP_NETWORK_TESTS").is_ok() {
             return;
         }
-        let builder = AptosClientBuilder::new(AptosNetwork::testnet());
-        let client = builder.build();
+        let builder = AptosClientBuilder::new(AptosNetwork::testnet(), None);
+        let client = builder.build().await.unwrap();
 
         // Test view function with address argument
         let view_request = ViewRequest {
@@ -286,8 +284,8 @@ mod view_function_tests {
         if std::env::var("SKIP_NETWORK_TESTS").is_ok() {
             return;
         }
-        let builder = AptosClientBuilder::new(AptosNetwork::testnet());
-        let client = builder.build();
+        let builder = AptosClientBuilder::new(AptosNetwork::testnet(), None);
+        let client = builder.build().await.unwrap();
 
         // Test view function to check if account exists
         let view_request = ViewRequest {
@@ -314,8 +312,8 @@ mod view_function_tests {
         if std::env::var("SKIP_NETWORK_TESTS").is_ok() {
             return;
         }
-        let builder = AptosClientBuilder::new(AptosNetwork::testnet());
-        let client = builder.build();
+        let builder = AptosClientBuilder::new(AptosNetwork::testnet(), None);
+        let client = builder.build().await.unwrap();
 
         // Test with invalid function name
         let view_request = ViewRequest {

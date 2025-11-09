@@ -20,11 +20,11 @@ mod tests {
     use std::vec;
 
     #[tokio::test]
-    async fn submit_transaction() {
-        let builder = AptosClientBuilder::new(AptosNetwork::testnet());
-        let client = builder.build();
+    async fn submit_transaction() -> Result<(), anyhow::Error> {
+        let builder = AptosClientBuilder::new(AptosNetwork::testnet(), None);
+        let client = builder.build().await?;
 
-        let state = client.get_state().await.unwrap();
+        let state = client.get_state().await?;
 
         let mut seed = [0u8; 32];
         let seed_bytes =
@@ -32,26 +32,24 @@ mod tests {
                 .unwrap(); // Remove the 0x prefix
         seed[..seed_bytes.len()].copy_from_slice(&seed_bytes);
 
-        let key = Ed25519PrivateKey::try_from(seed_bytes.as_slice()).unwrap();
+        let key = Ed25519PrivateKey::try_from(seed_bytes.as_slice())?;
         let auth_key = AuthenticationKey::ed25519(&Ed25519PublicKey::from(&key));
         let sender = auth_key.account_address();
         println!("Sender: {:?}", sender);
         let resource = client
             .get_account_resources(sender.to_string())
-            .await
-            .unwrap()
+            .await?
             .into_inner();
         let sequence_number = resource
             .iter()
             .find(|r| r.type_ == "0x1::account::Account")
-            .unwrap()
+            .ok_or_else(|| anyhow::anyhow!("missing account resource"))?
             .data
             .get("sequence_number")
-            .unwrap()
+            .ok_or_else(|| anyhow::anyhow!("missing sequence number"))?
             .as_str()
-            .unwrap()
-            .parse::<u64>()
-            .unwrap();
+            .ok_or_else(|| anyhow::anyhow!("missing sequence number"))?
+            .parse::<u64>()?;
         let payload = TransactionPayload::EntryFunction(EntryFunction::new(
             ModuleId::new(AccountAddress::ONE, "aptos_account".to_string()),
             "transfer".to_string(),
@@ -73,7 +71,7 @@ mod tests {
             chain_id,
         );
 
-        let message = raw_txn.generate_signing_message().unwrap();
+        let message = raw_txn.generate_signing_message()?;
 
         let signature = key.sign_message(&message);
 
@@ -82,7 +80,7 @@ mod tests {
                 raw_txn.clone(),
                 TransactionAuthenticator::single_sender(AccountAuthenticator::no_authenticator()),
             ))
-            .await;
+            .await?;
 
         println!("Simulate Transaction: {:?}", simulate_transaction);
 
@@ -94,22 +92,22 @@ mod tests {
             .await;
 
         println!("Transaction: {:?}", transaction);
+        Ok(())
     }
 
     #[tokio::test]
-    async fn submit_feepayer_transaction() {
-        let builder = AptosClientBuilder::new(AptosNetwork::testnet());
-        let client = builder.build();
+    async fn submit_feepayer_transaction() -> Result<(), anyhow::Error> {
+        let builder = AptosClientBuilder::new(AptosNetwork::testnet(), None);
+        let client = builder.build().await?;
 
-        let state = client.get_state().await.unwrap();
+        let state = client.get_state().await?;
 
         let mut seed = [0u8; 32];
         let seed_bytes =
-            hex::decode("4aeeeb3f286caa91984d4a16d424786c7aa26947050b00e84ab7033f2aab0c2d")
-                .unwrap(); // Remove the 0x prefix
+            hex::decode("4aeeeb3f286caa91984d4a16d424786c7aa26947050b00e84ab7033f2aab0c2d")?; // Remove the 0x prefix
         seed[..seed_bytes.len()].copy_from_slice(&seed_bytes);
 
-        let fee_payer_key = Ed25519PrivateKey::try_from(seed_bytes.as_slice()).unwrap();
+        let fee_payer_key = Ed25519PrivateKey::try_from(seed_bytes.as_slice())?;
         let fee_payer_address =
             AuthenticationKey::ed25519(&Ed25519PublicKey::from(&fee_payer_key)).account_address();
         println!("Feepayer Address: {:?}", fee_payer_address.to_string());
@@ -122,8 +120,7 @@ mod tests {
             ModuleId::new(
                 AccountAddress::from_str(
                     "0x94bd6fa34dba07f935ea2288ba36d74aa5dda6ae541137844cc2f0af8b6b73f3",
-                )
-                .unwrap(),
+                )?,
                 "create_object".to_string(),
             ),
             "create".to_string(),
@@ -152,7 +149,7 @@ mod tests {
             fee_payer_address,
         );
 
-        let message = raw_txn_with_data.generate_signing_message().unwrap();
+        let message = raw_txn_with_data.generate_signing_message()?;
 
         let txn_sender_signature = txn_sender_key.sign_message(&message);
 
@@ -169,7 +166,7 @@ mod tests {
                     AccountAuthenticator::no_authenticator(),
                 ),
             ))
-            .await;
+            .await?;
         println!("Simulate Transaction: {:?}", simulate_transaction);
         let transaction = client
             .submit_transaction(SignedTransaction::new(
@@ -188,22 +185,23 @@ mod tests {
                     ),
                 ),
             ))
-            .await;
+            .await?;
         println!("Transaction: {:?}", transaction);
+        Ok(())
     }
 
     #[tokio::test]
-    async fn submit_multi_agent_transaction() {
-        let builder = AptosClientBuilder::new(AptosNetwork::testnet());
-        let client = builder.build();
+    async fn submit_multi_agent_transaction() -> Result<(), anyhow::Error> {
+        let builder = AptosClientBuilder::new(AptosNetwork::testnet(), None);
+        let client = builder.build().await?;
 
-        let state = client.get_state().await.unwrap();
+        let state = client.get_state().await?;
 
         let seed_bytes =
             hex::decode("4aeeeb3f286caa91984d4a16d424786c7aa26947050b00e84ab7033f2aab0c2d")
-                .unwrap();
+                ?;
 
-        let key = Ed25519PrivateKey::try_from(seed_bytes.as_slice()).unwrap();
+        let key = Ed25519PrivateKey::try_from(seed_bytes.as_slice())?;
         let auth_key = AuthenticationKey::ed25519(&Ed25519PublicKey::from(&key));
         let sender = auth_key.account_address();
         println!("Sender: {:?}", sender);
@@ -217,28 +215,26 @@ mod tests {
 
         let resource = client
             .get_account_resources(sender.to_string())
-            .await
-            .unwrap()
+            .await?
             .into_inner();
 
         let sequence_number = resource
             .iter()
             .find(|r| r.type_ == "0x1::account::Account")
-            .unwrap()
+            .ok_or_else(|| anyhow::anyhow!("missing account resource"))?
             .data
             .get("sequence_number")
-            .unwrap()
+            .ok_or_else(|| anyhow::anyhow!("missing sequence number"))?
             .as_str()
-            .unwrap()
-            .parse::<u64>()
-            .unwrap();
+            .ok_or_else(|| anyhow::anyhow!("missing sequence number"))?
+            .parse::<u64>()?;
 
         let payload = TransactionPayload::EntryFunction(EntryFunction::new(
             ModuleId::new(
                 AccountAddress::from_str(
                     "0x0d966e595a22a025302928fe9d6e3ac28c7f1b68c3a68015a4487f8a816ed239",
                 )
-                .unwrap(),
+                ?,
                 "txn".to_string(),
             ),
             "multiAgentTxn".to_string(),
@@ -264,7 +260,7 @@ mod tests {
             vec![secondary_address],
         );
 
-        let message = raw_txn.generate_signing_message().unwrap();
+        let message = raw_txn.generate_signing_message()?;
 
         let signature = key.sign_message(&message);
 
@@ -277,7 +273,7 @@ mod tests {
                     secondary_signers: vec![AccountAuthenticator::no_authenticator()],
                 },
             ))
-            .await;
+            .await?;
         println!("Simulate Transaction: {:?}", simulate_transaction);
 
         let transaction = client
@@ -295,7 +291,8 @@ mod tests {
                     }],
                 },
             ))
-            .await;
+            .await?;
         println!("Transaction: {:?}", transaction);
+        Ok(())
     }
 }

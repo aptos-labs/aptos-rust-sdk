@@ -4,6 +4,7 @@ pub mod chain_id;
 pub mod event;
 pub mod hash;
 pub mod identifier;
+pub mod ledger_info;
 pub mod module_id;
 pub mod move_types;
 pub mod numbers;
