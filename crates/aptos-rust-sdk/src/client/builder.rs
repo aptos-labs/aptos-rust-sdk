@@ -1,7 +1,7 @@
 use crate::client::config::AptosNetwork;
 use crate::client::rest_api::AptosFullnodeClient;
-use aptos_rust_sdk_types::{api_types::ledger_info::LedgerInfo, headers::X_APTOS_CLIENT};
 use aptos_rust_sdk_types::AptosResult;
+use aptos_rust_sdk_types::{api_types::ledger_info::LedgerInfo, headers::X_APTOS_CLIENT};
 use reqwest::{
     header::{self, HeaderMap, HeaderName, HeaderValue},
     Client as ReqwestClient, ClientBuilder as ReqwestClientBuilder,
@@ -24,10 +24,8 @@ pub struct AptosClientBuilder {
 impl AptosClientBuilder {
     /// A hidden constructor, please use `AptosClient::builder()` to create
     pub fn new(network: AptosNetwork, headers: Option<&HeaderMap>) -> Self {
-        let mut headers = headers
-            .map(|h| h.clone())
-            .unwrap_or_else(HeaderMap::new);
-        
+        let mut headers = headers.map(|h| h.clone()).unwrap_or_else(HeaderMap::new);
+
         headers.insert(
             X_APTOS_CLIENT,
             HeaderValue::from_static(X_APTOS_SDK_HEADER_VALUE),
@@ -80,12 +78,7 @@ impl AptosClientBuilder {
             self.network
         } else {
             let url = self.network.rest_url().join("v1")?;
-            let ledger_info: LedgerInfo = rest_client
-                .get(url)
-                .send()
-                .await?
-                .json()
-                .await?;
+            let ledger_info: LedgerInfo = rest_client.get(url).send().await?.json().await?;
             let chain_id = ledger_info.chain_id();
             self.network.with_chain_id(Some(chain_id))
         };
@@ -119,7 +112,7 @@ mod tests {
         // If we somehow get here, try to create a network with invalid URL
         let network = AptosNetwork::new("invalid", invalid_url, None, None);
         let builder = AptosClientBuilder::new(network, None);
-        
+
         // Building should fail when trying to join the path
         let result = builder.build().await;
         assert!(result.is_err(), "Building with invalid URL should fail");
@@ -129,26 +122,27 @@ mod tests {
     async fn test_build_with_unreachable_url() {
         // Test with a valid URL format but unreachable server
         // Use a non-existent domain to ensure connection failure
-        let unreachable_url = Url::parse("http://this-domain-does-not-exist-12345.invalid:8080").unwrap();
+        let unreachable_url =
+            Url::parse("http://this-domain-does-not-exist-12345.invalid:8080").unwrap();
         // Ensure chain_id is None so it tries to fetch from server
         let network = AptosNetwork::new("unreachable", unreachable_url, None, None);
         let builder = AptosClientBuilder::new(network, None);
-        
+
         // Building should fail when trying to fetch chain_id from unreachable server
         let result = builder.build().await;
         assert!(result.is_err(), "Building with unreachable URL should fail");
-        
+
         // Check that the error is related to connection failure or DNS resolution
         let error_msg = format!("{}", result.unwrap_err());
         assert!(
-            error_msg.contains("connection") || 
-            error_msg.contains("refused") || 
-            error_msg.contains("timeout") ||
-            error_msg.contains("failed") ||
-            error_msg.contains("error sending request") ||
-            error_msg.contains("error decoding response body") ||
-            error_msg.contains("dns") ||
-            error_msg.contains("resolve"),
+            error_msg.contains("connection")
+                || error_msg.contains("refused")
+                || error_msg.contains("timeout")
+                || error_msg.contains("failed")
+                || error_msg.contains("error sending request")
+                || error_msg.contains("error decoding response body")
+                || error_msg.contains("dns")
+                || error_msg.contains("resolve"),
             "Error should be related to connection/DNS failure, got: {}",
             error_msg
         );
@@ -162,12 +156,18 @@ mod tests {
         // Ensure chain_id is None so it tries to fetch from server
         let network = AptosNetwork::new("test", base_url, None, None);
         let builder = AptosClientBuilder::new(network, None);
-        
+
         // Build should succeed and fetch chain_id from the server
-        let client = builder.build().await.expect("Should successfully build client");
-        
+        let client = builder
+            .build()
+            .await
+            .expect("Should successfully build client");
+
         // Verify that chain_id was fetched from the server
-        let chain_id = client.network.chain_id().expect("Chain id should be fetched from server");
+        let chain_id = client
+            .network
+            .chain_id()
+            .expect("Chain id should be fetched from server");
         assert_eq!(chain_id, ChainId::Mainnet, "Chain id should match mainnet");
     }
 }

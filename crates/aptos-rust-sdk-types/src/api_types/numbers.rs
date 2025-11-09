@@ -31,12 +31,12 @@ impl U64 {
     pub fn as_u64(&self) -> u64 {
         self.0
     }
-    
+
     /// Convert into u64
     pub fn into_u64(self) -> u64 {
         self.0
     }
-    
+
     /// Create a new U64 from a u64
     pub fn new(value: u64) -> Self {
         U64(value)

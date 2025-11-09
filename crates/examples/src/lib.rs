@@ -198,8 +198,7 @@ mod tests {
         let state = client.get_state().await?;
 
         let seed_bytes =
-            hex::decode("4aeeeb3f286caa91984d4a16d424786c7aa26947050b00e84ab7033f2aab0c2d")
-                ?;
+            hex::decode("4aeeeb3f286caa91984d4a16d424786c7aa26947050b00e84ab7033f2aab0c2d")?;
 
         let key = Ed25519PrivateKey::try_from(seed_bytes.as_slice())?;
         let auth_key = AuthenticationKey::ed25519(&Ed25519PublicKey::from(&key));
@@ -233,8 +232,7 @@ mod tests {
             ModuleId::new(
                 AccountAddress::from_str(
                     "0x0d966e595a22a025302928fe9d6e3ac28c7f1b68c3a68015a4487f8a816ed239",
-                )
-                ?,
+                )?,
                 "txn".to_string(),
             ),
             "multiAgentTxn".to_string(),

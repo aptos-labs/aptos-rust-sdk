@@ -17,7 +17,7 @@ impl ViewFunctionHelper {
     }
 
     /// Helper method to get account balance
-    /// 
+    ///
     /// # Arguments
     /// * `address` - Account address
     /// * `coin_type` - Coin module name (e.g., "aptos_coin")
@@ -110,7 +110,7 @@ mod tests {
 
         let result = client.view_function(request).await;
         assert!(result.is_ok(), "Getting account balance should succeed");
-        
+
         let response = result.unwrap();
         let balance = response.into_inner();
         assert!(balance.is_array(), "Balance should be returned as an array");
@@ -128,10 +128,13 @@ mod tests {
 
         let result = client.view_function(request).await;
         assert!(result.is_ok(), "Getting timestamp should succeed");
-        
+
         let response = result.unwrap();
         let timestamp = response.into_inner();
-        assert!(timestamp.is_array(), "Timestamp should be returned as an array");
+        assert!(
+            timestamp.is_array(),
+            "Timestamp should be returned as an array"
+        );
     }
 
     #[tokio::test]
@@ -146,10 +149,13 @@ mod tests {
 
         let result = client.view_function(request).await;
         assert!(result.is_ok(), "Getting sequence number should succeed");
-        
+
         let response = result.unwrap();
         let sequence = response.into_inner();
-        assert!(sequence.is_array(), "Sequence number should be returned as an array");
+        assert!(
+            sequence.is_array(),
+            "Sequence number should be returned as an array"
+        );
     }
 
     #[tokio::test]
@@ -164,10 +170,13 @@ mod tests {
 
         let result = client.view_function(request).await;
         assert!(result.is_ok(), "Checking account existence should succeed");
-        
+
         let response = result.unwrap();
         let exists = response.into_inner();
-        assert!(exists.is_array(), "Account existence should be returned as an array");
+        assert!(
+            exists.is_array(),
+            "Account existence should be returned as an array"
+        );
     }
 
     #[tokio::test]
@@ -195,7 +204,10 @@ mod tests {
         };
 
         let result = client.view_function(request).await;
-        assert!(result.is_err(), "Calling function from invalid module should fail");
+        assert!(
+            result.is_err(),
+            "Calling function from invalid module should fail"
+        );
     }
 
     #[tokio::test]
@@ -204,7 +216,7 @@ mod tests {
         let helper = ViewFunctionHelper::new(AptosNetwork::testnet())
             .await
             .expect("Failed to create helper");
-        
+
         let result = helper.get_balance("0x1", "aptos_coin", "AptosCoin").await;
         assert!(result.is_ok(), "Helper get_balance should succeed");
     }
@@ -215,7 +227,7 @@ mod tests {
         let helper = ViewFunctionHelper::new(AptosNetwork::testnet())
             .await
             .expect("Failed to create helper");
-        
+
         let result = helper.get_sequence_number("0x1").await;
         assert!(result.is_ok(), "Helper get_sequence_number should succeed");
     }
@@ -226,7 +238,7 @@ mod tests {
         let helper = ViewFunctionHelper::new(AptosNetwork::testnet())
             .await
             .expect("Failed to create helper");
-        
+
         let result = helper.account_exists("0x1").await;
         assert!(result.is_ok(), "Helper account_exists should succeed");
     }
@@ -237,7 +249,7 @@ mod tests {
         let helper = ViewFunctionHelper::new(AptosNetwork::testnet())
             .await
             .expect("Failed to create helper");
-        
+
         let result = helper.get_timestamp().await;
         assert!(result.is_ok(), "Helper get_timestamp should succeed");
     }

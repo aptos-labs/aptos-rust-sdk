@@ -7,7 +7,10 @@ async fn test_rest_client() {
         return;
     }
     // TODO: Test against local testnet
-    let aptos_client = AptosFullnodeClient::builder(AptosNetwork::localnet()).build().await.unwrap();
+    let aptos_client = AptosFullnodeClient::builder(AptosNetwork::localnet())
+        .build()
+        .await
+        .unwrap();
     let state = aptos_client
         .get_state()
         .await
@@ -22,7 +25,10 @@ async fn test_get_by_version() {
         return;
     }
     // TODO: Test against local testnet
-    let aptos_client = AptosFullnodeClient::builder(AptosNetwork::localnet()).build().await.unwrap();
+    let aptos_client = AptosFullnodeClient::builder(AptosNetwork::localnet())
+        .build()
+        .await
+        .unwrap();
 
     // Retrieve latest blockchain state
     let state = aptos_client

@@ -21,7 +21,12 @@ pub struct AptosNetwork {
 }
 
 impl AptosNetwork {
-    pub const fn new(name: &'static str, rest_url: Url, indexer_url: Option<Url>, chain_id: Option<ChainId>) -> AptosNetwork {
+    pub const fn new(
+        name: &'static str,
+        rest_url: Url,
+        indexer_url: Option<Url>,
+        chain_id: Option<ChainId>,
+    ) -> AptosNetwork {
         AptosNetwork {
             name,
             rest_url,
@@ -81,7 +86,7 @@ impl AptosNetwork {
     pub fn chain_id(&self) -> Option<ChainId> {
         self.chain_id
     }
-    
+
     pub fn with_name(mut self, name: &'static str) -> Self {
         self.name = name;
         self
