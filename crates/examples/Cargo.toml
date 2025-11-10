@@ -13,6 +13,7 @@ rand.workspace = true
 ed25519-dalek.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+anyhow.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true }
@@ -20,7 +21,3 @@ tokio = { workspace = true }
 [[bin]]
 name = "type_parsing_example"
 path = "src/type_parsing_example.rs"
-
-[[bin]]
-name = "view_function_example"
-path = "src/view_function_example.rs"

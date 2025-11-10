@@ -956,6 +956,7 @@ dependencies = [
 name = "examples"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "aptos-bcs",
  "aptos-crypto",
  "aptos-rust-sdk",
