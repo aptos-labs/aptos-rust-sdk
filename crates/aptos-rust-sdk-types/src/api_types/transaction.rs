@@ -205,7 +205,9 @@ pub struct ChangeSet {
     events: Vec<ContractEvent>,
 }
 
-#[derive(Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(
+    Clone, Debug, Hash, Eq, PartialEq, Serialize, Deserialize, CryptoHasher, BCSCryptoHash,
+)]
 pub enum RawTransactionWithData {
     MultiAgent {
         raw_txn: RawTransaction,

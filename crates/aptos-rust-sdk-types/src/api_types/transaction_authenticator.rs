@@ -3,9 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::api_types::address::AccountAddress;
-use crate::api_types::transaction::RawTransaction;
+use crate::api_types::bitvec::BitVec;
+use crate::api_types::transaction::{RawTransaction, RawTransactionWithData};
 use anyhow::ensure;
 use aptos_crypto::ed25519::{Ed25519PublicKey, Ed25519Signature};
+use aptos_crypto::hash::CryptoHash;
+use aptos_crypto::multi_ed25519::{MultiEd25519PublicKey, MultiEd25519Signature};
+use aptos_crypto::traits::Signature;
 use aptos_crypto::HashValue;
 use rand::rngs::OsRng;
 use rand::RngCore;
@@ -44,7 +48,11 @@ pub enum TransactionAuthenticator {
         public_key: Ed25519PublicKey,
         signature: Ed25519Signature,
     },
-    MultiEd25519 {},
+    /// K-of-N multisignature
+    MultiEd25519 {
+        public_key: MultiEd25519PublicKey,
+        signature: MultiEd25519Signature,
+    },
     /// Multi-agent transaction.
     MultiAgent {
         sender: AccountAuthenticator,
@@ -68,6 +76,17 @@ impl TransactionAuthenticator {
     /// Create a single-signature ed25519 authenticator
     pub fn ed25519(public_key: Ed25519PublicKey, signature: Ed25519Signature) -> Self {
         Self::Ed25519 {
+            public_key,
+            signature,
+        }
+    }
+
+    /// Create a multisignature ed25519 authenticator
+    pub fn multi_ed25519(
+        public_key: MultiEd25519PublicKey,
+        signature: MultiEd25519Signature,
+    ) -> Self {
+        Self::MultiEd25519 {
             public_key,
             signature,
         }
@@ -122,8 +141,21 @@ impl TransactionAuthenticator {
             ));
         }
         match self {
-            Self::Ed25519 { .. } | Self::MultiEd25519 { .. } => unimplemented!("TODO"), //signature.verify(raw_txn, public_key),
-            Self::FeePayer { .. } => {
+            Self::Ed25519 {
+                public_key,
+                signature,
+            } => signature.verify(raw_txn, public_key),
+            Self::MultiEd25519 {
+                public_key,
+                signature,
+            } => signature.verify(raw_txn, public_key),
+            Self::FeePayer {
+                sender,
+                secondary_signer_addresses,
+                secondary_signers,
+                fee_payer_address,
+                fee_payer_signer,
+            } => {
                 // In the fee payer model, the fee payer address can be optionally signed. We
                 // realized when we designed the fee payer model, that we made it too restrictive
                 // by requiring the signature over the fee payer address. So now we need to live in
@@ -132,40 +164,43 @@ impl TransactionAuthenticator {
                 // address, so we verify both and only fail if the signature fails for either of
                 // them. The legacy approach is to assume the address of the fee payer is signed
                 // over.
-                /*let mut to_verify = vec![sender];
-                let _ = secondary_signers
-                    .iter()
-                    .map(|signer| to_verify.push(signer))
-                    .collect::<Vec<_>>();
+                let mut to_verify = vec![sender];
+                to_verify.extend(secondary_signers.iter());
 
-                let no_fee_payer_address_message = RawTransactionWithData::new_fee_payer(
-                    raw_txn.clone(),
-                    secondary_signer_addresses.clone(),
-                    AccountAddress::ZERO,
-                );
+                let no_fee_payer_address_message =
+                    RawTransactionWithData::new_multi_agent_with_fee_payer(
+                        raw_txn.clone(),
+                        secondary_signer_addresses.clone(),
+                        AccountAddress::ZERO,
+                    );
 
-                let mut remaining = to_verify
+                let mut remaining: Vec<&AccountAuthenticator> = to_verify
                     .iter()
                     .filter(|verifier| verifier.verify(&no_fee_payer_address_message).is_err())
-                    .collect::<Vec<_>>();
+                    .copied()
+                    .collect();
 
-                remaining.push(&fee_payer_signer);
+                remaining.push(fee_payer_signer);
 
-                let fee_payer_address_message = RawTransactionWithData::new_fee_payer(
-                    raw_txn.clone(),
-                    secondary_signer_addresses.clone(),
-                    *fee_payer_address,
-                );
+                let fee_payer_address_message =
+                    RawTransactionWithData::new_multi_agent_with_fee_payer(
+                        raw_txn.clone(),
+                        secondary_signer_addresses.clone(),
+                        *fee_payer_address,
+                    );
 
                 for verifier in remaining {
                     verifier.verify(&fee_payer_address_message)?;
                 }
 
-                Ok(())*/
-                unimplemented!("TODO")
+                Ok(())
             }
-            Self::MultiAgent { .. } => {
-                /*let message = RawTransactionWithData::new_multi_agent(
+            Self::MultiAgent {
+                sender,
+                secondary_signer_addresses,
+                secondary_signers,
+            } => {
+                let message = RawTransactionWithData::new_multi_agent(
                     raw_txn.clone(),
                     secondary_signer_addresses.clone(),
                 );
@@ -173,8 +208,7 @@ impl TransactionAuthenticator {
                 for signer in secondary_signers {
                     signer.verify(&message)?;
                 }
-                Ok(())*/
-                unimplemented!("TODO")
+                Ok(())
             }
             Self::SingleSender { sender } => sender.verify(raw_txn),
         }
@@ -186,9 +220,10 @@ impl TransactionAuthenticator {
                 public_key,
                 signature,
             } => AccountAuthenticator::ed25519(public_key.clone(), signature.clone()),
-            Self::MultiEd25519 { .. } => {
-                unimplemented!("TODO")
-            }
+            Self::MultiEd25519 {
+                public_key,
+                signature,
+            } => AccountAuthenticator::multi_ed25519(public_key.clone(), signature.clone()),
             Self::FeePayer { sender, .. } => sender.clone(),
             Self::MultiAgent { sender, .. } => sender.clone(),
             Self::SingleSender { sender } => sender.clone(),
@@ -310,7 +345,7 @@ impl TransactionAuthenticator {
                         "No authenticator, no single key authenticators."
                     ))
                 }
-                AccountAuthenticator::MultiEd25519 {} => {
+                AccountAuthenticator::MultiEd25519 { .. } => {
                     return Err(anyhow::anyhow!(
                         "MultiEd25519 not supported for single key authenticators."
                     ))
@@ -332,7 +367,11 @@ impl fmt::Display for TransactionAuthenticator {
                 )
             }
             Self::MultiEd25519 { .. } => {
-                unimplemented!("TODO")
+                write!(
+                    f,
+                    "TransactionAuthenticator[scheme: MultiEd25519, sender: {}]",
+                    self.sender()
+                )
             }
             Self::FeePayer {
                 sender,
@@ -444,8 +483,12 @@ pub enum AccountAuthenticator {
         public_key: Ed25519PublicKey,
         signature: Ed25519Signature,
     },
-    MultiEd25519 {},
     /// Ed25519 K-of-N multisignature
+    MultiEd25519 {
+        public_key: MultiEd25519PublicKey,
+        signature: MultiEd25519Signature,
+    },
+    /// Single key authenticator
     SingleKey {
         authenticator: SingleKeyAuthenticator,
     },
@@ -477,6 +520,17 @@ impl AccountAuthenticator {
         }
     }
 
+    /// Create a multisignature ed25519 authenticator
+    pub fn multi_ed25519(
+        public_key: MultiEd25519PublicKey,
+        signature: MultiEd25519Signature,
+    ) -> Self {
+        Self::MultiEd25519 {
+            public_key,
+            signature,
+        }
+    }
+
     /// Create a single-signature authenticator
     pub fn single_key(authenticator: SingleKeyAuthenticator) -> Self {
         Self::SingleKey { authenticator }
@@ -492,9 +546,16 @@ impl AccountAuthenticator {
     }
 
     /// Return Ok if the authenticator's public key matches its signature, Err otherwise
-    pub fn verify<T: Serialize + Hash>(&self, message: &T) -> Result<(), anyhow::Error> {
+    pub fn verify<T: CryptoHash + Serialize>(&self, message: &T) -> Result<(), anyhow::Error> {
         match self {
-            Self::Ed25519 { .. } | Self::MultiEd25519 { .. } => unimplemented!("TODO"), //signature.verify(message, public_key),
+            Self::Ed25519 {
+                public_key,
+                signature,
+            } => signature.verify(message, public_key),
+            Self::MultiEd25519 {
+                public_key,
+                signature,
+            } => signature.verify(message, public_key),
             Self::SingleKey { authenticator } => authenticator.verify(message),
             Self::MultiKey { authenticator } => authenticator.verify(message),
             Self::NoAuthenticator {} => Ok(()),
@@ -505,7 +566,7 @@ impl AccountAuthenticator {
     pub fn public_key_bytes(&self) -> Vec<u8> {
         match self {
             Self::Ed25519 { public_key, .. } => public_key.to_bytes().to_vec(),
-            Self::MultiEd25519 { .. } => unimplemented!("TODO"),
+            Self::MultiEd25519 { public_key, .. } => public_key.to_bytes(),
             Self::SingleKey { authenticator } => authenticator.public_key_bytes(),
             Self::MultiKey { authenticator } => authenticator.public_key_bytes(),
             Self::NoAuthenticator {} => panic!("No authenticator, no public key."),
@@ -516,7 +577,7 @@ impl AccountAuthenticator {
     pub fn signature_bytes(&self) -> Vec<u8> {
         match self {
             Self::Ed25519 { signature, .. } => signature.to_bytes().to_vec(),
-            Self::MultiEd25519 { .. } => unimplemented!("TODO"),
+            Self::MultiEd25519 { signature, .. } => signature.to_bytes(),
             Self::SingleKey { authenticator } => authenticator.signature_bytes(),
             Self::MultiKey { authenticator } => authenticator.signature_bytes(),
             Self::NoAuthenticator {} => panic!("No authenticator, no signature."),
@@ -532,7 +593,7 @@ impl AccountAuthenticator {
     pub fn number_of_signatures(&self) -> usize {
         match self {
             Self::Ed25519 { .. } => 1,
-            Self::MultiEd25519 { .. } => 1,
+            Self::MultiEd25519 { signature, .. } => signature.signatures().len(),
             Self::SingleKey { .. } => 1,
             Self::MultiKey { authenticator } => authenticator.signatures.len(),
             Self::NoAuthenticator {} => 0,
@@ -678,21 +739,21 @@ impl fmt::Display for AuthenticationKey {
 pub struct MultiKeyAuthenticator {
     public_keys: MultiKey,
     signatures: Vec<AnySignature>,
-    // TODO: signatures_bitmap: aptos_bitvec::BitVec,
+    signatures_bitmap: BitVec,
 }
 
 impl MultiKeyAuthenticator {
     pub fn new(
         public_keys: MultiKey,
-        _signatures: Vec<(u8, AnySignature)>,
+        signatures: Vec<(u8, AnySignature)>,
     ) -> Result<Self, anyhow::Error> {
         ensure!(
             public_keys.len() < (u8::MAX as usize),
             "Too many public keys, {}, in MultiKeyAuthenticator.",
             public_keys.len(),
         );
-        unimplemented!("Needs aptos bitvec");
-        /*let mut signatures_bitmap = aptos_bitvec::BitVec::with_num_bits(public_keys.len() as u16);
+
+        let mut signatures_bitmap = BitVec::with_num_bits(public_keys.len() as u16);
         let mut any_signatures = vec![];
 
         for (idx, signature) in signatures {
@@ -715,7 +776,7 @@ impl MultiKeyAuthenticator {
             public_keys,
             signatures: any_signatures,
             signatures_bitmap,
-        })*/
+        })
     }
 
     pub fn public_keys(&self) -> &MultiKey {
@@ -723,20 +784,17 @@ impl MultiKeyAuthenticator {
     }
 
     pub fn signatures(&self) -> Vec<(u8, &AnySignature)> {
-        /*let mut values = vec![];
-        for (idx, signature) in
-            std::iter::zip(self.signatures_bitmap.iter_ones(), self.signatures.iter())
-        {
-            values.push((idx as u8, signature));
-        }
-        values*/
-        unimplemented!("Needs aptos bitvec");
+        self.signatures_bitmap
+            .iter_ones()
+            .zip(self.signatures.iter())
+            .map(|(idx, sig)| (idx as u8, sig))
+            .collect()
     }
 
     pub fn to_single_key_authenticators(
         &self,
     ) -> Result<Vec<SingleKeyAuthenticator>, anyhow::Error> {
-        /*ensure!(
+        ensure!(
             self.signatures_bitmap.last_set_bit().is_some(),
             "There were no signatures set in the bitmap."
         );
@@ -759,18 +817,21 @@ impl MultiKeyAuthenticator {
             self.signatures.len(),
             self.public_keys.signatures_required(),
         );
-        let authenticators: Vec<SingleKeyAuthenticator> =
-            std::iter::zip(self.signatures_bitmap.iter_ones(), self.signatures.iter())
-                .map(|(idx, sig)| SingleKeyAuthenticator {
-                    public_key: self.public_keys.public_keys[idx].clone(),
-                    signature: sig.clone(),
-                })
-                .collect();
-        Ok(authenticators)*/
-        unimplemented!("Needs aptos bitvec");
+
+        let authenticators: Vec<SingleKeyAuthenticator> = self
+            .signatures_bitmap
+            .iter_ones()
+            .zip(self.signatures.iter())
+            .map(|(idx, sig)| SingleKeyAuthenticator {
+                public_key: self.public_keys.public_keys[idx].clone(),
+                signature: sig.clone(),
+            })
+            .collect();
+
+        Ok(authenticators)
     }
 
-    pub fn verify<T: Serialize + Hash>(&self, message: &T) -> Result<(), anyhow::Error> {
+    pub fn verify<T: CryptoHash + Serialize>(&self, message: &T) -> Result<(), anyhow::Error> {
         let authenticators = self.to_single_key_authenticators()?;
         authenticators
             .iter()
@@ -783,9 +844,8 @@ impl MultiKeyAuthenticator {
     }
 
     pub fn signature_bytes(&self) -> Vec<u8> {
-        /*aptos_bcs::to_bytes(&(&self.signatures, &self.signatures_bitmap))
-        .expect("Only unhandleable errors happen here.")*/
-        unimplemented!("Needs aptos bitvec");
+        aptos_bcs::to_bytes(&(&self.signatures, &self.signatures_bitmap))
+            .expect("Only unhandleable errors happen here.")
     }
 }
 
@@ -869,7 +929,7 @@ impl SingleKeyAuthenticator {
         aptos_bcs::to_bytes(&self.signature).expect("Only unhandleable errors happen here.")
     }
 
-    pub fn verify<T: Serialize + Hash>(&self, message: &T) -> Result<(), anyhow::Error> {
+    pub fn verify<T: CryptoHash + Serialize>(&self, message: &T) -> Result<(), anyhow::Error> {
         self.signature.verify(&self.public_key, message)
     }
 }
@@ -884,16 +944,18 @@ impl AnySignature {
         Self::Ed25519 { signature }
     }
 
-    pub fn verify<T: Serialize + Hash>(
+    pub fn verify<T: CryptoHash + Serialize>(
         &self,
         public_key: &AnyPublicKey,
-        _message: &T,
+        message: &T,
     ) -> Result<(), anyhow::Error> {
         match (self, public_key) {
-            (Self::Ed25519 { .. }, AnyPublicKey::Ed25519 { .. }) => {
-                //signature.verify(message, public_key)
-                unimplemented!()
-            }
+            (
+                Self::Ed25519 { signature },
+                AnyPublicKey::Ed25519 {
+                    public_key: pub_key,
+                },
+            ) => signature.verify(message, pub_key),
         }
     }
 }
@@ -922,16 +984,18 @@ impl EphemeralSignature {
         Self::Ed25519 { signature }
     }
 
-    pub fn verify<T: Serialize>(
+    pub fn verify<T: CryptoHash + Serialize>(
         &self,
-        _message: &T,
+        message: &T,
         public_key: &EphemeralPublicKey,
     ) -> Result<(), anyhow::Error> {
         match (self, public_key) {
-            (Self::Ed25519 { .. }, EphemeralPublicKey::Ed25519 { .. }) => {
-                //signature.verify(message, public_key)
-                unimplemented!()
-            }
+            (
+                Self::Ed25519 { signature },
+                EphemeralPublicKey::Ed25519 {
+                    public_key: pub_key,
+                },
+            ) => signature.verify(message, pub_key),
         }
     }
 }
