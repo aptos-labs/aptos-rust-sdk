@@ -330,6 +330,149 @@ impl GenerateSigningMessage for RawTransaction {
     }
 }
 
+/// Represents a MultiAgentTransaction from TypeScript SDK.
+/// This is different from RawTransactionWithData - it doesn't have a variant index.
+/// Serialization format: RawTransaction + Vec<AccountAddress> + Option<AccountAddress>
+#[derive(Clone, Debug, Hash, Eq, PartialEq)]
+pub struct MultiAgentTransaction {
+    pub raw_transaction: RawTransaction,
+    pub secondary_signer_addresses: Vec<AccountAddress>,
+    pub fee_payer_address: Option<AccountAddress>,
+}
+
+impl MultiAgentTransaction {
+    /// Create a new MultiAgentTransaction
+    pub fn new(
+        raw_transaction: RawTransaction,
+        secondary_signer_addresses: Vec<AccountAddress>,
+        fee_payer_address: Option<AccountAddress>,
+    ) -> Self {
+        Self {
+            raw_transaction,
+            secondary_signer_addresses,
+            fee_payer_address,
+        }
+    }
+
+    /// Deserialize MultiAgentTransaction from bytes.
+    /// Format: RawTransaction + Vec<AccountAddress> + bool + Option<AccountAddress>
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, anyhow::Error> {
+        // The issue: aptos_bcs::from_bytes is strict and fails with "remaining input"
+        // Solution: Find the exact boundary by trying different slice lengths
+
+        // Find RawTransaction boundary by trying different lengths
+        let (raw_transaction, raw_txn_len) = {
+            let mut best_txn: Option<RawTransaction> = None;
+            let mut best_len = 0;
+
+            // Try lengths from minimum to maximum reasonable size
+            // RawTransaction minimum is around 100 bytes, maximum around 5000
+            for len in 100..bytes.len().min(5000) {
+                let slice = &bytes[..len];
+                if let Ok(txn) = aptos_bcs::from_bytes::<RawTransaction>(slice) {
+                    // Verify by round-trip serialization
+                    let mut serialized = vec![];
+                    aptos_bcs::serialize_into(&mut serialized, &txn)?;
+                    if serialized.len() == len {
+                        best_txn = Some(txn);
+                        best_len = len;
+                        break; // Found exact match
+                    }
+                }
+            }
+
+            match best_txn {
+                Some(txn) => (txn, best_len),
+                None => return Err(anyhow::anyhow!("Could not deserialize RawTransaction")),
+            }
+        };
+
+        let mut offset = raw_txn_len;
+
+        // Deserialize Vec<AccountAddress>
+        let remaining = &bytes[offset..];
+        let (secondary_signer_addresses, vec_len) = {
+            let mut best_vec: Option<Vec<AccountAddress>> = None;
+            let mut best_len = 0;
+
+            // Try different lengths for the vector
+            // Minimum is 1 byte (empty vector), maximum reasonable is 10000
+            for len in 1..remaining.len().min(10000) {
+                let slice = &remaining[..len];
+                if let Ok(addrs) = aptos_bcs::from_bytes::<Vec<AccountAddress>>(slice) {
+                    let mut serialized = vec![];
+                    aptos_bcs::serialize_into(&mut serialized, &addrs)?;
+                    if serialized.len() == len {
+                        best_vec = Some(addrs);
+                        best_len = len;
+                        break;
+                    }
+                }
+            }
+
+            match best_vec {
+                Some(vec) => (vec, best_len),
+                None => return Err(anyhow::anyhow!("Could not deserialize Vec<AccountAddress>")),
+            }
+        };
+
+        offset += vec_len;
+
+        // Deserialize bool
+        if offset >= bytes.len() {
+            return Err(anyhow::anyhow!("Insufficient bytes for fee payer flag"));
+        }
+        let fee_payer_present = bytes[offset] != 0;
+        offset += 1;
+
+        // Deserialize Option<AccountAddress>
+        let fee_payer_address = if fee_payer_present {
+            if offset >= bytes.len() {
+                return Err(anyhow::anyhow!("Insufficient bytes for fee payer address"));
+            }
+            // AccountAddress is 32 bytes in BCS
+            if offset + 32 > bytes.len() {
+                return Err(anyhow::anyhow!("Insufficient bytes for AccountAddress"));
+            }
+            let slice = &bytes[offset..offset + 32];
+            let addr: AccountAddress = aptos_bcs::from_bytes(slice)?;
+            Some(addr)
+        } else {
+            None
+        };
+
+        Ok(MultiAgentTransaction {
+            raw_transaction,
+            secondary_signer_addresses,
+            fee_payer_address,
+        })
+    }
+
+    /// Convert to RawTransactionWithData for signing message generation
+    pub fn to_raw_transaction_with_data(&self) -> RawTransactionWithData {
+        if let Some(fee_payer) = self.fee_payer_address {
+            RawTransactionWithData::MultiAgentWithFeePayer {
+                raw_txn: self.raw_transaction.clone(),
+                secondary_signer_addresses: self.secondary_signer_addresses.clone(),
+                fee_payer_address: fee_payer,
+            }
+        } else {
+            RawTransactionWithData::MultiAgent {
+                raw_txn: self.raw_transaction.clone(),
+                secondary_signer_addresses: self.secondary_signer_addresses.clone(),
+            }
+        }
+    }
+}
+
+impl GenerateSigningMessage for MultiAgentTransaction {
+    fn generate_signing_message(&self) -> Result<Vec<u8>, anyhow::Error> {
+        // Use the same signing message format as RawTransactionWithData
+        self.to_raw_transaction_with_data()
+            .generate_signing_message()
+    }
+}
+
 impl EntryFunction {
     pub fn new(
         module: ModuleId,
