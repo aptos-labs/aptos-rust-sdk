@@ -330,6 +330,112 @@ impl GenerateSigningMessage for RawTransaction {
     }
 }
 
+/// Represents a MultiAgentTransaction from TypeScript SDK.
+/// This is different from RawTransactionWithData - it doesn't have a variant index.
+/// Serialization format: RawTransaction + Vec<AccountAddress> + Option<AccountAddress>
+#[derive(Clone, Debug, Hash, Eq, PartialEq)]
+pub struct MultiAgentTransaction {
+    pub raw_transaction: RawTransaction,
+    pub secondary_signer_addresses: Vec<AccountAddress>,
+    pub fee_payer_address: Option<AccountAddress>,
+}
+
+impl MultiAgentTransaction {
+    /// Create a new MultiAgentTransaction
+    pub fn new(
+        raw_transaction: RawTransaction,
+        secondary_signer_addresses: Vec<AccountAddress>,
+        fee_payer_address: Option<AccountAddress>,
+    ) -> Self {
+        Self {
+            raw_transaction,
+            secondary_signer_addresses,
+            fee_payer_address,
+        }
+    }
+
+    /// Deserialize MultiAgentTransaction from bytes.
+    /// Format: RawTransaction + Vec<AccountAddress> + bool + Option<AccountAddress>
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, anyhow::Error> {
+        // Deserialize RawTransaction - this will consume bytes from the start
+        let raw_transaction: RawTransaction = aptos_bcs::from_bytes(bytes)?;
+
+        // Calculate how many bytes RawTransaction consumed by serializing it back
+        let raw_txn_serialized = {
+            let mut temp = vec![];
+            aptos_bcs::serialize_into(&mut temp, &raw_transaction)?;
+            temp
+        };
+        let mut offset = raw_txn_serialized.len();
+
+        if offset >= bytes.len() {
+            return Err(anyhow::anyhow!("Insufficient bytes after RawTransaction"));
+        }
+
+        // Deserialize Vec<AccountAddress> using BCS
+        let remaining_bytes = &bytes[offset..];
+        let secondary_signer_addresses: Vec<AccountAddress> =
+            aptos_bcs::from_bytes(remaining_bytes)?;
+
+        // Calculate bytes consumed by the vector
+        let addresses_serialized = {
+            let mut temp = vec![];
+            aptos_bcs::serialize_into(&mut temp, &secondary_signer_addresses)?;
+            temp
+        };
+        offset += addresses_serialized.len();
+
+        // Deserialize optional fee payer (bool + address if true)
+        if offset >= bytes.len() {
+            return Err(anyhow::anyhow!("Insufficient bytes for fee payer flag"));
+        }
+        let fee_payer_present = bytes[offset] != 0;
+        offset += 1;
+
+        let fee_payer_address = if fee_payer_present {
+            if offset >= bytes.len() {
+                return Err(anyhow::anyhow!("Insufficient bytes for fee payer address"));
+            }
+            // Deserialize AccountAddress using BCS
+            let remaining_bytes = &bytes[offset..];
+            let addr: AccountAddress = aptos_bcs::from_bytes(remaining_bytes)?;
+            Some(addr)
+        } else {
+            None
+        };
+
+        Ok(MultiAgentTransaction {
+            raw_transaction,
+            secondary_signer_addresses,
+            fee_payer_address,
+        })
+    }
+
+    /// Convert to RawTransactionWithData for signing message generation
+    pub fn to_raw_transaction_with_data(&self) -> RawTransactionWithData {
+        if let Some(fee_payer) = self.fee_payer_address {
+            RawTransactionWithData::MultiAgentWithFeePayer {
+                raw_txn: self.raw_transaction.clone(),
+                secondary_signer_addresses: self.secondary_signer_addresses.clone(),
+                fee_payer_address: fee_payer,
+            }
+        } else {
+            RawTransactionWithData::MultiAgent {
+                raw_txn: self.raw_transaction.clone(),
+                secondary_signer_addresses: self.secondary_signer_addresses.clone(),
+            }
+        }
+    }
+}
+
+impl GenerateSigningMessage for MultiAgentTransaction {
+    fn generate_signing_message(&self) -> Result<Vec<u8>, anyhow::Error> {
+        // Use the same signing message format as RawTransactionWithData
+        self.to_raw_transaction_with_data()
+            .generate_signing_message()
+    }
+}
+
 impl EntryFunction {
     pub fn new(
         module: ModuleId,
