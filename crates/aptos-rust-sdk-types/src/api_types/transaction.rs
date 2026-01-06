@@ -357,48 +357,85 @@ impl MultiAgentTransaction {
     /// Deserialize MultiAgentTransaction from bytes.
     /// Format: RawTransaction + Vec<AccountAddress> + bool + Option<AccountAddress>
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, anyhow::Error> {
-        // Deserialize RawTransaction - this will consume bytes from the start
-        let raw_transaction: RawTransaction = aptos_bcs::from_bytes(bytes)?;
+        // The issue: aptos_bcs::from_bytes is strict and fails with "remaining input"
+        // Solution: Find the exact boundary by trying different slice lengths
 
-        // Calculate how many bytes RawTransaction consumed by serializing it back
-        let raw_txn_serialized = {
-            let mut temp = vec![];
-            aptos_bcs::serialize_into(&mut temp, &raw_transaction)?;
-            temp
+        // Find RawTransaction boundary by trying different lengths
+        let (raw_transaction, raw_txn_len) = {
+            let mut best_txn: Option<RawTransaction> = None;
+            let mut best_len = 0;
+
+            // Try lengths from minimum to maximum reasonable size
+            // RawTransaction minimum is around 100 bytes, maximum around 5000
+            for len in 100..bytes.len().min(5000) {
+                let slice = &bytes[..len];
+                if let Ok(txn) = aptos_bcs::from_bytes::<RawTransaction>(slice) {
+                    // Verify by round-trip serialization
+                    let mut serialized = vec![];
+                    aptos_bcs::serialize_into(&mut serialized, &txn)?;
+                    if serialized.len() == len {
+                        best_txn = Some(txn);
+                        best_len = len;
+                        break; // Found exact match
+                    }
+                }
+            }
+
+            match best_txn {
+                Some(txn) => (txn, best_len),
+                None => return Err(anyhow::anyhow!("Could not deserialize RawTransaction")),
+            }
         };
-        let mut offset = raw_txn_serialized.len();
 
-        if offset >= bytes.len() {
-            return Err(anyhow::anyhow!("Insufficient bytes after RawTransaction"));
-        }
+        let mut offset = raw_txn_len;
 
-        // Deserialize Vec<AccountAddress> using BCS
-        let remaining_bytes = &bytes[offset..];
-        let secondary_signer_addresses: Vec<AccountAddress> =
-            aptos_bcs::from_bytes(remaining_bytes)?;
+        // Deserialize Vec<AccountAddress>
+        let remaining = &bytes[offset..];
+        let (secondary_signer_addresses, vec_len) = {
+            let mut best_vec: Option<Vec<AccountAddress>> = None;
+            let mut best_len = 0;
 
-        // Calculate bytes consumed by the vector
-        let addresses_serialized = {
-            let mut temp = vec![];
-            aptos_bcs::serialize_into(&mut temp, &secondary_signer_addresses)?;
-            temp
+            // Try different lengths for the vector
+            // Minimum is 1 byte (empty vector), maximum reasonable is 10000
+            for len in 1..remaining.len().min(10000) {
+                let slice = &remaining[..len];
+                if let Ok(addrs) = aptos_bcs::from_bytes::<Vec<AccountAddress>>(slice) {
+                    let mut serialized = vec![];
+                    aptos_bcs::serialize_into(&mut serialized, &addrs)?;
+                    if serialized.len() == len {
+                        best_vec = Some(addrs);
+                        best_len = len;
+                        break;
+                    }
+                }
+            }
+
+            match best_vec {
+                Some(vec) => (vec, best_len),
+                None => return Err(anyhow::anyhow!("Could not deserialize Vec<AccountAddress>")),
+            }
         };
-        offset += addresses_serialized.len();
 
-        // Deserialize optional fee payer (bool + address if true)
+        offset += vec_len;
+
+        // Deserialize bool
         if offset >= bytes.len() {
             return Err(anyhow::anyhow!("Insufficient bytes for fee payer flag"));
         }
         let fee_payer_present = bytes[offset] != 0;
         offset += 1;
 
+        // Deserialize Option<AccountAddress>
         let fee_payer_address = if fee_payer_present {
             if offset >= bytes.len() {
                 return Err(anyhow::anyhow!("Insufficient bytes for fee payer address"));
             }
-            // Deserialize AccountAddress using BCS
-            let remaining_bytes = &bytes[offset..];
-            let addr: AccountAddress = aptos_bcs::from_bytes(remaining_bytes)?;
+            // AccountAddress is 32 bytes in BCS
+            if offset + 32 > bytes.len() {
+                return Err(anyhow::anyhow!("Insufficient bytes for AccountAddress"));
+            }
+            let slice = &bytes[offset..offset + 32];
+            let addr: AccountAddress = aptos_bcs::from_bytes(slice)?;
             Some(addr)
         } else {
             None
