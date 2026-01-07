@@ -1,0 +1,26 @@
+# Clippy configuration
+
+# Cognitive complexity threshold
+cognitive-complexity-threshold = 30
+
+# Maximum number of lines for a function
+too-many-lines-threshold = 200
+
+# Maximum number of arguments for a function
+too-many-arguments-threshold = 8
+
+# Maximum number of struct fields
+max-struct-bools = 3
+
+# Allowed names for variables (won't trigger `disallowed_names`)
+allowed-idents-below-min-chars = ["i", "j", "k", "n", "x", "y", "z", "id", "to", "db"]
+
+# Type complexity threshold
+type-complexity-threshold = 350
+
+# Maximum enum variant size ratio for large_enum_variant
+enum-variant-size-threshold = 200
+
+# Allow these macros to have more than 7 lines
+excessive-nesting-threshold = 10
+

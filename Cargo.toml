@@ -3,6 +3,8 @@ resolver = "2"
 
 members = [
     "crates/aptos-rust-sdk",
+    "crates/aptos-rust-sdk-v2",
+    "crates/aptos-rust-sdk-v2-macros",
     "crates/aptos-rust-sdk-types",
     "crates/aptos-crypto",
     "crates/aptos-crypto-derive",
@@ -16,6 +18,7 @@ members = [
 # For more, see the "Conditional compilation for tests" section in documentation/coding_guidelines.md.
 default-members = [
     "crates/aptos-rust-sdk",
+    "crates/aptos-rust-sdk-v2",
     "crates/aptos-rust-sdk-types",
     "crates/aptos-crypto",
     "crates/aptos-crypto-derive"
@@ -25,17 +28,19 @@ default-members = [
 # for package declarations.
 [workspace.package]
 authors = ["Aptos Labs <opensource@aptoslabs.com>"]
-edition = "2021"
+edition = "2024"
 homepage = "https://aptoslabs.com"
 license = "Apache-2.0"
 publish = false
 repository = "https://github.com/aptos-labs/aptos-rust-sdk"
-rust-version = "1.85.0"
+rust-version = "1.90.0"
 
 [workspace.dependencies]
 # Internal crate dependencies.
 # Please do not add any test features here: they should be declared by the individual crate.
 aptos-rust-sdk = { path = "crates/aptos-rust-sdk" }
+aptos-rust-sdk-v2 = { path = "crates/aptos-rust-sdk-v2" }
+aptos-rust-sdk-v2-macros = { path = "crates/aptos-rust-sdk-v2-macros" }
 aptos-rust-sdk-types = { path = "crates/aptos-rust-sdk-types" }
 aptos-crypto = { path = "crates/aptos-crypto" }
 aptos-crypto-derive = { path = "crates/aptos-crypto-derive" }

@@ -1,0 +1,903 @@
+//! Main Aptos client entry point.
+//!
+//! The [`Aptos`] struct provides a unified interface for all SDK functionality.
+
+use crate::account::Account;
+use crate::api::{AnsClient, AptosResponse, FullnodeClient, PendingTransaction};
+use crate::config::{AptosConfig, Network};
+use crate::error::{AptosError, AptosResult};
+use crate::transaction::{
+    EntryFunction, RawTransaction, SignedTransaction, TransactionBuilder, TransactionPayload,
+};
+use crate::types::{AccountAddress, ChainId, TypeTag};
+use std::sync::Arc;
+use std::time::Duration;
+
+#[cfg(feature = "faucet")]
+use crate::api::FaucetClient;
+
+#[cfg(feature = "indexer")]
+use crate::api::IndexerClient;
+
+/// The main entry point for the Aptos SDK.
+///
+/// This struct provides a unified interface for interacting with the Aptos blockchain,
+/// including account management, transaction building and submission, and queries.
+///
+/// # Example
+///
+/// ```rust,no_run
+/// use aptos_rust_sdk_v2::{Aptos, AptosConfig};
+///
+/// #[tokio::main]
+/// async fn main() -> anyhow::Result<()> {
+///     // Create client for testnet
+///     let aptos = Aptos::new(AptosConfig::testnet())?;
+///
+///     // Get ledger info
+///     let ledger = aptos.ledger_info().await?;
+///     println!("Ledger version: {}", ledger.version());
+///
+///     // Resolve an ANS name
+///     if let Some(addr) = aptos.resolve_name("alice.apt").await? {
+///         println!("alice.apt -> {}", addr);
+///     }
+///
+///     Ok(())
+/// }
+/// ```
+#[derive(Debug)]
+pub struct Aptos {
+    config: AptosConfig,
+    fullnode: Arc<FullnodeClient>,
+    ans: Option<AnsClient>,
+    #[cfg(feature = "faucet")]
+    faucet: Option<FaucetClient>,
+    #[cfg(feature = "indexer")]
+    indexer: Option<IndexerClient>,
+}
+
+impl Aptos {
+    /// Creates a new Aptos client with the given configuration.
+    pub fn new(config: AptosConfig) -> AptosResult<Self> {
+        let fullnode = Arc::new(FullnodeClient::new(config.clone())?);
+        let network = config.network();
+
+        // ANS is only available on mainnet and testnet
+        let ans = if matches!(network, Network::Mainnet | Network::Testnet) {
+            AnsClient::from_fullnode(fullnode.clone(), network).ok()
+        } else {
+            None
+        };
+
+        #[cfg(feature = "faucet")]
+        let faucet = FaucetClient::new(config.clone()).ok();
+
+        #[cfg(feature = "indexer")]
+        let indexer = IndexerClient::new(config.clone()).ok();
+
+        Ok(Self {
+            config,
+            fullnode,
+            ans,
+            #[cfg(feature = "faucet")]
+            faucet,
+            #[cfg(feature = "indexer")]
+            indexer,
+        })
+    }
+
+    /// Creates a client for testnet with default settings.
+    pub fn testnet() -> AptosResult<Self> {
+        Self::new(AptosConfig::testnet())
+    }
+
+    /// Creates a client for devnet with default settings.
+    pub fn devnet() -> AptosResult<Self> {
+        Self::new(AptosConfig::devnet())
+    }
+
+    /// Creates a client for mainnet with default settings.
+    pub fn mainnet() -> AptosResult<Self> {
+        Self::new(AptosConfig::mainnet())
+    }
+
+    /// Creates a client for local development network.
+    pub fn local() -> AptosResult<Self> {
+        Self::new(AptosConfig::local())
+    }
+
+    /// Returns the configuration.
+    pub fn config(&self) -> &AptosConfig {
+        &self.config
+    }
+
+    /// Returns the fullnode client.
+    pub fn fullnode(&self) -> &FullnodeClient {
+        &self.fullnode
+    }
+
+    /// Returns the ANS client, if available.
+    ///
+    /// ANS is only available on mainnet and testnet.
+    pub fn ans(&self) -> Option<&AnsClient> {
+        self.ans.as_ref()
+    }
+
+    /// Returns the faucet client, if available.
+    #[cfg(feature = "faucet")]
+    pub fn faucet(&self) -> Option<&FaucetClient> {
+        self.faucet.as_ref()
+    }
+
+    /// Returns the indexer client, if available.
+    #[cfg(feature = "indexer")]
+    pub fn indexer(&self) -> Option<&IndexerClient> {
+        self.indexer.as_ref()
+    }
+
+    // === Ledger Info ===
+
+    /// Gets the current ledger information.
+    pub async fn ledger_info(&self) -> AptosResult<crate::api::response::LedgerInfo> {
+        let response = self.fullnode.get_ledger_info().await?;
+        Ok(response.into_inner())
+    }
+
+    /// Returns the current chain ID.
+    pub fn chain_id(&self) -> ChainId {
+        self.config.chain_id()
+    }
+
+    // === Account ===
+
+    /// Gets the sequence number for an account.
+    pub async fn get_sequence_number(&self, address: AccountAddress) -> AptosResult<u64> {
+        self.fullnode.get_sequence_number(address).await
+    }
+
+    /// Gets the APT balance for an account.
+    pub async fn get_balance(&self, address: AccountAddress) -> AptosResult<u64> {
+        self.fullnode.get_account_balance(address).await
+    }
+
+    /// Checks if an account exists.
+    pub async fn account_exists(&self, address: AccountAddress) -> AptosResult<bool> {
+        match self.fullnode.get_account(address).await {
+            Ok(_) => Ok(true),
+            Err(AptosError::Api { status_code: 404, .. }) => Ok(false),
+            Err(e) => Err(e),
+        }
+    }
+
+    // === Transactions ===
+
+    /// Builds a transaction for the given account.
+    ///
+    /// This automatically fetches the sequence number and gas price.
+    pub async fn build_transaction<A: Account>(
+        &self,
+        sender: &A,
+        payload: TransactionPayload,
+    ) -> AptosResult<RawTransaction> {
+        let sequence_number = self.get_sequence_number(sender.address()).await?;
+        let gas_estimation = self.fullnode.estimate_gas_price().await?;
+
+        TransactionBuilder::new()
+            .sender(sender.address())
+            .sequence_number(sequence_number)
+            .payload(payload)
+            .gas_unit_price(gas_estimation.data.recommended())
+            .chain_id(self.chain_id())
+            .expiration_from_now(600)
+            .build()
+    }
+
+    /// Signs and submits a transaction.
+    #[cfg(feature = "ed25519")]
+    pub async fn sign_and_submit<A: Account>(
+        &self,
+        account: &A,
+        payload: TransactionPayload,
+    ) -> AptosResult<AptosResponse<PendingTransaction>> {
+        let raw_txn = self.build_transaction(account, payload).await?;
+        let signed = crate::transaction::builder::sign_transaction(&raw_txn, account)?;
+        self.fullnode.submit_transaction(&signed).await
+    }
+
+    /// Signs, submits, and waits for a transaction to complete.
+    #[cfg(feature = "ed25519")]
+    pub async fn sign_submit_and_wait<A: Account>(
+        &self,
+        account: &A,
+        payload: TransactionPayload,
+        timeout: Option<Duration>,
+    ) -> AptosResult<AptosResponse<serde_json::Value>> {
+        let raw_txn = self.build_transaction(account, payload).await?;
+        let signed = crate::transaction::builder::sign_transaction(&raw_txn, account)?;
+        self.fullnode.submit_and_wait(&signed, timeout).await
+    }
+
+    /// Submits a pre-signed transaction.
+    pub async fn submit_transaction(
+        &self,
+        signed_txn: &SignedTransaction,
+    ) -> AptosResult<AptosResponse<PendingTransaction>> {
+        self.fullnode.submit_transaction(signed_txn).await
+    }
+
+    /// Submits and waits for a pre-signed transaction.
+    pub async fn submit_and_wait(
+        &self,
+        signed_txn: &SignedTransaction,
+        timeout: Option<Duration>,
+    ) -> AptosResult<AptosResponse<serde_json::Value>> {
+        self.fullnode.submit_and_wait(signed_txn, timeout).await
+    }
+
+    /// Simulates a transaction.
+    pub async fn simulate_transaction(
+        &self,
+        signed_txn: &SignedTransaction,
+    ) -> AptosResult<AptosResponse<Vec<serde_json::Value>>> {
+        self.fullnode.simulate_transaction(signed_txn).await
+    }
+
+    /// Simulates a transaction and returns a parsed result.
+    ///
+    /// This method provides a more ergonomic way to simulate transactions
+    /// with detailed result parsing.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let result = aptos.simulate(&account, payload).await?;
+    /// if result.success() {
+    ///     println!("Gas estimate: {}", result.gas_used());
+    /// } else {
+    ///     println!("Would fail: {}", result.error_message().unwrap_or_default());
+    /// }
+    /// ```
+    #[cfg(feature = "ed25519")]
+    pub async fn simulate<A: Account>(
+        &self,
+        account: &A,
+        payload: TransactionPayload,
+    ) -> AptosResult<crate::transaction::SimulationResult> {
+        let raw_txn = self.build_transaction(account, payload).await?;
+        let signed = crate::transaction::builder::sign_transaction(&raw_txn, account)?;
+        let response = self.fullnode.simulate_transaction(&signed).await?;
+        crate::transaction::SimulationResult::from_response(response.into_inner())
+    }
+
+    /// Simulates a transaction with a pre-built signed transaction.
+    pub async fn simulate_signed(
+        &self,
+        signed_txn: &SignedTransaction,
+    ) -> AptosResult<crate::transaction::SimulationResult> {
+        let response = self.fullnode.simulate_transaction(signed_txn).await?;
+        crate::transaction::SimulationResult::from_response(response.into_inner())
+    }
+
+    /// Estimates gas for a transaction by simulating it.
+    ///
+    /// Returns the estimated gas usage with a 20% safety margin.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let gas = aptos.estimate_gas(&account, payload).await?;
+    /// println!("Estimated gas: {}", gas);
+    /// ```
+    #[cfg(feature = "ed25519")]
+    pub async fn estimate_gas<A: Account>(
+        &self,
+        account: &A,
+        payload: TransactionPayload,
+    ) -> AptosResult<u64> {
+        let result = self.simulate(account, payload).await?;
+        if result.success() {
+            Ok(result.safe_gas_estimate())
+        } else {
+            Err(AptosError::SimulationFailed(
+                result.error_message().unwrap_or_else(|| result.vm_status().to_string()),
+            ))
+        }
+    }
+
+    /// Simulates and submits a transaction if successful.
+    ///
+    /// This is a "dry run" approach that first simulates the transaction
+    /// to verify it will succeed before actually submitting it.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let result = aptos.simulate_and_submit(&account, payload).await?;
+    /// println!("Transaction submitted: {}", result.hash);
+    /// ```
+    #[cfg(feature = "ed25519")]
+    pub async fn simulate_and_submit<A: Account>(
+        &self,
+        account: &A,
+        payload: TransactionPayload,
+    ) -> AptosResult<AptosResponse<PendingTransaction>> {
+        // First simulate
+        let raw_txn = self.build_transaction(account, payload.clone()).await?;
+        let signed = crate::transaction::builder::sign_transaction(&raw_txn, account)?;
+        let sim_response = self.fullnode.simulate_transaction(&signed).await?;
+        let sim_result = crate::transaction::SimulationResult::from_response(sim_response.into_inner())?;
+
+        if sim_result.failed() {
+            return Err(AptosError::SimulationFailed(
+                sim_result.error_message().unwrap_or_else(|| sim_result.vm_status().to_string()),
+            ));
+        }
+
+        // Submit the same signed transaction
+        self.fullnode.submit_transaction(&signed).await
+    }
+
+    /// Simulates, submits, and waits for a transaction.
+    ///
+    /// Like `simulate_and_submit` but also waits for the transaction to complete.
+    #[cfg(feature = "ed25519")]
+    pub async fn simulate_submit_and_wait<A: Account>(
+        &self,
+        account: &A,
+        payload: TransactionPayload,
+        timeout: Option<Duration>,
+    ) -> AptosResult<AptosResponse<serde_json::Value>> {
+        // First simulate
+        let raw_txn = self.build_transaction(account, payload.clone()).await?;
+        let signed = crate::transaction::builder::sign_transaction(&raw_txn, account)?;
+        let sim_response = self.fullnode.simulate_transaction(&signed).await?;
+        let sim_result = crate::transaction::SimulationResult::from_response(sim_response.into_inner())?;
+
+        if sim_result.failed() {
+            return Err(AptosError::SimulationFailed(
+                sim_result.error_message().unwrap_or_else(|| sim_result.vm_status().to_string()),
+            ));
+        }
+
+        // Submit and wait
+        self.fullnode.submit_and_wait(&signed, timeout).await
+    }
+
+    // === Transfers ===
+
+    /// Transfers APT from one account to another.
+    #[cfg(feature = "ed25519")]
+    pub async fn transfer_apt<A: Account>(
+        &self,
+        sender: &A,
+        recipient: AccountAddress,
+        amount: u64,
+    ) -> AptosResult<AptosResponse<serde_json::Value>> {
+        let payload = EntryFunction::apt_transfer(recipient, amount)?;
+        self.sign_submit_and_wait(sender, payload.into(), None).await
+    }
+
+    /// Transfers a coin from one account to another.
+    #[cfg(feature = "ed25519")]
+    pub async fn transfer_coin<A: Account>(
+        &self,
+        sender: &A,
+        recipient: AccountAddress,
+        coin_type: TypeTag,
+        amount: u64,
+    ) -> AptosResult<AptosResponse<serde_json::Value>> {
+        let payload = EntryFunction::coin_transfer(coin_type, recipient, amount)?;
+        self.sign_submit_and_wait(sender, payload.into(), None).await
+    }
+
+    // === View Functions ===
+
+    /// Calls a view function.
+    pub async fn view(
+        &self,
+        function: &str,
+        type_args: Vec<String>,
+        args: Vec<serde_json::Value>,
+    ) -> AptosResult<Vec<serde_json::Value>> {
+        let response = self.fullnode.view(function, type_args, args).await?;
+        Ok(response.into_inner())
+    }
+
+    // === Faucet ===
+
+    /// Funds an account using the faucet.
+    #[cfg(feature = "faucet")]
+    pub async fn fund_account(
+        &self,
+        address: AccountAddress,
+        amount: u64,
+    ) -> AptosResult<Vec<String>> {
+        let faucet = self
+            .faucet
+            .as_ref()
+            .ok_or_else(|| AptosError::FeatureNotEnabled("faucet".into()))?;
+        faucet.fund(address, amount).await
+    }
+
+    /// Creates a funded account.
+    #[cfg(all(feature = "faucet", feature = "ed25519"))]
+    pub async fn create_funded_account(
+        &self,
+        amount: u64,
+    ) -> AptosResult<crate::account::Ed25519Account> {
+        let account = crate::account::Ed25519Account::generate();
+        self.fund_account(account.address(), amount).await?;
+        // Wait a bit for the account to be created on chain
+        tokio::time::sleep(Duration::from_secs(2)).await;
+        Ok(account)
+    }
+
+    // === ANS (Aptos Names Service) ===
+
+    /// Resolves an ANS name to an address.
+    ///
+    /// Accepts names with or without the `.apt` suffix.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The ANS name to resolve (e.g., "alice" or "alice.apt")
+    ///
+    /// # Returns
+    ///
+    /// The resolved address, or `None` if the name is not registered.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let aptos = Aptos::mainnet()?;
+    /// if let Some(addr) = aptos.resolve_name("alice.apt").await? {
+    ///     println!("alice.apt -> {}", addr);
+    /// }
+    /// ```
+    pub async fn resolve_name(&self, name: &str) -> AptosResult<Option<AccountAddress>> {
+        let ans = self
+            .ans
+            .as_ref()
+            .ok_or_else(|| AptosError::FeatureNotEnabled("ANS (only available on mainnet/testnet)".into()))?;
+        ans.get_address(name).await
+    }
+
+    /// Gets the primary ANS name for an address.
+    ///
+    /// # Arguments
+    ///
+    /// * `address` - The address to look up
+    ///
+    /// # Returns
+    ///
+    /// The primary name (with `.apt` suffix), or `None` if no primary name is set.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let aptos = Aptos::mainnet()?;
+    /// if let Some(name) = aptos.get_primary_name(address).await? {
+    ///     println!("{} -> {}", address, name);
+    /// }
+    /// ```
+    pub async fn get_primary_name(&self, address: AccountAddress) -> AptosResult<Option<String>> {
+        let ans = self
+            .ans
+            .as_ref()
+            .ok_or_else(|| AptosError::FeatureNotEnabled("ANS (only available on mainnet/testnet)".into()))?;
+        ans.get_primary_name(address).await
+    }
+
+    /// Resolves an address or ANS name to an address.
+    ///
+    /// This is a convenience function that accepts either a hex address (0x...)
+    /// or an ANS name and returns the resolved address.
+    ///
+    /// # Arguments
+    ///
+    /// * `address_or_name` - Either a hex address or an ANS name
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let aptos = Aptos::mainnet()?;
+    /// // Both work:
+    /// let addr = aptos.resolve("alice.apt").await?;
+    /// let addr = aptos.resolve("0x123...").await?;
+    /// ```
+    pub async fn resolve(&self, address_or_name: &str) -> AptosResult<AccountAddress> {
+        // Try to parse as address first
+        if address_or_name.starts_with("0x") || address_or_name.starts_with("0X") {
+            if let Ok(address) = AccountAddress::from_hex(address_or_name) {
+                return Ok(address);
+            }
+        }
+
+        // Try as ANS name
+        self.resolve_name(address_or_name)
+            .await?
+            .ok_or_else(|| AptosError::NotFound(format!("ANS name not found: {}", address_or_name)))
+    }
+
+    /// Checks if an ANS name is available for registration.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - The name to check (with or without `.apt` suffix)
+    ///
+    /// # Returns
+    ///
+    /// `true` if the name is available, `false` if taken.
+    pub async fn is_name_available(&self, name: &str) -> AptosResult<bool> {
+        let ans = self
+            .ans
+            .as_ref()
+            .ok_or_else(|| AptosError::FeatureNotEnabled("ANS (only available on mainnet/testnet)".into()))?;
+        ans.is_name_available(name).await
+    }
+
+    // === Transaction Batching ===
+
+    /// Returns a batch operations helper for submitting multiple transactions.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let aptos = Aptos::testnet()?;
+    ///
+    /// // Build and submit batch of transfers
+    /// let payloads = vec![
+    ///     EntryFunction::apt_transfer(addr1, 1000)?.into(),
+    ///     EntryFunction::apt_transfer(addr2, 2000)?.into(),
+    ///     EntryFunction::apt_transfer(addr3, 3000)?.into(),
+    /// ];
+    ///
+    /// let results = aptos.batch().submit_and_wait(&sender, payloads, None).await?;
+    /// ```
+    pub fn batch(&self) -> crate::transaction::BatchOperations<'_> {
+        crate::transaction::BatchOperations::new(&self.fullnode, &self.config)
+    }
+
+    /// Submits multiple transactions in parallel.
+    ///
+    /// This is a convenience method that builds, signs, and submits
+    /// multiple transactions at once.
+    ///
+    /// # Arguments
+    ///
+    /// * `account` - The account to sign with
+    /// * `payloads` - The transaction payloads to submit
+    ///
+    /// # Returns
+    ///
+    /// Results for each transaction in the batch.
+    #[cfg(feature = "ed25519")]
+    pub async fn submit_batch<A: Account>(
+        &self,
+        account: &A,
+        payloads: Vec<TransactionPayload>,
+    ) -> AptosResult<Vec<crate::transaction::BatchTransactionResult>> {
+        self.batch().submit(account, payloads).await
+    }
+
+    /// Submits multiple transactions and waits for all to complete.
+    ///
+    /// # Arguments
+    ///
+    /// * `account` - The account to sign with
+    /// * `payloads` - The transaction payloads to submit
+    /// * `timeout` - Optional timeout for waiting
+    ///
+    /// # Returns
+    ///
+    /// Results for each transaction in the batch.
+    #[cfg(feature = "ed25519")]
+    pub async fn submit_batch_and_wait<A: Account>(
+        &self,
+        account: &A,
+        payloads: Vec<TransactionPayload>,
+        timeout: Option<Duration>,
+    ) -> AptosResult<Vec<crate::transaction::BatchTransactionResult>> {
+        self.batch().submit_and_wait(account, payloads, timeout).await
+    }
+
+    /// Transfers APT to multiple recipients in a batch.
+    ///
+    /// # Arguments
+    ///
+    /// * `sender` - The sending account
+    /// * `transfers` - List of (recipient, amount) pairs
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// let results = aptos.batch_transfer_apt(&sender, vec![
+    ///     (addr1, 1_000_000),  // 0.01 APT
+    ///     (addr2, 2_000_000),  // 0.02 APT
+    ///     (addr3, 3_000_000),  // 0.03 APT
+    /// ]).await?;
+    /// ```
+    #[cfg(feature = "ed25519")]
+    pub async fn batch_transfer_apt<A: Account>(
+        &self,
+        sender: &A,
+        transfers: Vec<(AccountAddress, u64)>,
+    ) -> AptosResult<Vec<crate::transaction::BatchTransactionResult>> {
+        self.batch().transfer_apt(sender, transfers).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use wiremock::{
+        matchers::{method, path, path_regex},
+        Mock, MockServer, ResponseTemplate,
+    };
+
+    #[test]
+    fn test_aptos_client_creation() {
+        let aptos = Aptos::testnet();
+        assert!(aptos.is_ok());
+    }
+
+    #[test]
+    fn test_chain_id() {
+        let aptos = Aptos::testnet().unwrap();
+        assert_eq!(aptos.chain_id(), ChainId::testnet());
+
+        let aptos = Aptos::mainnet().unwrap();
+        assert_eq!(aptos.chain_id(), ChainId::mainnet());
+    }
+
+    async fn create_mock_aptos(server: &MockServer) -> Aptos {
+        let url = format!("{}/v1", server.uri());
+        let config = AptosConfig::custom(&url).unwrap().without_retry();
+        Aptos::new(config).unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_get_sequence_number() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path_regex(r"/v1/accounts/0x[0-9a-f]+"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "sequence_number": "42",
+                "authentication_key": "0x0000000000000000000000000000000000000000000000000000000000000001"
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let aptos = create_mock_aptos(&server).await;
+        let seq = aptos.get_sequence_number(AccountAddress::ONE).await.unwrap();
+        assert_eq!(seq, 42);
+    }
+
+    #[tokio::test]
+    async fn test_get_balance() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path_regex(r"/v1/accounts/0x[0-9a-f]+/resource/.*CoinStore.*"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "type": "0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>",
+                "data": {
+                    "coin": {"value": "5000000000"}
+                }
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let aptos = create_mock_aptos(&server).await;
+        let balance = aptos.get_balance(AccountAddress::ONE).await.unwrap();
+        assert_eq!(balance, 5_000_000_000);
+    }
+
+    #[tokio::test]
+    async fn test_get_resources_via_fullnode() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path_regex(r"/v1/accounts/0x[0-9a-f]+/resources"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                {"type": "0x1::account::Account", "data": {}},
+                {"type": "0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>", "data": {}}
+            ])))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let aptos = create_mock_aptos(&server).await;
+        let resources = aptos.fullnode().get_account_resources(AccountAddress::ONE).await.unwrap();
+        assert_eq!(resources.data.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_ledger_info() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/v1"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "chain_id": 2,
+                "epoch": "100",
+                "ledger_version": "12345",
+                "oldest_ledger_version": "0",
+                "ledger_timestamp": "1000000",
+                "node_role": "full_node",
+                "oldest_block_height": "0",
+                "block_height": "5000"
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let aptos = create_mock_aptos(&server).await;
+        let info = aptos.ledger_info().await.unwrap();
+        assert_eq!(info.version(), 12345);
+    }
+
+    #[tokio::test]
+    async fn test_resolve_address_hex() {
+        let server = MockServer::start().await;
+        let aptos = create_mock_aptos(&server).await;
+
+        // Should resolve hex address directly without API call
+        let addr = aptos.resolve("0x1").await.unwrap();
+        assert_eq!(addr, AccountAddress::ONE);
+    }
+
+    #[tokio::test]
+    async fn test_config_builder() {
+        let config = AptosConfig::testnet()
+            .with_timeout(Duration::from_secs(60));
+
+        let aptos = Aptos::new(config).unwrap();
+        assert_eq!(aptos.chain_id(), ChainId::testnet());
+    }
+
+    #[tokio::test]
+    async fn test_fullnode_accessor() {
+        let server = MockServer::start().await;
+        let aptos = create_mock_aptos(&server).await;
+
+        // Can access fullnode client directly
+        let fullnode = aptos.fullnode();
+        assert!(fullnode.base_url().as_str().contains(&server.uri()));
+    }
+
+    #[cfg(feature = "ed25519")]
+    #[tokio::test]
+    async fn test_build_transaction() {
+        let server = MockServer::start().await;
+
+        // Mock for getting account
+        Mock::given(method("GET"))
+            .and(path_regex(r"/v1/accounts/0x[0-9a-f]+"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "sequence_number": "0",
+                "authentication_key": "0x0000000000000000000000000000000000000000000000000000000000000001"
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        // Mock for gas price
+        Mock::given(method("GET"))
+            .and(path("/v1/estimate_gas_price"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "gas_estimate": 100
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let aptos = create_mock_aptos(&server).await;
+        let account = crate::account::Ed25519Account::generate();
+        let recipient = AccountAddress::from_hex("0x123").unwrap();
+        let payload = crate::transaction::EntryFunction::apt_transfer(recipient, 1000).unwrap();
+
+        let raw_txn = aptos.build_transaction(&account, payload.into()).await.unwrap();
+        assert_eq!(raw_txn.sender, account.address());
+        assert_eq!(raw_txn.sequence_number, 0);
+    }
+
+    #[cfg(feature = "indexer")]
+    #[tokio::test]
+    async fn test_indexer_accessor() {
+        let aptos = Aptos::testnet().unwrap();
+        let indexer = aptos.indexer();
+        assert!(indexer.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_account_exists_true() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path_regex(r"^/v1/accounts/0x[0-9a-f]+$"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "sequence_number": "10",
+                "authentication_key": "0x0000000000000000000000000000000000000000000000000000000000000001"
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let aptos = create_mock_aptos(&server).await;
+        let exists = aptos.account_exists(AccountAddress::ONE).await.unwrap();
+        assert!(exists);
+    }
+
+    #[tokio::test]
+    async fn test_account_exists_false() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path_regex(r"^/v1/accounts/0x[0-9a-f]+$"))
+            .respond_with(ResponseTemplate::new(404).set_body_json(serde_json::json!({
+                "message": "Account not found",
+                "error_code": "account_not_found"
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let aptos = create_mock_aptos(&server).await;
+        let exists = aptos.account_exists(AccountAddress::ONE).await.unwrap();
+        assert!(!exists);
+    }
+
+    #[tokio::test]
+    async fn test_view_function() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/v1/view"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                "1000000"
+            ])))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let aptos = create_mock_aptos(&server).await;
+        let result: Vec<serde_json::Value> = aptos
+            .view(
+                "0x1::coin::balance",
+                vec!["0x1::aptos_coin::AptosCoin".to_string()],
+                vec![serde_json::json!("0x1")],
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].as_str().unwrap(), "1000000");
+    }
+
+    #[tokio::test]
+    async fn test_chain_id_from_config() {
+        let aptos = Aptos::mainnet().unwrap();
+        assert_eq!(aptos.chain_id(), ChainId::mainnet());
+
+        let aptos = Aptos::devnet().unwrap();
+        // Devnet uses chain_id 165
+        assert_eq!(aptos.chain_id(), ChainId::new(165));
+    }
+
+    #[tokio::test]
+    async fn test_custom_config() {
+        let server = MockServer::start().await;
+        let url = format!("{}/v1", server.uri());
+        let config = AptosConfig::custom(&url).unwrap();
+        let aptos = Aptos::new(config).unwrap();
+
+        // Custom config should have unknown chain ID
+        assert_eq!(aptos.chain_id(), ChainId::new(0));
+    }
+}
+

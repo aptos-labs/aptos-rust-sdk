@@ -1,0 +1,29 @@
+[package]
+name = "aptos-rust-sdk-v2-macros"
+version = "0.1.0"
+description = "Procedural macros for type-safe Aptos contract bindings"
+authors.workspace = true
+edition = "2024"
+homepage.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+readme = "README.md"
+keywords = ["aptos", "blockchain", "macros", "codegen", "web3"]
+categories = ["cryptography", "development-tools::procedural-macro-helpers"]
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = { workspace = true }
+quote = { workspace = true }
+syn = { version = "2.0", features = ["full", "parsing", "extra-traits"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+aptos-rust-sdk-v2 = { workspace = true }
+tokio = { workspace = true, features = ["full", "test-util"] }
+trybuild = { workspace = true }
+

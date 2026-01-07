@@ -1,0 +1,433 @@
+//! BLS12-381 signature scheme implementation.
+//!
+//! BLS signatures support aggregation, which is used for validator
+//! consensus signatures on Aptos.
+
+use crate::crypto::traits::{PublicKey, Signature, Signer, Verifier};
+use crate::error::{AptosError, AptosResult};
+use blst::min_pk::{PublicKey as BlstPublicKey, SecretKey, Signature as BlstSignature};
+use blst::BLST_ERROR;
+use rand::RngCore;
+use serde::{Deserialize, Serialize};
+use std::fmt;
+use zeroize::Zeroize;
+
+/// BLS12-381 private key length in bytes.
+pub const BLS12381_PRIVATE_KEY_LENGTH: usize = 32;
+/// BLS12-381 public key length in bytes (compressed).
+pub const BLS12381_PUBLIC_KEY_LENGTH: usize = 48;
+/// BLS12-381 signature length in bytes (compressed).
+pub const BLS12381_SIGNATURE_LENGTH: usize = 96;
+
+/// The domain separation tag for BLS signatures in Aptos.
+const DST: &[u8] = b"BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_";
+
+/// A BLS12-381 private key.
+#[derive(Clone, Zeroize)]
+#[zeroize(drop)]
+pub struct Bls12381PrivateKey {
+    #[zeroize(skip)]
+    #[allow(unused)] // Field is used; lint false positive from Zeroize derive
+    inner: SecretKey,
+}
+
+impl Bls12381PrivateKey {
+    /// Generates a new random BLS12-381 private key.
+    pub fn generate() -> Self {
+        let mut ikm = [0u8; 32];
+        rand::rngs::OsRng.fill_bytes(&mut ikm);
+        let secret_key = SecretKey::key_gen(&ikm, &[]).expect("key generation should not fail");
+        Self { inner: secret_key }
+    }
+
+    /// Creates a private key from raw bytes.
+    pub fn from_bytes(bytes: &[u8]) -> AptosResult<Self> {
+        if bytes.len() != BLS12381_PRIVATE_KEY_LENGTH {
+            return Err(AptosError::InvalidPrivateKey(format!(
+                "expected {} bytes, got {}",
+                BLS12381_PRIVATE_KEY_LENGTH,
+                bytes.len()
+            )));
+        }
+        let secret_key = SecretKey::from_bytes(bytes)
+            .map_err(|e| AptosError::InvalidPrivateKey(format!("{:?}", e)))?;
+        Ok(Self { inner: secret_key })
+    }
+
+    /// Creates a private key from a hex string.
+    pub fn from_hex(hex_str: &str) -> AptosResult<Self> {
+        let hex_str = hex_str.strip_prefix("0x").unwrap_or(hex_str);
+        let bytes = hex::decode(hex_str)?;
+        Self::from_bytes(&bytes)
+    }
+
+    /// Returns the private key as bytes.
+    pub fn to_bytes(&self) -> [u8; BLS12381_PRIVATE_KEY_LENGTH] {
+        self.inner.to_bytes()
+    }
+
+    /// Returns the private key as a hex string.
+    pub fn to_hex(&self) -> String {
+        format!("0x{}", hex::encode(self.inner.to_bytes()))
+    }
+
+    /// Returns the corresponding public key.
+    pub fn public_key(&self) -> Bls12381PublicKey {
+        Bls12381PublicKey {
+            inner: self.inner.sk_to_pk(),
+        }
+    }
+
+    /// Signs a message and returns the signature.
+    pub fn sign(&self, message: &[u8]) -> Bls12381Signature {
+        let signature = self.inner.sign(message, DST, &[]);
+        Bls12381Signature { inner: signature }
+    }
+}
+
+impl Signer for Bls12381PrivateKey {
+    type Signature = Bls12381Signature;
+
+    fn sign(&self, message: &[u8]) -> Bls12381Signature {
+        Bls12381PrivateKey::sign(self, message)
+    }
+
+    fn public_key(&self) -> Bls12381PublicKey {
+        Bls12381PrivateKey::public_key(self)
+    }
+}
+
+impl fmt::Debug for Bls12381PrivateKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Bls12381PrivateKey([REDACTED])")
+    }
+}
+
+/// A BLS12-381 public key.
+#[derive(Clone, PartialEq, Eq)]
+pub struct Bls12381PublicKey {
+    inner: BlstPublicKey,
+}
+
+impl Bls12381PublicKey {
+    /// Creates a public key from compressed bytes (48 bytes).
+    pub fn from_bytes(bytes: &[u8]) -> AptosResult<Self> {
+        if bytes.len() != BLS12381_PUBLIC_KEY_LENGTH {
+            return Err(AptosError::InvalidPublicKey(format!(
+                "expected {} bytes, got {}",
+                BLS12381_PUBLIC_KEY_LENGTH,
+                bytes.len()
+            )));
+        }
+        let public_key = BlstPublicKey::from_bytes(bytes)
+            .map_err(|e| AptosError::InvalidPublicKey(format!("{:?}", e)))?;
+        Ok(Self { inner: public_key })
+    }
+
+    /// Creates a public key from a hex string.
+    pub fn from_hex(hex_str: &str) -> AptosResult<Self> {
+        let hex_str = hex_str.strip_prefix("0x").unwrap_or(hex_str);
+        let bytes = hex::decode(hex_str)?;
+        Self::from_bytes(&bytes)
+    }
+
+    /// Returns the public key as compressed bytes (48 bytes).
+    pub fn to_bytes(&self) -> Vec<u8> {
+        self.inner.compress().to_vec()
+    }
+
+    /// Returns the public key as a hex string.
+    pub fn to_hex(&self) -> String {
+        format!("0x{}", hex::encode(self.inner.compress()))
+    }
+
+    /// Verifies a signature against a message.
+    pub fn verify(&self, message: &[u8], signature: &Bls12381Signature) -> AptosResult<()> {
+        let result = signature.inner.verify(true, message, DST, &[], &self.inner, true);
+        if result == BLST_ERROR::BLST_SUCCESS {
+            Ok(())
+        } else {
+            Err(AptosError::SignatureVerificationFailed)
+        }
+    }
+}
+
+impl PublicKey for Bls12381PublicKey {
+    const LENGTH: usize = BLS12381_PUBLIC_KEY_LENGTH;
+
+    fn from_bytes(bytes: &[u8]) -> AptosResult<Self> {
+        Bls12381PublicKey::from_bytes(bytes)
+    }
+
+    fn to_bytes(&self) -> Vec<u8> {
+        Bls12381PublicKey::to_bytes(self)
+    }
+}
+
+impl Verifier for Bls12381PublicKey {
+    type Signature = Bls12381Signature;
+
+    fn verify(&self, message: &[u8], signature: &Bls12381Signature) -> AptosResult<()> {
+        Bls12381PublicKey::verify(self, message, signature)
+    }
+}
+
+impl fmt::Debug for Bls12381PublicKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Bls12381PublicKey({})", self.to_hex())
+    }
+}
+
+impl fmt::Display for Bls12381PublicKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.to_hex())
+    }
+}
+
+impl Serialize for Bls12381PublicKey {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        if serializer.is_human_readable() {
+            serializer.serialize_str(&self.to_hex())
+        } else {
+            serializer.serialize_bytes(&self.to_bytes())
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for Bls12381PublicKey {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        if deserializer.is_human_readable() {
+            let s = String::deserialize(deserializer)?;
+            Self::from_hex(&s).map_err(serde::de::Error::custom)
+        } else {
+            let bytes = Vec::<u8>::deserialize(deserializer)?;
+            Self::from_bytes(&bytes).map_err(serde::de::Error::custom)
+        }
+    }
+}
+
+/// A BLS12-381 signature.
+#[derive(Clone, PartialEq, Eq)]
+pub struct Bls12381Signature {
+    inner: BlstSignature,
+}
+
+impl Bls12381Signature {
+    /// Creates a signature from compressed bytes (96 bytes).
+    pub fn from_bytes(bytes: &[u8]) -> AptosResult<Self> {
+        if bytes.len() != BLS12381_SIGNATURE_LENGTH {
+            return Err(AptosError::InvalidSignature(format!(
+                "expected {} bytes, got {}",
+                BLS12381_SIGNATURE_LENGTH,
+                bytes.len()
+            )));
+        }
+        let signature = BlstSignature::from_bytes(bytes)
+            .map_err(|e| AptosError::InvalidSignature(format!("{:?}", e)))?;
+        Ok(Self { inner: signature })
+    }
+
+    /// Creates a signature from a hex string.
+    pub fn from_hex(hex_str: &str) -> AptosResult<Self> {
+        let hex_str = hex_str.strip_prefix("0x").unwrap_or(hex_str);
+        let bytes = hex::decode(hex_str)?;
+        Self::from_bytes(&bytes)
+    }
+
+    /// Returns the signature as compressed bytes (96 bytes).
+    pub fn to_bytes(&self) -> Vec<u8> {
+        self.inner.compress().to_vec()
+    }
+
+    /// Returns the signature as a hex string.
+    pub fn to_hex(&self) -> String {
+        format!("0x{}", hex::encode(self.inner.compress()))
+    }
+}
+
+impl Signature for Bls12381Signature {
+    type PublicKey = Bls12381PublicKey;
+    const LENGTH: usize = BLS12381_SIGNATURE_LENGTH;
+
+    fn from_bytes(bytes: &[u8]) -> AptosResult<Self> {
+        Bls12381Signature::from_bytes(bytes)
+    }
+
+    fn to_bytes(&self) -> Vec<u8> {
+        Bls12381Signature::to_bytes(self)
+    }
+}
+
+impl fmt::Debug for Bls12381Signature {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Bls12381Signature({})", self.to_hex())
+    }
+}
+
+impl fmt::Display for Bls12381Signature {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.to_hex())
+    }
+}
+
+impl Serialize for Bls12381Signature {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        if serializer.is_human_readable() {
+            serializer.serialize_str(&self.to_hex())
+        } else {
+            serializer.serialize_bytes(&self.to_bytes())
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for Bls12381Signature {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        if deserializer.is_human_readable() {
+            let s = String::deserialize(deserializer)?;
+            Self::from_hex(&s).map_err(serde::de::Error::custom)
+        } else {
+            let bytes = Vec::<u8>::deserialize(deserializer)?;
+            Self::from_bytes(&bytes).map_err(serde::de::Error::custom)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_generate_and_sign() {
+        let private_key = Bls12381PrivateKey::generate();
+        let message = b"hello world";
+        let signature = private_key.sign(message);
+
+        let public_key = private_key.public_key();
+        assert!(public_key.verify(message, &signature).is_ok());
+    }
+
+    #[test]
+    fn test_wrong_message_fails() {
+        let private_key = Bls12381PrivateKey::generate();
+        let message = b"hello world";
+        let wrong_message = b"hello world!";
+        let signature = private_key.sign(message);
+
+        let public_key = private_key.public_key();
+        assert!(public_key.verify(wrong_message, &signature).is_err());
+    }
+
+    #[test]
+    fn test_from_bytes_roundtrip() {
+        let private_key = Bls12381PrivateKey::generate();
+        let bytes = private_key.to_bytes();
+        let restored = Bls12381PrivateKey::from_bytes(&bytes).unwrap();
+        assert_eq!(private_key.to_bytes(), restored.to_bytes());
+    }
+
+    #[test]
+    fn test_public_key_from_bytes_roundtrip() {
+        let private_key = Bls12381PrivateKey::generate();
+        let public_key = private_key.public_key();
+        let bytes = public_key.to_bytes();
+        let restored = Bls12381PublicKey::from_bytes(&bytes).unwrap();
+        assert_eq!(public_key.to_bytes(), restored.to_bytes());
+    }
+
+    #[test]
+    fn test_signature_from_bytes_roundtrip() {
+        let private_key = Bls12381PrivateKey::generate();
+        let signature = private_key.sign(b"test");
+        let bytes = signature.to_bytes();
+        let restored = Bls12381Signature::from_bytes(&bytes).unwrap();
+        assert_eq!(signature.to_bytes(), restored.to_bytes());
+    }
+
+    #[test]
+    fn test_hex_roundtrip() {
+        let private_key = Bls12381PrivateKey::generate();
+        let hex = private_key.to_hex();
+        let restored = Bls12381PrivateKey::from_hex(&hex).unwrap();
+        assert_eq!(private_key.to_bytes(), restored.to_bytes());
+    }
+
+    #[test]
+    fn test_public_key_hex_roundtrip() {
+        let private_key = Bls12381PrivateKey::generate();
+        let public_key = private_key.public_key();
+        let hex = public_key.to_hex();
+        let restored = Bls12381PublicKey::from_hex(&hex).unwrap();
+        assert_eq!(public_key.to_bytes(), restored.to_bytes());
+    }
+
+    #[test]
+    fn test_signature_hex_roundtrip() {
+        let private_key = Bls12381PrivateKey::generate();
+        let signature = private_key.sign(b"test");
+        let hex = signature.to_hex();
+        let restored = Bls12381Signature::from_hex(&hex).unwrap();
+        assert_eq!(signature.to_bytes(), restored.to_bytes());
+    }
+
+    #[test]
+    fn test_public_key_length() {
+        assert_eq!(Bls12381PublicKey::LENGTH, BLS12381_PUBLIC_KEY_LENGTH);
+    }
+
+    #[test]
+    fn test_signature_length() {
+        assert_eq!(Bls12381Signature::LENGTH, BLS12381_SIGNATURE_LENGTH);
+    }
+
+    #[test]
+    fn test_invalid_private_key_bytes() {
+        let bytes = vec![0u8; 16]; // Wrong length
+        let result = Bls12381PrivateKey::from_bytes(&bytes);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_invalid_public_key_bytes() {
+        let bytes = vec![0u8; 16]; // Wrong length
+        let result = Bls12381PublicKey::from_bytes(&bytes);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_invalid_signature_bytes() {
+        let bytes = vec![0u8; 16]; // Wrong length
+        let result = Bls12381Signature::from_bytes(&bytes);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_json_serialization_public_key() {
+        let private_key = Bls12381PrivateKey::generate();
+        let public_key = private_key.public_key();
+        let json = serde_json::to_string(&public_key).unwrap();
+        let restored: Bls12381PublicKey = serde_json::from_str(&json).unwrap();
+        assert_eq!(public_key.to_bytes(), restored.to_bytes());
+    }
+
+    #[test]
+    fn test_json_serialization_signature() {
+        let private_key = Bls12381PrivateKey::generate();
+        let signature = private_key.sign(b"test");
+        let json = serde_json::to_string(&signature).unwrap();
+        let restored: Bls12381Signature = serde_json::from_str(&json).unwrap();
+        assert_eq!(signature.to_bytes(), restored.to_bytes());
+    }
+}
+

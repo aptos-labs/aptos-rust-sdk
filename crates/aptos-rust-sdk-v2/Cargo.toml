@@ -1,0 +1,181 @@
+[package]
+name = "aptos-rust-sdk-v2"
+version = "0.1.0"
+description = "A user-friendly, idiomatic Rust SDK for the Aptos blockchain"
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+readme = "README.md"
+keywords = ["aptos", "blockchain", "crypto", "sdk", "web3"]
+categories = ["cryptography", "api-bindings", "asynchronous"]
+
+[features]
+default = ["ed25519", "secp256k1"]
+full = ["ed25519", "secp256k1", "secp256r1", "bls", "keyless", "indexer", "faucet"]
+
+# Cryptographic signature schemes
+ed25519 = ["dep:ed25519-dalek", "dep:rand_core"]
+secp256k1 = ["dep:k256"]
+secp256r1 = ["dep:p256"]
+bls = ["dep:blst"]
+
+# Account types
+keyless = ["dep:jsonwebtoken", "ed25519", "secp256r1"]
+
+# API clients
+indexer = ["dep:graphql_client"]
+faucet = []
+
+# Testing utilities
+fuzzing = ["dep:arbitrary", "dep:proptest", "dep:proptest-derive"]
+
+# E2E testing (requires running localnet)
+e2e = ["ed25519", "secp256k1", "faucet"]
+
+# CLI for code generation
+cli = ["dep:clap"]
+
+# Proc macros for contract bindings
+macros = ["dep:aptos-rust-sdk-v2-macros"]
+
+[dependencies]
+# Core dependencies
+tokio = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_bytes = "0.11"
+serde_json = { workspace = true }
+aptos-bcs = { workspace = true }
+thiserror = { workspace = true }
+url = { workspace = true }
+anyhow = { workspace = true }
+hex = { workspace = true }
+bytes = { workspace = true }
+async-trait = "0.1"
+futures = "0.3"
+
+# Hashing (always needed)
+sha2 = "0.10"
+sha3 = "0.10"
+
+# URL encoding
+urlencoding = "2.1"
+
+# Randomness - use 0.8 to be compatible with ed25519-dalek and k256
+rand = "0.8"
+rand_core = { version = "0.6", optional = true }
+
+# Zeroize for secure key handling
+zeroize = { version = "1.8", features = ["derive"] }
+
+# BIP-39/44 for key derivation
+bip39 = { version = "2.1", features = ["rand"] }
+hmac = "0.12"
+
+# Optional crypto dependencies
+ed25519-dalek = { version = "2.1", features = ["std", "rand_core", "zeroize"], optional = true }
+k256 = { version = "0.13", features = ["ecdsa", "sha256", "std"], optional = true }
+p256 = { version = "0.13", features = ["ecdsa", "sha256", "std"], optional = true }
+blst = { version = "0.3", optional = true }
+
+# Optional keyless dependencies
+jsonwebtoken = { version = "9.3", optional = true }
+
+# Optional indexer dependencies
+graphql_client = { version = "0.14", optional = true }
+
+# Optional testing dependencies
+arbitrary = { workspace = true, optional = true }
+proptest = { workspace = true, optional = true }
+proptest-derive = { workspace = true, optional = true }
+
+# CLI dependencies (for codegen binary)
+clap = { version = "4.5", features = ["derive"], optional = true }
+
+# Proc macro for contract bindings
+aptos-rust-sdk-v2-macros = { workspace = true, optional = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full", "test-util"] }
+proptest = { workspace = true }
+proptest-derive = { workspace = true }
+tempfile = "3.14"
+wiremock = "0.6"
+tracing-test = "0.2"
+
+[[example]]
+name = "transfer"
+path = "examples/transfer.rs"
+required-features = ["ed25519", "faucet"]
+
+[[example]]
+name = "deploy_module"
+path = "examples/deploy_module.rs"
+required-features = ["ed25519", "faucet"]
+
+[[example]]
+name = "sponsored_transaction"
+path = "examples/sponsored_transaction.rs"
+required-features = ["ed25519", "faucet"]
+
+[[example]]
+name = "multi_agent"
+path = "examples/multi_agent.rs"
+required-features = ["ed25519", "faucet"]
+
+[[example]]
+name = "view_function"
+path = "examples/view_function.rs"
+required-features = ["ed25519"]
+
+[[example]]
+name = "call_contract"
+path = "examples/call_contract.rs"
+required-features = ["ed25519", "faucet"]
+
+[[example]]
+name = "transaction_data"
+path = "examples/transaction_data.rs"
+required-features = ["ed25519", "faucet"]
+
+[[example]]
+name = "read_contract_state"
+path = "examples/read_contract_state.rs"
+required-features = ["ed25519"]
+
+[[example]]
+name = "nft_operations"
+path = "examples/nft_operations.rs"
+required-features = ["ed25519"]
+
+[[example]]
+name = "multi_sig_account"
+path = "examples/multi_sig_account.rs"
+required-features = ["ed25519", "faucet"]
+
+[[example]]
+name = "multi_key_account"
+path = "examples/multi_key_account.rs"
+required-features = ["ed25519", "secp256k1", "faucet"]
+
+[[example]]
+name = "codegen"
+path = "examples/codegen.rs"
+required-features = ["ed25519"]
+
+[[example]]
+name = "contract_bindings"
+path = "examples/contract_bindings.rs"
+required-features = ["ed25519", "macros"]
+
+[[bin]]
+name = "aptos-codegen"
+path = "src/bin/codegen.rs"
+required-features = ["cli"]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

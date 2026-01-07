@@ -1,0 +1,746 @@
+//! MultiKey signature scheme implementation.
+//!
+//! MultiKey enables M-of-N threshold signatures with mixed key types.
+//! Unlike MultiEd25519, each key can be a different signature scheme
+//! (Ed25519, Secp256k1, Secp256r1, etc.).
+
+use crate::error::{AptosError, AptosResult};
+use serde::{Deserialize, Serialize};
+use std::fmt;
+
+/// Maximum number of keys in a multi-key account.
+pub const MAX_NUM_OF_KEYS: usize = 32;
+
+/// Minimum threshold (at least 1 signature required).
+pub const MIN_THRESHOLD: u8 = 1;
+
+/// Supported signature schemes for multi-key.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[repr(u8)]
+pub enum AnyPublicKeyVariant {
+    /// Ed25519 public key.
+    Ed25519 = 0,
+    /// Secp256k1 ECDSA public key.
+    Secp256k1 = 1,
+    /// Secp256r1 (P-256) ECDSA public key.
+    Secp256r1 = 2,
+    /// Keyless public key.
+    Keyless = 3,
+}
+
+impl AnyPublicKeyVariant {
+    /// Get the variant from a byte.
+    pub fn from_byte(byte: u8) -> AptosResult<Self> {
+        match byte {
+            0 => Ok(Self::Ed25519),
+            1 => Ok(Self::Secp256k1),
+            2 => Ok(Self::Secp256r1),
+            3 => Ok(Self::Keyless),
+            _ => Err(AptosError::InvalidPublicKey(format!(
+                "unknown public key variant: {}",
+                byte
+            ))),
+        }
+    }
+
+    /// Get the byte representation.
+    pub fn as_byte(&self) -> u8 {
+        *self as u8
+    }
+}
+
+/// A public key that can be any supported signature scheme.
+#[derive(Clone, PartialEq, Eq)]
+pub struct AnyPublicKey {
+    /// The signature scheme variant.
+    pub variant: AnyPublicKeyVariant,
+    /// The raw public key bytes.
+    pub bytes: Vec<u8>,
+}
+
+impl AnyPublicKey {
+    /// Creates a new AnyPublicKey.
+    pub fn new(variant: AnyPublicKeyVariant, bytes: Vec<u8>) -> Self {
+        Self { variant, bytes }
+    }
+
+    /// Creates an Ed25519 public key.
+    #[cfg(feature = "ed25519")]
+    pub fn ed25519(public_key: &crate::crypto::Ed25519PublicKey) -> Self {
+        Self {
+            variant: AnyPublicKeyVariant::Ed25519,
+            bytes: public_key.to_bytes().to_vec(),
+        }
+    }
+
+    /// Creates a Secp256k1 public key.
+    #[cfg(feature = "secp256k1")]
+    pub fn secp256k1(public_key: &crate::crypto::Secp256k1PublicKey) -> Self {
+        Self {
+            variant: AnyPublicKeyVariant::Secp256k1,
+            bytes: public_key.to_bytes(),
+        }
+    }
+
+    /// Creates a Secp256r1 public key.
+    #[cfg(feature = "secp256r1")]
+    pub fn secp256r1(public_key: &crate::crypto::Secp256r1PublicKey) -> Self {
+        Self {
+            variant: AnyPublicKeyVariant::Secp256r1,
+            bytes: public_key.to_bytes(),
+        }
+    }
+
+    /// Serializes to BCS format: variant_byte || length || bytes
+    pub fn to_bcs_bytes(&self) -> Vec<u8> {
+        let mut result = Vec::with_capacity(1 + 4 + self.bytes.len());
+        result.push(self.variant.as_byte());
+        // BCS uses ULEB128 for length, but for simplicity we'll use a u32
+        let len = self.bytes.len() as u32;
+        result.extend_from_slice(&len.to_le_bytes());
+        result.extend_from_slice(&self.bytes);
+        result
+    }
+
+    /// Verifies a signature against a message.
+    pub fn verify(&self, message: &[u8], signature: &AnySignature) -> AptosResult<()> {
+        if signature.variant != self.variant {
+            return Err(AptosError::InvalidSignature(format!(
+                "signature variant {:?} doesn't match public key variant {:?}",
+                signature.variant, self.variant
+            )));
+        }
+
+        match self.variant {
+            #[cfg(feature = "ed25519")]
+            AnyPublicKeyVariant::Ed25519 => {
+                let pk = crate::crypto::Ed25519PublicKey::from_bytes(&self.bytes)?;
+                let sig = crate::crypto::Ed25519Signature::from_bytes(&signature.bytes)?;
+                pk.verify(message, &sig)
+            }
+            #[cfg(feature = "secp256k1")]
+            AnyPublicKeyVariant::Secp256k1 => {
+                let pk = crate::crypto::Secp256k1PublicKey::from_bytes(&self.bytes)?;
+                let sig = crate::crypto::Secp256k1Signature::from_bytes(&signature.bytes)?;
+                pk.verify(message, &sig)
+            }
+            #[cfg(feature = "secp256r1")]
+            AnyPublicKeyVariant::Secp256r1 => {
+                let pk = crate::crypto::Secp256r1PublicKey::from_bytes(&self.bytes)?;
+                let sig = crate::crypto::Secp256r1Signature::from_bytes(&signature.bytes)?;
+                pk.verify(message, &sig)
+            }
+            #[allow(unreachable_patterns)]
+            _ => Err(AptosError::InvalidPublicKey(format!(
+                "verification not supported for variant {:?}",
+                self.variant
+            ))),
+        }
+    }
+}
+
+impl fmt::Debug for AnyPublicKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "AnyPublicKey({:?}, 0x{})",
+            self.variant,
+            hex::encode(&self.bytes)
+        )
+    }
+}
+
+impl fmt::Display for AnyPublicKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}:0x{}", self.variant, hex::encode(&self.bytes))
+    }
+}
+
+/// A signature that can be any supported signature scheme.
+#[derive(Clone, PartialEq, Eq)]
+pub struct AnySignature {
+    /// The signature scheme variant.
+    pub variant: AnyPublicKeyVariant,
+    /// The raw signature bytes.
+    pub bytes: Vec<u8>,
+}
+
+impl AnySignature {
+    /// Creates a new AnySignature.
+    pub fn new(variant: AnyPublicKeyVariant, bytes: Vec<u8>) -> Self {
+        Self { variant, bytes }
+    }
+
+    /// Creates an Ed25519 signature.
+    #[cfg(feature = "ed25519")]
+    pub fn ed25519(signature: &crate::crypto::Ed25519Signature) -> Self {
+        Self {
+            variant: AnyPublicKeyVariant::Ed25519,
+            bytes: signature.to_bytes().to_vec(),
+        }
+    }
+
+    /// Creates a Secp256k1 signature.
+    #[cfg(feature = "secp256k1")]
+    pub fn secp256k1(signature: &crate::crypto::Secp256k1Signature) -> Self {
+        Self {
+            variant: AnyPublicKeyVariant::Secp256k1,
+            bytes: signature.to_bytes().to_vec(),
+        }
+    }
+
+    /// Creates a Secp256r1 signature.
+    #[cfg(feature = "secp256r1")]
+    pub fn secp256r1(signature: &crate::crypto::Secp256r1Signature) -> Self {
+        Self {
+            variant: AnyPublicKeyVariant::Secp256r1,
+            bytes: signature.to_bytes().to_vec(),
+        }
+    }
+
+    /// Serializes to BCS format: variant_byte || length || bytes
+    pub fn to_bcs_bytes(&self) -> Vec<u8> {
+        let mut result = Vec::with_capacity(1 + 4 + self.bytes.len());
+        result.push(self.variant.as_byte());
+        let len = self.bytes.len() as u32;
+        result.extend_from_slice(&len.to_le_bytes());
+        result.extend_from_slice(&self.bytes);
+        result
+    }
+}
+
+impl fmt::Debug for AnySignature {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "AnySignature({:?}, {} bytes)",
+            self.variant,
+            self.bytes.len()
+        )
+    }
+}
+
+/// A multi-key public key supporting mixed signature schemes.
+///
+/// This allows M-of-N threshold signing where each key can be a different type.
+#[derive(Clone, PartialEq, Eq)]
+pub struct MultiKeyPublicKey {
+    /// The individual public keys.
+    public_keys: Vec<AnyPublicKey>,
+    /// The required threshold (M in M-of-N).
+    threshold: u8,
+}
+
+impl MultiKeyPublicKey {
+    /// Creates a new multi-key public key.
+    ///
+    /// # Arguments
+    ///
+    /// * `public_keys` - The individual public keys (can be mixed types)
+    /// * `threshold` - The number of signatures required (M in M-of-N)
+    pub fn new(public_keys: Vec<AnyPublicKey>, threshold: u8) -> AptosResult<Self> {
+        if public_keys.is_empty() {
+            return Err(AptosError::InvalidPublicKey(
+                "multi-key requires at least one public key".into(),
+            ));
+        }
+        if public_keys.len() > MAX_NUM_OF_KEYS {
+            return Err(AptosError::InvalidPublicKey(format!(
+                "multi-key supports at most {} keys, got {}",
+                MAX_NUM_OF_KEYS,
+                public_keys.len()
+            )));
+        }
+        if threshold < MIN_THRESHOLD {
+            return Err(AptosError::InvalidPublicKey(
+                "threshold must be at least 1".into(),
+            ));
+        }
+        if threshold as usize > public_keys.len() {
+            return Err(AptosError::InvalidPublicKey(format!(
+                "threshold {} exceeds number of keys {}",
+                threshold,
+                public_keys.len()
+            )));
+        }
+        Ok(Self {
+            public_keys,
+            threshold,
+        })
+    }
+
+    /// Returns the number of public keys.
+    pub fn num_keys(&self) -> usize {
+        self.public_keys.len()
+    }
+
+    /// Returns the threshold.
+    pub fn threshold(&self) -> u8 {
+        self.threshold
+    }
+
+    /// Returns the individual public keys.
+    pub fn public_keys(&self) -> &[AnyPublicKey] {
+        &self.public_keys
+    }
+
+    /// Returns the key at the given index.
+    pub fn get(&self, index: usize) -> Option<&AnyPublicKey> {
+        self.public_keys.get(index)
+    }
+
+    /// Serializes to bytes for authentication key derivation.
+    ///
+    /// Format: num_keys || pk1_bcs || pk2_bcs || ... || threshold
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        
+        // Number of keys (1 byte)
+        bytes.push(self.public_keys.len() as u8);
+        
+        // Each public key in BCS format
+        for pk in &self.public_keys {
+            bytes.extend(pk.to_bcs_bytes());
+        }
+        
+        // Threshold (1 byte)
+        bytes.push(self.threshold);
+        
+        bytes
+    }
+
+    /// Creates from bytes.
+    pub fn from_bytes(bytes: &[u8]) -> AptosResult<Self> {
+        if bytes.is_empty() {
+            return Err(AptosError::InvalidPublicKey("empty bytes".into()));
+        }
+
+        let num_keys = bytes[0] as usize;
+        if num_keys == 0 || num_keys > MAX_NUM_OF_KEYS {
+            return Err(AptosError::InvalidPublicKey(format!(
+                "invalid number of keys: {}",
+                num_keys
+            )));
+        }
+
+        let mut offset = 1;
+        let mut public_keys = Vec::with_capacity(num_keys);
+
+        for _ in 0..num_keys {
+            if offset >= bytes.len() {
+                return Err(AptosError::InvalidPublicKey("bytes too short".into()));
+            }
+
+            let variant = AnyPublicKeyVariant::from_byte(bytes[offset])?;
+            offset += 1;
+
+            if offset + 4 > bytes.len() {
+                return Err(AptosError::InvalidPublicKey("bytes too short for length".into()));
+            }
+
+            let len = u32::from_le_bytes([
+                bytes[offset],
+                bytes[offset + 1],
+                bytes[offset + 2],
+                bytes[offset + 3],
+            ]) as usize;
+            offset += 4;
+
+            if offset + len > bytes.len() {
+                return Err(AptosError::InvalidPublicKey("bytes too short for key".into()));
+            }
+
+            let key_bytes = bytes[offset..offset + len].to_vec();
+            offset += len;
+
+            public_keys.push(AnyPublicKey::new(variant, key_bytes));
+        }
+
+        if offset >= bytes.len() {
+            return Err(AptosError::InvalidPublicKey("bytes too short for threshold".into()));
+        }
+
+        let threshold = bytes[offset];
+
+        Self::new(public_keys, threshold)
+    }
+
+    /// Derives the account address for this multi-key public key.
+    pub fn to_address(&self) -> crate::types::AccountAddress {
+        crate::crypto::derive_address(&self.to_bytes(), crate::crypto::MULTI_KEY_SCHEME)
+    }
+
+    /// Derives the authentication key for this public key.
+    pub fn to_authentication_key(&self) -> [u8; 32] {
+        crate::crypto::derive_authentication_key(&self.to_bytes(), crate::crypto::MULTI_KEY_SCHEME)
+    }
+
+    /// Verifies a multi-key signature against a message.
+    pub fn verify(&self, message: &[u8], signature: &MultiKeySignature) -> AptosResult<()> {
+        // Check that we have enough signatures
+        if signature.num_signatures() < self.threshold as usize {
+            return Err(AptosError::SignatureVerificationFailed);
+        }
+
+        // Verify each signature
+        for (index, sig) in signature.signatures() {
+            if *index as usize >= self.public_keys.len() {
+                return Err(AptosError::InvalidSignature(format!(
+                    "signer index {} out of bounds (max {})",
+                    index,
+                    self.public_keys.len() - 1
+                )));
+            }
+            let pk = &self.public_keys[*index as usize];
+            pk.verify(message, sig)?;
+        }
+
+        Ok(())
+    }
+}
+
+impl fmt::Debug for MultiKeyPublicKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "MultiKeyPublicKey({}-of-{} keys)",
+            self.threshold,
+            self.public_keys.len()
+        )
+    }
+}
+
+impl fmt::Display for MultiKeyPublicKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "0x{}", hex::encode(self.to_bytes()))
+    }
+}
+
+/// A multi-key signature containing signatures from multiple signers.
+#[derive(Clone, PartialEq, Eq)]
+pub struct MultiKeySignature {
+    /// Individual signatures with their signer index.
+    signatures: Vec<(u8, AnySignature)>,
+    /// Bitmap indicating which keys signed (little-endian, up to 4 bytes for 32 keys).
+    bitmap: [u8; 4],
+}
+
+impl MultiKeySignature {
+    /// Creates a new multi-key signature from individual signatures.
+    ///
+    /// # Arguments
+    ///
+    /// * `signatures` - Vec of (signer_index, signature) pairs
+    pub fn new(mut signatures: Vec<(u8, AnySignature)>) -> AptosResult<Self> {
+        if signatures.is_empty() {
+            return Err(AptosError::InvalidSignature(
+                "multi-key signature requires at least one signature".into(),
+            ));
+        }
+        if signatures.len() > MAX_NUM_OF_KEYS {
+            return Err(AptosError::InvalidSignature(format!(
+                "too many signatures: {} (max {})",
+                signatures.len(),
+                MAX_NUM_OF_KEYS
+            )));
+        }
+
+        // Sort by index
+        signatures.sort_by_key(|(idx, _)| *idx);
+
+        // Check for duplicates and bounds, build bitmap
+        let mut bitmap = [0u8; 4];
+        let mut last_index: Option<u8> = None;
+
+        for (index, _) in &signatures {
+            if *index as usize >= MAX_NUM_OF_KEYS {
+                return Err(AptosError::InvalidSignature(format!(
+                    "signer index {} out of bounds (max {})",
+                    index,
+                    MAX_NUM_OF_KEYS - 1
+                )));
+            }
+            if last_index == Some(*index) {
+                return Err(AptosError::InvalidSignature(format!(
+                    "duplicate signer index {}",
+                    index
+                )));
+            }
+            last_index = Some(*index);
+
+            // Set bit in bitmap
+            let byte_index = (index / 8) as usize;
+            let bit_index = index % 8;
+            bitmap[byte_index] |= 1 << bit_index;
+        }
+
+        Ok(Self { signatures, bitmap })
+    }
+
+    /// Returns the number of signatures.
+    pub fn num_signatures(&self) -> usize {
+        self.signatures.len()
+    }
+
+    /// Returns the individual signatures with their indices.
+    pub fn signatures(&self) -> &[(u8, AnySignature)] {
+        &self.signatures
+    }
+
+    /// Returns the signer bitmap.
+    pub fn bitmap(&self) -> &[u8; 4] {
+        &self.bitmap
+    }
+
+    /// Checks if a particular index signed.
+    pub fn has_signature(&self, index: u8) -> bool {
+        if index as usize >= MAX_NUM_OF_KEYS {
+            return false;
+        }
+        let byte_index = (index / 8) as usize;
+        let bit_index = index % 8;
+        (self.bitmap[byte_index] >> bit_index) & 1 == 1
+    }
+
+    /// Serializes to bytes.
+    ///
+    /// Format: num_signatures || sig1_bcs || sig2_bcs || ... || bitmap (4 bytes)
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        
+        // Number of signatures
+        bytes.push(self.signatures.len() as u8);
+        
+        // Each signature in BCS format (ordered by index)
+        for (_, sig) in &self.signatures {
+            bytes.extend(sig.to_bcs_bytes());
+        }
+        
+        // Bitmap (4 bytes)
+        bytes.extend_from_slice(&self.bitmap);
+        
+        bytes
+    }
+
+    /// Creates from bytes.
+    pub fn from_bytes(bytes: &[u8]) -> AptosResult<Self> {
+        if bytes.len() < 5 {
+            return Err(AptosError::InvalidSignature("bytes too short".into()));
+        }
+
+        let num_sigs = bytes[0] as usize;
+        if num_sigs == 0 || num_sigs > MAX_NUM_OF_KEYS {
+            return Err(AptosError::InvalidSignature(format!(
+                "invalid number of signatures: {}",
+                num_sigs
+            )));
+        }
+
+        // Read bitmap from the end
+        let bitmap_start = bytes.len() - 4;
+        let mut bitmap = [0u8; 4];
+        bitmap.copy_from_slice(&bytes[bitmap_start..]);
+
+        // Parse signatures
+        let mut offset = 1;
+        let mut signatures = Vec::with_capacity(num_sigs);
+
+        // Determine signer indices from bitmap
+        let mut signer_indices = Vec::new();
+        for bit_pos in 0..(MAX_NUM_OF_KEYS as u8) {
+            let byte_idx = (bit_pos / 8) as usize;
+            let bit_idx = bit_pos % 8;
+            if (bitmap[byte_idx] >> bit_idx) & 1 == 1 {
+                signer_indices.push(bit_pos);
+            }
+        }
+
+        if signer_indices.len() != num_sigs {
+            return Err(AptosError::InvalidSignature(
+                "bitmap doesn't match number of signatures".into(),
+            ));
+        }
+
+        for &index in &signer_indices {
+            if offset >= bitmap_start {
+                return Err(AptosError::InvalidSignature("bytes too short".into()));
+            }
+
+            let variant = AnyPublicKeyVariant::from_byte(bytes[offset])?;
+            offset += 1;
+
+            if offset + 4 > bitmap_start {
+                return Err(AptosError::InvalidSignature("bytes too short for length".into()));
+            }
+
+            let len = u32::from_le_bytes([
+                bytes[offset],
+                bytes[offset + 1],
+                bytes[offset + 2],
+                bytes[offset + 3],
+            ]) as usize;
+            offset += 4;
+
+            if offset + len > bitmap_start {
+                return Err(AptosError::InvalidSignature("bytes too short for signature".into()));
+            }
+
+            let sig_bytes = bytes[offset..offset + len].to_vec();
+            offset += len;
+
+            signatures.push((index, AnySignature::new(variant, sig_bytes)));
+        }
+
+        Ok(Self { signatures, bitmap })
+    }
+}
+
+impl fmt::Debug for MultiKeySignature {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "MultiKeySignature({} signatures, bitmap={:?})",
+            self.signatures.len(),
+            self.bitmap
+        )
+    }
+}
+
+impl fmt::Display for MultiKeySignature {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "0x{}", hex::encode(self.to_bytes()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[cfg(feature = "ed25519")]
+    fn test_multi_key_public_key_creation() {
+        use crate::crypto::Ed25519PrivateKey;
+
+        let keys: Vec<_> = (0..3)
+            .map(|_| AnyPublicKey::ed25519(&Ed25519PrivateKey::generate().public_key()))
+            .collect();
+
+        // Valid 2-of-3
+        let multi_pk = MultiKeyPublicKey::new(keys.clone(), 2).unwrap();
+        assert_eq!(multi_pk.num_keys(), 3);
+        assert_eq!(multi_pk.threshold(), 2);
+
+        // Invalid: threshold > num_keys
+        assert!(MultiKeyPublicKey::new(keys.clone(), 4).is_err());
+
+        // Invalid: threshold = 0
+        assert!(MultiKeyPublicKey::new(keys.clone(), 0).is_err());
+
+        // Invalid: empty keys
+        assert!(MultiKeyPublicKey::new(vec![], 1).is_err());
+    }
+
+    #[test]
+    #[cfg(all(feature = "ed25519", feature = "secp256k1"))]
+    fn test_multi_key_mixed_types() {
+        use crate::crypto::{Ed25519PrivateKey, Secp256k1PrivateKey};
+
+        // Create mixed key types
+        let ed_key = AnyPublicKey::ed25519(&Ed25519PrivateKey::generate().public_key());
+        let secp_key = AnyPublicKey::secp256k1(&Secp256k1PrivateKey::generate().public_key());
+
+        let multi_pk = MultiKeyPublicKey::new(vec![ed_key, secp_key], 2).unwrap();
+        assert_eq!(multi_pk.num_keys(), 2);
+        assert_eq!(multi_pk.get(0).unwrap().variant, AnyPublicKeyVariant::Ed25519);
+        assert_eq!(multi_pk.get(1).unwrap().variant, AnyPublicKeyVariant::Secp256k1);
+    }
+
+    #[test]
+    #[cfg(feature = "ed25519")]
+    fn test_multi_key_sign_verify() {
+        use crate::crypto::Ed25519PrivateKey;
+
+        let private_keys: Vec<_> = (0..3).map(|_| Ed25519PrivateKey::generate()).collect();
+        let public_keys: Vec<_> = private_keys
+            .iter()
+            .map(|k| AnyPublicKey::ed25519(&k.public_key()))
+            .collect();
+
+        let multi_pk = MultiKeyPublicKey::new(public_keys, 2).unwrap();
+        let message = b"test message";
+
+        // Sign with keys 0 and 2 (2-of-3)
+        let sig0 = AnySignature::ed25519(&private_keys[0].sign(message));
+        let sig2 = AnySignature::ed25519(&private_keys[2].sign(message));
+
+        let multi_sig = MultiKeySignature::new(vec![(0, sig0), (2, sig2)]).unwrap();
+
+        // Verify should succeed
+        assert!(multi_pk.verify(message, &multi_sig).is_ok());
+
+        // Wrong message should fail
+        assert!(multi_pk.verify(b"wrong message", &multi_sig).is_err());
+    }
+
+    #[test]
+    #[cfg(feature = "ed25519")]
+    fn test_multi_key_bytes_roundtrip() {
+        use crate::crypto::Ed25519PrivateKey;
+
+        let keys: Vec<_> = (0..3)
+            .map(|_| AnyPublicKey::ed25519(&Ed25519PrivateKey::generate().public_key()))
+            .collect();
+        let multi_pk = MultiKeyPublicKey::new(keys, 2).unwrap();
+
+        let bytes = multi_pk.to_bytes();
+        let restored = MultiKeyPublicKey::from_bytes(&bytes).unwrap();
+
+        assert_eq!(multi_pk.threshold(), restored.threshold());
+        assert_eq!(multi_pk.num_keys(), restored.num_keys());
+    }
+
+    #[test]
+    #[cfg(feature = "ed25519")]
+    fn test_multi_key_signature_bytes_roundtrip() {
+        use crate::crypto::Ed25519PrivateKey;
+
+        let private_keys: Vec<_> = (0..3).map(|_| Ed25519PrivateKey::generate()).collect();
+        let message = b"test";
+
+        let sig0 = AnySignature::ed25519(&private_keys[0].sign(message));
+        let sig2 = AnySignature::ed25519(&private_keys[2].sign(message));
+
+        let multi_sig = MultiKeySignature::new(vec![(0, sig0), (2, sig2)]).unwrap();
+
+        let bytes = multi_sig.to_bytes();
+        let restored = MultiKeySignature::from_bytes(&bytes).unwrap();
+
+        assert_eq!(multi_sig.num_signatures(), restored.num_signatures());
+        assert_eq!(multi_sig.bitmap(), restored.bitmap());
+    }
+
+    #[test]
+    #[cfg(feature = "ed25519")]
+    fn test_signature_bitmap() {
+        use crate::crypto::Ed25519PrivateKey;
+
+        let private_keys: Vec<_> = (0..5).map(|_| Ed25519PrivateKey::generate()).collect();
+        let message = b"test";
+
+        // Sign with indices 1, 3, 4
+        let signatures: Vec<_> = [1, 3, 4]
+            .iter()
+            .map(|&i| (i, AnySignature::ed25519(&private_keys[i as usize].sign(message))))
+            .collect();
+
+        let multi_sig = MultiKeySignature::new(signatures).unwrap();
+
+        assert!(!multi_sig.has_signature(0));
+        assert!(multi_sig.has_signature(1));
+        assert!(!multi_sig.has_signature(2));
+        assert!(multi_sig.has_signature(3));
+        assert!(multi_sig.has_signature(4));
+        assert!(!multi_sig.has_signature(5));
+    }
+}
+
