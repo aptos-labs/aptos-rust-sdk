@@ -4,84 +4,115 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-The Aptos Rust SDK is a work-in-progress SDK for interacting with the Aptos blockchain. It currently supports crypto functionality but does not yet support transaction submission. The project consists of four main workspace crates:
+The Aptos Rust SDK is a user-friendly, idiomatic Rust SDK for interacting with the Aptos blockchain. It has feature parity with the TypeScript SDK and supports full blockchain interaction including account management, transaction building, and multiple signature schemes.
 
-- **aptos-rust-sdk**: Main SDK crate with REST API client functionality
-- **aptos-rust-sdk-types**: Core types and data structures for Aptos API interactions  
-- **aptos-crypto**: Cryptographic primitives (ed25519, BLS12-381, secp256k1, etc.)
-- **aptos-crypto-derive**: Procedural macros for crypto implementations
+The project consists of two workspace crates:
+
+- **aptos-rust-sdk-v2**: Main SDK crate with API clients, account management, transaction building, and cryptography
+- **aptos-rust-sdk-v2-macros**: Procedural macros for type-safe contract bindings
 
 ## Development Commands
 
 ### Building
+
 ```bash
-cargo build                    # Build all workspace members
-cargo build --release         # Release build
-cargo build -p aptos-rust-sdk  # Build specific crate
+cargo build                                    # Build with default features (ed25519 + secp256k1)
+cargo build -p aptos-rust-sdk-v2 --all-features  # Build with all features
+cargo build --release                          # Release build
 ```
 
 ### Testing
+
 ```bash
-cargo test                     # Run all tests
-cargo test -p aptos-rust-sdk   # Test specific crate
-cargo test --lib              # Run library tests only
+cargo test -p aptos-rust-sdk-v2                # Run unit tests
+cargo test -p aptos-rust-sdk-v2 --all-features # Test with all features
+cargo test -p aptos-rust-sdk-v2 --features "e2e" -- --ignored  # E2E tests (requires localnet)
 ```
 
 ### Linting and Formatting
+
 ```bash
-cargo clippy                   # Run linter
-cargo clippy --all-targets --all-features -- -D warnings  # Strict linting
-cargo fmt                     # Format code (uses nightly rustfmt in CI)
+cargo clippy -p aptos-rust-sdk-v2 --all-features -- -D warnings  # Strict linting
+cargo +nightly fmt                             # Format code (uses nightly rustfmt)
+cargo +nightly fmt -- --check                  # Check formatting
 ```
 
-### Examples
+### Running Examples
+
 ```bash
-cargo run --example rest_api   # Run REST API example
-# Examples are in crates/aptos-rust-sdk/examples/ and crates/examples/src/
+cargo run -p aptos-rust-sdk-v2 --example transfer --features "ed25519,faucet"
+cargo run -p aptos-rust-sdk-v2 --example view_function --features "ed25519"
 ```
+
+Examples are in `crates/aptos-rust-sdk-v2/examples/`.
 
 ## Code Architecture
 
-### Client Architecture
-The SDK follows a builder pattern for client construction:
-- `AptosClientBuilder` in `crates/aptos-rust-sdk/src/client/builder.rs` creates configured clients
-- `AptosFullnodeClient` in `crates/aptos-rust-sdk/src/client/rest_api.rs` handles REST API interactions
-- Network configurations in `crates/aptos-rust-sdk/src/client/config.rs` (mainnet, testnet, devnet)
+### Main Entry Point
 
-### Type System
-The type system is centralized in `aptos-rust-sdk-types`:
-- `api_types/` contains all Aptos-specific types (addresses, transactions, Move types, etc.)
-- `serializable.rs` handles BCS (Binary Canonical Serialization) 
-- Custom error handling through `error.rs` with `AptosResult<T>` type alias
+The SDK follows a client-centric design with `Aptos` as the main entry point:
+- `Aptos` in `crates/aptos-rust-sdk-v2/src/aptos.rs` - Primary client combining all API capabilities
+- `AptosConfig` in `crates/aptos-rust-sdk-v2/src/config.rs` - Network configuration (mainnet, testnet, devnet, localnet)
 
-### Cryptographic Layer
-Comprehensive crypto support in `aptos-crypto`:
-- Multiple signature schemes: Ed25519, BLS12-381, secp256k1, secp256r1
-- Multi-signature support (`multi_ed25519.rs`)
-- Poseidon hashing for keyless accounts (`poseidon_bn254/`)
-- Asymmetric encryption (`asymmetric_encryption/`)
+### Module Structure
+
+- **`account/`** - Account management and key generation
+  - `Ed25519Account`, `Secp256k1Account`, `Secp256r1Account` - Single-key accounts
+  - `MultiKeyAccount` - Multi-key authentication
+  - `KeylessAccount` - OIDC-based keyless authentication
+
+- **`api/`** - API clients
+  - `fullnode.rs` - REST API client for fullnode interactions
+  - `indexer.rs` - GraphQL indexer client
+  - `faucet.rs` - Faucet client for testnets
+  - `ans.rs` - Aptos Names Service integration
+
+- **`transaction/`** - Transaction building and signing
+  - `builder.rs` - Fluent builder pattern for transactions
+  - `authenticator.rs` - Transaction authentication
+  - `sponsored.rs` - Fee payer (sponsored) transactions
+  - `batch.rs` - Transaction batching
+
+- **`crypto/`** - Cryptographic primitives
+  - Multiple signature schemes: Ed25519, Secp256k1, Secp256r1, BLS12-381
+  - `hash.rs` - Hashing utilities
+  - `traits.rs` - Core cryptographic traits
+
+- **`types/`** - Core Aptos types
+  - `address.rs` - Account addresses
+  - `move_types.rs` - Move type representations
+  - `hash.rs` - Hash values
+
+- **`codegen/`** - Code generation from Move ABIs
+  - Generates type-safe Rust bindings from Move contract ABIs
 
 ### Key Patterns
-- **Workspace Dependencies**: All external dependencies are centralized in the root `Cargo.toml` workspace section
-- **BCS Serialization**: Uses `aptos-bcs` crate instead of standard `bcs` for serialization
-- **Async/Await**: Heavy use of `tokio` for async operations, especially in client code
-- **Builder Pattern**: Clients and complex types use builder patterns for construction
-- **Result Types**: Uses `AptosResult<T>` consistently throughout the SDK
 
-## Important Files to Understand
-- `crates/aptos-rust-sdk/src/client/rest_api.rs`: Core REST client implementation
-- `crates/aptos-rust-sdk-types/src/api_types/transaction.rs`: Transaction type definitions
-- `crates/aptos-rust-sdk-types/src/api_types/view.rs`: View function request/response types
-- `crates/aptos-crypto/src/traits.rs`: Core cryptographic traits
-- `crates/aptos-rust-sdk/examples/rest_api.rs`: Working example of SDK usage
+- **Feature Flags**: Cryptographic schemes and optional features are behind feature flags (ed25519, secp256k1, mnemonic, secp256r1, bls, keyless, indexer, faucet)
+- **Builder Pattern**: Transactions and configurations use fluent builder patterns
+- **Async/Await**: Heavy use of `tokio` for async operations
+- **Result Types**: Uses `AptosResult<T>` with `AptosError` throughout
+- **BCS Serialization**: Uses `aptos-bcs` crate for Binary Canonical Serialization
+
+### Important Files to Understand
+
+- `crates/aptos-rust-sdk-v2/src/aptos.rs` - Main SDK client combining all capabilities
+- `crates/aptos-rust-sdk-v2/src/config.rs` - Network configuration
+- `crates/aptos-rust-sdk-v2/src/transaction/builder.rs` - Transaction builder
+- `crates/aptos-rust-sdk-v2/src/account/mod.rs` - Account trait and implementations
+- `crates/aptos-rust-sdk-v2/src/crypto/traits.rs` - Core cryptographic traits
+- `crates/aptos-rust-sdk-v2/examples/transfer.rs` - Working example of basic transfer
 
 ## Rust Toolchain
-- **Version**: 1.85 (specified in `rust-toolchain.toml`)
+
+- **Version**: 1.85+ (specified in `rust-toolchain.toml`)
+- **Edition**: 2024
 - **Components**: cargo, clippy, rustc, rust-docs, rust-std
-- **Note**: Uses nightly rustfmt for formatting (not specified in toolchain)
+- **Note**: Uses nightly rustfmt for formatting
 
 ## Testing Strategy
-- Unit tests are located in `src/tests/` directories within each crate
-- Property-based testing with `proptest` for crypto components
-- Integration tests in `crates/aptos-rust-sdk/src/tests/`
-- Test vectors for crypto validation in `crates/aptos-crypto/test_vectors/`
+
+- Unit tests are co-located with source code or in `src/tests/` directories
+- E2E tests require running Aptos localnet (`aptos node run-localnet`)
+- Behavioral specification tests in `specifications/tests/rust/`
+- Property-based testing with `proptest` for crypto components (via `fuzzing` feature)

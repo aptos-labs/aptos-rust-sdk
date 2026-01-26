@@ -37,6 +37,7 @@
 //! |---------|---------|-------------|
 //! | `ed25519` | Yes | Ed25519 signature scheme |
 //! | `secp256k1` | Yes | Secp256k1 ECDSA signatures |
+//! | `mnemonic` | Yes | BIP-39 mnemonic phrase support for key derivation |
 //! | `secp256r1` | No | Secp256r1 (P-256) ECDSA signatures |
 //! | `bls` | No | BLS12-381 signatures |
 //! | `keyless` | No | OIDC-based keyless authentication |

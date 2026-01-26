@@ -1,4 +1,6 @@
 //! BIP-39 mnemonic phrase support for key derivation.
+//!
+//! This module requires the `mnemonic` feature flag.
 
 use crate::error::{AptosError, AptosResult};
 

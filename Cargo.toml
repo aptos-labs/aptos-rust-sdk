@@ -2,13 +2,8 @@
 resolver = "2"
 
 members = [
-    "crates/aptos-rust-sdk",
     "crates/aptos-rust-sdk-v2",
     "crates/aptos-rust-sdk-v2-macros",
-    "crates/aptos-rust-sdk-types",
-    "crates/aptos-crypto",
-    "crates/aptos-crypto-derive",
-    "crates/examples"
 ]
 
 # NOTE: default-members is the complete list of binaries that form the "production Aptos codebase". These members should
@@ -17,11 +12,7 @@ members = [
 #
 # For more, see the "Conditional compilation for tests" section in documentation/coding_guidelines.md.
 default-members = [
-    "crates/aptos-rust-sdk",
     "crates/aptos-rust-sdk-v2",
-    "crates/aptos-rust-sdk-types",
-    "crates/aptos-crypto",
-    "crates/aptos-crypto-derive"
 ]
 
 # All workspace members should inherit these keys
@@ -38,46 +29,20 @@ rust-version = "1.90.0"
 [workspace.dependencies]
 # Internal crate dependencies.
 # Please do not add any test features here: they should be declared by the individual crate.
-aptos-rust-sdk = { path = "crates/aptos-rust-sdk" }
 aptos-rust-sdk-v2 = { path = "crates/aptos-rust-sdk-v2" }
 aptos-rust-sdk-v2-macros = { path = "crates/aptos-rust-sdk-v2-macros" }
-aptos-rust-sdk-types = { path = "crates/aptos-rust-sdk-types" }
-aptos-crypto = { path = "crates/aptos-crypto" }
-aptos-crypto-derive = { path = "crates/aptos-crypto-derive" }
 
 # External crate dependencies.
 # Please do not add any test features here: they should be declared by the individual crate.
-aes-gcm = "0.10.3"
 anyhow = "1.0.97"
 arbitrary = { version = "1.4.1", features = ["derive"] }
-ark-bn254 = "0.5.0"
-ark-ff = "0.5.0"
-base64 = "0.22.1"
 aptos-bcs = "0.1.4"
-bitvec = "1.0.1"
-blst = "0.3.14"
 bytes = { version = "1.10.1", features = ["serde"] }
-curve25519-dalek = "3"
-digest = "0.9.0"
-ed25519-dalek = { version = "1.0.1", features = ["std", "serde"] }
-ff = { version = "0.13.1", features = ["derive"] }
 hex = { version = "0.4.3", features = ["serde"] }
-hkdf = "0.11.0"
-libsecp256k1 = "0.7.2"
-more-asserts = "0.3.1"
-neptune = { version = "13.0.0", default-features = false }
-num = "0.4.3"
-num-bigint = { version = "0.4.6", features = ["rand"] }
-num-integer = "0.1.46"
-once_cell = "1.21.1"
-p256 = { version = "0.13.2" }
-signature = "2.2.0"
 proc-macro2 = "1.0.94"
 proptest = "1.6.0"
 proptest-derive = "0.5.1"
 quote = "1.0.40"
-rand = "0.7.3"
-rand_core = "0.9.3"
 reqwest = { version = "0.12.15", features = [
     "blocking",
     "cookies",
@@ -85,22 +50,14 @@ reqwest = { version = "0.12.15", features = [
     "multipart",
     "stream",
 ] }
-sha2 = "0.9.3"
-sha3 = "0.9.1"
 serde = { version = "1.0.219", features = ["derive", "rc"] }
-serde_bytes = "0.11.17"
 serde_json = { version = "1.0.140", features = [
     "preserve_order",
     "arbitrary_precision",
 ] } # Note: arbitrary_precision is required to parse u256 in JSON
-serde-name = "0.2.1"
-static_assertions = "1.1.0"
-syn = { version = "1.0.109", features = ["derive", "extra-traits"] }
 thiserror = "2.0.12"
-tiny-keccak = { version = "2.0.2", features = ["keccak", "sha3"] }
 trybuild = "1.0.104"
 tokio = { version = "1.44.1", features = ["full"] }
-typenum = "1.18.0"
 url = { version = "2.5.4", features = ["serde"] }
 
 [profile.release]

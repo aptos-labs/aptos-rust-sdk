@@ -13,14 +13,17 @@ keywords = ["aptos", "blockchain", "crypto", "sdk", "web3"]
 categories = ["cryptography", "api-bindings", "asynchronous"]
 
 [features]
-default = ["ed25519", "secp256k1"]
-full = ["ed25519", "secp256k1", "secp256r1", "bls", "keyless", "indexer", "faucet"]
+default = ["ed25519", "secp256k1", "mnemonic"]
+full = ["ed25519", "secp256k1", "secp256r1", "bls", "keyless", "indexer", "faucet", "mnemonic"]
 
 # Cryptographic signature schemes
 ed25519 = ["dep:ed25519-dalek", "dep:rand_core"]
 secp256k1 = ["dep:k256"]
 secp256r1 = ["dep:p256"]
 bls = ["dep:blst"]
+
+# BIP-39 mnemonic phrase support
+mnemonic = ["dep:bip39", "dep:hmac"]
 
 # Account types
 keyless = ["dep:jsonwebtoken", "ed25519", "secp256r1"]
@@ -71,9 +74,9 @@ rand_core = { version = "0.6", optional = true }
 # Zeroize for secure key handling
 zeroize = { version = "1.8", features = ["derive"] }
 
-# BIP-39/44 for key derivation
-bip39 = { version = "2.1", features = ["rand"] }
-hmac = "0.12"
+# Optional BIP-39/44 for key derivation
+bip39 = { version = "2.1", features = ["rand"], optional = true }
+hmac = { version = "0.12", optional = true }
 
 # Optional crypto dependencies
 ed25519-dalek = { version = "2.1", features = ["std", "rand_core", "zeroize"], optional = true }

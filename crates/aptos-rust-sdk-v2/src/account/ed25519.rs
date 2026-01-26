@@ -1,6 +1,7 @@
 //! Ed25519 account implementation.
 
 use crate::account::account::{Account, AuthenticationKey};
+#[cfg(feature = "mnemonic")]
 use crate::account::Mnemonic;
 use crate::crypto::{Ed25519PrivateKey, Ed25519PublicKey, ED25519_SCHEME};
 use crate::error::AptosResult;
@@ -19,10 +20,6 @@ use std::fmt;
 /// // Generate a new random account
 /// let account = Ed25519Account::generate();
 /// println!("Address: {}", account.address());
-///
-/// // Create from mnemonic
-/// let mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
-/// let account = Ed25519Account::from_mnemonic(mnemonic, 0).unwrap();
 /// ```
 #[derive(Clone)]
 pub struct Ed25519Account {
@@ -72,12 +69,14 @@ impl Ed25519Account {
     ///
     /// # Example
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// use aptos_rust_sdk_v2::account::Ed25519Account;
     ///
     /// let mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
     /// let account = Ed25519Account::from_mnemonic(mnemonic, 0).unwrap();
     /// ```
+    #[cfg(feature = "mnemonic")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "mnemonic")))]
     pub fn from_mnemonic(mnemonic: &str, index: u32) -> AptosResult<Self> {
         let mnemonic = Mnemonic::from_phrase(mnemonic)?;
         let private_key = mnemonic.derive_ed25519_key(index)?;
@@ -87,6 +86,8 @@ impl Ed25519Account {
     /// Generates a new account with a random mnemonic.
     ///
     /// Returns both the account and the mnemonic phrase (for backup).
+    #[cfg(feature = "mnemonic")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "mnemonic")))]
     pub fn generate_with_mnemonic() -> AptosResult<(Self, String)> {
         let mnemonic = Mnemonic::generate(24)?;
         let phrase = mnemonic.phrase().to_string();
@@ -160,6 +161,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "mnemonic")]
     fn test_from_mnemonic() {
         // Standard test mnemonic
         let mnemonic =
@@ -185,6 +187,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "mnemonic")]
     fn test_generate_with_mnemonic() {
         let (account, mnemonic) = Ed25519Account::generate_with_mnemonic().unwrap();
 
@@ -266,6 +269,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "mnemonic")]
     fn test_invalid_mnemonic() {
         let result = Ed25519Account::from_mnemonic("invalid mnemonic phrase", 0);
         assert!(result.is_err());

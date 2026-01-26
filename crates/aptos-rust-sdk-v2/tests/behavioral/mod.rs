@@ -114,9 +114,12 @@ mod multi_scheme_crypto_tests {
 
 #[cfg(feature = "ed25519")]
 mod account_tests {
-    use aptos_rust_sdk_v2::account::{Account, Ed25519Account, Mnemonic};
+    use aptos_rust_sdk_v2::account::{Account, Ed25519Account};
+    #[cfg(feature = "mnemonic")]
+    use aptos_rust_sdk_v2::account::Mnemonic;
 
     #[test]
+    #[cfg(feature = "mnemonic")]
     fn test_deterministic_key_derivation() {
         let mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
         
@@ -127,6 +130,7 @@ mod account_tests {
     }
 
     #[test]
+    #[cfg(feature = "mnemonic")]
     fn test_different_indices_produce_different_accounts() {
         let mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
         
@@ -137,6 +141,7 @@ mod account_tests {
     }
 
     #[test]
+    #[cfg(feature = "mnemonic")]
     fn test_mnemonic_generation() {
         let mnemonic = Mnemonic::generate(12).unwrap();
         assert_eq!(mnemonic.phrase().split_whitespace().count(), 12);

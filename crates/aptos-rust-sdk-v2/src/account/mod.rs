@@ -38,6 +38,7 @@ mod keyless;
 mod secp256k1;
 #[cfg(feature = "secp256r1")]
 mod secp256r1;
+#[cfg(feature = "mnemonic")]
 mod mnemonic;
 
 pub use account::{Account, AnyAccount, AuthenticationKey};
@@ -55,4 +56,5 @@ pub use keyless::{
 pub use secp256k1::Secp256k1Account;
 #[cfg(feature = "secp256r1")]
 pub use secp256r1::Secp256r1Account;
+#[cfg(feature = "mnemonic")]
 pub use mnemonic::Mnemonic;

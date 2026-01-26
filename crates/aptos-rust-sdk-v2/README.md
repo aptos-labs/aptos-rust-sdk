@@ -49,6 +49,7 @@ async fn main() -> anyhow::Result<()> {
 |---------|---------|-------------|
 | `ed25519` | ✓ | Ed25519 signature scheme |
 | `secp256k1` | ✓ | Secp256k1 ECDSA signatures |
+| `mnemonic` | ✓ | BIP-39 mnemonic phrase support for key derivation |
 | `secp256r1` | | Secp256r1 (P-256) ECDSA signatures |
 | `bls` | | BLS12-381 signatures |
 | `keyless` | | OIDC-based keyless authentication |

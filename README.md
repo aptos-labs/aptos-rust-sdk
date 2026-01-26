@@ -1,169 +1,149 @@
 # Aptos Rust SDK
 
-> **Status:** work in progress. The current implementation primarily covers REST client plumbing, API type definitions, and Ed25519-based signing helpers. Several verification paths (e.g. multi-sig authenticators) are still marked `unimplemented!()`.
+A user-friendly, idiomatic Rust SDK for the Aptos blockchain with feature parity to the TypeScript SDK.
+
+## Features
+
+- **Full Blockchain Interaction**: Connect, explore, and interact with the Aptos blockchain
+- **Multiple Signature Schemes**: Ed25519, Secp256k1, Secp256r1 (P-256), and BLS12-381
+- **Transaction Building**: Fluent builder pattern for constructing transactions
+- **Account Management**: Single-key, multi-sig, and keyless (OIDC) accounts
+- **Type Safety**: Strong Rust type system for Move contract interactions
+- **Modular Design**: Feature flags to include only what you need
 
 ## Workspace Layout
-- `crates/aptos-rust-sdk` – async REST client surface for fullnodes (`AptosFullnodeClient`) plus builders and response helpers.
-- `crates/aptos-rust-sdk-types` – API types, serialization helpers, and Move value utilities consumed by the client.
-- `crates/examples` – runnable binaries and async tests that demonstrate view functions, type parsing, and transaction workflows.
+
+- `crates/aptos-rust-sdk-v2` – Main SDK crate with async clients, account management, transaction building, and crypto
+- `crates/aptos-rust-sdk-v2-macros` – Procedural macros for type-safe contract bindings
 
 ## Prerequisites
-- Rust toolchain 1.85.0 (tracked in `rust-toolchain.toml`).
-- Access to an Aptos fullnode REST endpoint (mainnet/testnet/devnet/localnet URLs are pre-configured in `AptosNetwork`).
 
-```
-cargo build
-cargo test --package aptos-rust-sdk -- --nocapture
-cargo test --package examples -- --nocapture # requires network access unless SKIP_NETWORK_TESTS=1
-```
+- Rust toolchain 1.85+ (tracked in `rust-toolchain.toml`)
+- Access to an Aptos fullnode REST endpoint (mainnet/testnet/devnet/localnet)
 
-## Consuming the Crates
-The crates are not published to crates.io (`publish = false`), so depend on the sources directly:
+## Quick Start
+
+Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-aptos-rust-sdk = { git = "https://github.com/aptos-labs/aptos-rust-sdk", package = "aptos-rust-sdk", branch = "main"}
-aptos-rust-sdk-types = { git = "https://github.com/aptos-labs/aptos-rust-sdk", package = "aptos-rust-sdk-types", branch = "main"}
+aptos-rust-sdk-v2 = { git = "https://github.com/aptos-labs/aptos-rust-sdk", package = "aptos-rust-sdk-v2" }
 ```
 
-When working inside this workspace, use the shared dependency definitions from `[workspace.dependencies]`.
-
-## Building a Client
-`AptosFullnodeClient` is constructed via the builder API:
+Basic usage:
 
 ```rust
-use aptos_rust_sdk::client::builder::AptosClientBuilder;
-use aptos_rust_sdk::client::config::AptosNetwork;
-
-let client = AptosClientBuilder::new(AptosNetwork::testnet())
-    .timeout(std::time::Duration::from_secs(10))
-    .build();
-let state = client.get_state().await?; // ledger metadata
-```
-
-The builder automatically adds the `x-aptos-client` header and supports optional API key injection through the `X_API_KEY` environment variable.
-
-## Reading On-Chain Data
-Common read paths are wrapped on the client:
-- `get_state()` returns `State` decoded from ledger headers.
-- `get_account_resources(address)` fetches account resources as JSON.
-- `get_account_balance(address, asset_type)` hits the REST balance endpoint.
-- `view_function(request)` issues `POST /v1/view` with typed Move arguments (`ViewRequest`).
-
-See `view_function_example.rs` for end-to-end usage, including helper patterns and known limitations of the REST API (struct type arguments work reliably; vectors and primitive type arguments often fail).
-
-## Constructing and Submitting Transactions
-`crates/examples/src/lib.rs` demonstrates three transaction flows.
-
-### Single-Signer Entry Function
-1. Derive the sender address from an `AuthenticationKey`.
-2. Fetch the sequence number via `get_account_resources`.
-3. Build a `TransactionPayload::EntryFunction` with module/function identifiers and BCS-encoded arguments.
-4. Create `RawTransaction::new(...)` with gas settings, expiration, and `ChainId`.
-5. Sign `raw_txn.generate_signing_message()` with an `Ed25519PrivateKey` and wrap it using `TransactionAuthenticator::ed25519`.
-6. Submit or simulate with `AptosFullnodeClient::submit_transaction` / `simulate_transaction`.
-
-```rust
-use aptos_crypto::ed25519::{Ed25519PrivateKey, Ed25519PublicKey};
-use aptos_rust_sdk::client::builder::AptosClientBuilder;
-use aptos_rust_sdk::client::config::AptosNetwork;
-use aptos_rust_sdk_types::api_types::transaction::{
-    EntryFunction, GenerateSigningMessage, RawTransaction, SignedTransaction, TransactionPayload,
-};
-use aptos_rust_sdk_types::api_types::transaction_authenticator::{
-    AccountAuthenticator, AuthenticationKey, TransactionAuthenticator,
-};
+use aptos_rust_sdk_v2::{Aptos, AptosConfig};
+use aptos_rust_sdk_v2::account::{Account, Ed25519Account};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let client = AptosClientBuilder::new(AptosNetwork::testnet()).build();
-    let state = client.get_state().await?;
+    // Connect to testnet
+    let aptos = Aptos::new(AptosConfig::testnet())?;
 
-    let seed_bytes = hex::decode("4aeeeb3f286caa91984d4a16d424786c7aa26947050b00e84ab7033f2aab0c2d")?;
-    let key = Ed25519PrivateKey::try_from(seed_bytes.as_slice())?;
-    let sender = AuthenticationKey::ed25519(&Ed25519PublicKey::from(&key)).account_address();
+    // Create a new account
+    let account = Ed25519Account::generate();
+    println!("Address: {}", account.address());
 
-    let resources = client
-        .get_account_resources(sender.to_string())
-        .await?
-        .into_inner();
-    let sequence_number = resources
-        .iter()
-        .find(|r| r.type_ == "0x1::account::Account")
-        .and_then(|r| r.data.get("sequence_number"))
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| anyhow::anyhow!("missing sequence number"))?
-        .parse::<u64>()?;
+    // Check balance
+    let balance = aptos.get_balance(account.address()).await?;
+    println!("Balance: {} octas", balance);
 
-    let payload = TransactionPayload::EntryFunction(EntryFunction::new(
-        aptos_rust_sdk_types::api_types::module_id::ModuleId::new(
-            aptos_rust_sdk_types::api_types::address::AccountAddress::ONE,
-            "aptos_account".to_string(),
-        ),
-        "transfer".to_string(),
-        vec![],
-        vec![
-            aptos_rust_sdk_types::api_types::address::AccountAddress::ONE.to_vec(),
-            1u64.to_le_bytes().to_vec(),
-        ],
-    ));
-
-    // Configure gas parameters. These values depend on network conditions and transaction complexity.
-    // See: https://aptos.dev/concepts/transactions/#gas for guidance.
-    // For testnet, typical values are:
-    //   - max_gas_amount: 1500 (maximum gas units to consume; 1500 is sufficient for most simple transactions)
-    //   - gas_unit_price: 100 (price per gas unit for transaction prioritization; 100 is the default when network is not congested, and there's usually no lower value; can be increased moderately if needed)
-    let MAX_GAS_AMOUNT: u64 = 1500;
-    let GAS_UNIT_PRICE: u64 = 100;
-
-    let raw_txn = RawTransaction::new(
-        sender,
-        sequence_number,
-        payload,
-        MAX_GAS_AMOUNT,
-        GAS_UNIT_PRICE,
-        state.timestamp_usecs / 1_000_000 + 600, // expiration timestamp (secs)
-        aptos_rust_sdk_types::api_types::chain_id::ChainId::Testnet,
-    );
-
-    let signature = key.sign_message(&raw_txn.generate_signing_message()?);
-    let signed = SignedTransaction::new(
-        raw_txn,
-        TransactionAuthenticator::ed25519(Ed25519PublicKey::from(&key), signature),
-    );
-
-    // Optional: simulate before submission
-    client
-        .simulate_transaction(SignedTransaction::new(
-            signed.raw_txn().clone(),
-            TransactionAuthenticator::single_sender(AccountAuthenticator::no_authenticator()),
-        ))
-        .await?;
-
-    let response = client.submit_transaction(signed).await?;
-    println!("submitted: {:?}", response.into_inner());
     Ok(())
 }
 ```
 
-### Fee Payer Flow
-Use `RawTransactionWithData::new_multi_agent_with_fee_payer` to generate the signing message shared by the primary sender and the fee payer. Attach authenticators with `TransactionAuthenticator::fee_payer`, providing:
-- the sender’s `AccountAuthenticator`
-- any secondary signer authenticators
-- the fee payer address and authenticator
+## Feature Flags
 
-### Multi-Agent Flow
-`RawTransactionWithData::new_multi_agent` collects the base transaction and secondary signer addresses. Each participant signs the shared message. Construct the final authenticator with `TransactionAuthenticator::MultiAgent` and submit.
+| Feature | Default | Description |
+|---------|---------|-------------|
+| `ed25519` | ✓ | Ed25519 signature scheme |
+| `secp256k1` | ✓ | Secp256k1 ECDSA signatures |
+| `mnemonic` | ✓ | BIP-39 mnemonic phrase support for key derivation |
+| `secp256r1` | | Secp256r1 (P-256) ECDSA signatures |
+| `bls` | | BLS12-381 signatures |
+| `keyless` | | OIDC-based keyless authentication |
+| `indexer` | | GraphQL indexer client |
+| `faucet` | | Faucet integration for testnets |
+| `full` | | Enable all features |
+
+### Minimal Build
+
+For the smallest possible binary:
+
+```toml
+[dependencies]
+aptos-rust-sdk-v2 = { git = "https://github.com/aptos-labs/aptos-rust-sdk", package = "aptos-rust-sdk-v2", default-features = false, features = ["ed25519"] }
+```
+
+### Full Build
+
+For all features:
+
+```toml
+[dependencies]
+aptos-rust-sdk-v2 = { git = "https://github.com/aptos-labs/aptos-rust-sdk", package = "aptos-rust-sdk-v2", features = ["full"] }
+```
 
 ## Examples
-- `cargo test -p examples --lib` runs async integration tests under `crates/examples/src/lib.rs` exercising the flows above.
-- `cargo run -p examples --bin view_function_example` prints the view-function walkthrough.
-- `cargo run -p examples --bin type_parsing_example` demonstrates Move type parsing utilities.
 
-## Limitations and TODOs
-- README reflects the current WIP status: transaction submission helpers exist but server-side behaviour can change rapidly, and the crate does not expose high-level wallet abstractions yet.
-- Multi-sig verification paths (`TransactionAuthenticator::verify`, `AccountAuthenticator::verify`) are stubbed with `unimplemented!()`.
-- View function support mirrors REST API constraints; vector type arguments and certain primitive type arguments are unreliable.
-- Indexer client support is not implemented (`crates/aptos-rust-sdk/src/client/indexer.rs`).
+See the [`crates/aptos-rust-sdk-v2/examples/`](crates/aptos-rust-sdk-v2/examples/) directory for complete working examples:
 
-Contributions and bug reports are welcome while the SDK stabilizes.
+- [`transfer.rs`](crates/aptos-rust-sdk-v2/examples/transfer.rs) - Basic APT transfer
+- [`deploy_module.rs`](crates/aptos-rust-sdk-v2/examples/deploy_module.rs) - Deploy a Move module
+- [`sponsored_transaction.rs`](crates/aptos-rust-sdk-v2/examples/sponsored_transaction.rs) - Fee payer flow
+- [`multi_agent.rs`](crates/aptos-rust-sdk-v2/examples/multi_agent.rs) - Multi-signer transactions
+- [`view_function.rs`](crates/aptos-rust-sdk-v2/examples/view_function.rs) - Read-only queries
+- [`multi_key_account.rs`](crates/aptos-rust-sdk-v2/examples/multi_key_account.rs) - Multi-key account operations
+- [`multi_sig_account.rs`](crates/aptos-rust-sdk-v2/examples/multi_sig_account.rs) - Multi-sig v2 accounts
+- [`nft_operations.rs`](crates/aptos-rust-sdk-v2/examples/nft_operations.rs) - NFT interactions
+- [`codegen.rs`](crates/aptos-rust-sdk-v2/examples/codegen.rs) - Contract binding generation
+- [`contract_bindings.rs`](crates/aptos-rust-sdk-v2/examples/contract_bindings.rs) - Using generated bindings
+
+## Development
+
+### Building
+
+```bash
+# Build with default features (ed25519 + secp256k1)
+cargo build -p aptos-rust-sdk-v2
+
+# Build with all features
+cargo build -p aptos-rust-sdk-v2 --all-features
+
+# Release build
+cargo build -p aptos-rust-sdk-v2 --release
+```
+
+### Testing
+
+```bash
+# Run unit tests
+cargo test -p aptos-rust-sdk-v2
+
+# Run tests with all features
+cargo test -p aptos-rust-sdk-v2 --all-features
+
+# Run E2E tests (requires localnet)
+aptos node run-localnet --with-faucet
+cargo test -p aptos-rust-sdk-v2 --features "e2e" -- --ignored
+```
+
+### Linting and Formatting
+
+```bash
+# Run clippy
+cargo clippy -p aptos-rust-sdk-v2 --all-features -- -D warnings
+
+# Format code (uses nightly rustfmt)
+cargo +nightly fmt
+```
+
+## Resources
+
+- [Aptos Developer Documentation](https://aptos.dev)
+- [TypeScript SDK](https://github.com/aptos-labs/aptos-ts-sdk)
+
+## License
+
+Apache-2.0
