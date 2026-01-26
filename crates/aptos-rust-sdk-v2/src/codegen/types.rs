@@ -5,7 +5,7 @@ use std::collections::HashMap;
 /// A Rust type representation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RustType {
-    /// The full type path (e.g., "Vec<u8>", "AccountAddress").
+    /// The full type path (e.g., "`Vec<u8>`", "AccountAddress").
     pub path: String,
     /// Whether this type requires BCS serialization as an argument.
     pub needs_bcs: bool,
@@ -119,7 +119,7 @@ impl MoveTypeMapper {
             let inner = &move_type[7..move_type.len() - 1];
             let inner_type = self.map_type(inner);
 
-            // Special case: vector<u8> -> Vec<u8> (bytes)
+            // Special case: `vector<u8>` -> `Vec<u8>` (bytes)
             if inner == "u8" {
                 return RustType::new("Vec<u8>").with_doc("Bytes");
             }

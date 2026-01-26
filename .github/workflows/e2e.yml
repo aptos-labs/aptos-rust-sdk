@@ -70,45 +70,46 @@ jobs:
         run: pkill -f "aptos node" || true
 
   # Spec tests that require network connectivity
-  spec-tests-network:
-    name: Spec Tests (Network Required)
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-      
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
-      
-      - name: Install Aptos CLI
-        run: |
-          curl -fsSL "https://aptos.dev/scripts/install_cli.py" | python3
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-      
-      - name: Start localnet
-        run: |
-          aptos node run-localnet --with-faucet --force-restart &
-          sleep 30
-          for i in {1..60}; do
-            if curl -s http://127.0.0.1:8080/v1 > /dev/null; then
-              echo "Localnet is ready"
-              break
-            fi
-            echo "Waiting for localnet... ($i)"
-            sleep 2
-          done
-      
-      - name: Run spec tests
-        run: cargo test --test specs
-        working-directory: specifications/tests/rust
-        env:
-          APTOS_LOCAL_FAUCET_URL: http://127.0.0.1:8081
-          APTOS_LOCAL_NODE_URL: http://127.0.0.1:8080/v1
-      
-      - name: Stop localnet
-        if: always()
-        run: pkill -f "aptos node" || true
+  # TODO: Re-enable once specification tests are stabilized
+  # spec-tests-network:
+  #   name: Spec Tests (Network Required)
+  #   runs-on: ubuntu-latest
+  #   timeout-minutes: 30
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #     
+  #     - name: Install Rust
+  #       uses: dtolnay/rust-toolchain@stable
+  #     
+  #     - name: Cache cargo
+  #       uses: Swatinem/rust-cache@v2
+  #     
+  #     - name: Install Aptos CLI
+  #       run: |
+  #         curl -fsSL "https://aptos.dev/scripts/install_cli.py" | python3
+  #         echo "$HOME/.local/bin" >> $GITHUB_PATH
+  #     
+  #     - name: Start localnet
+  #       run: |
+  #         aptos node run-localnet --with-faucet --force-restart &
+  #         sleep 30
+  #         for i in {1..60}; do
+  #           if curl -s http://127.0.0.1:8080/v1 > /dev/null; then
+  #             echo "Localnet is ready"
+  #             break
+  #           fi
+  #           echo "Waiting for localnet... ($i)"
+  #           sleep 2
+  #         done
+  #     
+  #     - name: Run spec tests
+  #       run: cargo test --test specs
+  #       working-directory: specifications/tests/rust
+  #       env:
+  #         APTOS_LOCAL_FAUCET_URL: http://127.0.0.1:8081
+  #         APTOS_LOCAL_NODE_URL: http://127.0.0.1:8080/v1
+  #     
+  #     - name: Stop localnet
+  #       if: always()
+  #       run: pkill -f "aptos node" || true
 

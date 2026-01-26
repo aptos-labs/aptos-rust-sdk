@@ -13,7 +13,7 @@ keywords = ["aptos", "blockchain", "crypto", "sdk", "web3"]
 categories = ["cryptography", "api-bindings", "asynchronous"]
 
 [features]
-default = ["ed25519", "secp256k1", "mnemonic"]
+default = ["ed25519", "secp256k1", "secp256r1", "indexer", "faucet", "mnemonic"]
 full = ["ed25519", "secp256k1", "secp256r1", "bls", "keyless", "indexer", "faucet", "mnemonic"]
 
 # Cryptographic signature schemes
