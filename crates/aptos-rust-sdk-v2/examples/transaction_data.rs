@@ -216,18 +216,19 @@ async fn main() -> anyhow::Result<()> {
 
     // Get the ledger info to find recent transaction version
     let ledger_info = aptos.ledger_info().await?;
-    println!("Current ledger version: {}", ledger_info.version());
+    let current_height = ledger_info.height()?;
+    println!("Current ledger version: {}", ledger_info.version()?);
 
     // Get a recent block
     let block = aptos
         .fullnode()
-        .get_block_by_height(ledger_info.height(), true)
+        .get_block_by_height(current_height, true)
         .await?;
 
     if let Some(transactions) = block.data.get("transactions").and_then(|v| v.as_array()) {
         println!(
             "Block {} contains {} transactions",
-            ledger_info.height(),
+            current_height,
             transactions.len()
         );
 

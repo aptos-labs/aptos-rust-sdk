@@ -105,7 +105,7 @@ The SDK follows a client-centric design with `Aptos` as the main entry point:
 
 ## Rust Toolchain
 
-- **Version**: 1.85+ (specified in `rust-toolchain.toml`)
+- **Version**: 1.90+ (specified in `rust-toolchain.toml`)
 - **Edition**: 2024
 - **Components**: cargo, clippy, rustc, rust-docs, rust-std
 - **Note**: Uses nightly rustfmt for formatting

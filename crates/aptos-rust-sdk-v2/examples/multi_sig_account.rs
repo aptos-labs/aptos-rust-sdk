@@ -84,19 +84,15 @@ async fn main() -> anyhow::Result<()> {
         .chain_id(aptos.chain_id())
         .build()?;
 
-    // Sign with the multi-sig account (uses threshold keys automatically)
-    let signing_message = raw_txn.signing_message()?;
-    let multi_sig = multi_account.sign(&signing_message)?;
-
-    println!(
-        "Signed with {} signatures (threshold: {})",
-        multi_sig.num_signatures(),
-        multi_account.threshold()
-    );
-
-    // Create signed transaction
+    // Create signed transaction (signs with the multi-sig account using threshold keys automatically)
     let signed =
         aptos_rust_sdk_v2::transaction::builder::sign_transaction(&raw_txn, &multi_account)?;
+
+    println!(
+        "Signed with threshold {}-of-{}",
+        multi_account.threshold(),
+        multi_account.num_keys()
+    );
 
     // Submit and wait
     let result = aptos.submit_and_wait(&signed, None).await?;

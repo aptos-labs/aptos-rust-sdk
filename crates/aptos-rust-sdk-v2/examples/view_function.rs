@@ -15,9 +15,9 @@ async fn main() -> anyhow::Result<()> {
 
     // Get ledger info
     let ledger_info = aptos.ledger_info().await?;
-    println!("Ledger version: {}", ledger_info.version());
-    println!("Block height: {}", ledger_info.height());
-    println!("Epoch: {}", ledger_info.epoch_num());
+    println!("Ledger version: {}", ledger_info.version()?);
+    println!("Block height: {}", ledger_info.height()?);
+    println!("Epoch: {}", ledger_info.epoch_num()?);
     println!();
 
     // Call timestamp view function

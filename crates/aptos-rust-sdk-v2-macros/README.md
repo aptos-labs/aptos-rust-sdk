@@ -4,7 +4,8 @@ Procedural macros for generating type-safe Aptos contract bindings at compile ti
 
 ## Features
 
-- `#[aptos_contract]` - Generate contract bindings from ABI
+- `aptos_contract!` - Generate contract bindings from inline ABI
+- `aptos_contract_file!` - Generate contract bindings from ABI file
 - `#[derive(MoveStruct)]` - Derive Move struct serialization
 - Compile-time type checking for contract interactions
 
@@ -37,7 +38,7 @@ let balance = MyCoin::view_balance(&aptos, owner).await?;
 use aptos_rust_sdk_v2_macros::aptos_contract_file;
 
 // Load ABI from file at compile time
-aptos_contract_file!("abi/my_module.json");
+aptos_contract_file!("abi/my_module.json", MyModule);
 ```
 
 ### With Move Source (Better Parameter Names)

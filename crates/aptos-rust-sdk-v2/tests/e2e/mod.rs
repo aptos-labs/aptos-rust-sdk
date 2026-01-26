@@ -531,11 +531,23 @@ mod ledger_tests {
             .await
             .expect("failed to get ledger info");
 
-        println!("Ledger version: {}", ledger_info.version());
-        println!("Block height: {}", ledger_info.height());
-        println!("Epoch: {}", ledger_info.epoch_num());
+        println!(
+            "Ledger version: {}",
+            ledger_info.version().expect("failed to parse version")
+        );
+        println!(
+            "Block height: {}",
+            ledger_info.height().expect("failed to parse height")
+        );
+        println!(
+            "Epoch: {}",
+            ledger_info.epoch_num().expect("failed to parse epoch")
+        );
 
-        assert!(ledger_info.version() > 0, "ledger version should be > 0");
+        assert!(
+            ledger_info.version().expect("failed to parse version") > 0,
+            "ledger version should be > 0"
+        );
     }
 
     #[tokio::test]

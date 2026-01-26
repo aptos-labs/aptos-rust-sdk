@@ -84,8 +84,11 @@ impl PendingTransaction {
     }
 
     /// Returns the sequence number.
-    pub fn sequence_number(&self) -> u64 {
-        self.sequence_number.parse().unwrap_or(0)
+    ///
+    /// # Errors
+    /// Returns an error if the sequence number string cannot be parsed as u64.
+    pub fn sequence_number(&self) -> Result<u64, std::num::ParseIntError> {
+        self.sequence_number.parse()
     }
 }
 
@@ -114,18 +117,27 @@ pub struct LedgerInfo {
 
 impl LedgerInfo {
     /// Returns the ledger version as u64.
-    pub fn version(&self) -> u64 {
-        self.ledger_version.parse().unwrap_or(0)
+    ///
+    /// # Errors
+    /// Returns an error if the ledger version string cannot be parsed as u64.
+    pub fn version(&self) -> Result<u64, std::num::ParseIntError> {
+        self.ledger_version.parse()
     }
 
     /// Returns the block height as u64.
-    pub fn height(&self) -> u64 {
-        self.block_height.parse().unwrap_or(0)
+    ///
+    /// # Errors
+    /// Returns an error if the block height string cannot be parsed as u64.
+    pub fn height(&self) -> Result<u64, std::num::ParseIntError> {
+        self.block_height.parse()
     }
 
     /// Returns the epoch as u64.
-    pub fn epoch_num(&self) -> u64 {
-        self.epoch.parse().unwrap_or(0)
+    ///
+    /// # Errors
+    /// Returns an error if the epoch string cannot be parsed as u64.
+    pub fn epoch_num(&self) -> Result<u64, std::num::ParseIntError> {
+        self.epoch.parse()
     }
 }
 
@@ -168,8 +180,11 @@ pub struct AccountData {
 
 impl AccountData {
     /// Returns the sequence number as u64.
-    pub fn sequence_number(&self) -> u64 {
-        self.sequence_number.parse().unwrap_or(0)
+    ///
+    /// # Errors
+    /// Returns an error if the sequence number string cannot be parsed as u64.
+    pub fn sequence_number(&self) -> Result<u64, std::num::ParseIntError> {
+        self.sequence_number.parse()
     }
 }
 
@@ -333,7 +348,7 @@ mod tests {
         }"#;
         let pending: PendingTransaction = serde_json::from_str(json).unwrap();
         assert_eq!(pending.sender(), "0x1");
-        assert_eq!(pending.sequence_number(), 42);
+        assert_eq!(pending.sequence_number().unwrap(), 42);
     }
 
     #[test]
@@ -350,9 +365,9 @@ mod tests {
         }"#;
         let info: LedgerInfo = serde_json::from_str(json).unwrap();
         assert_eq!(info.chain_id, 2);
-        assert_eq!(info.version(), 12345);
-        assert_eq!(info.height(), 5000);
-        assert_eq!(info.epoch_num(), 100);
+        assert_eq!(info.version().unwrap(), 12345);
+        assert_eq!(info.height().unwrap(), 5000);
+        assert_eq!(info.epoch_num().unwrap(), 100);
     }
 
     #[test]
@@ -362,7 +377,7 @@ mod tests {
             "authentication_key": "0x1234"
         }"#;
         let account: AccountData = serde_json::from_str(json).unwrap();
-        assert_eq!(account.sequence_number(), 10);
+        assert_eq!(account.sequence_number().unwrap(), 10);
     }
 
     #[test]

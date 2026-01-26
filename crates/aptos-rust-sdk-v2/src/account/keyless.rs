@@ -542,7 +542,11 @@ fn extract_claims(
     if let Some(exp) = exp_time
         && SystemTime::now() >= exp
     {
-        return Err(AptosError::InvalidJwt("JWT is expired".into()));
+        let exp_secs = claims.exp.unwrap_or(0);
+        return Err(AptosError::InvalidJwt(format!(
+            "JWT is expired (exp: {} seconds since UNIX_EPOCH)",
+            exp_secs
+        )));
     }
 
     Ok((issuer, audience, user_id, exp_time, nonce))

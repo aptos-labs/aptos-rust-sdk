@@ -16,6 +16,8 @@ use url::Url;
 
 const BCS_CONTENT_TYPE: &str = "application/x.aptos.signed_transaction+bcs";
 const JSON_CONTENT_TYPE: &str = "application/json";
+/// Default timeout for waiting for a transaction to be committed.
+const DEFAULT_TRANSACTION_WAIT_TIMEOUT_SECS: u64 = 30;
 
 /// Client for the Aptos fullnode REST API.
 ///
@@ -45,7 +47,7 @@ const JSON_CONTENT_TYPE: &str = "application/json";
 ///     )?;
 ///     
 ///     let ledger_info = client.get_ledger_info().await?;
-///     println!("Ledger version: {}", ledger_info.data.version());
+///     println!("Ledger version: {:?}", ledger_info.data.version());
 ///     Ok(())
 /// }
 /// ```
@@ -114,7 +116,10 @@ impl FullnodeClient {
     /// Gets the sequence number for an account.
     pub async fn get_sequence_number(&self, address: AccountAddress) -> AptosResult<u64> {
         let account = self.get_account(address).await?;
-        Ok(account.data.sequence_number())
+        account
+            .data
+            .sequence_number()
+            .map_err(|e| AptosError::Internal(format!("failed to parse sequence number: {}", e)))
     }
 
     /// Gets all resources for an account.
@@ -246,7 +251,7 @@ impl FullnodeClient {
         hash: &HashValue,
         timeout: Option<Duration>,
     ) -> AptosResult<AptosResponse<serde_json::Value>> {
-        let timeout = timeout.unwrap_or(Duration::from_secs(30));
+        let timeout = timeout.unwrap_or(Duration::from_secs(DEFAULT_TRANSACTION_WAIT_TIMEOUT_SECS));
         let start = std::time::Instant::now();
         let poll_interval = Duration::from_millis(500);
 
@@ -592,8 +597,8 @@ mod tests {
         let result = client.get_ledger_info().await.unwrap();
 
         assert_eq!(result.data.chain_id, 2);
-        assert_eq!(result.data.version(), 12345);
-        assert_eq!(result.data.height(), 5000);
+        assert_eq!(result.data.version().unwrap(), 12345);
+        assert_eq!(result.data.height().unwrap(), 5000);
     }
 
     #[tokio::test]
@@ -617,7 +622,7 @@ mod tests {
         let client = create_mock_client(&server).await;
         let result = client.get_account(AccountAddress::ONE).await.unwrap();
 
-        assert_eq!(result.data.sequence_number(), 42);
+        assert_eq!(result.data.sequence_number().unwrap(), 42);
         assert_eq!(result.ledger_version, Some(12345));
     }
 

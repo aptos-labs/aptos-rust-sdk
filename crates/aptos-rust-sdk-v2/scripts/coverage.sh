@@ -8,7 +8,7 @@
 #   ./scripts/coverage.sh all      # All tests including E2E
 #   ./scripts/coverage.sh ci       # CI mode (XML + HTML output)
 
-set -e
+set -euo pipefail
 
 PROFILE="${1:-default}"
 SDK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

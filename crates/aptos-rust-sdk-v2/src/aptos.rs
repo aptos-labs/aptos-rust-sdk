@@ -38,7 +38,7 @@ use crate::api::IndexerClient;
 ///
 ///     // Get ledger info
 ///     let ledger = aptos.ledger_info().await?;
-///     println!("Ledger version: {}", ledger.version());
+///     println!("Ledger version: {:?}", ledger.version());
 ///
 ///     // Resolve an ANS name
 ///     if let Some(addr) = aptos.resolve_name("alice.apt").await? {
@@ -770,7 +770,7 @@ mod tests {
 
         let aptos = create_mock_aptos(&server).await;
         let info = aptos.ledger_info().await.unwrap();
-        assert_eq!(info.version(), 12345);
+        assert_eq!(info.version().unwrap(), 12345);
     }
 
     #[tokio::test]

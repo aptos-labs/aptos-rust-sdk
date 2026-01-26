@@ -77,7 +77,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Notes
 - This SDK is independent of `aptos-core` for faster compilation
-- Minimum Supported Rust Version (MSRV): 1.75
+- Minimum Supported Rust Version (MSRV): 1.90
 
 [0.1.0]: https://github.com/aptos-labs/aptos-rust-sdk/releases/tag/v0.1.0
 
