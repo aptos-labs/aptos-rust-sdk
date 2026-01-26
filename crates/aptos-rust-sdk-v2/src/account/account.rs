@@ -354,11 +354,11 @@ mod tests {
         let address = ed25519.address();
         let auth_key = ed25519.authentication_key();
         let any_account: AnyAccount = ed25519.into();
-        
+
         assert_eq!(any_account.address(), address);
         assert_eq!(any_account.authentication_key(), auth_key);
         assert!(!any_account.public_key_bytes().is_empty());
-        
+
         let sig = any_account.sign(b"test message").unwrap();
         assert!(!sig.is_empty());
     }

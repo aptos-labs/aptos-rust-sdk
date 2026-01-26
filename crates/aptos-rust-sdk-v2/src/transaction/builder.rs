@@ -4,7 +4,9 @@ use crate::account::Account;
 use crate::error::{AptosError, AptosResult};
 use crate::transaction::authenticator::{AccountAuthenticator, TransactionAuthenticator};
 use crate::transaction::payload::TransactionPayload;
-use crate::transaction::types::{FeePayerRawTransaction, MultiAgentRawTransaction, RawTransaction, SignedTransaction};
+use crate::transaction::types::{
+    FeePayerRawTransaction, MultiAgentRawTransaction, RawTransaction, SignedTransaction,
+};
 use crate::types::{AccountAddress, ChainId};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -176,7 +178,8 @@ pub fn sign_transaction<A: Account>(
     let signature = account.sign(&signing_message)?;
     let public_key = account.public_key_bytes();
 
-    let authenticator = make_transaction_authenticator(account.signature_scheme(), public_key, signature);
+    let authenticator =
+        make_transaction_authenticator(account.signature_scheme(), public_key, signature);
 
     Ok(SignedTransaction::new(raw_txn.clone(), authenticator))
 }
@@ -493,7 +496,8 @@ mod tests {
         };
 
         let secondary_signers: Vec<&dyn Account> = vec![&secondary];
-        let signed = sign_multi_agent_transaction(&multi_agent, &sender, &secondary_signers).unwrap();
+        let signed =
+            sign_multi_agent_transaction(&multi_agent, &sender, &secondary_signers).unwrap();
         assert_eq!(signed.sender(), sender.address());
     }
 

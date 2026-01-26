@@ -19,9 +19,9 @@
 //! ```
 
 use aptos_rust_sdk_v2::{
+    Aptos, AptosConfig,
     api::response::MoveModuleABI,
     codegen::{GeneratorConfig, ModuleGenerator, MoveSourceParser},
-    Aptos, AptosConfig,
 };
 use clap::{Parser, ValueEnum};
 use std::{fs, path::PathBuf};
@@ -108,10 +108,7 @@ async fn main() -> anyhow::Result<()> {
     } else if let Some(module_str) = &args.module {
         // Fetch from network
         let network = args.network.as_ref().unwrap();
-        println!(
-            "Fetching module {} from {:?}...",
-            module_str, network
-        );
+        println!("Fetching module {} from {:?}...", module_str, network);
 
         let config = network.to_config();
         let aptos = Aptos::new(config)?;
@@ -129,8 +126,11 @@ async fn main() -> anyhow::Result<()> {
         let module_name = parts[1];
 
         // Fetch module
-        let response = aptos.fullnode().get_account_module(address, module_name).await?;
-        
+        let response = aptos
+            .fullnode()
+            .get_account_module(address, module_name)
+            .await?;
+
         response
             .data
             .abi

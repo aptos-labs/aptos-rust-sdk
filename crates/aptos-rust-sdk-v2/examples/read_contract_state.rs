@@ -8,7 +8,7 @@
 //!
 //! Run with: `cargo run --example read_contract_state --features ed25519`
 
-use aptos_rust_sdk_v2::{types::AccountAddress, Aptos, AptosConfig};
+use aptos_rust_sdk_v2::{Aptos, AptosConfig, types::AccountAddress};
 use serde::Deserialize;
 
 /// CoinStore resource structure
@@ -86,7 +86,11 @@ async fn main() -> anyhow::Result<()> {
             let coin_store: CoinStore = serde_json::from_value(resource.data.data.clone())?;
             let balance: u64 = coin_store.coin.value.parse().unwrap_or(0);
             println!("Address {} APT balance:", rich_addr.to_short_string());
-            println!("  {} APT ({} octas)", balance as f64 / 100_000_000.0, balance);
+            println!(
+                "  {} APT ({} octas)",
+                balance as f64 / 100_000_000.0,
+                balance
+            );
             println!("  Frozen: {}", coin_store.frozen);
         }
         Err(e) => {
@@ -157,7 +161,10 @@ async fn main() -> anyhow::Result<()> {
             println!("  Operator: {}", stake_pool.operator_address);
         }
         Err(_) => {
-            println!("No stake pool found at {}", validator_addr.to_short_string());
+            println!(
+                "No stake pool found at {}",
+                validator_addr.to_short_string()
+            );
         }
     }
 
@@ -205,11 +212,7 @@ async fn main() -> anyhow::Result<()> {
             println!("    - {}", func.name);
         }
 
-        let view_functions: Vec<_> = abi
-            .exposed_functions
-            .iter()
-            .filter(|f| f.is_view)
-            .collect();
+        let view_functions: Vec<_> = abi.exposed_functions.iter().filter(|f| f.is_view).collect();
         println!("  View functions: {}", view_functions.len());
         for func in view_functions.iter().take(5) {
             println!("    - {} -> {:?}", func.name, func.returns);
@@ -250,4 +253,3 @@ async fn main() -> anyhow::Result<()> {
     println!("\n✓ All contract state reading examples completed!");
     Ok(())
 }
-

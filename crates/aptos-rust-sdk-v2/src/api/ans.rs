@@ -110,7 +110,7 @@ impl AnsClient {
             _ => {
                 return Err(AptosError::Config(
                     "ANS is only available on mainnet and testnet".into(),
-                ))
+                ));
             }
         };
 
@@ -132,7 +132,7 @@ impl AnsClient {
             _ => {
                 return Err(AptosError::Config(
                     "ANS is only available on mainnet and testnet".into(),
-                ))
+                ));
             }
         };
 
@@ -168,35 +168,32 @@ impl AnsClient {
         let function = format!("{}::domains::get_target_addr", self.ans_address);
 
         let args = if let Some(sub) = &subdomain {
-            vec![
-                serde_json::json!(domain),
-                serde_json::json!(sub),
-            ]
+            vec![serde_json::json!(domain), serde_json::json!(sub)]
         } else {
             vec![
                 serde_json::json!(domain),
-                serde_json::json!(""),  // Empty string for no subdomain
+                serde_json::json!(""), // Empty string for no subdomain
             ]
         };
 
-        let result = self
-            .fullnode
-            .view(&function, vec![], args)
-            .await;
+        let result = self.fullnode.view(&function, vec![], args).await;
 
         match result {
             Ok(response) => {
                 // Response is [{ "vec": ["0x..."] }] or [{ "vec": [] }]
                 if let Some(first) = response.data.first()
                     && let Some(vec_obj) = first.get("vec")
-                        && let Some(arr) = vec_obj.as_array()
-                            && let Some(addr_str) = arr.first().and_then(|v| v.as_str()) {
-                                let address = AccountAddress::from_hex(addr_str)?;
-                                return Ok(Some(address));
-                            }
+                    && let Some(arr) = vec_obj.as_array()
+                    && let Some(addr_str) = arr.first().and_then(|v| v.as_str())
+                {
+                    let address = AccountAddress::from_hex(addr_str)?;
+                    return Ok(Some(address));
+                }
                 Ok(None)
             }
-            Err(AptosError::Api { status_code: 404, .. }) => Ok(None),
+            Err(AptosError::Api {
+                status_code: 404, ..
+            }) => Ok(None),
             Err(e) => Err(e),
         }
     }
@@ -236,36 +233,39 @@ impl AnsClient {
                 // Response format: [{ "vec": [{ "domain_name": "...", "subdomain_name": { "vec": [...] } }] }]
                 if let Some(first) = response.data.first()
                     && let Some(vec_obj) = first.get("vec")
-                        && let Some(arr) = vec_obj.as_array()
-                            && let Some(name_obj) = arr.first() {
-                                let domain = name_obj
-                                    .get("domain_name")
-                                    .and_then(|v| v.as_str())
-                                    .unwrap_or("");
+                    && let Some(arr) = vec_obj.as_array()
+                    && let Some(name_obj) = arr.first()
+                {
+                    let domain = name_obj
+                        .get("domain_name")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("");
 
-                                let subdomain = name_obj
-                                    .get("subdomain_name")
-                                    .and_then(|v| v.get("vec"))
-                                    .and_then(|v| v.as_array())
-                                    .and_then(|arr| arr.first())
-                                    .and_then(|v| v.as_str());
+                    let subdomain = name_obj
+                        .get("subdomain_name")
+                        .and_then(|v| v.get("vec"))
+                        .and_then(|v| v.as_array())
+                        .and_then(|arr| arr.first())
+                        .and_then(|v| v.as_str());
 
-                                if !domain.is_empty() {
-                                    let full_name = if let Some(sub) = subdomain {
-                                        if sub.is_empty() {
-                                            format!("{}.apt", domain)
-                                        } else {
-                                            format!("{}.{}.apt", sub, domain)
-                                        }
-                                    } else {
-                                        format!("{}.apt", domain)
-                                    };
-                                    return Ok(Some(full_name));
-                                }
+                    if !domain.is_empty() {
+                        let full_name = if let Some(sub) = subdomain {
+                            if sub.is_empty() {
+                                format!("{}.apt", domain)
+                            } else {
+                                format!("{}.{}.apt", sub, domain)
                             }
+                        } else {
+                            format!("{}.apt", domain)
+                        };
+                        return Ok(Some(full_name));
+                    }
+                }
                 Ok(None)
             }
-            Err(AptosError::Api { status_code: 404, .. }) => Ok(None),
+            Err(AptosError::Api {
+                status_code: 404, ..
+            }) => Ok(None),
             Err(e) => Err(e),
         }
     }
@@ -299,15 +299,9 @@ impl AnsClient {
         let function = format!("{}::domains::get_expiration", self.ans_address);
 
         let args = if let Some(sub) = &subdomain {
-            vec![
-                serde_json::json!(domain),
-                serde_json::json!(sub),
-            ]
+            vec![serde_json::json!(domain), serde_json::json!(sub)]
         } else {
-            vec![
-                serde_json::json!(domain),
-                serde_json::json!(""),
-            ]
+            vec![serde_json::json!(domain), serde_json::json!("")]
         };
 
         let result = self.fullnode.view(&function, vec![], args).await;
@@ -316,14 +310,17 @@ impl AnsClient {
             Ok(response) => {
                 if let Some(first) = response.data.first()
                     && let Some(vec_obj) = first.get("vec")
-                        && let Some(arr) = vec_obj.as_array()
-                            && let Some(exp_str) = arr.first().and_then(|v| v.as_str())
-                                && let Ok(exp) = exp_str.parse::<u64>() {
-                                    return Ok(Some(exp));
-                                }
+                    && let Some(arr) = vec_obj.as_array()
+                    && let Some(exp_str) = arr.first().and_then(|v| v.as_str())
+                    && let Ok(exp) = exp_str.parse::<u64>()
+                {
+                    return Ok(Some(exp));
+                }
                 Ok(None)
             }
-            Err(AptosError::Api { status_code: 404, .. }) => Ok(None),
+            Err(AptosError::Api {
+                status_code: 404, ..
+            }) => Ok(None),
             Err(e) => Err(e),
         }
     }
@@ -347,9 +344,10 @@ impl AnsClient {
     pub async fn resolve(&self, address_or_name: &str) -> AptosResult<AccountAddress> {
         // Try to parse as address first
         if (address_or_name.starts_with("0x") || address_or_name.starts_with("0X"))
-            && let Ok(address) = AccountAddress::from_hex(address_or_name) {
-                return Ok(address);
-            }
+            && let Ok(address) = AccountAddress::from_hex(address_or_name)
+        {
+            return Ok(address);
+        }
 
         // Try as ANS name
         self.get_address(address_or_name)
@@ -409,7 +407,12 @@ impl AnsClient {
         }
 
         // Must start with alphanumeric
-        if !part.chars().next().map(|c| c.is_alphanumeric()).unwrap_or(false) {
+        if !part
+            .chars()
+            .next()
+            .map(|c| c.is_alphanumeric())
+            .unwrap_or(false)
+        {
             return Err(AptosError::InvalidAddress(
                 "Name must start with alphanumeric character".into(),
             ));
@@ -612,4 +615,3 @@ mod tests {
         assert!(testnet.is_ok());
     }
 }
-

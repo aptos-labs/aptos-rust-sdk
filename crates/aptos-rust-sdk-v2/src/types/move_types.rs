@@ -144,7 +144,11 @@ impl StructTag {
     }
 
     /// Creates a struct tag with no type arguments.
-    pub fn simple(address: AccountAddress, module: impl Into<String>, name: impl Into<String>) -> AptosResult<Self> {
+    pub fn simple(
+        address: AccountAddress,
+        module: impl Into<String>,
+        name: impl Into<String>,
+    ) -> AptosResult<Self> {
         Ok(Self {
             address,
             module: Identifier::new(module)?,
@@ -631,7 +635,10 @@ mod tests {
         assert_eq!(TypeTag::Address.to_string(), "address");
         assert_eq!(TypeTag::Signer.to_string(), "signer");
         assert_eq!(TypeTag::vector(TypeTag::U8).to_string(), "vector<u8>");
-        assert_eq!(TypeTag::aptos_coin().to_string(), "0x1::aptos_coin::AptosCoin");
+        assert_eq!(
+            TypeTag::aptos_coin().to_string(),
+            "0x1::aptos_coin::AptosCoin"
+        );
     }
 
     #[test]
@@ -639,7 +646,10 @@ mod tests {
         assert_eq!(TypeTag::from_str_strict("bool").unwrap(), TypeTag::Bool);
         assert_eq!(TypeTag::from_str_strict("u8").unwrap(), TypeTag::U8);
         assert_eq!(TypeTag::from_str_strict("u64").unwrap(), TypeTag::U64);
-        assert_eq!(TypeTag::from_str_strict("address").unwrap(), TypeTag::Address);
+        assert_eq!(
+            TypeTag::from_str_strict("address").unwrap(),
+            TypeTag::Address
+        );
         assert_eq!(TypeTag::from_str_strict("signer").unwrap(), TypeTag::Signer);
     }
 
@@ -744,7 +754,9 @@ mod tests {
             "data": {"coin": {"value": "1000"}}
         }"#;
         let resource: MoveResource = serde_json::from_str(json).unwrap();
-        assert_eq!(resource.typ, "0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>");
+        assert_eq!(
+            resource.typ,
+            "0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>"
+        );
     }
 }
-

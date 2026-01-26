@@ -5,10 +5,7 @@
 //!
 //! Run with: `cargo run --example deploy_module --features "ed25519,faucet"`
 
-use aptos_rust_sdk_v2::{
-    account::Ed25519Account,
-    Aptos, AptosConfig,
-};
+use aptos_rust_sdk_v2::{Aptos, AptosConfig, account::Ed25519Account};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -29,7 +26,7 @@ async fn main() -> anyhow::Result<()> {
     // 1. Compile your Move module using `aptos move compile`
     // 2. Read the compiled bytecode
     // 3. Create a publish transaction
-    
+
     println!("\n=== Module Deployment Guide ===");
     println!("\nTo deploy a Move module:");
     println!("1. Create your Move module in a directory with Move.toml");
@@ -40,7 +37,8 @@ async fn main() -> anyhow::Result<()> {
 
     // Show example code for deployment
     println!("Example code for deployment:");
-    println!(r#"
+    println!(
+        r#"
     use std::fs;
     use aptos_rust_sdk_v2::transaction::{{EntryFunction, TransactionBuilder}};
     use aptos_rust_sdk_v2::types::MoveModuleId;
@@ -62,14 +60,18 @@ async fn main() -> anyhow::Result<()> {
     
     // Submit the transaction
     let result = aptos.sign_submit_and_wait(&deployer, payload.into(), None).await?;
-    "#);
+    "#
+    );
     println!();
 
     // For now, just demonstrate querying account modules
     println!("=== Checking Modules ===");
     println!("Checking modules at deployer address...");
-    let response = aptos.fullnode().get_account_modules(deployer.address()).await;
-    
+    let response = aptos
+        .fullnode()
+        .get_account_modules(deployer.address())
+        .await;
+
     match response {
         Ok(modules) => {
             println!("Found {} modules", modules.data.len());
@@ -89,11 +91,8 @@ async fn main() -> anyhow::Result<()> {
 
     // Show modules on the framework address as an example
     println!("\nExample: Framework modules at 0x1:");
-    let framework_modules = aptos
-        .fullnode()
-        .get_account_modules("0x1".parse()?)
-        .await?;
-    
+    let framework_modules = aptos.fullnode().get_account_modules("0x1".parse()?).await?;
+
     println!("Found {} framework modules", framework_modules.data.len());
     for module in framework_modules.data.iter().take(10) {
         if let Some(abi) = &module.abi {
@@ -105,7 +104,10 @@ async fn main() -> anyhow::Result<()> {
             );
         }
     }
-    println!("  ... and {} more modules", framework_modules.data.len().saturating_sub(10));
+    println!(
+        "  ... and {} more modules",
+        framework_modules.data.len().saturating_sub(10)
+    );
 
     Ok(())
 }

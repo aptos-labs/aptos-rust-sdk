@@ -5,7 +5,7 @@ use crate::crypto::{Ed25519PrivateKey, Ed25519PublicKey, KEYLESS_SCHEME};
 use crate::error::{AptosError, AptosResult};
 use crate::types::AccountAddress;
 use async_trait::async_trait;
-use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
+use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use sha3::{Digest, Sha3_256};
@@ -511,10 +511,8 @@ fn decode_claims(jwt: &str) -> AptosResult<JwtClaims> {
     validation.validate_exp = false;
     validation.set_required_spec_claims::<String>(&[]);
 
-    let data =
-        decode::<JwtClaims>(jwt, &DecodingKey::from_secret(&[]), &validation).map_err(|e| {
-            AptosError::InvalidJwt(format!("failed to decode JWT claims: {e}"))
-        })?;
+    let data = decode::<JwtClaims>(jwt, &DecodingKey::from_secret(&[]), &validation)
+        .map_err(|e| AptosError::InvalidJwt(format!("failed to decode JWT claims: {e}")))?;
     Ok(data.claims)
 }
 
@@ -542,9 +540,10 @@ fn extract_claims(
 
     let exp_time = claims.exp.map(|exp| UNIX_EPOCH + Duration::from_secs(exp));
     if let Some(exp) = exp_time
-        && SystemTime::now() >= exp {
-            return Err(AptosError::InvalidJwt("JWT is expired".into()));
-        }
+        && SystemTime::now() >= exp
+    {
+        return Err(AptosError::InvalidJwt("JWT is expired".into()));
+    }
 
     Ok((issuer, audience, user_id, exp_time, nonce))
 }
@@ -584,7 +583,7 @@ fn sha3_256_bytes(data: &[u8]) -> [u8; 32] {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use jsonwebtoken::{encode, EncodingKey, Header};
+    use jsonwebtoken::{EncodingKey, Header, encode};
 
     struct StaticPepperService {
         pepper: Pepper,

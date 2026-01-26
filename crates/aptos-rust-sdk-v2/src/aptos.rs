@@ -167,7 +167,9 @@ impl Aptos {
     pub async fn account_exists(&self, address: AccountAddress) -> AptosResult<bool> {
         match self.fullnode.get_account(address).await {
             Ok(_) => Ok(true),
-            Err(AptosError::Api { status_code: 404, .. }) => Ok(false),
+            Err(AptosError::Api {
+                status_code: 404, ..
+            }) => Ok(false),
             Err(e) => Err(e),
         }
     }
@@ -302,7 +304,9 @@ impl Aptos {
             Ok(result.safe_gas_estimate())
         } else {
             Err(AptosError::SimulationFailed(
-                result.error_message().unwrap_or_else(|| result.vm_status().to_string()),
+                result
+                    .error_message()
+                    .unwrap_or_else(|| result.vm_status().to_string()),
             ))
         }
     }
@@ -328,11 +332,14 @@ impl Aptos {
         let raw_txn = self.build_transaction(account, payload.clone()).await?;
         let signed = crate::transaction::builder::sign_transaction(&raw_txn, account)?;
         let sim_response = self.fullnode.simulate_transaction(&signed).await?;
-        let sim_result = crate::transaction::SimulationResult::from_response(sim_response.into_inner())?;
+        let sim_result =
+            crate::transaction::SimulationResult::from_response(sim_response.into_inner())?;
 
         if sim_result.failed() {
             return Err(AptosError::SimulationFailed(
-                sim_result.error_message().unwrap_or_else(|| sim_result.vm_status().to_string()),
+                sim_result
+                    .error_message()
+                    .unwrap_or_else(|| sim_result.vm_status().to_string()),
             ));
         }
 
@@ -354,11 +361,14 @@ impl Aptos {
         let raw_txn = self.build_transaction(account, payload.clone()).await?;
         let signed = crate::transaction::builder::sign_transaction(&raw_txn, account)?;
         let sim_response = self.fullnode.simulate_transaction(&signed).await?;
-        let sim_result = crate::transaction::SimulationResult::from_response(sim_response.into_inner())?;
+        let sim_result =
+            crate::transaction::SimulationResult::from_response(sim_response.into_inner())?;
 
         if sim_result.failed() {
             return Err(AptosError::SimulationFailed(
-                sim_result.error_message().unwrap_or_else(|| sim_result.vm_status().to_string()),
+                sim_result
+                    .error_message()
+                    .unwrap_or_else(|| sim_result.vm_status().to_string()),
             ));
         }
 
@@ -377,7 +387,8 @@ impl Aptos {
         amount: u64,
     ) -> AptosResult<AptosResponse<serde_json::Value>> {
         let payload = EntryFunction::apt_transfer(recipient, amount)?;
-        self.sign_submit_and_wait(sender, payload.into(), None).await
+        self.sign_submit_and_wait(sender, payload.into(), None)
+            .await
     }
 
     /// Transfers a coin from one account to another.
@@ -390,7 +401,8 @@ impl Aptos {
         amount: u64,
     ) -> AptosResult<AptosResponse<serde_json::Value>> {
         let payload = EntryFunction::coin_transfer(coin_type, recipient, amount)?;
-        self.sign_submit_and_wait(sender, payload.into(), None).await
+        self.sign_submit_and_wait(sender, payload.into(), None)
+            .await
     }
 
     // === View Functions ===
@@ -472,10 +484,9 @@ impl Aptos {
     /// }
     /// ```
     pub async fn resolve_name(&self, name: &str) -> AptosResult<Option<AccountAddress>> {
-        let ans = self
-            .ans
-            .as_ref()
-            .ok_or_else(|| AptosError::FeatureNotEnabled("ANS (only available on mainnet/testnet)".into()))?;
+        let ans = self.ans.as_ref().ok_or_else(|| {
+            AptosError::FeatureNotEnabled("ANS (only available on mainnet/testnet)".into())
+        })?;
         ans.get_address(name).await
     }
 
@@ -498,10 +509,9 @@ impl Aptos {
     /// }
     /// ```
     pub async fn get_primary_name(&self, address: AccountAddress) -> AptosResult<Option<String>> {
-        let ans = self
-            .ans
-            .as_ref()
-            .ok_or_else(|| AptosError::FeatureNotEnabled("ANS (only available on mainnet/testnet)".into()))?;
+        let ans = self.ans.as_ref().ok_or_else(|| {
+            AptosError::FeatureNotEnabled("ANS (only available on mainnet/testnet)".into())
+        })?;
         ans.get_primary_name(address).await
     }
 
@@ -525,9 +535,10 @@ impl Aptos {
     pub async fn resolve(&self, address_or_name: &str) -> AptosResult<AccountAddress> {
         // Try to parse as address first
         if (address_or_name.starts_with("0x") || address_or_name.starts_with("0X"))
-            && let Ok(address) = AccountAddress::from_hex(address_or_name) {
-                return Ok(address);
-            }
+            && let Ok(address) = AccountAddress::from_hex(address_or_name)
+        {
+            return Ok(address);
+        }
 
         // Try as ANS name
         self.resolve_name(address_or_name)
@@ -545,10 +556,9 @@ impl Aptos {
     ///
     /// `true` if the name is available, `false` if taken.
     pub async fn is_name_available(&self, name: &str) -> AptosResult<bool> {
-        let ans = self
-            .ans
-            .as_ref()
-            .ok_or_else(|| AptosError::FeatureNotEnabled("ANS (only available on mainnet/testnet)".into()))?;
+        let ans = self.ans.as_ref().ok_or_else(|| {
+            AptosError::FeatureNotEnabled("ANS (only available on mainnet/testnet)".into())
+        })?;
         ans.is_name_available(name).await
     }
 
@@ -614,7 +624,9 @@ impl Aptos {
         payloads: Vec<TransactionPayload>,
         timeout: Option<Duration>,
     ) -> AptosResult<Vec<crate::transaction::BatchTransactionResult>> {
-        self.batch().submit_and_wait(account, payloads, timeout).await
+        self.batch()
+            .submit_and_wait(account, payloads, timeout)
+            .await
     }
 
     /// Transfers APT to multiple recipients in a batch.
@@ -647,8 +659,8 @@ impl Aptos {
 mod tests {
     use super::*;
     use wiremock::{
-        matchers::{method, path, path_regex},
         Mock, MockServer, ResponseTemplate,
+        matchers::{method, path, path_regex},
     };
 
     #[test]
@@ -687,7 +699,10 @@ mod tests {
             .await;
 
         let aptos = create_mock_aptos(&server).await;
-        let seq = aptos.get_sequence_number(AccountAddress::ONE).await.unwrap();
+        let seq = aptos
+            .get_sequence_number(AccountAddress::ONE)
+            .await
+            .unwrap();
         assert_eq!(seq, 42);
     }
 
@@ -698,9 +713,9 @@ mod tests {
         // get_balance now uses view function instead of CoinStore resource
         Mock::given(method("POST"))
             .and(path("/v1/view"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
-                "5000000000"
-            ])))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!(["5000000000"])),
+            )
             .expect(1)
             .mount(&server)
             .await;
@@ -725,7 +740,11 @@ mod tests {
             .await;
 
         let aptos = create_mock_aptos(&server).await;
-        let resources = aptos.fullnode().get_account_resources(AccountAddress::ONE).await.unwrap();
+        let resources = aptos
+            .fullnode()
+            .get_account_resources(AccountAddress::ONE)
+            .await
+            .unwrap();
         assert_eq!(resources.data.len(), 2);
     }
 
@@ -766,8 +785,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_config_builder() {
-        let config = AptosConfig::testnet()
-            .with_timeout(Duration::from_secs(60));
+        let config = AptosConfig::testnet().with_timeout(Duration::from_secs(60));
 
         let aptos = Aptos::new(config).unwrap();
         assert_eq!(aptos.chain_id(), ChainId::testnet());
@@ -814,7 +832,10 @@ mod tests {
         let recipient = AccountAddress::from_hex("0x123").unwrap();
         let payload = crate::transaction::EntryFunction::apt_transfer(recipient, 1000).unwrap();
 
-        let raw_txn = aptos.build_transaction(&account, payload.into()).await.unwrap();
+        let raw_txn = aptos
+            .build_transaction(&account, payload.into())
+            .await
+            .unwrap();
         assert_eq!(raw_txn.sender, account.address());
         assert_eq!(raw_txn.sequence_number, 0);
     }
@@ -871,9 +892,7 @@ mod tests {
 
         Mock::given(method("POST"))
             .and(path("/v1/view"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
-                "1000000"
-            ])))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!(["1000000"])))
             .expect(1)
             .mount(&server)
             .await;
@@ -913,4 +932,3 @@ mod tests {
         assert_eq!(aptos.chain_id(), ChainId::new(0));
     }
 }
-

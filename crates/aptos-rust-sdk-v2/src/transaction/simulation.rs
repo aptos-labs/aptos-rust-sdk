@@ -63,15 +63,12 @@ pub struct SimulationResult {
 impl SimulationResult {
     /// Parses a simulation result from the API response.
     pub fn from_response(response: Vec<serde_json::Value>) -> AptosResult<Self> {
-        let data = response
-            .into_iter()
-            .next()
-            .ok_or_else(|| AptosError::Api {
-                status_code: 200,
-                message: "Empty simulation response".into(),
-                error_code: None,
-                vm_error_code: None,
-            })?;
+        let data = response.into_iter().next().ok_or_else(|| AptosError::Api {
+            status_code: 200,
+            message: "Empty simulation response".into(),
+            error_code: None,
+            vm_error_code: None,
+        })?;
 
         Self::from_json(data)
     }
@@ -357,7 +354,7 @@ pub struct VmError {
 impl VmError {
     fn from_status(status: &str) -> Option<Self> {
         let category = VmErrorCategory::from_status(status);
-        
+
         // Try to extract abort code
         let abort_code = if status.contains("ABORTED") {
             // Parse abort code from status like "Move abort in 0x1::coin: EINSUFFICIENT_BALANCE(0x10001)"
@@ -466,10 +463,12 @@ pub enum VmErrorCategory {
 impl VmErrorCategory {
     fn from_status(status: &str) -> Self {
         let status_upper = status.to_uppercase();
-        
+
         if status_upper.contains("INSUFFICIENT") || status_upper.contains("NOT_ENOUGH") {
             Self::InsufficientBalance
-        } else if status_upper.contains("SEQUENCE_NUMBER") || status_upper.contains("SEQUENCE NUMBER") {
+        } else if status_upper.contains("SEQUENCE_NUMBER")
+            || status_upper.contains("SEQUENCE NUMBER")
+        {
             Self::SequenceNumber
         } else if status_upper.contains("OUT_OF_GAS") || status_upper.contains("OUT OF GAS") {
             Self::OutOfGas
@@ -481,7 +480,9 @@ impl VmErrorCategory {
             Self::ModuleNotFound
         } else if status_upper.contains("FUNCTION") && status_upper.contains("NOT") {
             Self::FunctionNotFound
-        } else if status_upper.contains("TYPE") && (status_upper.contains("MISMATCH") || status_upper.contains("ERROR")) {
+        } else if status_upper.contains("TYPE")
+            && (status_upper.contains("MISMATCH") || status_upper.contains("ERROR"))
+        {
             Self::TypeMismatch
         } else {
             Self::Unknown
@@ -662,4 +663,3 @@ mod tests {
         assert!(result.changes()[0].is_write());
     }
 }
-

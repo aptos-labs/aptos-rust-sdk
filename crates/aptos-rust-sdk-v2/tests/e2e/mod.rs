@@ -145,7 +145,7 @@ mod account_tests {
         let account = Ed25519Account::generate();
 
         let result = aptos.get_sequence_number(account.address()).await;
-        
+
         // Should get an error for non-existent account
         assert!(result.is_err() || result.unwrap() == 0);
     }
@@ -181,7 +181,7 @@ mod transfer_tests {
             .transfer_apt(&sender, recipient.address(), 10_000_000)
             .await
             .expect("failed to transfer");
-        
+
         let success = result.data.get("success").and_then(|v| v.as_bool());
         assert_eq!(success, Some(true), "transfer should succeed");
         println!("Transfer successful!");
@@ -193,7 +193,10 @@ mod transfer_tests {
             .get_balance(recipient.address())
             .await
             .expect("failed to get balance");
-        assert_eq!(balance, 10_000_000, "recipient should have transferred amount");
+        assert_eq!(
+            balance, 10_000_000,
+            "recipient should have transferred amount"
+        );
     }
 
     #[tokio::test]
@@ -207,16 +210,14 @@ mod transfer_tests {
             .expect("failed to create sender");
 
         // Transfer to multiple recipients
-        let recipients: Vec<_> = (0..3)
-            .map(|_| Ed25519Account::generate())
-            .collect();
+        let recipients: Vec<_> = (0..3).map(|_| Ed25519Account::generate()).collect();
 
         for (i, recipient) in recipients.iter().enumerate() {
             let result = aptos
                 .transfer_apt(&sender, recipient.address(), 1_000_000 * (i as u64 + 1))
                 .await
                 .expect("failed to transfer");
-            
+
             let success = result.data.get("success").and_then(|v| v.as_bool());
             assert_eq!(success, Some(true));
             println!("Transfer {} to {} successful", i + 1, recipient.address());
@@ -250,10 +251,12 @@ mod transfer_tests {
             .await;
 
         // Should fail (either at simulation or execution)
-        assert!(result.is_err() || {
-            let r = result.unwrap();
-            r.data.get("success").and_then(|v| v.as_bool()) == Some(false)
-        });
+        assert!(
+            result.is_err() || {
+                let r = result.unwrap();
+                r.data.get("success").and_then(|v| v.as_bool()) == Some(false)
+            }
+        );
     }
 }
 
@@ -365,7 +368,7 @@ mod view_tests {
 mod transaction_tests {
     use super::*;
     use aptos_rust_sdk_v2::account::Ed25519Account;
-    use aptos_rust_sdk_v2::transaction::{builder::sign_transaction, EntryFunction};
+    use aptos_rust_sdk_v2::transaction::{EntryFunction, builder::sign_transaction};
 
     #[tokio::test]
     async fn e2e_build_sign_submit_transaction() {
@@ -392,9 +395,19 @@ mod transaction_tests {
         // Debug: Print BCS bytes
         let bcs_bytes = signed.to_bcs().expect("failed to serialize");
         println!("BCS bytes ({} total):", bcs_bytes.len());
-        println!("First 100 bytes: {}", hex::encode(&bcs_bytes[..100.min(bcs_bytes.len())]));
-        println!("Last 100 bytes: {}", hex::encode(&bcs_bytes[bcs_bytes.len().saturating_sub(100)..]));
-        println!("Authenticator variant (byte at offset {}): {}", bcs_bytes.len() - 97, bcs_bytes.get(bcs_bytes.len() - 97).unwrap_or(&0));
+        println!(
+            "First 100 bytes: {}",
+            hex::encode(&bcs_bytes[..100.min(bcs_bytes.len())])
+        );
+        println!(
+            "Last 100 bytes: {}",
+            hex::encode(&bcs_bytes[bcs_bytes.len().saturating_sub(100)..])
+        );
+        println!(
+            "Authenticator variant (byte at offset {}): {}",
+            bcs_bytes.len() - 97,
+            bcs_bytes.get(bcs_bytes.len() - 97).unwrap_or(&0)
+        );
 
         // Submit
         let result = aptos
@@ -415,10 +428,8 @@ mod transaction_tests {
             .await
             .expect("failed to create account");
 
-        let payload = EntryFunction::apt_transfer(
-            Ed25519Account::generate().address(),
-            1000,
-        ).unwrap();
+        let payload =
+            EntryFunction::apt_transfer(Ed25519Account::generate().address(), 1000).unwrap();
 
         let raw_txn = aptos
             .build_transaction(&account, payload.into())
@@ -434,10 +445,10 @@ mod transaction_tests {
             .expect("failed to simulate");
 
         assert!(!result.data.is_empty(), "simulation should return results");
-        
+
         let success = result.data[0].get("success").and_then(|v| v.as_bool());
         assert_eq!(success, Some(true), "simulation should succeed");
-        
+
         let gas_used = result.data[0].get("gas_used").and_then(|v| v.as_str());
         println!("Simulated gas used: {:?}", gas_used);
     }
@@ -482,10 +493,8 @@ mod transaction_tests {
             .expect("failed to create account");
 
         // Build transaction with very short expiration (already expired)
-        let payload = EntryFunction::apt_transfer(
-            Ed25519Account::generate().address(),
-            1000,
-        ).unwrap();
+        let payload =
+            EntryFunction::apt_transfer(Ed25519Account::generate().address(), 1000).unwrap();
 
         let raw_txn = aptos_rust_sdk_v2::transaction::TransactionBuilder::new()
             .sender(account.address())
@@ -517,8 +526,11 @@ mod ledger_tests {
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
 
-        let ledger_info = aptos.ledger_info().await.expect("failed to get ledger info");
-        
+        let ledger_info = aptos
+            .ledger_info()
+            .await
+            .expect("failed to get ledger info");
+
         println!("Ledger version: {}", ledger_info.version());
         println!("Block height: {}", ledger_info.height());
         println!("Epoch: {}", ledger_info.epoch_num());
@@ -532,8 +544,11 @@ mod ledger_tests {
         let aptos = Aptos::new(config).expect("failed to create client");
 
         // Just verify we can get ledger info
-        let _ledger_info = aptos.ledger_info().await.expect("failed to get ledger info");
-        
+        let _ledger_info = aptos
+            .ledger_info()
+            .await
+            .expect("failed to get ledger info");
+
         // Chain ID should be set
         assert!(aptos.chain_id().id() > 0);
         println!("Client chain ID: {}", aptos.chain_id().id());
@@ -549,9 +564,9 @@ mod multi_signer_tests {
     use super::*;
     use aptos_rust_sdk_v2::account::{Account, Ed25519Account};
     use aptos_rust_sdk_v2::transaction::{
+        EntryFunction, TransactionBuilder,
         builder::{sign_fee_payer_transaction, sign_multi_agent_transaction},
         types::{FeePayerRawTransaction, MultiAgentRawTransaction},
-        EntryFunction, TransactionBuilder,
     };
 
     #[tokio::test]
@@ -580,8 +595,11 @@ mod multi_signer_tests {
         // Build the fee payer transaction
         let payload = EntryFunction::apt_transfer(recipient.address(), 500).unwrap();
 
-        let sender_seq = aptos.get_sequence_number(sender.address()).await.unwrap_or(0);
-        
+        let sender_seq = aptos
+            .get_sequence_number(sender.address())
+            .await
+            .unwrap_or(0);
+
         let raw_txn = TransactionBuilder::new()
             .sender(sender.address())
             .sequence_number(sender_seq)
@@ -603,7 +621,7 @@ mod multi_signer_tests {
 
         // Submit
         let result = aptos.submit_and_wait(&signed, None).await;
-        
+
         // This may or may not work depending on localnet support for fee payer
         match result {
             Ok(r) => {
@@ -637,12 +655,13 @@ mod multi_signer_tests {
 
         // Note: Most simple transactions don't need multi-agent
         // This is just demonstrating the signing flow
-        let payload = EntryFunction::apt_transfer(
-            Ed25519Account::generate().address(),
-            1000,
-        ).unwrap();
+        let payload =
+            EntryFunction::apt_transfer(Ed25519Account::generate().address(), 1000).unwrap();
 
-        let sender_seq = aptos.get_sequence_number(sender.address()).await.unwrap_or(0);
+        let sender_seq = aptos
+            .get_sequence_number(sender.address())
+            .await
+            .unwrap_or(0);
 
         let raw_txn = TransactionBuilder::new()
             .sender(sender.address())
@@ -666,7 +685,7 @@ mod multi_signer_tests {
 
         // Submit
         let result = aptos.submit_and_wait(&signed, None).await;
-        
+
         match result {
             Ok(r) => {
                 println!("Multi-agent transaction result: {:?}", r.data);
@@ -687,7 +706,9 @@ mod multi_key_e2e_tests {
     use super::*;
     use aptos_rust_sdk_v2::account::{AnyPrivateKey, MultiKeyAccount};
     use aptos_rust_sdk_v2::crypto::{Ed25519PrivateKey, Secp256k1PrivateKey};
-    use aptos_rust_sdk_v2::transaction::{builder::sign_transaction, EntryFunction, TransactionBuilder};
+    use aptos_rust_sdk_v2::transaction::{
+        EntryFunction, TransactionBuilder, builder::sign_transaction,
+    };
 
     #[tokio::test]
     async fn e2e_multi_key_account_transfer() {
@@ -717,14 +738,20 @@ mod multi_key_e2e_tests {
         wait_for_finality().await;
 
         // Check balance
-        let balance = aptos.get_balance(multi_key_account.address()).await.unwrap_or(0);
+        let balance = aptos
+            .get_balance(multi_key_account.address())
+            .await
+            .unwrap_or(0);
         println!("Multi-key balance: {}", balance);
 
         // Build and sign a transfer
         let recipient = aptos_rust_sdk_v2::account::Ed25519Account::generate();
         let payload = EntryFunction::apt_transfer(recipient.address(), 1_000_000).unwrap();
 
-        let seq = aptos.get_sequence_number(multi_key_account.address()).await.unwrap_or(0);
+        let seq = aptos
+            .get_sequence_number(multi_key_account.address())
+            .await
+            .unwrap_or(0);
 
         let raw_txn = TransactionBuilder::new()
             .sender(multi_key_account.address())
@@ -736,12 +763,12 @@ mod multi_key_e2e_tests {
             .build()
             .expect("failed to build");
 
-        let signed = sign_transaction(&raw_txn, &multi_key_account)
-            .expect("failed to sign with multi-key");
+        let signed =
+            sign_transaction(&raw_txn, &multi_key_account).expect("failed to sign with multi-key");
 
         // Submit
         let result = aptos.submit_and_wait(&signed, None).await;
-        
+
         match result {
             Ok(r) => {
                 let success = r.data.get("success").and_then(|v| v.as_bool());

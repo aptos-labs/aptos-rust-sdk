@@ -9,13 +9,13 @@
 //! Run with: `cargo run --example entry_function --features "ed25519,faucet"`
 
 use aptos_rust_sdk_v2::{
+    Aptos, AptosConfig,
     account::Ed25519Account,
     transaction::{
-        functions, move_none, move_some, move_string,
-        EntryFunction, InputEntryFunctionData, TransactionPayload,
+        EntryFunction, InputEntryFunctionData, TransactionPayload, functions, move_none, move_some,
+        move_string,
     },
     types::{MoveModuleId, TypeTag},
-    Aptos, AptosConfig,
 };
 
 #[tokio::main]
@@ -47,7 +47,11 @@ async fn main() -> anyhow::Result<()> {
 
     // Submit and wait for the transaction
     let result = aptos.sign_submit_and_wait(&sender, payload1, None).await?;
-    let success = result.data.get("success").and_then(|v| v.as_bool()).unwrap_or(false);
+    let success = result
+        .data
+        .get("success")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
     println!("  Transaction success: {}", success);
 
     // ==== Part 2: Using Type Arguments ====
@@ -65,7 +69,11 @@ async fn main() -> anyhow::Result<()> {
     println!("  Type arg parsed from string");
 
     let result = aptos.sign_submit_and_wait(&sender, payload2, None).await?;
-    let success = result.data.get("success").and_then(|v| v.as_bool()).unwrap_or(false);
+    let success = result
+        .data
+        .get("success")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
     println!("  Transaction success: {}", success);
 
     // ==== Part 3: Convenience Helpers ====
@@ -76,7 +84,14 @@ async fn main() -> anyhow::Result<()> {
     println!("InputEntryFunctionData::transfer_apt() - Quick APT transfer");
 
     let result = aptos.sign_submit_and_wait(&sender, payload3, None).await?;
-    println!("  Transaction success: {}", result.data.get("success").and_then(|v| v.as_bool()).unwrap_or(false));
+    println!(
+        "  Transaction success: {}",
+        result
+            .data
+            .get("success")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+    );
 
     // Using transfer_coin helper for any coin type
     let payload4 = InputEntryFunctionData::transfer_coin(
@@ -87,7 +102,14 @@ async fn main() -> anyhow::Result<()> {
     println!("InputEntryFunctionData::transfer_coin() - Generic coin transfer");
 
     let result = aptos.sign_submit_and_wait(&sender, payload4, None).await?;
-    println!("  Transaction success: {}", result.data.get("success").and_then(|v| v.as_bool()).unwrap_or(false));
+    println!(
+        "  Transaction success: {}",
+        result
+            .data
+            .get("success")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+    );
 
     // ==== Part 4: Using EntryFunction Directly ====
     println!("\n--- Part 4: Using EntryFunction Directly ---");
@@ -108,18 +130,40 @@ async fn main() -> anyhow::Result<()> {
     println!("  Requires manual BCS encoding of arguments");
 
     let result = aptos.sign_submit_and_wait(&sender, payload5, None).await?;
-    println!("  Transaction success: {}", result.data.get("success").and_then(|v| v.as_bool()).unwrap_or(false));
+    println!(
+        "  Transaction success: {}",
+        result
+            .data
+            .get("success")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+    );
 
     // ==== Part 5: Function ID Constants ====
     println!("\n--- Part 5: Using Function ID Constants ---");
 
     // Use predefined function IDs for common operations
     println!("Available function constants:");
-    println!("  functions::APT_TRANSFER = \"{}\"", functions::APT_TRANSFER);
-    println!("  functions::COIN_TRANSFER = \"{}\"", functions::COIN_TRANSFER);
-    println!("  functions::CREATE_ACCOUNT = \"{}\"", functions::CREATE_ACCOUNT);
-    println!("  functions::REGISTER_COIN = \"{}\"", functions::REGISTER_COIN);
-    println!("  functions::PUBLISH_PACKAGE = \"{}\"", functions::PUBLISH_PACKAGE);
+    println!(
+        "  functions::APT_TRANSFER = \"{}\"",
+        functions::APT_TRANSFER
+    );
+    println!(
+        "  functions::COIN_TRANSFER = \"{}\"",
+        functions::COIN_TRANSFER
+    );
+    println!(
+        "  functions::CREATE_ACCOUNT = \"{}\"",
+        functions::CREATE_ACCOUNT
+    );
+    println!(
+        "  functions::REGISTER_COIN = \"{}\"",
+        functions::REGISTER_COIN
+    );
+    println!(
+        "  functions::PUBLISH_PACKAGE = \"{}\"",
+        functions::PUBLISH_PACKAGE
+    );
 
     println!("\nAvailable type constants:");
     println!("  aptos_rust_sdk_v2::transaction::types::APT_COIN = \"0x1::aptos_coin::AptosCoin\"");
@@ -132,7 +176,14 @@ async fn main() -> anyhow::Result<()> {
 
     let result = aptos.sign_submit_and_wait(&sender, payload6, None).await?;
     println!("\nUsing functions::APT_TRANSFER constant:");
-    println!("  Transaction success: {}", result.data.get("success").and_then(|v| v.as_bool()).unwrap_or(false));
+    println!(
+        "  Transaction success: {}",
+        result
+            .data
+            .get("success")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+    );
 
     // ==== Part 6: Complex Argument Types ====
     println!("\n--- Part 6: Complex Argument Types ---");
@@ -158,12 +209,12 @@ async fn main() -> anyhow::Result<()> {
     // Example with complex types (hypothetical function)
     println!("\nExample complex payload (not submitted):");
     let _complex_payload = InputEntryFunctionData::new("0x1::example::complex_function")
-        .arg(42u8)           // u8
-        .arg(1000u64)        // u64
-        .arg(true)           // bool
-        .arg(name)           // String
-        .arg(addresses)      // vector<address>
-        .arg(amounts)        // vector<u64>
+        .arg(42u8) // u8
+        .arg(1000u64) // u64
+        .arg(true) // bool
+        .arg(name) // String
+        .arg(addresses) // vector<address>
+        .arg(amounts) // vector<u64>
         .build();
     println!("  Built payload with: u8, u64, bool, String, vector<address>, vector<u64>");
 
@@ -191,7 +242,14 @@ async fn main() -> anyhow::Result<()> {
 
     let result = aptos.sign_submit_and_wait(&sender, payload7, None).await?;
     println!("\nUsing type_arg_typed():");
-    println!("  Transaction success: {}", result.data.get("success").and_then(|v| v.as_bool()).unwrap_or(false));
+    println!(
+        "  Transaction success: {}",
+        result
+            .data
+            .get("success")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+    );
 
     // ==== Part 8: From Parts Construction ====
     println!("\n--- Part 8: Building from Module Parts ---");
@@ -207,7 +265,14 @@ async fn main() -> anyhow::Result<()> {
     println!("  Useful when module ID is already parsed");
 
     let result = aptos.sign_submit_and_wait(&sender, payload8, None).await?;
-    println!("  Transaction success: {}", result.data.get("success").and_then(|v| v.as_bool()).unwrap_or(false));
+    println!(
+        "  Transaction success: {}",
+        result
+            .data
+            .get("success")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+    );
 
     // ==== Part 9: Build Entry Function Only ====
     println!("\n--- Part 9: Building Entry Function Only ---");
@@ -219,14 +284,24 @@ async fn main() -> anyhow::Result<()> {
         .build_entry_function()?;
 
     println!("build_entry_function() returns EntryFunction directly:");
-    println!("  Module: {}::{}", entry_fn.module.address, entry_fn.module.name);
+    println!(
+        "  Module: {}::{}",
+        entry_fn.module.address, entry_fn.module.name
+    );
     println!("  Function: {}", entry_fn.function);
     println!("  Args count: {}", entry_fn.args.len());
 
     // Convert to payload manually
     let payload9 = TransactionPayload::EntryFunction(entry_fn);
     let result = aptos.sign_submit_and_wait(&sender, payload9, None).await?;
-    println!("  Transaction success: {}", result.data.get("success").and_then(|v| v.as_bool()).unwrap_or(false));
+    println!(
+        "  Transaction success: {}",
+        result
+            .data
+            .get("success")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+    );
 
     // ==== Part 10: Error Handling ====
     println!("\n--- Part 10: Error Handling ---");
@@ -262,7 +337,10 @@ async fn main() -> anyhow::Result<()> {
     let recipient_balance = aptos.get_balance(recipient.address()).await?;
     println!("\nFinal balances:");
     println!("  Sender: {} APT", sender_balance as f64 / 100_000_000.0);
-    println!("  Recipient: {} APT", recipient_balance as f64 / 100_000_000.0);
+    println!(
+        "  Recipient: {} APT",
+        recipient_balance as f64 / 100_000_000.0
+    );
 
     println!("\n=== Entry Function Examples Completed ===");
     Ok(())

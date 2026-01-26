@@ -180,4 +180,3 @@ mod tests {
         assert!(set.contains(&ChainId::new(1)));
     }
 }
-

@@ -166,9 +166,9 @@ async fn main() -> anyhow::Result<()> {
 
     // With Move source, we get meaningful parameter names: `to`, `amount`
     let transfer_payload = CoinModule::transfer(
-        recipient,                           // to: address
-        amount,                              // amount: u64
-        vec![],                              // type_args (e.g., AptosCoin type)
+        recipient, // to: address
+        amount,    // amount: u64
+        vec![],    // type_args (e.g., AptosCoin type)
     )?;
 
     println!("\nGenerated transfer payload: {:?}", transfer_payload);
@@ -177,13 +177,13 @@ async fn main() -> anyhow::Result<()> {
     // ANCHOR: custom_token_operations
     // Build custom token operations
     let mint_payload = MyToken::mint(
-        recipient,  // recipient
-        500_000,    // amount
+        recipient, // recipient
+        500_000,   // amount
     )?;
     println!("Generated mint payload: {:?}", mint_payload);
 
     let burn_payload = MyToken::burn(
-        100_000,    // amount
+        100_000, // amount
     )?;
     println!("Generated burn payload: {:?}", burn_payload);
     // ANCHOR_END: custom_token_operations
@@ -219,4 +219,3 @@ async fn main() -> anyhow::Result<()> {
 
     Ok(())
 }
-

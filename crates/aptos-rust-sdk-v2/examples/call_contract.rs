@@ -8,10 +8,10 @@
 //! Run with: `cargo run --example call_contract --features "ed25519,faucet"`
 
 use aptos_rust_sdk_v2::{
+    Aptos, AptosConfig,
     account::Ed25519Account,
     transaction::{EntryFunction, TransactionBuilder, TransactionPayload},
     types::{AccountAddress, MoveModuleId, TypeTag},
-    Aptos, AptosConfig,
 };
 
 #[tokio::main]
@@ -47,11 +47,17 @@ async fn main() -> anyhow::Result<()> {
         println!("Transfer successful!");
         println!(
             "  Version: {}",
-            result.data.get("version").unwrap_or(&serde_json::json!("N/A"))
+            result
+                .data
+                .get("version")
+                .unwrap_or(&serde_json::json!("N/A"))
         );
         println!(
             "  Gas used: {}",
-            result.data.get("gas_used").unwrap_or(&serde_json::json!("N/A"))
+            result
+                .data
+                .get("gas_used")
+                .unwrap_or(&serde_json::json!("N/A"))
         );
     }
 
@@ -79,7 +85,10 @@ async fn main() -> anyhow::Result<()> {
         println!("Coin transfer successful!");
         println!(
             "  Version: {}",
-            result.data.get("version").unwrap_or(&serde_json::json!("N/A"))
+            result
+                .data
+                .get("version")
+                .unwrap_or(&serde_json::json!("N/A"))
         );
     }
 
@@ -113,7 +122,10 @@ async fn main() -> anyhow::Result<()> {
                 println!("  Registered APT CoinStore");
                 println!(
                     "  Version: {}",
-                    result.data.get("version").unwrap_or(&serde_json::json!("N/A"))
+                    result
+                        .data
+                        .get("version")
+                        .unwrap_or(&serde_json::json!("N/A"))
                 );
             }
         }
@@ -170,7 +182,10 @@ async fn main() -> anyhow::Result<()> {
 
         // Get current gas price
         let gas_estimate = aptos.fullnode().estimate_gas_price().await?;
-        println!("  Current gas estimate: {} octas", gas_estimate.data.gas_estimate);
+        println!(
+            "  Current gas estimate: {} octas",
+            gas_estimate.data.gas_estimate
+        );
 
         // Build transaction with custom settings
         let payload = EntryFunction::apt_transfer(recipient.address(), 100_000)?;
@@ -193,11 +208,15 @@ async fn main() -> anyhow::Result<()> {
         if let Some(sim_result) = simulation.data.first() {
             println!(
                 "  Simulation gas used: {}",
-                sim_result.get("gas_used").unwrap_or(&serde_json::json!("N/A"))
+                sim_result
+                    .get("gas_used")
+                    .unwrap_or(&serde_json::json!("N/A"))
             );
             println!(
                 "  Simulation success: {}",
-                sim_result.get("success").unwrap_or(&serde_json::json!("N/A"))
+                sim_result
+                    .get("success")
+                    .unwrap_or(&serde_json::json!("N/A"))
             );
         }
 
@@ -205,11 +224,13 @@ async fn main() -> anyhow::Result<()> {
         let result = aptos.submit_and_wait(&signed, None).await?;
         println!(
             "  Actual gas used: {}",
-            result.data.get("gas_used").unwrap_or(&serde_json::json!("N/A"))
+            result
+                .data
+                .get("gas_used")
+                .unwrap_or(&serde_json::json!("N/A"))
         );
     }
 
     println!("\n✓ All examples completed successfully!");
     Ok(())
 }
-

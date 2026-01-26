@@ -324,4 +324,3 @@ mod tests {
         assert_eq!(slice.len(), HASH_LENGTH);
     }
 }
-

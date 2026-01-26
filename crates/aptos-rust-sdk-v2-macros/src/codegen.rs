@@ -141,7 +141,11 @@ fn generate_entry_function(
         .map(|(i, move_type)| {
             let name = get_param_name(i, move_type, source_func);
             let rust_type = move_type_to_rust(move_type);
-            (format_ident!("{}", safe_ident(&name)), rust_type, move_type.clone())
+            (
+                format_ident!("{}", safe_ident(&name)),
+                rust_type,
+                move_type.clone(),
+            )
         })
         .collect();
 
@@ -187,10 +191,7 @@ fn generate_entry_function(
         .and_then(|f| f.doc.as_ref())
         .map(|d| format!("{}\n\n", d))
         .unwrap_or_default();
-    let full_doc = format!(
-        "{}Entry function: `{}`",
-        doc, function_id
-    );
+    let full_doc = format!("{}Entry function: `{}`", doc, function_id);
 
     quote! {
         #[doc = #full_doc]
@@ -231,7 +232,11 @@ fn generate_view_function(
         .map(|(i, move_type)| {
             let name = get_param_name(i, move_type, source_func);
             let rust_type = move_type_to_rust(move_type);
-            (format_ident!("{}", safe_ident(&name)), rust_type, move_type.clone())
+            (
+                format_ident!("{}", safe_ident(&name)),
+                rust_type,
+                move_type.clone(),
+            )
         })
         .collect();
 
@@ -246,9 +251,7 @@ fn generate_view_function(
     // Build JSON encoding for args
     let arg_encodings: Vec<_> = params
         .iter()
-        .map(|(name, _, move_type)| {
-            view_arg_encoding(name, move_type)
-        })
+        .map(|(name, _, move_type)| view_arg_encoding(name, move_type))
         .collect();
 
     // Type arguments
@@ -271,10 +274,7 @@ fn generate_view_function(
         .and_then(|f| f.doc.as_ref())
         .map(|d| format!("{}\n\n", d))
         .unwrap_or_default();
-    let full_doc = format!(
-        "{}View function: `{}`",
-        doc, function_id
-    );
+    let full_doc = format!("{}View function: `{}`", doc, function_id);
 
     quote! {
         #[doc = #full_doc]
@@ -314,9 +314,10 @@ fn get_param_name(
 ) -> String {
     // Try to get from source
     if let Some(func) = source_func
-        && let Some(name) = func.param_names.get(index) {
-            return name.clone();
-        }
+        && let Some(name) = func.param_names.get(index)
+    {
+        return name.clone();
+    }
 
     // Generate from type
     match move_type {
@@ -423,4 +424,3 @@ fn safe_ident(name: &str) -> String {
         _ => snake,
     }
 }
-

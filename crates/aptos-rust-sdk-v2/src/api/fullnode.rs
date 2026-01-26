@@ -8,8 +8,8 @@ use crate::error::{AptosError, AptosResult};
 use crate::retry::{RetryConfig, RetryExecutor};
 use crate::transaction::types::SignedTransaction;
 use crate::types::{AccountAddress, HashValue};
-use reqwest::header::{ACCEPT, CONTENT_TYPE};
 use reqwest::Client;
+use reqwest::header::{ACCEPT, CONTENT_TYPE};
 use std::sync::Arc;
 use std::time::Duration;
 use url::Url;
@@ -103,7 +103,10 @@ impl FullnodeClient {
     // === Account ===
 
     /// Gets account information.
-    pub async fn get_account(&self, address: AccountAddress) -> AptosResult<AptosResponse<AccountData>> {
+    pub async fn get_account(
+        &self,
+        address: AccountAddress,
+    ) -> AptosResult<AptosResponse<AccountData>> {
         let url = self.build_url(&format!("accounts/{}", address))?;
         self.get_json(url).await
     }
@@ -266,7 +269,9 @@ impl FullnodeClient {
                         return Ok(response);
                     }
                 }
-                Err(AptosError::Api { status_code: 404, .. }) => {
+                Err(AptosError::Api {
+                    status_code: 404, ..
+                }) => {
                     // Transaction not found yet, continue waiting
                 }
                 Err(e) => return Err(e),
@@ -545,8 +550,8 @@ impl FullnodeClient {
 mod tests {
     use super::*;
     use wiremock::{
-        matchers::{method, path, path_regex},
         Mock, MockServer, ResponseTemplate,
+        matchers::{method, path, path_regex},
     };
 
     #[test]
@@ -659,7 +664,10 @@ mod tests {
             .await;
 
         let client = create_mock_client(&server).await;
-        let result = client.get_account_resources(AccountAddress::ONE).await.unwrap();
+        let result = client
+            .get_account_resources(AccountAddress::ONE)
+            .await
+            .unwrap();
 
         assert_eq!(result.data.len(), 2);
         assert!(result.data[0].typ.contains("Account"));
@@ -713,7 +721,10 @@ mod tests {
             .await;
 
         let client = create_mock_client(&server).await;
-        let result = client.get_account_modules(AccountAddress::ONE).await.unwrap();
+        let result = client
+            .get_account_modules(AccountAddress::ONE)
+            .await
+            .unwrap();
 
         assert_eq!(result.data.len(), 1);
         assert!(result.data[0].abi.is_some());
@@ -765,7 +776,13 @@ mod tests {
         .unwrap();
         let result = client.get_transaction_by_hash(&hash).await.unwrap();
 
-        assert!(result.data.get("success").and_then(|v| v.as_bool()).unwrap());
+        assert!(
+            result
+                .data
+                .get("success")
+                .and_then(|v| v.as_bool())
+                .unwrap()
+        );
     }
 
     #[tokio::test]
@@ -795,7 +812,13 @@ mod tests {
             .await
             .unwrap();
 
-        assert!(result.data.get("success").and_then(|v| v.as_bool()).unwrap());
+        assert!(
+            result
+                .data
+                .get("success")
+                .and_then(|v| v.as_bool())
+                .unwrap()
+        );
     }
 
     #[tokio::test]
@@ -875,9 +898,7 @@ mod tests {
 
         Mock::given(method("POST"))
             .and(path("/v1/view"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
-                "1000000"
-            ])))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!(["1000000"])))
             .expect(1)
             .mount(&server)
             .await;
@@ -895,4 +916,3 @@ mod tests {
         assert_eq!(result.data.len(), 1);
     }
 }
-

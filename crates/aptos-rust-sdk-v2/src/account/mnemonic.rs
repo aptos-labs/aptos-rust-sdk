@@ -31,11 +31,11 @@ impl Mnemonic {
     /// * `word_count` - Number of words (12, 15, 18, 21, or 24)
     pub fn generate(word_count: usize) -> AptosResult<Self> {
         let entropy_bytes = match word_count {
-            12 => 16,  // 128 bits
-            15 => 20,  // 160 bits
-            18 => 24,  // 192 bits
-            21 => 28,  // 224 bits
-            24 => 32,  // 256 bits
+            12 => 16, // 128 bits
+            15 => 20, // 160 bits
+            18 => 24, // 192 bits
+            21 => 28, // 224 bits
+            24 => 32, // 256 bits
             _ => {
                 return Err(AptosError::InvalidMnemonic(format!(
                     "invalid word count: {}, must be 12, 15, 18, 21, or 24",
@@ -81,7 +81,7 @@ impl Mnemonic {
     /// Derives the seed from this mnemonic with a passphrase.
     pub fn to_seed_with_passphrase(&self, passphrase: &str) -> [u8; 64] {
         let mnemonic = bip39::Mnemonic::parse_normalized(&self.phrase).expect("validated mnemonic");
-        
+
         mnemonic.to_seed(passphrase)
     }
 
@@ -120,11 +120,11 @@ fn derive_ed25519_from_seed(seed: &[u8], index: u32) -> AptosResult<[u8; 32]> {
     // Aptos derivation path: m/44'/637'/0'/0'/index'
     // All indices are hardened (with 0x80000000 offset)
     let path = [
-        44 | 0x80000000,      // 44' (purpose)
-        637 | 0x80000000,     // 637' (Aptos coin type)
-        0x80000000,       // 0' (account)
-        0x80000000,       // 0' (change)
-        index | 0x80000000,   // index' (address index)
+        44 | 0x80000000,    // 44' (purpose)
+        637 | 0x80000000,   // 637' (Aptos coin type)
+        0x80000000,         // 0' (account)
+        0x80000000,         // 0' (change)
+        index | 0x80000000, // index' (address index)
     ];
 
     for child_index in path {
@@ -170,8 +170,7 @@ mod tests {
 
     #[test]
     fn test_parse_mnemonic() {
-        let phrase =
-            "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        let phrase = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
         let mnemonic = Mnemonic::from_phrase(phrase).unwrap();
         assert_eq!(mnemonic.phrase(), phrase);
     }
@@ -184,8 +183,7 @@ mod tests {
     #[test]
     #[cfg(feature = "ed25519")]
     fn test_derive_ed25519_key() {
-        let phrase =
-            "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        let phrase = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
         let mnemonic = Mnemonic::from_phrase(phrase).unwrap();
 
         let key1 = mnemonic.derive_ed25519_key(0).unwrap();
@@ -196,4 +194,3 @@ mod tests {
         assert_ne!(key1.to_bytes(), key3.to_bytes());
     }
 }
-

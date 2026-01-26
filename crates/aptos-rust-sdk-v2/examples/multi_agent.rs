@@ -6,13 +6,13 @@
 //! Run with: `cargo run --example multi_agent --features "ed25519,faucet"`
 
 use aptos_rust_sdk_v2::{
+    Aptos, AptosConfig,
     account::{Account, Ed25519Account},
     transaction::{
-        builder::sign_multi_agent_transaction, types::MultiAgentRawTransaction, EntryFunction,
-        TransactionBuilder, TransactionPayload,
+        EntryFunction, TransactionBuilder, TransactionPayload,
+        builder::sign_multi_agent_transaction, types::MultiAgentRawTransaction,
     },
     types::MoveModuleId,
-    Aptos, AptosConfig,
 };
 
 #[tokio::main]
@@ -30,15 +30,19 @@ async fn main() -> anyhow::Result<()> {
 
     // Fund both accounts
     println!("\nFunding accounts...");
-    aptos.fund_account(primary_signer.address(), 100_000_000).await?;
-    aptos.fund_account(secondary_signer.address(), 100_000_000).await?;
-    
+    aptos
+        .fund_account(primary_signer.address(), 100_000_000)
+        .await?;
+    aptos
+        .fund_account(secondary_signer.address(), 100_000_000)
+        .await?;
+
     tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
     // For this example, we'll use a simple entry function
     // In practice, you would use a function that actually requires multiple signers
     // such as a multi-sig wallet or a swap that needs both parties to sign
-    
+
     // Build a payload (using a simple transfer for demonstration)
     // Note: A real multi-agent use case would be something like:
     // - Atomic swaps between users
@@ -67,10 +71,7 @@ async fn main() -> anyhow::Result<()> {
         .build()?;
 
     // Create a multi-agent transaction
-    let multi_agent_txn = MultiAgentRawTransaction::new(
-        raw_txn,
-        vec![secondary_signer.address()],
-    );
+    let multi_agent_txn = MultiAgentRawTransaction::new(raw_txn, vec![secondary_signer.address()]);
 
     // Sign with both signers
     let signed_txn = sign_multi_agent_transaction(
@@ -86,7 +87,7 @@ async fn main() -> anyhow::Result<()> {
     let success = result.data.get("success").and_then(|v| v.as_bool());
     if success == Some(true) {
         println!("Multi-agent transaction successful!");
-        
+
         let version = result.data.get("version").and_then(|v| v.as_str());
         println!("Transaction version: {:?}", version);
     } else {
@@ -100,4 +101,3 @@ async fn main() -> anyhow::Result<()> {
 
     Ok(())
 }
-

@@ -195,7 +195,10 @@ impl AptosError {
             self,
             Self::NotFound(_)
                 | Self::AccountNotFound(_)
-                | Self::Api { status_code: 404, .. }
+                | Self::Api {
+                    status_code: 404,
+                    ..
+                }
         )
     }
 
@@ -301,27 +304,41 @@ mod tests {
 
     #[test]
     fn test_various_error_displays() {
-        assert!(AptosError::InvalidPublicKey("bad key".to_string())
-            .to_string()
-            .contains("public key"));
-        assert!(AptosError::InvalidPrivateKey("bad key".to_string())
-            .to_string()
-            .contains("private key"));
-        assert!(AptosError::InvalidSignature("bad sig".to_string())
-            .to_string()
-            .contains("signature"));
-        assert!(AptosError::SignatureVerificationFailed
-            .to_string()
-            .contains("verification"));
-        assert!(AptosError::InvalidTypeTag("bad tag".to_string())
-            .to_string()
-            .contains("type tag"));
-        assert!(AptosError::SimulationFailed("error".to_string())
-            .to_string()
-            .contains("Simulation"));
-        assert!(AptosError::SubmissionFailed("error".to_string())
-            .to_string()
-            .contains("Submission"));
+        assert!(
+            AptosError::InvalidPublicKey("bad key".to_string())
+                .to_string()
+                .contains("public key")
+        );
+        assert!(
+            AptosError::InvalidPrivateKey("bad key".to_string())
+                .to_string()
+                .contains("private key")
+        );
+        assert!(
+            AptosError::InvalidSignature("bad sig".to_string())
+                .to_string()
+                .contains("signature")
+        );
+        assert!(
+            AptosError::SignatureVerificationFailed
+                .to_string()
+                .contains("verification")
+        );
+        assert!(
+            AptosError::InvalidTypeTag("bad tag".to_string())
+                .to_string()
+                .contains("type tag")
+        );
+        assert!(
+            AptosError::SimulationFailed("error".to_string())
+                .to_string()
+                .contains("Simulation")
+        );
+        assert!(
+            AptosError::SubmissionFailed("error".to_string())
+                .to_string()
+                .contains("Submission")
+        );
     }
 
     #[test]

@@ -542,8 +542,7 @@ mod tests {
 
     #[test]
     fn test_retry_config() {
-        let config = AptosConfig::testnet()
-            .with_retry(RetryConfig::aggressive());
+        let config = AptosConfig::testnet().with_retry(RetryConfig::aggressive());
 
         assert_eq!(config.retry_config.max_retries, 5);
         assert_eq!(config.retry_config.initial_delay_ms, 50);
@@ -603,10 +602,8 @@ mod tests {
 
     #[test]
     fn test_aptos_config_with_pool() {
-        let config = AptosConfig::testnet()
-            .with_pool(PoolConfig::high_throughput());
+        let config = AptosConfig::testnet().with_pool(PoolConfig::high_throughput());
 
         assert_eq!(config.pool_config.max_idle_total, 256);
     }
 }
-

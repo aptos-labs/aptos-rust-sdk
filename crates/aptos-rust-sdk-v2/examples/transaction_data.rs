@@ -8,11 +8,7 @@
 //!
 //! Run with: `cargo run --example transaction_data --features "ed25519,faucet"`
 
-use aptos_rust_sdk_v2::{
-    account::Ed25519Account,
-    transaction::EntryFunction,
-    Aptos, AptosConfig,
-};
+use aptos_rust_sdk_v2::{Aptos, AptosConfig, account::Ed25519Account, transaction::EntryFunction};
 use serde::Deserialize;
 
 /// Coin deposit event from 0x1::coin
@@ -63,31 +59,59 @@ async fn main() -> anyhow::Result<()> {
     println!("\nTransaction Details:");
     println!(
         "  Hash: {}",
-        result.data.get("hash").and_then(|v| v.as_str()).unwrap_or("N/A")
+        result
+            .data
+            .get("hash")
+            .and_then(|v| v.as_str())
+            .unwrap_or("N/A")
     );
     println!(
         "  Version: {}",
-        result.data.get("version").and_then(|v| v.as_str()).unwrap_or("N/A")
+        result
+            .data
+            .get("version")
+            .and_then(|v| v.as_str())
+            .unwrap_or("N/A")
     );
     println!(
         "  Success: {}",
-        result.data.get("success").and_then(|v| v.as_bool()).unwrap_or(false)
+        result
+            .data
+            .get("success")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
     );
     println!(
         "  Gas Used: {} gas units",
-        result.data.get("gas_used").and_then(|v| v.as_str()).unwrap_or("N/A")
+        result
+            .data
+            .get("gas_used")
+            .and_then(|v| v.as_str())
+            .unwrap_or("N/A")
     );
     println!(
         "  Gas Unit Price: {} octas",
-        result.data.get("gas_unit_price").and_then(|v| v.as_str()).unwrap_or("N/A")
+        result
+            .data
+            .get("gas_unit_price")
+            .and_then(|v| v.as_str())
+            .unwrap_or("N/A")
     );
     println!(
         "  Sender: {}",
-        result.data.get("sender").and_then(|v| v.as_str()).unwrap_or("N/A")
+        result
+            .data
+            .get("sender")
+            .and_then(|v| v.as_str())
+            .unwrap_or("N/A")
     );
     println!(
         "  Sequence Number: {}",
-        result.data.get("sequence_number").and_then(|v| v.as_str()).unwrap_or("N/A")
+        result
+            .data
+            .get("sequence_number")
+            .and_then(|v| v.as_str())
+            .unwrap_or("N/A")
     );
 
     // Calculate gas cost in APT
@@ -109,27 +133,39 @@ async fn main() -> anyhow::Result<()> {
         println!("Found {} events:", events.len());
 
         for (i, event) in events.iter().enumerate() {
-            let event_type = event.get("type").and_then(|v| v.as_str()).unwrap_or("unknown");
+            let event_type = event
+                .get("type")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown");
             println!("\n  Event {}: {}", i + 1, event_type);
 
             // Parse specific event types
             if event_type.contains("DepositEvent") {
                 if let Some(data) = event.get("data")
-                    && let Ok(deposit) = serde_json::from_value::<DepositEvent>(data.clone()) {
-                        let amount: u64 = deposit.amount.parse().unwrap_or(0);
-                        println!("    Amount deposited: {} APT", amount as f64 / 100_000_000.0);
-                    }
+                    && let Ok(deposit) = serde_json::from_value::<DepositEvent>(data.clone())
+                {
+                    let amount: u64 = deposit.amount.parse().unwrap_or(0);
+                    println!(
+                        "    Amount deposited: {} APT",
+                        amount as f64 / 100_000_000.0
+                    );
+                }
             } else if event_type.contains("WithdrawEvent") {
                 if let Some(data) = event.get("data")
-                    && let Ok(withdraw) = serde_json::from_value::<WithdrawEvent>(data.clone()) {
-                        let amount: u64 = withdraw.amount.parse().unwrap_or(0);
-                        println!("    Amount withdrawn: {} APT", amount as f64 / 100_000_000.0);
-                    }
+                    && let Ok(withdraw) = serde_json::from_value::<WithdrawEvent>(data.clone())
+                {
+                    let amount: u64 = withdraw.amount.parse().unwrap_or(0);
+                    println!(
+                        "    Amount withdrawn: {} APT",
+                        amount as f64 / 100_000_000.0
+                    );
+                }
             } else if event_type.contains("CreateAccountEvent")
                 && let Some(data) = event.get("data")
-                    && let Ok(create) = serde_json::from_value::<CreateAccountEvent>(data.clone()) {
-                        println!("    Created account: {}", create.created);
-                    }
+                && let Ok(create) = serde_json::from_value::<CreateAccountEvent>(data.clone())
+            {
+                println!("    Created account: {}", create.created);
+            }
 
             // Show raw data for debugging
             if let Some(data) = event.get("data") {
@@ -148,14 +184,17 @@ async fn main() -> anyhow::Result<()> {
             recipient.address(),
             "0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>",
             "deposit_events",
-            Some(0), // Start from sequence 0
+            Some(0),  // Start from sequence 0
             Some(10), // Get up to 10 events
         )
         .await;
 
     match events {
         Ok(response) => {
-            println!("Found {} deposit events for recipient:", response.data.len());
+            println!(
+                "Found {} deposit events for recipient:",
+                response.data.len()
+            );
             for event in &response.data {
                 if let Some(data) = event.get("data") {
                     let amount = data.get("amount").and_then(|v| v.as_str()).unwrap_or("0");
@@ -165,7 +204,10 @@ async fn main() -> anyhow::Result<()> {
             }
         }
         Err(e) => {
-            println!("Could not get events (account may not have CoinStore): {}", e);
+            println!(
+                "Could not get events (account may not have CoinStore): {}",
+                e
+            );
         }
     }
 
@@ -191,8 +233,14 @@ async fn main() -> anyhow::Result<()> {
 
         // Show first few transaction types
         for (i, txn) in transactions.iter().take(5).enumerate() {
-            let txn_type = txn.get("type").and_then(|v| v.as_str()).unwrap_or("unknown");
-            let success = txn.get("success").and_then(|v| v.as_bool()).unwrap_or(false);
+            let txn_type = txn
+                .get("type")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown");
+            let success = txn
+                .get("success")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
             println!("  {}: {} (success: {})", i + 1, txn_type, success);
         }
     }
@@ -220,14 +268,15 @@ async fn main() -> anyhow::Result<()> {
         .await?;
 
     if let Some(coin) = apt_resource.data.data.get("coin")
-        && let Some(value) = coin.get("value").and_then(|v| v.as_str()) {
-            let balance: u64 = value.parse().unwrap_or(0);
-            println!(
-                "\nSender APT balance: {} APT ({} octas)",
-                balance as f64 / 100_000_000.0,
-                balance
-            );
-        }
+        && let Some(value) = coin.get("value").and_then(|v| v.as_str())
+    {
+        let balance: u64 = value.parse().unwrap_or(0);
+        println!(
+            "\nSender APT balance: {} APT ({} octas)",
+            balance as f64 / 100_000_000.0,
+            balance
+        );
+    }
 
     // ==== Part 6: Get Transaction by Hash (lookup previously submitted) ====
     println!("\n=== Part 6: Lookup Transaction by Hash ===");
@@ -236,19 +285,37 @@ async fn main() -> anyhow::Result<()> {
     println!("Re-fetched transaction:");
     println!(
         "  Timestamp: {}",
-        lookup.data.get("timestamp").and_then(|v| v.as_str()).unwrap_or("N/A")
+        lookup
+            .data
+            .get("timestamp")
+            .and_then(|v| v.as_str())
+            .unwrap_or("N/A")
     );
     println!(
         "  Expiration: {}",
-        lookup.data.get("expiration_timestamp_secs").and_then(|v| v.as_str()).unwrap_or("N/A")
+        lookup
+            .data
+            .get("expiration_timestamp_secs")
+            .and_then(|v| v.as_str())
+            .unwrap_or("N/A")
     );
 
     // Parse the payload to see what the transaction did
     if let Some(payload) = lookup.data.get("payload") {
-        println!("  Payload type: {}", 
-            payload.get("type").and_then(|v| v.as_str()).unwrap_or("N/A"));
-        println!("  Function: {}", 
-            payload.get("function").and_then(|v| v.as_str()).unwrap_or("N/A"));
+        println!(
+            "  Payload type: {}",
+            payload
+                .get("type")
+                .and_then(|v| v.as_str())
+                .unwrap_or("N/A")
+        );
+        println!(
+            "  Function: {}",
+            payload
+                .get("function")
+                .and_then(|v| v.as_str())
+                .unwrap_or("N/A")
+        );
 
         if let Some(args) = payload.get("arguments").and_then(|v| v.as_array()) {
             println!("  Arguments: {:?}", args);
@@ -258,4 +325,3 @@ async fn main() -> anyhow::Result<()> {
     println!("\n✓ All transaction data examples completed!");
     Ok(())
 }
-

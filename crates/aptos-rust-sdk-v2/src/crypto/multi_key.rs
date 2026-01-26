@@ -294,18 +294,18 @@ impl MultiKeyPublicKey {
     /// Format: num_keys || pk1_bcs || pk2_bcs || ... || threshold
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
-        
+
         // Number of keys (1 byte)
         bytes.push(self.public_keys.len() as u8);
-        
+
         // Each public key in BCS format
         for pk in &self.public_keys {
             bytes.extend(pk.to_bcs_bytes());
         }
-        
+
         // Threshold (1 byte)
         bytes.push(self.threshold);
-        
+
         bytes
     }
 
@@ -335,7 +335,9 @@ impl MultiKeyPublicKey {
             offset += 1;
 
             if offset + 4 > bytes.len() {
-                return Err(AptosError::InvalidPublicKey("bytes too short for length".into()));
+                return Err(AptosError::InvalidPublicKey(
+                    "bytes too short for length".into(),
+                ));
             }
 
             let len = u32::from_le_bytes([
@@ -347,7 +349,9 @@ impl MultiKeyPublicKey {
             offset += 4;
 
             if offset + len > bytes.len() {
-                return Err(AptosError::InvalidPublicKey("bytes too short for key".into()));
+                return Err(AptosError::InvalidPublicKey(
+                    "bytes too short for key".into(),
+                ));
             }
 
             let key_bytes = bytes[offset..offset + len].to_vec();
@@ -357,7 +361,9 @@ impl MultiKeyPublicKey {
         }
 
         if offset >= bytes.len() {
-            return Err(AptosError::InvalidPublicKey("bytes too short for threshold".into()));
+            return Err(AptosError::InvalidPublicKey(
+                "bytes too short for threshold".into(),
+            ));
         }
 
         let threshold = bytes[offset];
@@ -507,18 +513,18 @@ impl MultiKeySignature {
     /// Format: num_signatures || sig1_bcs || sig2_bcs || ... || bitmap (4 bytes)
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
-        
+
         // Number of signatures
         bytes.push(self.signatures.len() as u8);
-        
+
         // Each signature in BCS format (ordered by index)
         for (_, sig) in &self.signatures {
             bytes.extend(sig.to_bcs_bytes());
         }
-        
+
         // Bitmap (4 bytes)
         bytes.extend_from_slice(&self.bitmap);
-        
+
         bytes
     }
 
@@ -570,7 +576,9 @@ impl MultiKeySignature {
             offset += 1;
 
             if offset + 4 > bitmap_start {
-                return Err(AptosError::InvalidSignature("bytes too short for length".into()));
+                return Err(AptosError::InvalidSignature(
+                    "bytes too short for length".into(),
+                ));
             }
 
             let len = u32::from_le_bytes([
@@ -582,7 +590,9 @@ impl MultiKeySignature {
             offset += 4;
 
             if offset + len > bitmap_start {
-                return Err(AptosError::InvalidSignature("bytes too short for signature".into()));
+                return Err(AptosError::InvalidSignature(
+                    "bytes too short for signature".into(),
+                ));
             }
 
             let sig_bytes = bytes[offset..offset + len].to_vec();
@@ -651,8 +661,14 @@ mod tests {
 
         let multi_pk = MultiKeyPublicKey::new(vec![ed_key, secp_key], 2).unwrap();
         assert_eq!(multi_pk.num_keys(), 2);
-        assert_eq!(multi_pk.get(0).unwrap().variant, AnyPublicKeyVariant::Ed25519);
-        assert_eq!(multi_pk.get(1).unwrap().variant, AnyPublicKeyVariant::Secp256k1);
+        assert_eq!(
+            multi_pk.get(0).unwrap().variant,
+            AnyPublicKeyVariant::Ed25519
+        );
+        assert_eq!(
+            multi_pk.get(1).unwrap().variant,
+            AnyPublicKeyVariant::Secp256k1
+        );
     }
 
     #[test]
@@ -730,7 +746,12 @@ mod tests {
         // Sign with indices 1, 3, 4
         let signatures: Vec<_> = [1, 3, 4]
             .iter()
-            .map(|&i| (i, AnySignature::ed25519(&private_keys[i as usize].sign(message))))
+            .map(|&i| {
+                (
+                    i,
+                    AnySignature::ed25519(&private_keys[i as usize].sign(message)),
+                )
+            })
             .collect();
 
         let multi_sig = MultiKeySignature::new(signatures).unwrap();
@@ -743,4 +764,3 @@ mod tests {
         assert!(!multi_sig.has_signature(5));
     }
 }
-

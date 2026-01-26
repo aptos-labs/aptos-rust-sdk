@@ -129,14 +129,15 @@ impl MoveTypeMapper {
 
         // Handle Option types (0x1::option::Option<T>)
         if move_type.contains("::option::Option<")
-            && let Some(start) = move_type.find("Option<") {
-                let rest = &move_type[start + 7..];
-                if let Some(end) = rest.rfind('>') {
-                    let inner = &rest[..end];
-                    let inner_type = self.map_type(inner);
-                    return RustType::new(format!("Option<{}>", inner_type.path));
-                }
+            && let Some(start) = move_type.find("Option<")
+        {
+            let rest = &move_type[start + 7..];
+            if let Some(end) = rest.rfind('>') {
+                let inner = &rest[..end];
+                let inner_type = self.map_type(inner);
+                return RustType::new(format!("Option<{}>", inner_type.path));
             }
+        }
 
         // Handle String type
         if move_type == "0x1::string::String" || move_type.ends_with("::string::String") {
@@ -178,8 +179,12 @@ impl MoveTypeMapper {
 
         match move_type {
             "address" => format!("aptos_bcs::to_bytes(&{}).unwrap()", var_name),
-            _ if move_type.starts_with("vector<u8>") => format!("aptos_bcs::to_bytes(&{}).unwrap()", var_name),
-            _ if move_type.starts_with("vector<") => format!("aptos_bcs::to_bytes(&{}).unwrap()", var_name),
+            _ if move_type.starts_with("vector<u8>") => {
+                format!("aptos_bcs::to_bytes(&{}).unwrap()", var_name)
+            }
+            _ if move_type.starts_with("vector<") => {
+                format!("aptos_bcs::to_bytes(&{}).unwrap()", var_name)
+            }
             "0x1::string::String" => format!("aptos_bcs::to_bytes(&{}).unwrap()", var_name),
             _ if move_type.ends_with("::string::String") => {
                 format!("aptos_bcs::to_bytes(&{}).unwrap()", var_name)
@@ -252,7 +257,10 @@ mod tests {
         let mapper = MoveTypeMapper::new();
 
         assert_eq!(mapper.map_type("vector<u8>").path, "Vec<u8>");
-        assert_eq!(mapper.map_type("vector<address>").path, "Vec<AccountAddress>");
+        assert_eq!(
+            mapper.map_type("vector<address>").path,
+            "Vec<AccountAddress>"
+        );
         assert_eq!(mapper.map_type("vector<u64>").path, "Vec<u64>");
     }
 
@@ -277,4 +285,3 @@ mod tests {
         assert_eq!(to_snake_case("AptosCoin"), "aptos_coin");
     }
 }
-

@@ -5,8 +5,8 @@
 
 use crate::account::account::{Account, AuthenticationKey};
 use crate::crypto::{
-    Ed25519PrivateKey, Ed25519PublicKey, Ed25519Signature, MultiEd25519PublicKey,
-    MultiEd25519Signature, MULTI_ED25519_SCHEME,
+    Ed25519PrivateKey, Ed25519PublicKey, Ed25519Signature, MULTI_ED25519_SCHEME,
+    MultiEd25519PublicKey, MultiEd25519Signature,
 };
 use crate::error::{AptosError, AptosResult};
 use crate::types::AccountAddress;
@@ -404,13 +404,9 @@ mod tests {
         let public_keys: Vec<_> = all_keys.iter().map(|k| k.public_key()).collect();
 
         // Only own keys 0 and 2
-        let my_keys = vec![
-            (0u8, all_keys[0].clone()),
-            (2u8, all_keys[2].clone()),
-        ];
+        let my_keys = vec![(0u8, all_keys[0].clone()), (2u8, all_keys[2].clone())];
 
-        let account =
-            MultiEd25519Account::from_keys(public_keys.clone(), my_keys, 2).unwrap();
+        let account = MultiEd25519Account::from_keys(public_keys.clone(), my_keys, 2).unwrap();
 
         assert_eq!(account.num_keys(), 3);
         assert_eq!(account.num_owned_keys(), 2);
@@ -430,8 +426,7 @@ mod tests {
         // Only own 1 key but need 2
         let my_keys = vec![(0u8, all_keys[0].clone())];
 
-        let account =
-            MultiEd25519Account::from_keys(public_keys.clone(), my_keys, 2).unwrap();
+        let account = MultiEd25519Account::from_keys(public_keys.clone(), my_keys, 2).unwrap();
 
         assert!(!account.can_sign());
         assert!(account.sign(b"test").is_err());
@@ -473,18 +468,12 @@ mod tests {
         let public_keys: Vec<_> = keys.iter().map(|k| k.public_key()).collect();
 
         // Simulate 3 parties each with their own key
-        let party0 = MultiEd25519Account::from_keys(
-            public_keys.clone(),
-            vec![(0, keys[0].clone())],
-            2,
-        )
-        .unwrap();
-        let party2 = MultiEd25519Account::from_keys(
-            public_keys.clone(),
-            vec![(2, keys[2].clone())],
-            2,
-        )
-        .unwrap();
+        let party0 =
+            MultiEd25519Account::from_keys(public_keys.clone(), vec![(0, keys[0].clone())], 2)
+                .unwrap();
+        let party2 =
+            MultiEd25519Account::from_keys(public_keys.clone(), vec![(2, keys[2].clone())], 2)
+                .unwrap();
 
         let message = b"transaction data";
 
@@ -513,4 +502,3 @@ mod tests {
         assert_eq!(account1.address(), account2.address());
     }
 }
-

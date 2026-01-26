@@ -57,8 +57,7 @@ impl RawTransaction {
     /// transaction authenticator.
     pub fn signing_message(&self) -> AptosResult<Vec<u8>> {
         let prefix = crate::crypto::sha3_256(b"APTOS::RawTransaction");
-        let bcs_bytes =
-            aptos_bcs::to_bytes(self).map_err(crate::error::AptosError::bcs)?;
+        let bcs_bytes = aptos_bcs::to_bytes(self).map_err(crate::error::AptosError::bcs)?;
 
         let mut message = Vec::with_capacity(prefix.len() + bcs_bytes.len());
         message.extend_from_slice(&prefix);
@@ -379,11 +378,7 @@ mod tests {
         let raw_txn = create_test_raw_transaction();
         let secondary_addr = AccountAddress::from_hex("0x2").unwrap();
         let fee_payer_addr = AccountAddress::THREE;
-        let fee_payer = FeePayerRawTransaction::new(
-            raw_txn,
-            vec![secondary_addr],
-            fee_payer_addr,
-        );
+        let fee_payer = FeePayerRawTransaction::new(raw_txn, vec![secondary_addr], fee_payer_addr);
         assert_eq!(fee_payer.fee_payer_address, AccountAddress::THREE);
         assert_eq!(fee_payer.secondary_signer_addresses.len(), 1);
     }
@@ -404,4 +399,3 @@ mod tests {
         assert!(!message.is_empty());
     }
 }
-

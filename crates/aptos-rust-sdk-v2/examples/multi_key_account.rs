@@ -7,10 +7,10 @@
 //! Run with: `cargo run --example multi_key_account --features "ed25519,secp256k1,faucet"`
 
 use aptos_rust_sdk_v2::{
+    Aptos, AptosConfig,
     account::{AnyPrivateKey, MultiKeyAccount},
     crypto::{AnyPublicKey, Ed25519PrivateKey, Secp256k1PrivateKey},
     transaction::{EntryFunction, TransactionBuilder},
-    Aptos, AptosConfig,
 };
 
 #[tokio::main]
@@ -44,17 +44,30 @@ async fn main() -> anyhow::Result<()> {
 
     println!("\n--- Multi-Key Account Created ---");
     println!("Address:   {}", multi_key_account.address());
-    println!("Threshold: {}-of-{}", multi_key_account.threshold(), multi_key_account.num_keys());
+    println!(
+        "Threshold: {}-of-{}",
+        multi_key_account.threshold(),
+        multi_key_account.num_keys()
+    );
     println!("Key types: {:?}", multi_key_account.key_types());
     println!("Can sign:  {}", multi_key_account.can_sign());
 
     // 4. Fund the multi-key account
     println!("\n--- Funding Account ---");
-    aptos.fund_account(multi_key_account.address(), 100_000_000).await?;
+    aptos
+        .fund_account(multi_key_account.address(), 100_000_000)
+        .await?;
     tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-    
-    let balance = aptos.get_balance(multi_key_account.address()).await.unwrap_or(0);
-    println!("Balance: {} octas ({} APT)", balance, balance as f64 / 100_000_000.0);
+
+    let balance = aptos
+        .get_balance(multi_key_account.address())
+        .await
+        .unwrap_or(0);
+    println!(
+        "Balance: {} octas ({} APT)",
+        balance,
+        balance as f64 / 100_000_000.0
+    );
 
     // 5. Create a recipient account
     let recipient = aptos.create_funded_account(0).await?;
@@ -65,8 +78,10 @@ async fn main() -> anyhow::Result<()> {
     let transfer_amount = 10_000_000; // 0.1 APT
     let payload = EntryFunction::apt_transfer(recipient.address(), transfer_amount)?;
 
-    let sequence_number = aptos.get_sequence_number(multi_key_account.address()).await?;
-    
+    let sequence_number = aptos
+        .get_sequence_number(multi_key_account.address())
+        .await?;
+
     let raw_txn = TransactionBuilder::new()
         .sender(multi_key_account.address())
         .sequence_number(sequence_number)
@@ -77,11 +92,13 @@ async fn main() -> anyhow::Result<()> {
         .build()?;
 
     // 7. Sign with the multi-key account (uses threshold number of keys)
-    println!("Signing with {}-of-{} keys...", threshold, multi_key_account.num_keys());
-    let signed_txn = aptos_rust_sdk_v2::transaction::builder::sign_transaction(
-        &raw_txn,
-        &multi_key_account,
-    )?;
+    println!(
+        "Signing with {}-of-{} keys...",
+        threshold,
+        multi_key_account.num_keys()
+    );
+    let signed_txn =
+        aptos_rust_sdk_v2::transaction::builder::sign_transaction(&raw_txn, &multi_key_account)?;
 
     // 8. Submit and wait for confirmation
     println!("Submitting transaction...");
@@ -141,7 +158,7 @@ async fn demonstrate_distributed_signing() -> anyhow::Result<()> {
     let message = b"transaction_signing_message";
 
     println!("\n--- Creating Signature Contributions ---");
-    
+
     // Party 1 creates their signature
     let (idx1, sig1) = party1_account.create_signature_contribution(message, 0)?;
     println!("Party 1 signed with key index {}", idx1);
@@ -152,10 +169,7 @@ async fn demonstrate_distributed_signing() -> anyhow::Result<()> {
 
     // Combine signatures (can be done by any party or a relayer)
     println!("\n--- Aggregating Signatures ---");
-    let multi_sig = MultiKeyAccount::aggregate_signatures(vec![
-        (idx1, sig1),
-        (idx2, sig2),
-    ])?;
+    let multi_sig = MultiKeyAccount::aggregate_signatures(vec![(idx1, sig1), (idx2, sig2)])?;
     println!("Combined {} signatures", multi_sig.num_signatures());
 
     // Verify the combined signature
@@ -171,4 +185,3 @@ async fn demonstrate_distributed_signing() -> anyhow::Result<()> {
 
     Ok(())
 }
-

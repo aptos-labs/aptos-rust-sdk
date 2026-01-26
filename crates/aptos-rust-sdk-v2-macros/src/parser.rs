@@ -3,8 +3,8 @@
 use proc_macro2::Span;
 use std::collections::HashMap;
 use syn::{
-    parse::{Parse, ParseStream},
     Ident, LitStr, Result, Token,
+    parse::{Parse, ParseStream},
 };
 
 /// Input for the `aptos_contract!` macro.
@@ -54,7 +54,8 @@ impl Parse for ContractInput {
             }
         }
 
-        let name = name.ok_or_else(|| syn::Error::new(Span::call_site(), "Missing 'name' field"))?;
+        let name =
+            name.ok_or_else(|| syn::Error::new(Span::call_site(), "Missing 'name' field"))?;
         let abi = abi.ok_or_else(|| syn::Error::new(Span::call_site(), "Missing 'abi' field"))?;
 
         Ok(ContractInput { name, abi, source })
@@ -226,11 +227,7 @@ fn extract_function_name(signature: &str) -> Option<String> {
         .take_while(|c| c.is_alphanumeric() || *c == '_')
         .collect();
 
-    if name.is_empty() {
-        None
-    } else {
-        Some(name)
-    }
+    if name.is_empty() { None } else { Some(name) }
 }
 
 fn extract_type_params(signature: &str) -> Vec<String> {
@@ -241,19 +238,20 @@ fn extract_type_params(signature: &str) -> Vec<String> {
 
         if let Some(lt_idx) = after_fun.find('<')
             && let Some(gt_idx) = after_fun.find('>')
-                && lt_idx < gt_idx {
-                    let type_params = &after_fun[lt_idx + 1..gt_idx];
-                    for param in type_params.split(',') {
-                        let param = param.trim();
-                        let name: String = param
-                            .chars()
-                            .take_while(|c| c.is_alphanumeric() || *c == '_')
-                            .collect();
-                        if !name.is_empty() {
-                            params.push(name);
-                        }
-                    }
+            && lt_idx < gt_idx
+        {
+            let type_params = &after_fun[lt_idx + 1..gt_idx];
+            for param in type_params.split(',') {
+                let param = param.trim();
+                let name: String = param
+                    .chars()
+                    .take_while(|c| c.is_alphanumeric() || *c == '_')
+                    .collect();
+                if !name.is_empty() {
+                    params.push(name);
                 }
+            }
+        }
     }
 
     params
@@ -336,4 +334,3 @@ fn extract_single_param_name(param: &str) -> Option<String> {
         None
     }
 }
-

@@ -211,8 +211,13 @@ mod tests {
     fn test_framework_event_constants() {
         assert_eq!(framework::DEPOSIT_EVENT, "0x1::coin::DepositEvent");
         assert_eq!(framework::WITHDRAW_EVENT, "0x1::coin::WithdrawEvent");
-        assert_eq!(framework::ACCOUNT_CREATE_EVENT, "0x1::account::CreateAccountEvent");
-        assert_eq!(framework::KEY_ROTATION_EVENT, "0x1::account::KeyRotationEvent");
+        assert_eq!(
+            framework::ACCOUNT_CREATE_EVENT,
+            "0x1::account::CreateAccountEvent"
+        );
+        assert_eq!(
+            framework::KEY_ROTATION_EVENT,
+            "0x1::account::KeyRotationEvent"
+        );
     }
 }
-

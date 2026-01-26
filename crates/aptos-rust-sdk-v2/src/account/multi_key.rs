@@ -5,8 +5,8 @@
 
 use crate::account::account::{Account, AuthenticationKey};
 use crate::crypto::{
-    AnyPublicKey, AnyPublicKeyVariant, AnySignature, MultiKeyPublicKey, MultiKeySignature,
-    MULTI_KEY_SCHEME,
+    AnyPublicKey, AnyPublicKeyVariant, AnySignature, MULTI_KEY_SCHEME, MultiKeyPublicKey,
+    MultiKeySignature,
 };
 use crate::error::{AptosError, AptosResult};
 use crate::types::AccountAddress;
@@ -589,4 +589,3 @@ mod tests {
         assert_eq!(account1.address(), account2.address());
     }
 }
-

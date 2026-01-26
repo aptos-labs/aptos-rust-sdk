@@ -89,24 +89,19 @@ pub mod simulation;
 pub mod sponsored;
 pub mod types;
 
-pub use authenticator::{
-    AccountAuthenticator, Ed25519Authenticator, TransactionAuthenticator,
-};
+pub use authenticator::{AccountAuthenticator, Ed25519Authenticator, TransactionAuthenticator};
 pub use batch::{
     BatchOperations, BatchSummary, BatchTransactionResult, BatchTransactionStatus,
     SignedTransactionBatch, TransactionBatchBuilder,
 };
-pub use builder::{sign_transaction, TransactionBuilder};
+pub use builder::{TransactionBuilder, sign_transaction};
 pub use input::{
-    functions, move_none, move_some, move_string, move_vec, types as move_types,
-    InputEntryFunctionData, InputEntryFunctionDataBuilder, IntoMoveArg, MoveU256,
+    InputEntryFunctionData, InputEntryFunctionDataBuilder, IntoMoveArg, MoveU256, functions,
+    move_none, move_some, move_string, move_vec, types as move_types,
 };
 pub use payload::{EntryFunction, Script, ScriptArgument, TransactionPayload};
 pub use simulation::{
     SimulatedEvent, SimulationOptions, SimulationResult, StateChange, VmError, VmErrorCategory,
 };
-pub use sponsored::{
-    sponsor_transaction, PartiallySigned, Sponsor, SponsoredTransactionBuilder,
-};
+pub use sponsored::{PartiallySigned, Sponsor, SponsoredTransactionBuilder, sponsor_transaction};
 pub use types::{RawTransaction, SignedTransaction, TransactionInfo};
-

@@ -1,7 +1,9 @@
 //! Secp256k1 account implementation.
 
 use crate::account::account::{Account, AuthenticationKey};
-use crate::crypto::{derive_authentication_key, Secp256k1PrivateKey, Secp256k1PublicKey, SINGLE_KEY_SCHEME};
+use crate::crypto::{
+    SINGLE_KEY_SCHEME, Secp256k1PrivateKey, Secp256k1PublicKey, derive_authentication_key,
+};
 use crate::error::AptosResult;
 use crate::types::AccountAddress;
 use std::fmt;
@@ -201,4 +203,3 @@ mod tests {
         assert!(result.is_err());
     }
 }
-

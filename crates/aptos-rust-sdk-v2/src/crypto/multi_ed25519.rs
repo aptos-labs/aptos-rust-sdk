@@ -4,8 +4,7 @@
 //! out of N public keys are required to authorize a transaction.
 
 use crate::crypto::ed25519::{
-    Ed25519PublicKey, Ed25519Signature, ED25519_PUBLIC_KEY_LENGTH,
-    ED25519_SIGNATURE_LENGTH,
+    ED25519_PUBLIC_KEY_LENGTH, ED25519_SIGNATURE_LENGTH, Ed25519PublicKey, Ed25519Signature,
 };
 use crate::crypto::traits::{PublicKey, Verifier};
 use crate::error::{AptosError, AptosResult};
@@ -155,7 +154,10 @@ impl MultiEd25519PublicKey {
 
     /// Derives the authentication key for this public key.
     pub fn to_authentication_key(&self) -> [u8; 32] {
-        crate::crypto::derive_authentication_key(&self.to_bytes(), crate::crypto::MULTI_ED25519_SCHEME)
+        crate::crypto::derive_authentication_key(
+            &self.to_bytes(),
+            crate::crypto::MULTI_ED25519_SCHEME,
+        )
     }
 
     /// Verifies a multi-Ed25519 signature against a message.
@@ -591,4 +593,3 @@ mod tests {
         assert!(!multi_sig.has_signature(5));
     }
 }
-

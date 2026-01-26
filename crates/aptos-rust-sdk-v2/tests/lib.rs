@@ -21,4 +21,3 @@ mod behavioral;
 // They also require the `faucet` feature which is included in `e2e`
 #[cfg(feature = "e2e")]
 mod e2e;
-

@@ -5,8 +5,8 @@
 
 use crate::crypto::traits::{PublicKey, Signature, Signer, Verifier};
 use crate::error::{AptosError, AptosResult};
-use blst::min_pk::{PublicKey as BlstPublicKey, SecretKey, Signature as BlstSignature};
 use blst::BLST_ERROR;
+use blst::min_pk::{PublicKey as BlstPublicKey, SecretKey, Signature as BlstSignature};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -172,7 +172,9 @@ impl Bls12381PublicKey {
 
     /// Verifies a signature against a message.
     pub fn verify(&self, message: &[u8], signature: &Bls12381Signature) -> AptosResult<()> {
-        let result = signature.inner.verify(true, message, DST, &[], &self.inner, true);
+        let result = signature
+            .inner
+            .verify(true, message, DST, &[], &self.inner, true);
         if result == BLST_ERROR::BLST_SUCCESS {
             Ok(())
         } else {
@@ -420,14 +422,9 @@ impl Bls12381ProofOfPossession {
     /// Returns Ok(()) if the PoP is valid, or an error if invalid.
     pub fn verify(&self, public_key: &Bls12381PublicKey) -> AptosResult<()> {
         let pk_bytes = public_key.to_bytes();
-        let result = self.inner.verify(
-            true,
-            &pk_bytes,
-            DST_POP,
-            &[],
-            &public_key.inner,
-            true,
-        );
+        let result = self
+            .inner
+            .verify(true, &pk_bytes, DST_POP, &[], &public_key.inner, true);
         if result == BLST_ERROR::BLST_SUCCESS {
             Ok(())
         } else {
@@ -574,4 +571,3 @@ mod tests {
         assert_eq!(signature.to_bytes(), restored.to_bytes());
     }
 }
-

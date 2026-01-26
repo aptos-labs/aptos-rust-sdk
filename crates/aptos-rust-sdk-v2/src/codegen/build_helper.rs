@@ -106,7 +106,10 @@ impl BuildConfig {
 /// ```rust,ignore
 /// build_helper::generate_from_abi("abi/coin.json", "src/generated/")?;
 /// ```
-pub fn generate_from_abi(abi_path: impl AsRef<Path>, output_dir: impl AsRef<Path>) -> AptosResult<()> {
+pub fn generate_from_abi(
+    abi_path: impl AsRef<Path>,
+    output_dir: impl AsRef<Path>,
+) -> AptosResult<()> {
     generate_from_abi_with_config(abi_path, output_dir, BuildConfig::default())
 }
 
@@ -120,9 +123,14 @@ pub fn generate_from_abi_with_config(
     let output_dir = output_dir.as_ref();
 
     // Read and parse ABI
-    let abi_content = fs::read_to_string(abi_path)
-        .map_err(|e| AptosError::Config(format!("Failed to read ABI file {}: {}", abi_path.display(), e)))?;
-    
+    let abi_content = fs::read_to_string(abi_path).map_err(|e| {
+        AptosError::Config(format!(
+            "Failed to read ABI file {}: {}",
+            abi_path.display(),
+            e
+        ))
+    })?;
+
     let abi: MoveModuleABI = serde_json::from_str(&abi_content)
         .map_err(|e| AptosError::Config(format!("Failed to parse ABI JSON: {}", e)))?;
 
@@ -137,7 +145,7 @@ pub fn generate_from_abi_with_config(
     // Write output file
     let output_filename = format!("{}.rs", abi.name);
     let output_path = output_dir.join(&output_filename);
-    
+
     fs::write(&output_path, &code)
         .map_err(|e| AptosError::Config(format!("Failed to write output file: {}", e)))?;
 
@@ -184,12 +192,22 @@ pub fn generate_from_abis_with_config(
     // Generate code for each ABI
     for abi_path in abi_paths {
         let abi_path = abi_path.as_ref();
-        
-        let abi_content = fs::read_to_string(abi_path)
-            .map_err(|e| AptosError::Config(format!("Failed to read ABI file {}: {}", abi_path.display(), e)))?;
-        
-        let abi: MoveModuleABI = serde_json::from_str(&abi_content)
-            .map_err(|e| AptosError::Config(format!("Failed to parse ABI JSON from {}: {}", abi_path.display(), e)))?;
+
+        let abi_content = fs::read_to_string(abi_path).map_err(|e| {
+            AptosError::Config(format!(
+                "Failed to read ABI file {}: {}",
+                abi_path.display(),
+                e
+            ))
+        })?;
+
+        let abi: MoveModuleABI = serde_json::from_str(&abi_content).map_err(|e| {
+            AptosError::Config(format!(
+                "Failed to parse ABI JSON from {}: {}",
+                abi_path.display(),
+                e
+            ))
+        })?;
 
         let generator = ModuleGenerator::new(&abi, config.generator_config.clone());
         let code = generator.generate()?;
@@ -201,7 +219,7 @@ pub fn generate_from_abis_with_config(
         // Write output file
         let output_filename = format!("{}.rs", abi.name);
         let output_path = output_dir.join(&output_filename);
-        
+
         fs::write(&output_path, &code)
             .map_err(|e| AptosError::Config(format!("Failed to write output file: {}", e)))?;
 
@@ -216,7 +234,7 @@ pub fn generate_from_abis_with_config(
     if config.generate_mod_file && !module_names.is_empty() {
         let mod_content = generate_mod_file(&module_names);
         let mod_path = output_dir.join("mod.rs");
-        
+
         fs::write(&mod_path, mod_content)
             .map_err(|e| AptosError::Config(format!("Failed to write mod.rs: {}", e)))?;
     }
@@ -243,19 +261,19 @@ pub fn generate_from_abi_with_source(
     // Read and parse ABI
     let abi_content = fs::read_to_string(abi_path)
         .map_err(|e| AptosError::Config(format!("Failed to read ABI file: {}", e)))?;
-    
+
     let abi: MoveModuleABI = serde_json::from_str(&abi_content)
         .map_err(|e| AptosError::Config(format!("Failed to parse ABI JSON: {}", e)))?;
 
     // Read and parse Move source
     let source_content = fs::read_to_string(source_path)
         .map_err(|e| AptosError::Config(format!("Failed to read Move source: {}", e)))?;
-    
+
     let source_info = MoveSourceParser::parse(&source_content);
 
     // Generate code
-    let generator = ModuleGenerator::new(&abi, GeneratorConfig::default())
-        .with_source_info(source_info);
+    let generator =
+        ModuleGenerator::new(&abi, GeneratorConfig::default()).with_source_info(source_info);
     let code = generator.generate()?;
 
     // Create output directory
@@ -265,7 +283,7 @@ pub fn generate_from_abi_with_source(
     // Write output file
     let output_filename = format!("{}.rs", abi.name);
     let output_path = output_dir.join(&output_filename);
-    
+
     fs::write(&output_path, &code)
         .map_err(|e| AptosError::Config(format!("Failed to write output file: {}", e)))?;
 
@@ -315,17 +333,13 @@ pub fn generate_from_directory(
     output_dir: impl AsRef<Path>,
 ) -> AptosResult<()> {
     let abi_dir = abi_dir.as_ref();
-    
+
     let entries = fs::read_dir(abi_dir)
         .map_err(|e| AptosError::Config(format!("Failed to read ABI directory: {}", e)))?;
-    
+
     let abi_paths: Vec<_> = entries
         .filter_map(|e| e.ok())
-        .filter(|e| {
-            e.path()
-                .extension()
-                .is_some_and(|ext| ext == "json")
-        })
+        .filter(|e| e.path().extension().is_some_and(|ext| ext == "json"))
         .map(|e| e.path())
         .collect();
 

@@ -6,12 +6,12 @@
 //! Run with: `cargo run --example sponsored_transaction --features "ed25519,faucet"`
 
 use aptos_rust_sdk_v2::{
+    Aptos, AptosConfig,
     account::Ed25519Account,
     transaction::{
-        builder::sign_fee_payer_transaction, types::FeePayerRawTransaction, EntryFunction,
-        TransactionBuilder,
+        EntryFunction, TransactionBuilder, builder::sign_fee_payer_transaction,
+        types::FeePayerRawTransaction,
     },
-    Aptos, AptosConfig,
 };
 
 #[tokio::main]
@@ -32,11 +32,11 @@ async fn main() -> anyhow::Result<()> {
     // Fund only the fee payer (sender doesn't need APT for gas!)
     println!("\nFunding fee payer account...");
     aptos.fund_account(fee_payer.address(), 100_000_000).await?;
-    
+
     // Also fund sender with a small amount so they have something to transfer
     println!("Funding sender account...");
     aptos.fund_account(sender.address(), 10_000_000).await?;
-    
+
     tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
     // Check balances
@@ -44,7 +44,10 @@ async fn main() -> anyhow::Result<()> {
     let fee_payer_balance = aptos.get_balance(fee_payer.address()).await?;
     println!("\nInitial balances:");
     println!("  Sender: {} APT", sender_balance as f64 / 100_000_000.0);
-    println!("  Fee payer: {} APT", fee_payer_balance as f64 / 100_000_000.0);
+    println!(
+        "  Fee payer: {} APT",
+        fee_payer_balance as f64 / 100_000_000.0
+    );
 
     // Build the transaction payload
     let payload = EntryFunction::apt_transfer(recipient.address(), 5_000_000)?;
@@ -74,23 +77,27 @@ async fn main() -> anyhow::Result<()> {
 
     // Submit the transaction
     println!("\nSubmitting sponsored transaction...");
-    let result = aptos
-        .submit_and_wait(&signed_txn, None)
-        .await?;
+    let result = aptos.submit_and_wait(&signed_txn, None).await?;
 
     let success = result.data.get("success").and_then(|v| v.as_bool());
     if success == Some(true) {
         println!("Transaction successful!");
-        
+
         // Check final balances
         let sender_balance = aptos.get_balance(sender.address()).await?;
         let recipient_balance = aptos.get_balance(recipient.address()).await?;
         let fee_payer_balance = aptos.get_balance(fee_payer.address()).await?;
-        
+
         println!("\nFinal balances:");
         println!("  Sender: {} APT", sender_balance as f64 / 100_000_000.0);
-        println!("  Recipient: {} APT", recipient_balance as f64 / 100_000_000.0);
-        println!("  Fee payer: {} APT (paid gas fees)", fee_payer_balance as f64 / 100_000_000.0);
+        println!(
+            "  Recipient: {} APT",
+            recipient_balance as f64 / 100_000_000.0
+        );
+        println!(
+            "  Fee payer: {} APT (paid gas fees)",
+            fee_payer_balance as f64 / 100_000_000.0
+        );
     } else {
         let vm_status = result
             .data
@@ -102,4 +109,3 @@ async fn main() -> anyhow::Result<()> {
 
     Ok(())
 }
-

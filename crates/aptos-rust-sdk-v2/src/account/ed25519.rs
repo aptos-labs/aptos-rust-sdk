@@ -1,9 +1,9 @@
 //! Ed25519 account implementation.
 
-use crate::account::account::{Account, AuthenticationKey};
 #[cfg(feature = "mnemonic")]
 use crate::account::Mnemonic;
-use crate::crypto::{Ed25519PrivateKey, Ed25519PublicKey, ED25519_SCHEME};
+use crate::account::account::{Account, AuthenticationKey};
+use crate::crypto::{ED25519_SCHEME, Ed25519PrivateKey, Ed25519PublicKey};
 use crate::error::AptosResult;
 use crate::types::AccountAddress;
 use std::fmt;
@@ -164,8 +164,7 @@ mod tests {
     #[cfg(feature = "mnemonic")]
     fn test_from_mnemonic() {
         // Standard test mnemonic
-        let mnemonic =
-            "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        let mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
         let account = Ed25519Account::from_mnemonic(mnemonic, 0).unwrap();
 
         // Same mnemonic should produce same account
@@ -275,4 +274,3 @@ mod tests {
         assert!(result.is_err());
     }
 }
-

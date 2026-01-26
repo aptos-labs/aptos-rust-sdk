@@ -13,13 +13,13 @@
 //! Run with: `cargo run --example multisig_v2 --features "ed25519,faucet"`
 
 use aptos_rust_sdk_v2::{
+    Aptos, AptosConfig,
     account::Ed25519Account,
     transaction::{
-        payload::{Multisig, MultisigTransactionPayload},
         EntryFunction, InputEntryFunctionData, TransactionBuilder, TransactionPayload,
+        payload::{Multisig, MultisigTransactionPayload},
     },
     types::AccountAddress,
-    Aptos, AptosConfig,
 };
 
 #[tokio::main]
@@ -67,8 +67,8 @@ async fn main() -> anyhow::Result<()> {
 
     // Call 0x1::multisig_account::create_with_owners
     let create_payload = InputEntryFunctionData::new("0x1::multisig_account::create_with_owners")
-        .arg(owners.clone())       // additional_owners: vector<address>
-        .arg(threshold)            // num_signatures_required: u64
+        .arg(owners.clone()) // additional_owners: vector<address>
+        .arg(threshold) // num_signatures_required: u64
         .arg(Vec::<String>::new()) // metadata_keys: vector<String>
         .arg(Vec::<Vec<u8>>::new()) // metadata_values: vector<vector<u8>>
         .build()?;
@@ -101,11 +101,9 @@ async fn main() -> anyhow::Result<()> {
 
     // Create the proposal using create_transaction
     // This stores the transaction on-chain for voting
-    let proposal_payload = InputEntryFunctionData::new(
-        "0x1::multisig_account::create_transaction",
-    )
-        .arg(multisig_address)                                    // multisig_account: address
-        .arg(aptos_bcs::to_bytes(&transfer_entry_fn)?)            // payload: vector<u8>
+    let proposal_payload = InputEntryFunctionData::new("0x1::multisig_account::create_transaction")
+        .arg(multisig_address) // multisig_account: address
+        .arg(aptos_bcs::to_bytes(&transfer_entry_fn)?) // payload: vector<u8>
         .build()?;
 
     println!("Owner 1 creating transaction proposal...");
@@ -113,7 +111,11 @@ async fn main() -> anyhow::Result<()> {
         .sign_submit_and_wait(&owner1, proposal_payload, None)
         .await?;
 
-    let success = proposal_result.data.get("success").and_then(|v| v.as_bool()).unwrap_or(false);
+    let success = proposal_result
+        .data
+        .get("success")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
     println!("Proposal created: {}", success);
 
     // The sequence number of this proposal (starts at 1)
@@ -125,8 +127,8 @@ async fn main() -> anyhow::Result<()> {
 
     // Owner 2 approves the proposal
     let approve_payload = InputEntryFunctionData::new("0x1::multisig_account::approve_transaction")
-        .arg(multisig_address)  // multisig_account: address
-        .arg(sequence_number)   // sequence_number: u64
+        .arg(multisig_address) // multisig_account: address
+        .arg(sequence_number) // sequence_number: u64
         .build()?;
 
     println!("Owner 2 approving proposal...");
@@ -134,7 +136,11 @@ async fn main() -> anyhow::Result<()> {
         .sign_submit_and_wait(&owner2, approve_payload, None)
         .await?;
 
-    let success = approve_result.data.get("success").and_then(|v| v.as_bool()).unwrap_or(false);
+    let success = approve_result
+        .data
+        .get("success")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
     println!("Owner 2 approved: {}", success);
 
     // Now we have 2 approvals (owner1 implicitly + owner2), meeting the threshold
@@ -169,13 +175,20 @@ async fn main() -> anyhow::Result<()> {
     println!("Owner 3 executing approved transaction...");
     let exec_result = aptos.submit_and_wait(&signed, None).await?;
 
-    let success = exec_result.data.get("success").and_then(|v| v.as_bool()).unwrap_or(false);
+    let success = exec_result
+        .data
+        .get("success")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
     println!("Execution success: {}", success);
 
     // Verify the transfer
     tokio::time::sleep(std::time::Duration::from_secs(2)).await;
     let recipient_balance = aptos.get_balance(recipient.address()).await.unwrap_or(0);
-    println!("Recipient received: {} APT", recipient_balance as f64 / 100_000_000.0);
+    println!(
+        "Recipient received: {} APT",
+        recipient_balance as f64 / 100_000_000.0
+    );
 
     // ==== Part 7: Query Multisig Account State ====
     println!("\n--- Part 7: Querying Multisig Account State ---");
@@ -188,15 +201,16 @@ async fn main() -> anyhow::Result<()> {
 
     // Create another proposal
     let reject_transfer = EntryFunction::apt_transfer(recipient.address(), 50_000_000)?;
-    let proposal2_payload = InputEntryFunctionData::new(
-        "0x1::multisig_account::create_transaction",
-    )
-        .arg(multisig_address)
-        .arg(aptos_bcs::to_bytes(&reject_transfer)?)
-        .build()?;
+    let proposal2_payload =
+        InputEntryFunctionData::new("0x1::multisig_account::create_transaction")
+            .arg(multisig_address)
+            .arg(aptos_bcs::to_bytes(&reject_transfer)?)
+            .build()?;
 
     println!("Owner 1 creating another proposal...");
-    aptos.sign_submit_and_wait(&owner1, proposal2_payload, None).await?;
+    aptos
+        .sign_submit_and_wait(&owner1, proposal2_payload, None)
+        .await?;
     let sequence_number_2 = 2u64;
 
     // Owner 2 rejects this proposal
@@ -210,7 +224,11 @@ async fn main() -> anyhow::Result<()> {
         .sign_submit_and_wait(&owner2, reject_payload, None)
         .await?;
 
-    let success = reject_result.data.get("success").and_then(|v| v.as_bool()).unwrap_or(false);
+    let success = reject_result
+        .data
+        .get("success")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
     println!("Rejection recorded: {}", success);
 
     // Owner 3 also rejects
@@ -220,7 +238,9 @@ async fn main() -> anyhow::Result<()> {
         .build()?;
 
     println!("Owner 3 also rejecting proposal #2...");
-    aptos.sign_submit_and_wait(&owner3, reject_payload_3, None).await?;
+    aptos
+        .sign_submit_and_wait(&owner3, reject_payload_3, None)
+        .await?;
 
     // Now the proposal is fully rejected (2 rejections >= threshold)
     println!("Proposal #2 rejected by majority");
@@ -277,10 +297,10 @@ fn extract_multisig_address(data: &serde_json::Value) -> anyhow::Result<AccountA
                     .get("data")
                     .and_then(|d| d.get("multisig_account"))
                     .and_then(|v| v.as_str())
-                {
-                    return AccountAddress::from_hex(addr_str)
-                        .map_err(|e| anyhow::anyhow!("Invalid address: {}", e));
-                }
+            {
+                return AccountAddress::from_hex(addr_str)
+                    .map_err(|e| anyhow::anyhow!("Invalid address: {}", e));
+            }
         }
     }
 
@@ -292,26 +312,29 @@ fn extract_multisig_address(data: &serde_json::Value) -> anyhow::Result<AccountA
                 // Look for the multisig_account resource
                 if let Some(data) = change.get("data")
                     && let Some(typ) = data.get("type").and_then(|v| v.as_str())
-                        && typ.contains("multisig_account::MultisigAccount") {
-                            return AccountAddress::from_hex(addr)
-                                .map_err(|e| anyhow::anyhow!("Invalid address: {}", e));
-                        }
+                    && typ.contains("multisig_account::MultisigAccount")
+                {
+                    return AccountAddress::from_hex(addr)
+                        .map_err(|e| anyhow::anyhow!("Invalid address: {}", e));
+                }
             }
         }
     }
 
-    Err(anyhow::anyhow!("Could not find multisig address in transaction result"))
+    Err(anyhow::anyhow!(
+        "Could not find multisig address in transaction result"
+    ))
 }
 
 /// Query and display multisig account state
-async fn query_multisig_state(aptos: &Aptos, multisig_address: AccountAddress) -> anyhow::Result<()> {
+async fn query_multisig_state(
+    aptos: &Aptos,
+    multisig_address: AccountAddress,
+) -> anyhow::Result<()> {
     // Get the MultisigAccount resource
     let resource = aptos
         .fullnode()
-        .get_account_resource(
-            multisig_address,
-            "0x1::multisig_account::MultisigAccount",
-        )
+        .get_account_resource(multisig_address, "0x1::multisig_account::MultisigAccount")
         .await;
 
     match resource {
@@ -327,17 +350,32 @@ async fn query_multisig_state(aptos: &Aptos, multisig_address: AccountAddress) -
             }
 
             // Parse threshold
-            if let Some(threshold) = res.data.data.get("num_signatures_required").and_then(|v| v.as_str()) {
+            if let Some(threshold) = res
+                .data
+                .data
+                .get("num_signatures_required")
+                .and_then(|v| v.as_str())
+            {
                 println!("  Required signatures: {}", threshold);
             }
 
             // Parse last executed
-            if let Some(last) = res.data.data.get("last_executed_sequence_number").and_then(|v| v.as_str()) {
+            if let Some(last) = res
+                .data
+                .data
+                .get("last_executed_sequence_number")
+                .and_then(|v| v.as_str())
+            {
                 println!("  Last executed sequence: {}", last);
             }
 
             // Parse next sequence
-            if let Some(next) = res.data.data.get("next_sequence_number").and_then(|v| v.as_str()) {
+            if let Some(next) = res
+                .data
+                .data
+                .get("next_sequence_number")
+                .and_then(|v| v.as_str())
+            {
                 println!("  Next sequence: {}", next);
             }
         }

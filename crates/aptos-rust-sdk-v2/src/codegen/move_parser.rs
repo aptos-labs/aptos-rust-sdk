@@ -203,11 +203,7 @@ impl MoveSourceParser {
             .take_while(|c| c.is_alphanumeric() || *c == '_')
             .collect();
 
-        if name.is_empty() {
-            None
-        } else {
-            Some(name)
-        }
+        if name.is_empty() { None } else { Some(name) }
     }
 
     /// Extracts type parameter names from a signature.
@@ -221,20 +217,21 @@ impl MoveSourceParser {
             // Look for <...> before (
             if let Some(lt_idx) = after_fun.find('<')
                 && let Some(gt_idx) = after_fun.find('>')
-                    && lt_idx < gt_idx {
-                        let type_params = &after_fun[lt_idx + 1..gt_idx];
-                        for param in type_params.split(',') {
-                            let param = param.trim();
-                            // Extract just the name (before any constraints)
-                            let name: String = param
-                                .chars()
-                                .take_while(|c| c.is_alphanumeric() || *c == '_')
-                                .collect();
-                            if !name.is_empty() {
-                                params.push(name);
-                            }
-                        }
+                && lt_idx < gt_idx
+            {
+                let type_params = &after_fun[lt_idx + 1..gt_idx];
+                for param in type_params.split(',') {
+                    let param = param.trim();
+                    // Extract just the name (before any constraints)
+                    let name: String = param
+                        .chars()
+                        .take_while(|c| c.is_alphanumeric() || *c == '_')
+                        .collect();
+                    if !name.is_empty() {
+                        params.push(name);
                     }
+                }
+            }
         }
 
         params
@@ -411,9 +408,10 @@ impl MoveSourceParser {
                         .collect();
 
                     if !field_name.is_empty()
-                        && let Some(doc) = current_doc.take() {
-                            info.field_docs.insert(field_name, doc);
-                        }
+                        && let Some(doc) = current_doc.take()
+                    {
+                        info.field_docs.insert(field_name, doc);
+                    }
                 } else if !line.starts_with("//") && !line.is_empty() {
                     current_doc = None;
                 }
@@ -480,7 +478,8 @@ impl EnrichedFunctionInfo {
         }
         // Fill in missing type param names
         while info.type_param_names.len() < abi_type_params_count {
-            info.type_param_names.push(format!("T{}", info.type_param_names.len()));
+            info.type_param_names
+                .push(format!("T{}", info.type_param_names.len()));
         }
 
         // Create enriched params
@@ -644,11 +643,23 @@ module my_addr::my_token {
         assert!(info.structs.contains_key("TokenInfo"));
         let token_info = info.structs.get("TokenInfo").unwrap();
         assert!(token_info.doc.is_some());
-        assert!(token_info.doc.as_ref().unwrap().contains("token information"));
+        assert!(
+            token_info
+                .doc
+                .as_ref()
+                .unwrap()
+                .contains("token information")
+        );
 
         // Field docs
         assert!(token_info.field_docs.contains_key("name"));
-        assert!(token_info.field_docs.get("name").unwrap().contains("name of the token"));
+        assert!(
+            token_info
+                .field_docs
+                .get("name")
+                .unwrap()
+                .contains("name of the token")
+        );
     }
 
     #[test]
@@ -662,12 +673,8 @@ module my_addr::my_token {
             "u64".to_string(),
         ];
 
-        let enriched = EnrichedFunctionInfo::from_abi_and_source(
-            "mint",
-            &abi_params,
-            0,
-            mint_source,
-        );
+        let enriched =
+            EnrichedFunctionInfo::from_abi_and_source("mint", &abi_params, 0, mint_source);
 
         assert_eq!(enriched.params[0].name, "admin");
         assert!(enriched.params[0].is_signer);
@@ -686,12 +693,7 @@ module my_addr::my_token {
             "u64".to_string(),
         ];
 
-        let enriched = EnrichedFunctionInfo::from_abi_and_source(
-            "transfer",
-            &abi_params,
-            0,
-            None,
-        );
+        let enriched = EnrichedFunctionInfo::from_abi_and_source("transfer", &abi_params, 0, None);
 
         // Should generate reasonable names
         assert_eq!(enriched.params[0].name, "account");
@@ -699,4 +701,3 @@ module my_addr::my_token {
         assert_eq!(enriched.params[2].name, "amount");
     }
 }
-

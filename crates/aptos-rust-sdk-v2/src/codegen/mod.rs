@@ -94,5 +94,4 @@ pub use move_parser::{
     EnrichedFunctionInfo, EnrichedParam, MoveFunctionInfo, MoveModuleInfo, MoveSourceParser,
     MoveStructInfo,
 };
-pub use types::{to_pascal_case, to_snake_case, MoveTypeMapper, RustType};
-
+pub use types::{MoveTypeMapper, RustType, to_pascal_case, to_snake_case};

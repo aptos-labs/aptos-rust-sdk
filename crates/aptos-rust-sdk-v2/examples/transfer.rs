@@ -8,10 +8,7 @@
 //!
 //! Run with: `cargo run --example transfer --features "ed25519,faucet"`
 
-use aptos_rust_sdk_v2::{
-    account::Ed25519Account,
-    Aptos, AptosConfig,
-};
+use aptos_rust_sdk_v2::{Aptos, AptosConfig, account::Ed25519Account};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -26,7 +23,7 @@ async fn main() -> anyhow::Result<()> {
     // Fund sender using faucet
     println!("Funding sender account...");
     aptos.fund_account(sender.address(), 100_000_000).await?;
-    
+
     // Wait for funding to complete
     tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
@@ -47,13 +44,19 @@ async fn main() -> anyhow::Result<()> {
     let success = result.data.get("success").and_then(|v| v.as_bool());
     if success == Some(true) {
         println!("Transfer successful!");
-        
+
         // Check balances
         let sender_balance = aptos.get_balance(sender.address()).await?;
         let recipient_balance = aptos.get_balance(recipient.address()).await?;
-        
-        println!("Sender balance: {} APT", sender_balance as f64 / 100_000_000.0);
-        println!("Recipient balance: {} APT", recipient_balance as f64 / 100_000_000.0);
+
+        println!(
+            "Sender balance: {} APT",
+            sender_balance as f64 / 100_000_000.0
+        );
+        println!(
+            "Recipient balance: {} APT",
+            recipient_balance as f64 / 100_000_000.0
+        );
     } else {
         let vm_status = result
             .data
@@ -65,4 +68,3 @@ async fn main() -> anyhow::Result<()> {
 
     Ok(())
 }
-

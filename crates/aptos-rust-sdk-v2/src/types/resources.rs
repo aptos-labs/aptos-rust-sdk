@@ -2,8 +2,8 @@
 //!
 //! These types represent the most commonly accessed on-chain resources.
 
-use crate::types::events::EventHandle;
 use crate::types::AccountAddress;
+use crate::types::events::EventHandle;
 use serde::{Deserialize, Serialize};
 
 /// The account resource stored at every account address.
@@ -174,4 +174,3 @@ mod tests {
         assert_eq!(coin_store.balance(), 1000);
     }
 }
-

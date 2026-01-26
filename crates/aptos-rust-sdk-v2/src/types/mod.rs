@@ -10,16 +10,17 @@ mod hash;
 mod move_types;
 mod resources;
 
-pub use address::{AccountAddress, ADDRESS_LENGTH};
+pub use address::{ADDRESS_LENGTH, AccountAddress};
 pub use chain_id::ChainId;
-pub use events::{framework as event_types, Event, EventGuid, EventHandle, EventKey, VersionedEvent};
-pub use hash::{HashValue, HASH_LENGTH};
+pub use events::{
+    Event, EventGuid, EventHandle, EventKey, VersionedEvent, framework as event_types,
+};
+pub use hash::{HASH_LENGTH, HashValue};
 pub use move_types::{
     EntryFunctionId, Identifier, MoveModuleId, MoveResource, MoveStruct, MoveStructTag, MoveType,
     MoveValue, StructTag, TypeTag,
 };
 pub use resources::{
-    AccountResource, CoinStoreResource, CollectionData, FungibleAssetBalance,
-    FungibleAssetMetadata, StakePool, StakingConfig, TokenData, APT_COIN_STORE_TYPE,
+    APT_COIN_STORE_TYPE, AccountResource, CoinStoreResource, CollectionData, FungibleAssetBalance,
+    FungibleAssetMetadata, StakePool, StakingConfig, TokenData,
 };
-

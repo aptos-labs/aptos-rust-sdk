@@ -165,8 +165,8 @@ impl FaucetClient {
 mod tests {
     use super::*;
     use wiremock::{
-        matchers::{method, path_regex},
         Mock, MockServer, ResponseTemplate,
+        matchers::{method, path_regex},
     };
 
     #[test]
@@ -180,8 +180,10 @@ mod tests {
     }
 
     async fn create_mock_faucet_client(server: &MockServer) -> FaucetClient {
-        let config = AptosConfig::custom(&server.uri()).unwrap()
-            .with_faucet_url(&server.uri()).unwrap()
+        let config = AptosConfig::custom(&server.uri())
+            .unwrap()
+            .with_faucet_url(&server.uri())
+            .unwrap()
             .without_retry();
         FaucetClient::new(config).unwrap()
     }
@@ -213,9 +215,10 @@ mod tests {
 
         Mock::given(method("POST"))
             .and(path_regex(r"^/mint$"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!(
-                ["0xhash123", "0xhash456"]
-            )))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!(["0xhash123", "0xhash456"])),
+            )
             .expect(1)
             .mount(&server)
             .await;
@@ -260,8 +263,10 @@ mod tests {
             .await;
 
         // Create client without retry to test error handling
-        let config = AptosConfig::custom(&server.uri()).unwrap()
-            .with_faucet_url(&server.uri()).unwrap()
+        let config = AptosConfig::custom(&server.uri())
+            .unwrap()
+            .with_faucet_url(&server.uri())
+            .unwrap()
             .without_retry();
         let client = FaucetClient::new(config).unwrap();
         let result = client.fund(AccountAddress::ONE, 100_000_000).await;
@@ -280,8 +285,10 @@ mod tests {
             .mount(&server)
             .await;
 
-        let config = AptosConfig::custom(&server.uri()).unwrap()
-            .with_faucet_url(&server.uri()).unwrap()
+        let config = AptosConfig::custom(&server.uri())
+            .unwrap()
+            .with_faucet_url(&server.uri())
+            .unwrap()
             .without_retry();
         let client = FaucetClient::new(config).unwrap();
         let result = client.fund(AccountAddress::ONE, 100_000_000).await;
@@ -319,4 +326,3 @@ mod tests {
         assert!(url.as_str().contains("address=0x1"));
     }
 }
-

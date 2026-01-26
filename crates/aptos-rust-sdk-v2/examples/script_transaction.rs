@@ -11,10 +11,10 @@
 //! Run with: `cargo run --example script_transaction --features "ed25519,faucet"`
 
 use aptos_rust_sdk_v2::{
+    Aptos, AptosConfig,
     account::Ed25519Account,
     transaction::{Script, ScriptArgument, TransactionBuilder, TransactionPayload},
     types::TypeTag,
-    Aptos, AptosConfig,
 };
 
 #[tokio::main]
@@ -68,7 +68,7 @@ async fn main() -> anyhow::Result<()> {
     //
     // script {
     //     use aptos_framework::aptos_account;
-    //     
+    //
     //     fun main(sender: &signer, recipient: address, amount: u64) {
     //         aptos_account::transfer(sender, recipient, amount);
     //     }
@@ -141,14 +141,14 @@ async fn main() -> anyhow::Result<()> {
     //
     // script {
     //     use aptos_framework::coin;
-    //     
+    //
     //     fun main<CoinType>(sender: &signer, recipient: address, amount: u64) {
     //         coin::transfer<CoinType>(sender, recipient, amount);
     //     }
     // }
 
     let typed_script = Script::new(
-        vec![], // Bytecode would go here
+        vec![],                      // Bytecode would go here
         vec![TypeTag::aptos_coin()], // Type argument: AptosCoin
         vec![
             ScriptArgument::Address(recipient.address()),
@@ -183,7 +183,7 @@ async fn main() -> anyhow::Result<()> {
     //
     // script {
     //     use aptos_framework::aptos_account;
-    //     
+    //
     //     fun multi_transfer(
     //         sender: &signer,
     //         recipient1: address,
@@ -217,7 +217,10 @@ async fn main() -> anyhow::Result<()> {
 
     println!("Multi-recipient transfer script:");
     println!("  Recipients: 3");
-    println!("  Total transfer: {} APT", (1_000_000 + 2_000_000 + 3_000_000) as f64 / 100_000_000.0);
+    println!(
+        "  Total transfer: {} APT",
+        (1_000_000 + 2_000_000 + 3_000_000) as f64 / 100_000_000.0
+    );
     println!("  Benefit: Atomic - all succeed or all fail");
 
     // ==== Part 8: How to Compile Scripts ====

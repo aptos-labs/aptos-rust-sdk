@@ -86,4 +86,3 @@ pub struct MoveStructField {
     #[serde(rename = "type")]
     pub typ: String,
 }
-

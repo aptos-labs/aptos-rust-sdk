@@ -39,7 +39,9 @@
 use crate::account::Account;
 use crate::error::{AptosError, AptosResult};
 use crate::transaction::authenticator::{AccountAuthenticator, TransactionAuthenticator};
-use crate::transaction::builder::{DEFAULT_EXPIRATION_SECONDS, DEFAULT_GAS_UNIT_PRICE, DEFAULT_MAX_GAS_AMOUNT};
+use crate::transaction::builder::{
+    DEFAULT_EXPIRATION_SECONDS, DEFAULT_GAS_UNIT_PRICE, DEFAULT_MAX_GAS_AMOUNT,
+};
 use crate::transaction::payload::TransactionPayload;
 use crate::transaction::types::{FeePayerRawTransaction, RawTransaction, SignedTransaction};
 use crate::types::{AccountAddress, ChainId};
@@ -735,14 +737,9 @@ mod tests {
         let payload = EntryFunction::apt_transfer(recipient, 1000).unwrap();
 
         // Use the convenience function
-        let signed_txn = sponsor_transaction(
-            &sender,
-            0,
-            &fee_payer,
-            payload.into(),
-            ChainId::testnet(),
-        )
-        .unwrap();
+        let signed_txn =
+            sponsor_transaction(&sender, 0, &fee_payer, payload.into(), ChainId::testnet())
+                .unwrap();
 
         assert_eq!(signed_txn.raw_txn.sender, sender.address());
     }

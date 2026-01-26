@@ -82,7 +82,10 @@ impl InputEntryFunctionData {
     ///
     /// * `module` - The module ID
     /// * `function` - The function name
-    pub fn from_parts(module: MoveModuleId, function: impl Into<String>) -> InputEntryFunctionDataBuilder {
+    pub fn from_parts(
+        module: MoveModuleId,
+        function: impl Into<String>,
+    ) -> InputEntryFunctionDataBuilder {
         InputEntryFunctionDataBuilder {
             module: Ok(module),
             function: function.into(),
@@ -238,7 +241,9 @@ impl InputEntryFunctionDataBuilder {
     pub fn type_arg(mut self, type_arg: &str) -> Self {
         match TypeTag::from_str_strict(type_arg) {
             Ok(tag) => self.type_args.push(tag),
-            Err(e) => self.errors.push(format!("Invalid type argument '{}': {}", type_arg, e)),
+            Err(e) => self
+                .errors
+                .push(format!("Invalid type argument '{}': {}", type_arg, e)),
         }
         self
     }
@@ -288,7 +293,9 @@ impl InputEntryFunctionDataBuilder {
     pub fn arg<T: Serialize>(mut self, value: T) -> Self {
         match aptos_bcs::to_bytes(&value) {
             Ok(bytes) => self.args.push(bytes),
-            Err(e) => self.errors.push(format!("Failed to serialize argument: {}", e)),
+            Err(e) => self
+                .errors
+                .push(format!("Failed to serialize argument: {}", e)),
         }
         self
     }
@@ -429,13 +436,13 @@ impl MoveU256 {
     pub fn parse(s: &str) -> AptosResult<Self> {
         // Parse as big integer and convert to little-endian bytes
         let mut bytes = [0u8; 32];
-        
+
         // Simple parsing for small values
         if let Ok(val) = s.parse::<u128>() {
             bytes[..16].copy_from_slice(&val.to_le_bytes());
             return Ok(Self(bytes));
         }
-        
+
         Err(AptosError::Transaction(format!("Invalid u256: {}", s)))
     }
 
@@ -533,9 +540,7 @@ mod tests {
 
     #[test]
     fn test_invalid_function_id() {
-        let result = InputEntryFunctionData::new("invalid")
-            .arg(42u64)
-            .build();
+        let result = InputEntryFunctionData::new("invalid").arg(42u64).build();
 
         assert!(result.is_err());
     }
@@ -568,12 +573,9 @@ mod tests {
     #[test]
     fn test_transfer_coin_helper() {
         let recipient = AccountAddress::from_hex("0x789").unwrap();
-        let payload = InputEntryFunctionData::transfer_coin(
-            "0x1::aptos_coin::AptosCoin",
-            recipient,
-            1000,
-        )
-        .unwrap();
+        let payload =
+            InputEntryFunctionData::transfer_coin("0x1::aptos_coin::AptosCoin", recipient, 1000)
+                .unwrap();
 
         match payload {
             TransactionPayload::EntryFunction(ef) => {
@@ -658,4 +660,3 @@ mod tests {
         assert_eq!(functions::COIN_TRANSFER, "0x1::coin::transfer");
     }
 }
-

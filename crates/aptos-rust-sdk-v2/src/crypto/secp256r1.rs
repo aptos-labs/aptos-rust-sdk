@@ -6,8 +6,8 @@
 use crate::crypto::traits::{PublicKey, Signature, Signer, Verifier};
 use crate::error::{AptosError, AptosResult};
 use p256::ecdsa::{
-    signature::Signer as P256Signer, signature::Verifier as P256Verifier,
-    Signature as P256Signature, SigningKey, VerifyingKey,
+    Signature as P256Signature, SigningKey, VerifyingKey, signature::Signer as P256Signer,
+    signature::Verifier as P256Verifier,
 };
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -473,4 +473,3 @@ mod tests {
         assert_eq!(public_key.to_bytes().len(), 33);
     }
 }
-

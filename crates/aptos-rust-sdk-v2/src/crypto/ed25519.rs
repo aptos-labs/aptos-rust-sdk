@@ -411,4 +411,3 @@ mod tests {
         assert_eq!(address, address2);
     }
 }
-

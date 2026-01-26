@@ -91,8 +91,8 @@ impl AccountAddress {
         };
 
         // Handle short addresses by zero-padding
-        let hex_string = std::str::from_utf8(hex_str)
-            .map_err(|e| AptosError::InvalidAddress(e.to_string()))?;
+        let hex_string =
+            std::str::from_utf8(hex_str).map_err(|e| AptosError::InvalidAddress(e.to_string()))?;
 
         // Reject empty hex string (e.g., just "0x" prefix with no digits)
         if hex_string.is_empty() {
@@ -393,4 +393,3 @@ mod tests {
         assert!(set.contains(&AccountAddress::ONE));
     }
 }
-

@@ -61,4 +61,3 @@ pub trait Signature: Clone + Sized {
         format!("0x{}", hex::encode(self.to_bytes()))
     }
 }
-

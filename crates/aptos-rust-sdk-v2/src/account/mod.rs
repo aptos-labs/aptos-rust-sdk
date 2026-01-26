@@ -29,32 +29,32 @@
 mod account;
 #[cfg(feature = "ed25519")]
 mod ed25519;
+#[cfg(feature = "keyless")]
+mod keyless;
+#[cfg(feature = "mnemonic")]
+mod mnemonic;
 #[cfg(feature = "ed25519")]
 mod multi_ed25519;
 mod multi_key;
-#[cfg(feature = "keyless")]
-mod keyless;
 #[cfg(feature = "secp256k1")]
 mod secp256k1;
 #[cfg(feature = "secp256r1")]
 mod secp256r1;
-#[cfg(feature = "mnemonic")]
-mod mnemonic;
 
 pub use account::{Account, AnyAccount, AuthenticationKey};
 #[cfg(feature = "ed25519")]
 pub use ed25519::Ed25519Account;
-#[cfg(feature = "ed25519")]
-pub use multi_ed25519::MultiEd25519Account;
-pub use multi_key::{AnyPrivateKey, MultiKeyAccount};
 #[cfg(feature = "keyless")]
 pub use keyless::{
     EphemeralKeyPair, HttpPepperService, HttpProverService, KeylessAccount, KeylessSignature,
     OidcProvider, Pepper, PepperService, ProverService, ZkProof,
 };
+#[cfg(feature = "mnemonic")]
+pub use mnemonic::Mnemonic;
+#[cfg(feature = "ed25519")]
+pub use multi_ed25519::MultiEd25519Account;
+pub use multi_key::{AnyPrivateKey, MultiKeyAccount};
 #[cfg(feature = "secp256k1")]
 pub use secp256k1::Secp256k1Account;
 #[cfg(feature = "secp256r1")]
 pub use secp256r1::Secp256r1Account;
-#[cfg(feature = "mnemonic")]
-pub use mnemonic::Mnemonic;

@@ -34,8 +34,8 @@ use crate::api::FullnodeClient;
 use crate::config::AptosConfig;
 use crate::error::{AptosError, AptosResult};
 use crate::transaction::{
-    builder::sign_transaction, RawTransaction, SignedTransaction, TransactionBuilder,
-    TransactionPayload,
+    RawTransaction, SignedTransaction, TransactionBuilder, TransactionPayload,
+    builder::sign_transaction,
 };
 use crate::types::{AccountAddress, ChainId};
 use futures::future::join_all;
@@ -222,9 +222,9 @@ impl TransactionBatchBuilder {
         let sender = self
             .sender
             .ok_or_else(|| AptosError::Transaction("sender is required".into()))?;
-        let starting_seq = self
-            .starting_sequence_number
-            .ok_or_else(|| AptosError::Transaction("starting_sequence_number is required".into()))?;
+        let starting_seq = self.starting_sequence_number.ok_or_else(|| {
+            AptosError::Transaction("starting_sequence_number is required".into())
+        })?;
         let chain_id = self
             .chain_id
             .ok_or_else(|| AptosError::Transaction("chain_id is required".into()))?;
@@ -257,7 +257,9 @@ impl TransactionBatchBuilder {
             signed.push(signed_txn);
         }
 
-        Ok(SignedTransactionBatch { transactions: signed })
+        Ok(SignedTransactionBatch {
+            transactions: signed,
+        })
     }
 }
 
@@ -296,10 +298,7 @@ impl SignedTransactionBatch {
     /// Submits all transactions in parallel.
     ///
     /// Returns immediately after submission without waiting for confirmation.
-    pub async fn submit_all(
-        self,
-        client: &FullnodeClient,
-    ) -> Vec<BatchTransactionResult> {
+    pub async fn submit_all(self, client: &FullnodeClient) -> Vec<BatchTransactionResult> {
         let futures: Vec<_> = self
             .transactions
             .into_iter()
@@ -353,10 +352,7 @@ impl SignedTransactionBatch {
     /// Submits transactions sequentially (one at a time).
     ///
     /// This is slower but may be needed if transactions depend on each other.
-    pub async fn submit_sequential(
-        self,
-        client: &FullnodeClient,
-    ) -> Vec<BatchTransactionResult> {
+    pub async fn submit_sequential(self, client: &FullnodeClient) -> Vec<BatchTransactionResult> {
         let mut results = Vec::with_capacity(self.transactions.len());
 
         for (index, txn) in self.transactions.into_iter().enumerate() {
@@ -415,7 +411,10 @@ async fn submit_and_wait_single(
         .and_then(|v| v.as_str())
         .unwrap_or("")
         .to_string();
-    let success = data.get("success").and_then(|v| v.as_bool()).unwrap_or(false);
+    let success = data
+        .get("success")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
     let version = data
         .get("version")
         .and_then(|v| v.as_str())
@@ -585,12 +584,13 @@ mod tests {
 
     #[test]
     fn test_batch_builder_missing_fields() {
-        let builder = TransactionBatchBuilder::new()
-            .add_payload(TransactionPayload::Script(crate::transaction::Script {
+        let builder = TransactionBatchBuilder::new().add_payload(TransactionPayload::Script(
+            crate::transaction::Script {
                 code: vec![],
                 type_args: vec![],
                 args: vec![],
-            }));
+            },
+        ));
 
         let result = builder.build();
         assert!(result.is_err());
@@ -779,4 +779,3 @@ mod tests {
         }
     }
 }
-

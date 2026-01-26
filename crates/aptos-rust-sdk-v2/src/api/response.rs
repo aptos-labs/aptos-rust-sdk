@@ -372,7 +372,10 @@ mod tests {
             "data": {"coin": {"value": "1000"}}
         }"#;
         let resource: Resource = serde_json::from_str(json).unwrap();
-        assert_eq!(resource.typ, "0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>");
+        assert_eq!(
+            resource.typ,
+            "0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>"
+        );
     }
 
     #[test]
@@ -419,4 +422,3 @@ mod tests {
         assert_eq!(struct_def.fields.len(), 1);
     }
 }
-

@@ -23,7 +23,7 @@
 
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, LitStr};
+use syn::{LitStr, parse_macro_input};
 
 mod abi;
 mod codegen;
@@ -133,7 +133,11 @@ pub fn aptos_contract_file(input: TokenStream) -> TokenStream {
         Err(e) => {
             return syn::Error::new_spanned(
                 proc_macro2::TokenStream::new(),
-                format!("Failed to parse ABI JSON from '{}': {}", file_path.display(), e),
+                format!(
+                    "Failed to parse ABI JSON from '{}': {}",
+                    file_path.display(),
+                    e
+                ),
             )
             .to_compile_error()
             .into();
@@ -228,4 +232,3 @@ pub fn derive_move_struct(input: TokenStream) -> TokenStream {
 
     expanded.into()
 }
-

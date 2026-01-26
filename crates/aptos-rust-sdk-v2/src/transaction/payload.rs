@@ -183,8 +183,7 @@ impl EntryFunction {
             function: "transfer".to_string(),
             type_args: vec![],
             args: vec![
-                aptos_bcs::to_bytes(&recipient)
-                    .map_err(crate::error::AptosError::bcs)?,
+                aptos_bcs::to_bytes(&recipient).map_err(crate::error::AptosError::bcs)?,
                 aptos_bcs::to_bytes(&amount).map_err(crate::error::AptosError::bcs)?,
             ],
         })
@@ -208,8 +207,7 @@ impl EntryFunction {
             function: "transfer".to_string(),
             type_args: vec![coin_type],
             args: vec![
-                aptos_bcs::to_bytes(&recipient)
-                    .map_err(crate::error::AptosError::bcs)?,
+                aptos_bcs::to_bytes(&recipient).map_err(crate::error::AptosError::bcs)?,
                 aptos_bcs::to_bytes(&amount).map_err(crate::error::AptosError::bcs)?,
             ],
         })
@@ -245,13 +243,15 @@ mod tests {
 
     #[test]
     fn test_from_function_id() {
-        let entry_fn =
-            EntryFunction::from_function_id("0x1::coin::transfer", vec![TypeTag::aptos_coin()], vec![])
-                .unwrap();
+        let entry_fn = EntryFunction::from_function_id(
+            "0x1::coin::transfer",
+            vec![TypeTag::aptos_coin()],
+            vec![],
+        )
+        .unwrap();
 
         assert_eq!(entry_fn.module.address, AccountAddress::ONE);
         assert_eq!(entry_fn.module.name.as_str(), "coin");
         assert_eq!(entry_fn.function, "transfer");
     }
 }
-

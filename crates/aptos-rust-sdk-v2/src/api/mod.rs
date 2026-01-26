@@ -26,9 +26,7 @@ pub use faucet::FaucetClient;
 
 #[cfg(feature = "indexer")]
 pub use indexer::{
-    IndexerClient, PaginationParams, Page, Event, Collection,
-    FungibleAssetBalance, FungibleAssetMetadata, TokenBalance,
-    TokenData, CollectionData, Transaction, CoinActivity, 
-    CoinBalance, ProcessorStatus,
+    CoinActivity, CoinBalance, Collection, CollectionData, Event, FungibleAssetBalance,
+    FungibleAssetMetadata, IndexerClient, Page, PaginationParams, ProcessorStatus, TokenBalance,
+    TokenData, Transaction,
 };
-

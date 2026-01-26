@@ -20,10 +20,10 @@ mod crypto_tests {
     #[test]
     fn test_different_messages_produce_different_signatures() {
         let private_key = Ed25519PrivateKey::generate();
-        
+
         let sig1 = private_key.sign(b"message 1");
         let sig2 = private_key.sign(b"message 2");
-        
+
         assert_ne!(sig1.to_bytes(), sig2.to_bytes());
     }
 
@@ -58,10 +58,10 @@ mod crypto_tests {
         let message = b"original message";
 
         let signature = private_key.sign(message);
-        
+
         // Verification with original message should work
         assert!(public_key.verify(message, &signature).is_ok());
-        
+
         // Verification with tampered message should fail
         assert!(public_key.verify(b"tampered message", &signature).is_err());
     }
@@ -104,28 +104,32 @@ mod multi_scheme_crypto_tests {
         // Ed25519 signature cannot be verified with Secp256k1 key (different types)
         let ed_sig = ed_key.sign(message);
         let secp_pub = secp_key.public_key();
-        
+
         // This should fail because the signature format doesn't match
         let ed_sig_bytes = ed_sig.to_bytes();
-        let secp_sig_result = aptos_rust_sdk_v2::crypto::Secp256k1Signature::from_bytes(&ed_sig_bytes);
-        assert!(secp_sig_result.is_err() || secp_pub.verify(message, &secp_sig_result.unwrap()).is_err());
+        let secp_sig_result =
+            aptos_rust_sdk_v2::crypto::Secp256k1Signature::from_bytes(&ed_sig_bytes);
+        assert!(
+            secp_sig_result.is_err()
+                || secp_pub.verify(message, &secp_sig_result.unwrap()).is_err()
+        );
     }
 }
 
 #[cfg(feature = "ed25519")]
 mod account_tests {
-    use aptos_rust_sdk_v2::account::{Account, Ed25519Account};
     #[cfg(feature = "mnemonic")]
     use aptos_rust_sdk_v2::account::Mnemonic;
+    use aptos_rust_sdk_v2::account::{Account, Ed25519Account};
 
     #[test]
     #[cfg(feature = "mnemonic")]
     fn test_deterministic_key_derivation() {
         let mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
-        
+
         let account1 = Ed25519Account::from_mnemonic(mnemonic, 0).unwrap();
         let account2 = Ed25519Account::from_mnemonic(mnemonic, 0).unwrap();
-        
+
         assert_eq!(account1.address(), account2.address());
     }
 
@@ -133,10 +137,10 @@ mod account_tests {
     #[cfg(feature = "mnemonic")]
     fn test_different_indices_produce_different_accounts() {
         let mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
-        
+
         let account1 = Ed25519Account::from_mnemonic(mnemonic, 0).unwrap();
         let account2 = Ed25519Account::from_mnemonic(mnemonic, 1).unwrap();
-        
+
         assert_ne!(account1.address(), account2.address());
     }
 
@@ -154,10 +158,10 @@ mod account_tests {
     fn test_account_address_derivation() {
         let account = Ed25519Account::generate();
         let address = account.address();
-        
+
         // Address should not be zero
         assert!(!address.is_zero());
-        
+
         // Address should be 32 bytes
         assert_eq!(address.as_bytes().len(), 32);
     }
@@ -168,10 +172,10 @@ mod account_tests {
         let message = b"test message for signing";
 
         let signature = account.sign(message).expect("signing should succeed");
-        
+
         // Signature should not be empty
         assert!(!signature.is_empty());
-        
+
         // Signature length for Ed25519 is 64 bytes
         assert_eq!(signature.len(), 64);
     }
@@ -181,11 +185,11 @@ mod account_tests {
         // Generate an account and get its private key
         let original = Ed25519Account::generate();
         let _private_key_hex = hex::encode(original.public_key_bytes()); // This would need the actual private key
-        
+
         // For now, test that generation works consistently
         let account1 = Ed25519Account::generate();
         let account2 = Ed25519Account::generate();
-        
+
         // Different accounts should have different addresses
         assert_ne!(account1.address(), account2.address());
     }
@@ -194,10 +198,10 @@ mod account_tests {
     fn test_authentication_key_derivation() {
         let account = Ed25519Account::generate();
         let auth_key = account.authentication_key();
-        
+
         // Auth key should be 32 bytes
         assert_eq!(auth_key.as_bytes().len(), 32);
-        
+
         // For Ed25519 accounts without rotation, auth_key == address
         assert_eq!(auth_key.as_bytes(), account.address().as_bytes());
     }
@@ -216,7 +220,10 @@ mod multi_ed25519_tests {
         // Should be able to sign (we have all 3 keys, threshold is 2)
         let message = b"multi-sig test message";
         let signature = account.sign(message);
-        assert!(signature.is_ok(), "signing with threshold keys should succeed");
+        assert!(
+            signature.is_ok(),
+            "signing with threshold keys should succeed"
+        );
     }
 
     #[test]
@@ -231,14 +238,17 @@ mod multi_ed25519_tests {
         // Signing should fail
         let message = b"multi-sig test message";
         let signature = account.sign(message);
-        assert!(signature.is_err(), "signing with insufficient keys should fail");
+        assert!(
+            signature.is_err(),
+            "signing with insufficient keys should fail"
+        );
     }
 
     #[test]
     fn test_multi_ed25519_address_derivation() {
         let keys: Vec<_> = (0..3).map(|_| Ed25519PrivateKey::generate()).collect();
         let public_keys: Vec<_> = keys.iter().map(|k| k.public_key()).collect();
-        
+
         let account1 = MultiEd25519Account::new(keys.clone(), 2).unwrap();
         let account2 = MultiEd25519Account::view_only(public_keys.clone(), 2).unwrap();
 
@@ -290,7 +300,10 @@ mod multi_key_tests {
         // Should be able to sign
         let message = b"multi-key test message";
         let signature = account.sign(message);
-        assert!(signature.is_ok(), "signing with threshold keys should succeed");
+        assert!(
+            signature.is_ok(),
+            "signing with threshold keys should succeed"
+        );
     }
 
     #[test]
@@ -354,14 +367,16 @@ mod multi_key_tests {
             public_keys.clone(),
             vec![(0, AnyPrivateKey::ed25519(ed_key))],
             2,
-        ).unwrap();
+        )
+        .unwrap();
 
         // Party 2 only has the Secp256k1 key
         let party2 = MultiKeyAccount::from_keys(
             public_keys.clone(),
             vec![(1, AnyPrivateKey::secp256k1(secp_key))],
             2,
-        ).unwrap();
+        )
+        .unwrap();
 
         // Both accounts should have the same address
         assert_eq!(party1.address(), party2.address());
@@ -379,10 +394,8 @@ mod multi_key_tests {
         assert!(contrib2.is_ok());
 
         // Aggregate signatures
-        let multi_sig = MultiKeyAccount::aggregate_signatures(vec![
-            contrib1.unwrap(),
-            contrib2.unwrap(),
-        ]);
+        let multi_sig =
+            MultiKeyAccount::aggregate_signatures(vec![contrib1.unwrap(), contrib2.unwrap()]);
         assert!(multi_sig.is_ok());
     }
 }
@@ -445,11 +458,8 @@ mod transaction_tests {
 
     #[test]
     fn test_entry_function_from_function_id() {
-        let entry_fn = EntryFunction::from_function_id(
-            "0x1::coin::transfer",
-            vec![],
-            vec![],
-        ).unwrap();
+        let entry_fn =
+            EntryFunction::from_function_id("0x1::coin::transfer", vec![], vec![]).unwrap();
 
         assert_eq!(entry_fn.module.address, AccountAddress::ONE);
         assert_eq!(entry_fn.module.name.as_str(), "coin");
@@ -472,7 +482,7 @@ mod transaction_tests {
     #[test]
     fn test_raw_transaction_signing_message() {
         let payload = EntryFunction::apt_transfer(AccountAddress::ONE, 1000).unwrap();
-        
+
         let raw_txn = TransactionBuilder::new()
             .sender(AccountAddress::ONE)
             .sequence_number(0)
@@ -486,10 +496,10 @@ mod transaction_tests {
 
         let signing_message = raw_txn.signing_message();
         assert!(signing_message.is_ok());
-        
+
         let msg = signing_message.unwrap();
         assert!(!msg.is_empty());
-        
+
         // Signing message should be deterministic
         let msg2 = raw_txn.signing_message().unwrap();
         assert_eq!(msg, msg2);
@@ -500,7 +510,7 @@ mod transaction_tests {
 mod signing_flow_tests {
     use aptos_rust_sdk_v2::account::Ed25519Account;
     use aptos_rust_sdk_v2::transaction::{
-        builder::sign_transaction, EntryFunction, TransactionBuilder, TransactionPayload,
+        EntryFunction, TransactionBuilder, TransactionPayload, builder::sign_transaction,
     };
     use aptos_rust_sdk_v2::types::{AccountAddress, ChainId};
 
@@ -523,11 +533,14 @@ mod signing_flow_tests {
 
         // Signed transaction should have the raw transaction
         assert_eq!(signed_txn.raw_txn.sender, account.address());
-        
+
         // Should have an authenticator
         // The authenticator type depends on the account type
         match &signed_txn.authenticator {
-            aptos_rust_sdk_v2::transaction::TransactionAuthenticator::Ed25519 { public_key, signature } => {
+            aptos_rust_sdk_v2::transaction::TransactionAuthenticator::Ed25519 {
+                public_key,
+                signature,
+            } => {
                 assert_eq!(public_key.0.len(), 32);
                 assert_eq!(signature.0.len(), 64);
             }
@@ -557,8 +570,14 @@ mod signing_flow_tests {
         // Same transaction + same account = same signature
         match (&signed1.authenticator, &signed2.authenticator) {
             (
-                aptos_rust_sdk_v2::transaction::TransactionAuthenticator::Ed25519 { signature: sig1, .. },
-                aptos_rust_sdk_v2::transaction::TransactionAuthenticator::Ed25519 { signature: sig2, .. },
+                aptos_rust_sdk_v2::transaction::TransactionAuthenticator::Ed25519 {
+                    signature: sig1,
+                    ..
+                },
+                aptos_rust_sdk_v2::transaction::TransactionAuthenticator::Ed25519 {
+                    signature: sig2,
+                    ..
+                },
             ) => {
                 assert_eq!(sig1, sig2);
             }
@@ -575,7 +594,8 @@ mod types_tests {
         // Full address
         let addr = AccountAddress::from_hex(
             "0x0000000000000000000000000000000000000000000000000000000000000001",
-        ).unwrap();
+        )
+        .unwrap();
         assert_eq!(addr, AccountAddress::ONE);
 
         // Short address
@@ -676,11 +696,11 @@ mod bcs_serialization_tests {
     #[test]
     fn test_address_serialization() {
         let addr = AccountAddress::from_hex("0x123456789abcdef").unwrap();
-        
+
         // Should be able to convert to bytes
         let bytes = addr.as_bytes();
         assert_eq!(bytes.len(), 32);
-        
+
         // Should be able to parse from bytes
         let restored = AccountAddress::from_bytes(bytes).unwrap();
         assert_eq!(addr, restored);
@@ -689,10 +709,10 @@ mod bcs_serialization_tests {
     #[test]
     fn test_chain_id_serialization() {
         let chain_id = ChainId::testnet();
-        
+
         // Chain ID should be a simple u8
         assert_eq!(chain_id.id(), 2);
-        
+
         // Can recreate from ID
         let restored = ChainId::new(chain_id.id());
         assert_eq!(chain_id.id(), restored.id());
@@ -711,7 +731,7 @@ mod bcs_serialization_tests {
 mod transaction_bcs_tests {
     use aptos_rust_sdk_v2::account::Ed25519Account;
     use aptos_rust_sdk_v2::transaction::{
-        builder::sign_transaction, EntryFunction, TransactionBuilder, TransactionPayload,
+        EntryFunction, TransactionBuilder, TransactionPayload, builder::sign_transaction,
     };
     use aptos_rust_sdk_v2::types::{AccountAddress, ChainId};
 

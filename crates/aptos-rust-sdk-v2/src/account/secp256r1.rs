@@ -4,7 +4,9 @@
 //! WebAuthn/Passkey implementations.
 
 use crate::account::account::{Account, AuthenticationKey};
-use crate::crypto::{derive_authentication_key, Secp256r1PrivateKey, Secp256r1PublicKey, SINGLE_KEY_SCHEME};
+use crate::crypto::{
+    SINGLE_KEY_SCHEME, Secp256r1PrivateKey, Secp256r1PublicKey, derive_authentication_key,
+};
 use crate::error::AptosResult;
 use crate::types::AccountAddress;
 use std::fmt;
@@ -198,4 +200,3 @@ mod tests {
         assert!(result.is_err());
     }
 }
-

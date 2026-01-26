@@ -9,10 +9,7 @@
 //! ```
 
 use aptos_rust_sdk_v2::{
-    api::response::{
-        MoveFunction, MoveModuleABI, MoveStructDef,
-        MoveStructField,
-    },
+    api::response::{MoveFunction, MoveModuleABI, MoveStructDef, MoveStructField},
     codegen::{GeneratorConfig, ModuleGenerator, MoveSourceParser},
 };
 
@@ -196,8 +193,14 @@ module 0xcafe::my_token {
     // Parse the Move source
     let source_info = MoveSourceParser::parse(move_source);
     println!("Parsed Move source:");
-    println!("  - Functions: {:?}", source_info.functions.keys().collect::<Vec<_>>());
-    println!("  - Structs: {:?}", source_info.structs.keys().collect::<Vec<_>>());
+    println!(
+        "  - Functions: {:?}",
+        source_info.functions.keys().collect::<Vec<_>>()
+    );
+    println!(
+        "  - Structs: {:?}",
+        source_info.structs.keys().collect::<Vec<_>>()
+    );
     // ANCHOR_END: move_source
 
     // ANCHOR: generate_without_source
@@ -206,14 +209,16 @@ module 0xcafe::my_token {
     let config = GeneratorConfig::new()
         .with_entry_functions(true)
         .with_view_functions(true)
-        .with_structs(false);  // Skip structs for brevity
+        .with_structs(false); // Skip structs for brevity
 
     let generator = ModuleGenerator::new(&abi, config.clone());
     let code_without_source = generator.generate()?;
-    
+
     // Show just the transfer function
     for line in code_without_source.lines() {
-        if line.contains("pub fn transfer") || line.contains("/// Entry function: `my_token::transfer`") {
+        if line.contains("pub fn transfer")
+            || line.contains("/// Entry function: `my_token::transfer`")
+        {
             println!("{}", line);
         }
     }
@@ -222,8 +227,7 @@ module 0xcafe::my_token {
     // ANCHOR: generate_with_source
     // Generate WITH source info (uses real parameter names and docs)
     println!("\n=== Generated WITH Move Source ===\n");
-    let generator_with_source = ModuleGenerator::new(&abi, config)
-        .with_source_info(source_info);
+    let generator_with_source = ModuleGenerator::new(&abi, config).with_source_info(source_info);
     let code_with_source = generator_with_source.generate()?;
 
     // Show the transfer function with proper names
@@ -242,18 +246,17 @@ module 0xcafe::my_token {
     // ANCHOR_END: generate_with_source
 
     println!("\n=== Full Generated Code (with source) ===\n");
-    
+
     // Generate full code with structs
     let full_config = GeneratorConfig::new()
         .with_entry_functions(true)
         .with_view_functions(true)
         .with_structs(true);
-    
+
     let full_source_info = MoveSourceParser::parse(move_source);
-    let full_generator = ModuleGenerator::new(&abi, full_config)
-        .with_source_info(full_source_info);
+    let full_generator = ModuleGenerator::new(&abi, full_config).with_source_info(full_source_info);
     let full_code = full_generator.generate()?;
-    
+
     println!("{}", full_code);
 
     // ANCHOR: usage_example
@@ -262,7 +265,7 @@ module 0xcafe::my_token {
     // ```rust
     // // Import the generated module
     // mod my_token;
-    // 
+    //
     // use aptos_rust_sdk_v2::{Aptos, AptosConfig};
     // use my_token::*;
     //

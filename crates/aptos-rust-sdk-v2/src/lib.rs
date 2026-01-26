@@ -104,8 +104,7 @@ pub use types::{AccountAddress, ChainId, HashValue};
 // Re-export proc macros when the feature is enabled
 #[cfg(feature = "macros")]
 #[cfg_attr(docsrs, doc(cfg(feature = "macros")))]
-pub use aptos_rust_sdk_v2_macros::{aptos_contract, aptos_contract_file, MoveStruct};
+pub use aptos_rust_sdk_v2_macros::{MoveStruct, aptos_contract, aptos_contract_file};
 
 #[cfg(test)]
 mod tests;
-

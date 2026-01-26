@@ -167,9 +167,9 @@ impl IndexerClient {
                             });
                         }
 
-                        graphql_response
-                            .data
-                            .ok_or_else(|| AptosError::Internal("no data in GraphQL response".into()))
+                        graphql_response.data.ok_or_else(|| {
+                            AptosError::Internal("no data in GraphQL response".into())
+                        })
                     } else {
                         let status = response.status();
                         let body = response.text().await.unwrap_or_default();
@@ -460,8 +460,11 @@ impl IndexerClient {
         address: AccountAddress,
         pagination: Option<PaginationParams>,
     ) -> AptosResult<Page<TokenBalance>> {
-        let pagination = pagination.unwrap_or(PaginationParams { limit: 25, offset: 0 });
-        
+        let pagination = pagination.unwrap_or(PaginationParams {
+            limit: 25,
+            offset: 0,
+        });
+
         let query = r#"
             query GetAccountTokens($address: String!, $limit: Int!, $offset: Int!) {
                 current_token_ownerships_v2(
@@ -500,7 +503,7 @@ impl IndexerClient {
         struct AggregateCount {
             count: u64,
         }
-        
+
         #[derive(Deserialize)]
         struct Aggregate {
             aggregate: Option<AggregateCount>,
@@ -513,7 +516,10 @@ impl IndexerClient {
         }
 
         let response: Response = self.query(query, Some(variables)).await?;
-        let total_count = response.current_token_ownerships_v2_aggregate.aggregate.map(|a| a.count);
+        let total_count = response
+            .current_token_ownerships_v2_aggregate
+            .aggregate
+            .map(|a| a.count);
         let has_more = total_count.is_some_and(|total| {
             (pagination.offset as u64 + response.current_token_ownerships_v2.len() as u64) < total
         });
@@ -531,8 +537,11 @@ impl IndexerClient {
         address: AccountAddress,
         pagination: Option<PaginationParams>,
     ) -> AptosResult<Page<Transaction>> {
-        let pagination = pagination.unwrap_or(PaginationParams { limit: 25, offset: 0 });
-        
+        let pagination = pagination.unwrap_or(PaginationParams {
+            limit: 25,
+            offset: 0,
+        });
+
         let query = r#"
             query GetAccountTransactions($address: String!, $limit: Int!, $offset: Int!) {
                 account_transactions(
@@ -568,7 +577,7 @@ impl IndexerClient {
         struct AggregateCount {
             count: u64,
         }
-        
+
         #[derive(Deserialize)]
         struct Aggregate {
             aggregate: Option<AggregateCount>,
@@ -581,7 +590,10 @@ impl IndexerClient {
         }
 
         let response: Response = self.query(query, Some(variables)).await?;
-        let total_count = response.account_transactions_aggregate.aggregate.map(|a| a.count);
+        let total_count = response
+            .account_transactions_aggregate
+            .aggregate
+            .map(|a| a.count);
         let has_more = total_count.is_some_and(|total| {
             (pagination.offset as u64 + response.account_transactions.len() as u64) < total
         });
@@ -699,9 +711,13 @@ impl IndexerClient {
         }
 
         let response: Response = self.query(query, Some(variables)).await?;
-        response.current_collections_v2.into_iter().next().ok_or_else(|| {
-            AptosError::NotFound(format!("Collection not found: {}", collection_address))
-        })
+        response
+            .current_collections_v2
+            .into_iter()
+            .next()
+            .ok_or_else(|| {
+                AptosError::NotFound(format!("Collection not found: {}", collection_address))
+            })
     }
 
     /// Gets tokens in a collection.
@@ -710,8 +726,11 @@ impl IndexerClient {
         collection_address: AccountAddress,
         pagination: Option<PaginationParams>,
     ) -> AptosResult<Page<TokenBalance>> {
-        let pagination = pagination.unwrap_or(PaginationParams { limit: 25, offset: 0 });
-        
+        let pagination = pagination.unwrap_or(PaginationParams {
+            limit: 25,
+            offset: 0,
+        });
+
         let query = r#"
             query GetCollectionTokens($address: String!, $limit: Int!, $offset: Int!) {
                 current_token_ownerships_v2(
@@ -753,7 +772,7 @@ impl IndexerClient {
 
         let response: Response = self.query(query, Some(variables)).await?;
         let items_count = response.current_token_ownerships_v2.len();
-        
+
         Ok(Page {
             items: response.current_token_ownerships_v2,
             has_more: items_count == pagination.limit as usize,
@@ -856,7 +875,11 @@ impl IndexerClient {
     }
 
     /// Checks if the indexer is healthy by comparing with a reference version.
-    pub async fn check_indexer_lag(&self, reference_version: u64, max_lag: u64) -> AptosResult<bool> {
+    pub async fn check_indexer_lag(
+        &self,
+        reference_version: u64,
+        max_lag: u64,
+    ) -> AptosResult<bool> {
         let indexer_version = self.get_indexer_version().await?;
         Ok(reference_version.saturating_sub(indexer_version) <= max_lag)
     }
@@ -901,4 +924,3 @@ mod tests {
         assert!(client.is_ok());
     }
 }
-

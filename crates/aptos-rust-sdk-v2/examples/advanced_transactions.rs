@@ -9,15 +9,15 @@
 //! Run with: `cargo run --example advanced_transactions --features "ed25519,secp256k1,faucet"`
 
 use aptos_rust_sdk_v2::{
+    Aptos, AptosConfig,
     account::{Account, AnyPrivateKey, Ed25519Account, MultiEd25519Account, MultiKeyAccount},
     crypto::{Ed25519PrivateKey, Secp256k1PrivateKey},
     transaction::{
-        builder::{sign_fee_payer_transaction, sign_multi_agent_transaction},
-        types::{FeePayerRawTransaction, MultiAgentRawTransaction},
         EntryFunction, SponsoredTransactionBuilder, TransactionBatchBuilder, TransactionBuilder,
         TransactionPayload,
+        builder::{sign_fee_payer_transaction, sign_multi_agent_transaction},
+        types::{FeePayerRawTransaction, MultiAgentRawTransaction},
     },
-    Aptos, AptosConfig,
 };
 
 #[tokio::main]
@@ -63,7 +63,7 @@ async fn main() -> anyhow::Result<()> {
 }
 
 /// Example: Sponsored + Multi-agent transaction
-/// 
+///
 /// This combines:
 /// - Fee payer (sponsor) paying for gas
 /// - Multiple signers required for the transaction
@@ -81,8 +81,12 @@ async fn sponsored_multi_agent_example(aptos: &Aptos) -> anyhow::Result<()> {
 
     // Fund accounts (only fee payer needs gas, but both signers need some balance)
     println!("\nFunding accounts...");
-    aptos.fund_account(primary_signer.address(), 50_000_000).await?;
-    aptos.fund_account(secondary_signer.address(), 50_000_000).await?;
+    aptos
+        .fund_account(primary_signer.address(), 50_000_000)
+        .await?;
+    aptos
+        .fund_account(secondary_signer.address(), 50_000_000)
+        .await?;
     aptos.fund_account(fee_payer.address(), 100_000_000).await?;
 
     // Build the transaction payload
@@ -129,12 +133,19 @@ async fn sponsored_multi_agent_example(aptos: &Aptos) -> anyhow::Result<()> {
     println!("\nSubmitting sponsored multi-agent transaction...");
     let result = aptos.submit_and_wait(&signed_txn, None).await?;
 
-    let success = result.data.get("success").and_then(|v| v.as_bool()).unwrap_or(false);
+    let success = result
+        .data
+        .get("success")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
     println!("Transaction success: {}", success);
 
     // Verify fee payer paid the gas
     let fee_payer_balance = aptos.get_balance(fee_payer.address()).await?;
-    println!("Fee payer balance after: {} APT (paid gas)", fee_payer_balance as f64 / 100_000_000.0);
+    println!(
+        "Fee payer balance after: {} APT (paid gas)",
+        fee_payer_balance as f64 / 100_000_000.0
+    );
 
     Ok(())
 }
@@ -167,13 +178,18 @@ async fn sponsored_multikey_example(aptos: &Aptos) -> anyhow::Result<()> {
     let fee_payer = Ed25519Account::generate();
     let recipient = Ed25519Account::generate();
 
-    println!("\nMultiKey account: {} (2-of-3)", multi_key_account.address());
+    println!(
+        "\nMultiKey account: {} (2-of-3)",
+        multi_key_account.address()
+    );
     println!("Fee payer: {}", fee_payer.address());
     println!("Recipient: {}", recipient.address());
 
     // Fund accounts
     println!("\nFunding accounts...");
-    aptos.fund_account(multi_key_account.address(), 50_000_000).await?;
+    aptos
+        .fund_account(multi_key_account.address(), 50_000_000)
+        .await?;
     aptos.fund_account(fee_payer.address(), 100_000_000).await?;
 
     // Build payload
@@ -182,7 +198,11 @@ async fn sponsored_multikey_example(aptos: &Aptos) -> anyhow::Result<()> {
     // Use SponsoredTransactionBuilder
     let signed_txn = SponsoredTransactionBuilder::new()
         .sender(multi_key_account.address())
-        .sequence_number(aptos.get_sequence_number(multi_key_account.address()).await?)
+        .sequence_number(
+            aptos
+                .get_sequence_number(multi_key_account.address())
+                .await?,
+        )
         .fee_payer(fee_payer.address())
         .payload(TransactionPayload::EntryFunction(payload))
         .chain_id(aptos.chain_id())
@@ -203,12 +223,19 @@ async fn sponsored_multikey_example(aptos: &Aptos) -> anyhow::Result<()> {
     println!("\nSubmitting sponsored MultiKey transaction...");
     let result = aptos.submit_and_wait(&signed_txn, None).await?;
 
-    let success = result.data.get("success").and_then(|v| v.as_bool()).unwrap_or(false);
+    let success = result
+        .data
+        .get("success")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
     println!("Transaction success: {}", success);
 
     // Check recipient balance
     let recipient_balance = aptos.get_balance(recipient.address()).await.unwrap_or(0);
-    println!("Recipient received: {} APT", recipient_balance as f64 / 100_000_000.0);
+    println!(
+        "Recipient received: {} APT",
+        recipient_balance as f64 / 100_000_000.0
+    );
 
     Ok(())
 }
@@ -237,12 +264,17 @@ async fn sponsored_multisig_example(aptos: &Aptos) -> anyhow::Result<()> {
     let fee_payer = Ed25519Account::generate();
     let recipient = Ed25519Account::generate();
 
-    println!("\nMultiEd25519 account: {} (2-of-3)", multi_ed_account.address());
+    println!(
+        "\nMultiEd25519 account: {} (2-of-3)",
+        multi_ed_account.address()
+    );
     println!("Fee payer: {}", fee_payer.address());
 
     // Fund accounts
     println!("\nFunding accounts...");
-    aptos.fund_account(multi_ed_account.address(), 50_000_000).await?;
+    aptos
+        .fund_account(multi_ed_account.address(), 50_000_000)
+        .await?;
     aptos.fund_account(fee_payer.address(), 100_000_000).await?;
 
     // Build payload
@@ -251,7 +283,11 @@ async fn sponsored_multisig_example(aptos: &Aptos) -> anyhow::Result<()> {
     // Build sponsored transaction
     let signed_txn = SponsoredTransactionBuilder::new()
         .sender(multi_ed_account.address())
-        .sequence_number(aptos.get_sequence_number(multi_ed_account.address()).await?)
+        .sequence_number(
+            aptos
+                .get_sequence_number(multi_ed_account.address())
+                .await?,
+        )
         .fee_payer(fee_payer.address())
         .payload(TransactionPayload::EntryFunction(payload))
         .chain_id(aptos.chain_id())
@@ -272,7 +308,11 @@ async fn sponsored_multisig_example(aptos: &Aptos) -> anyhow::Result<()> {
     println!("\nSubmitting sponsored MultiEd25519 transaction...");
     let result = aptos.submit_and_wait(&signed_txn, None).await?;
 
-    let success = result.data.get("success").and_then(|v| v.as_bool()).unwrap_or(false);
+    let success = result
+        .data
+        .get("success")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
     println!("Transaction success: {}", success);
 
     Ok(())
@@ -289,7 +329,7 @@ async fn batch_multisig_example(aptos: &Aptos) -> anyhow::Result<()> {
     let key3 = Ed25519PrivateKey::generate();
 
     let multi_account = MultiEd25519Account::new(vec![key1, key2, key3], 2)?;
-    
+
     // Create multiple recipients
     let recipient1 = Ed25519Account::generate();
     let recipient2 = Ed25519Account::generate();
@@ -302,13 +342,24 @@ async fn batch_multisig_example(aptos: &Aptos) -> anyhow::Result<()> {
 
     // Fund the multi-sig account
     println!("\nFunding multisig account...");
-    aptos.fund_account(multi_account.address(), 100_000_000).await?;
+    aptos
+        .fund_account(multi_account.address(), 100_000_000)
+        .await?;
 
     // Create batch of transfers
     let payloads: Vec<TransactionPayload> = vec![
-        TransactionPayload::EntryFunction(EntryFunction::apt_transfer(recipient1.address(), 1_000_000)?),
-        TransactionPayload::EntryFunction(EntryFunction::apt_transfer(recipient2.address(), 2_000_000)?),
-        TransactionPayload::EntryFunction(EntryFunction::apt_transfer(recipient3.address(), 3_000_000)?),
+        TransactionPayload::EntryFunction(EntryFunction::apt_transfer(
+            recipient1.address(),
+            1_000_000,
+        )?),
+        TransactionPayload::EntryFunction(EntryFunction::apt_transfer(
+            recipient2.address(),
+            2_000_000,
+        )?),
+        TransactionPayload::EntryFunction(EntryFunction::apt_transfer(
+            recipient3.address(),
+            3_000_000,
+        )?),
     ];
 
     // Get sequence number
@@ -382,13 +433,18 @@ async fn multi_agent_multikey_example(aptos: &Aptos) -> anyhow::Result<()> {
     let recipient = Ed25519Account::generate();
 
     println!("Primary signer (Ed25519): {}", primary.address());
-    println!("Secondary signer (2-of-3 MultiKey): {}", secondary_multikey.address());
+    println!(
+        "Secondary signer (2-of-3 MultiKey): {}",
+        secondary_multikey.address()
+    );
     println!("Recipient: {}", recipient.address());
 
     // Fund accounts
     println!("\nFunding accounts...");
     aptos.fund_account(primary.address(), 100_000_000).await?;
-    aptos.fund_account(secondary_multikey.address(), 50_000_000).await?;
+    aptos
+        .fund_account(secondary_multikey.address(), 50_000_000)
+        .await?;
 
     // Build payload
     let payload = EntryFunction::apt_transfer(recipient.address(), 2_000_000)?;
@@ -408,10 +464,8 @@ async fn multi_agent_multikey_example(aptos: &Aptos) -> anyhow::Result<()> {
         .build()?;
 
     // Create multi-agent transaction
-    let multi_agent_txn = MultiAgentRawTransaction::new(
-        raw_txn,
-        vec![secondary_multikey.address()],
-    );
+    let multi_agent_txn =
+        MultiAgentRawTransaction::new(raw_txn, vec![secondary_multikey.address()]);
 
     // Sign with both: Ed25519 primary and MultiKey secondary
     let signed_txn = sign_multi_agent_transaction(
@@ -428,7 +482,11 @@ async fn multi_agent_multikey_example(aptos: &Aptos) -> anyhow::Result<()> {
     println!("\nSubmitting multi-agent transaction...");
     let result = aptos.submit_and_wait(&signed_txn, None).await?;
 
-    let success = result.data.get("success").and_then(|v| v.as_bool()).unwrap_or(false);
+    let success = result
+        .data
+        .get("success")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
     println!("Transaction success: {}", success);
 
     Ok(())

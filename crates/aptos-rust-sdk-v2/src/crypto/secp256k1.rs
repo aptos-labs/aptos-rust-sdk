@@ -5,8 +5,8 @@
 use crate::crypto::traits::{PublicKey, Signature, Signer, Verifier};
 use crate::error::{AptosError, AptosResult};
 use k256::ecdsa::{
-    signature::Signer as K256Signer, signature::Verifier as K256Verifier, Signature as K256Signature,
-    SigningKey, VerifyingKey,
+    Signature as K256Signature, SigningKey, VerifyingKey, signature::Signer as K256Signer,
+    signature::Verifier as K256Verifier,
 };
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -479,4 +479,3 @@ mod tests {
         assert!(format!("{}", signature).starts_with("0x"));
     }
 }
-
