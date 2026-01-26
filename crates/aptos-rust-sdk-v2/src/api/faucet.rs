@@ -37,10 +37,26 @@ pub struct FaucetClient {
 }
 
 /// Response from the faucet.
+///
+/// The faucet API can return different formats depending on version:
+/// - Direct array: `["hash1", "hash2"]`
+/// - Object: `{"txn_hashes": ["hash1", "hash2"]}`
 #[derive(Debug, Clone, Deserialize)]
-pub(crate) struct FaucetResponse {
-    /// Transaction hashes for the funding transactions.
-    pub txn_hashes: Vec<String>,
+#[serde(untagged)]
+pub(crate) enum FaucetResponse {
+    /// Direct array of transaction hashes (localnet format).
+    Direct(Vec<String>),
+    /// Object with txn_hashes field (some older/alternative formats).
+    Object { txn_hashes: Vec<String> },
+}
+
+impl FaucetResponse {
+    pub(super) fn into_hashes(self) -> Vec<String> {
+        match self {
+            FaucetResponse::Direct(hashes) => hashes,
+            FaucetResponse::Object { txn_hashes } => txn_hashes,
+        }
+    }
 }
 
 impl FaucetClient {
@@ -110,7 +126,7 @@ impl FaucetClient {
 
                     if response.status().is_success() {
                         let faucet_response: FaucetResponse = response.json().await?;
-                        Ok(faucet_response.txn_hashes)
+                        Ok(faucet_response.into_hashes())
                     } else {
                         let status = response.status();
                         let body = response.text().await.unwrap_or_default();
@@ -188,6 +204,28 @@ mod tests {
 
         assert_eq!(result.len(), 2);
         assert_eq!(result[0], "0xabc123");
+    }
+
+    #[tokio::test]
+    async fn test_fund_success_direct_array() {
+        // Test the direct array format used by localnet
+        let server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path_regex(r"^/mint$"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!(
+                ["0xhash123", "0xhash456"]
+            )))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = create_mock_faucet_client(&server).await;
+        let result = client.fund(AccountAddress::ONE, 100_000_000).await.unwrap();
+
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0], "0xhash123");
+        assert_eq!(result[1], "0xhash456");
     }
 
     #[tokio::test]

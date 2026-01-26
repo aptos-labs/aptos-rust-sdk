@@ -160,22 +160,25 @@ impl FullnodeClient {
 
     /// Gets the APT balance for an account in octas.
     pub async fn get_account_balance(&self, address: AccountAddress) -> AptosResult<u64> {
-        let resource = self
-            .get_account_resource(
-                address,
-                "0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>",
+        // Use the coin::balance view function which works with both legacy CoinStore
+        // and the newer Fungible Asset standard
+        let result = self
+            .view(
+                "0x1::coin::balance",
+                vec!["0x1::aptos_coin::AptosCoin".to_string()],
+                vec![serde_json::json!(address.to_string())],
             )
             .await?;
 
-        let coin = resource
+        // The view function returns an array with a single string value
+        let balance_str = result
             .data
-            .data
-            .get("coin")
-            .and_then(|c| c.get("value"))
+            .first()
             .and_then(|v| v.as_str())
-            .ok_or_else(|| AptosError::Internal("failed to parse balance".into()))?;
+            .ok_or_else(|| AptosError::Internal("failed to parse balance response".into()))?;
 
-        coin.parse()
+        balance_str
+            .parse()
             .map_err(|_| AptosError::Internal("failed to parse balance as u64".into()))
     }
 
@@ -428,7 +431,7 @@ impl FullnodeClient {
         } else {
             format!("{}/{}", base_str, path)
         };
-        Url::parse(&full_path).map_err(|e| AptosError::Url(e))
+        Url::parse(&full_path).map_err(AptosError::Url)
     }
 
     async fn get_json<T: for<'de> serde::Deserialize<'de>>(

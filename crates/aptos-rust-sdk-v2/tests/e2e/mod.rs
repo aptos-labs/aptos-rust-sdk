@@ -1,30 +1,29 @@
 //! End-to-end tests against localnet or testnet.
 //!
-//! These tests are ignored by default and require a running Aptos node.
-//! They are only compiled when the `e2e` feature is enabled.
+//! These tests require a running Aptos node and are only compiled when
+//! the `e2e` feature is enabled.
 //!
 //! ## Running the tests
 //!
-//! ### Option 1: Using Aptos CLI localnet
+//! ### Option 1: Using the convenience script
 //! ```bash
-//! # In one terminal, start localnet:
-//! aptos node run-localnet
-//!
-//! # In another terminal, run tests:
-//! cargo test --features "e2e" -- --ignored e2e
+//! ./scripts/run-e2e.sh
 //! ```
 //!
-//! ### Option 2: Using custom node URLs
+//! ### Option 2: Manual setup
+//! ```bash
+//! # In one terminal, start localnet:
+//! aptos node run-localnet --with-faucet
+//!
+//! # In another terminal, run tests:
+//! cargo test -p aptos-rust-sdk-v2 --features "e2e,full"
+//! ```
+//!
+//! ### Option 3: Using custom node URLs
 //! ```bash
 //! export APTOS_LOCAL_NODE_URL=http://127.0.0.1:8080/v1
 //! export APTOS_LOCAL_FAUCET_URL=http://127.0.0.1:8081
-//! cargo test --features "e2e" -- --ignored e2e
-//! ```
-//!
-//! ### Running coverage with E2E tests
-//! ```bash
-//! # Start localnet first, then:
-//! cargo tarpaulin -p aptos-rust-sdk-v2 --profile e2e
+//! cargo test -p aptos-rust-sdk-v2 --features "e2e,full"
 //! ```
 //!
 //! ## Test Categories
@@ -33,10 +32,8 @@
 //! - **transfer_tests**: APT transfers between accounts
 //! - **view_tests**: View function calls
 //! - **transaction_tests**: Transaction building, signing, submission
-//! - **events_tests**: Event queries
 //! - **multi_signer_tests**: Multi-agent and fee payer transactions
-
-#![cfg(feature = "e2e")]
+//! - **state_tests**: Resource and state queries
 
 use aptos_rust_sdk_v2::{Aptos, AptosConfig};
 use std::env;
@@ -68,10 +65,9 @@ async fn wait_for_finality() {
 #[cfg(all(feature = "ed25519", feature = "faucet"))]
 mod account_tests {
     use super::*;
-    use aptos_rust_sdk_v2::account::{Account, Ed25519Account};
+    use aptos_rust_sdk_v2::account::Ed25519Account;
 
     #[tokio::test]
-    #[ignore = "requires localnet"]
     async fn e2e_create_and_fund_account() {
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
@@ -99,7 +95,6 @@ mod account_tests {
     }
 
     #[tokio::test]
-    #[ignore = "requires localnet"]
     async fn e2e_create_funded_account_helper() {
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
@@ -122,7 +117,6 @@ mod account_tests {
     }
 
     #[tokio::test]
-    #[ignore = "requires localnet"]
     async fn e2e_get_sequence_number() {
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
@@ -143,7 +137,6 @@ mod account_tests {
     }
 
     #[tokio::test]
-    #[ignore = "requires localnet"]
     async fn e2e_account_not_found() {
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
@@ -168,7 +161,6 @@ mod transfer_tests {
     use aptos_rust_sdk_v2::account::Ed25519Account;
 
     #[tokio::test]
-    #[ignore = "requires localnet"]
     async fn e2e_transfer_apt() {
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
@@ -205,7 +197,6 @@ mod transfer_tests {
     }
 
     #[tokio::test]
-    #[ignore = "requires localnet"]
     async fn e2e_multiple_transfers() {
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
@@ -242,7 +233,6 @@ mod transfer_tests {
     }
 
     #[tokio::test]
-    #[ignore = "requires localnet"]
     async fn e2e_transfer_insufficient_balance() {
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
@@ -277,7 +267,6 @@ mod view_tests {
     use aptos_rust_sdk_v2::account::Ed25519Account;
 
     #[tokio::test]
-    #[ignore = "requires localnet"]
     async fn e2e_view_timestamp() {
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
@@ -298,7 +287,6 @@ mod view_tests {
     }
 
     #[tokio::test]
-    #[ignore = "requires localnet"]
     async fn e2e_view_coin_balance() {
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
@@ -325,7 +313,6 @@ mod view_tests {
     }
 
     #[tokio::test]
-    #[ignore = "requires localnet"]
     async fn e2e_view_account_exists() {
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
@@ -351,7 +338,6 @@ mod view_tests {
     }
 
     #[tokio::test]
-    #[ignore = "requires localnet"]
     async fn e2e_view_nonexistent_account() {
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
@@ -382,7 +368,6 @@ mod transaction_tests {
     use aptos_rust_sdk_v2::transaction::{builder::sign_transaction, EntryFunction};
 
     #[tokio::test]
-    #[ignore = "requires localnet"]
     async fn e2e_build_sign_submit_transaction() {
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
@@ -404,6 +389,13 @@ mod transaction_tests {
         // Sign
         let signed = sign_transaction(&raw_txn, &sender).expect("failed to sign");
 
+        // Debug: Print BCS bytes
+        let bcs_bytes = signed.to_bcs().expect("failed to serialize");
+        println!("BCS bytes ({} total):", bcs_bytes.len());
+        println!("First 100 bytes: {}", hex::encode(&bcs_bytes[..100.min(bcs_bytes.len())]));
+        println!("Last 100 bytes: {}", hex::encode(&bcs_bytes[bcs_bytes.len().saturating_sub(100)..]));
+        println!("Authenticator variant (byte at offset {}): {}", bcs_bytes.len() - 97, bcs_bytes.get(bcs_bytes.len() - 97).unwrap_or(&0));
+
         // Submit
         let result = aptos
             .submit_and_wait(&signed, None)
@@ -414,7 +406,6 @@ mod transaction_tests {
     }
 
     #[tokio::test]
-    #[ignore = "requires localnet"]
     async fn e2e_simulate_transaction() {
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
@@ -452,7 +443,6 @@ mod transaction_tests {
     }
 
     #[tokio::test]
-    #[ignore = "requires localnet"]
     async fn e2e_get_transaction_by_hash() {
         use aptos_rust_sdk_v2::types::HashValue;
 
@@ -482,7 +472,6 @@ mod transaction_tests {
     }
 
     #[tokio::test]
-    #[ignore = "requires localnet"]
     async fn e2e_transaction_expiration() {
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
@@ -524,7 +513,6 @@ mod ledger_tests {
     use super::*;
 
     #[tokio::test]
-    #[ignore = "requires localnet"]
     async fn e2e_get_ledger_info() {
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
@@ -539,13 +527,12 @@ mod ledger_tests {
     }
 
     #[tokio::test]
-    #[ignore = "requires localnet"]
     async fn e2e_chain_id_from_ledger() {
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
 
         // Just verify we can get ledger info
-        let ledger_info = aptos.ledger_info().await.expect("failed to get ledger info");
+        let _ledger_info = aptos.ledger_info().await.expect("failed to get ledger info");
         
         // Chain ID should be set
         assert!(aptos.chain_id().id() > 0);
@@ -568,7 +555,6 @@ mod multi_signer_tests {
     };
 
     #[tokio::test]
-    #[ignore = "requires localnet"]
     async fn e2e_fee_payer_transaction() {
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
@@ -630,7 +616,6 @@ mod multi_signer_tests {
     }
 
     #[tokio::test]
-    #[ignore = "requires localnet"]
     async fn e2e_multi_agent_transaction() {
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
@@ -705,7 +690,6 @@ mod multi_key_e2e_tests {
     use aptos_rust_sdk_v2::transaction::{builder::sign_transaction, EntryFunction, TransactionBuilder};
 
     #[tokio::test]
-    #[ignore = "requires localnet"]
     async fn e2e_multi_key_account_transfer() {
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
@@ -778,10 +762,8 @@ mod multi_key_e2e_tests {
 #[cfg(all(feature = "ed25519", feature = "faucet"))]
 mod state_tests {
     use super::*;
-    use aptos_rust_sdk_v2::account::Account;
 
     #[tokio::test]
-    #[ignore = "requires localnet"]
     async fn e2e_get_account_resource() {
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
@@ -810,7 +792,6 @@ mod state_tests {
     }
 
     #[tokio::test]
-    #[ignore = "requires localnet"]
     async fn e2e_get_coin_store_resource() {
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");

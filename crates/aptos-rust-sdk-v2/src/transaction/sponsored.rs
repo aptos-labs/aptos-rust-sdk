@@ -341,24 +341,8 @@ fn make_account_authenticator(
             signature,
         },
         crate::crypto::MULTI_KEY_SCHEME => AccountAuthenticator::multi_key(public_key, signature),
-        _ => {
-            // Use single key authenticator for other schemes
-            AccountAuthenticator::single_key(
-                scheme_to_signature_scheme(scheme),
-                public_key,
-                signature,
-            )
-        }
-    }
-}
-
-/// Converts a scheme byte to a SignatureScheme enum.
-fn scheme_to_signature_scheme(scheme: u8) -> crate::transaction::authenticator::SignatureScheme {
-    match scheme {
-        1 => crate::transaction::authenticator::SignatureScheme::Secp256k1,
-        2 => crate::transaction::authenticator::SignatureScheme::Secp256r1,
-        crate::crypto::KEYLESS_SCHEME => crate::transaction::authenticator::SignatureScheme::Keyless,
-        _ => crate::transaction::authenticator::SignatureScheme::Ed25519,
+        // For other/unknown schemes, default to Ed25519 format
+        _ => AccountAuthenticator::ed25519(public_key, signature),
     }
 }
 

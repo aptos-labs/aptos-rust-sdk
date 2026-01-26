@@ -22,8 +22,8 @@
 //! ```
 
 use proc_macro::TokenStream;
-use quote::{format_ident, quote};
-use syn::{parse_macro_input, LitStr, Token};
+use quote::quote;
+use syn::{parse_macro_input, LitStr};
 
 mod abi;
 mod codegen;

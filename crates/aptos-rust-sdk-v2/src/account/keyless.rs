@@ -541,11 +541,10 @@ fn extract_claims(
         .ok_or_else(|| AptosError::InvalidJwt("missing nonce claim".into()))?;
 
     let exp_time = claims.exp.map(|exp| UNIX_EPOCH + Duration::from_secs(exp));
-    if let Some(exp) = exp_time {
-        if SystemTime::now() >= exp {
+    if let Some(exp) = exp_time
+        && SystemTime::now() >= exp {
             return Err(AptosError::InvalidJwt("JWT is expired".into()));
         }
-    }
 
     Ok((issuer, audience, user_id, exp_time, nonce))
 }

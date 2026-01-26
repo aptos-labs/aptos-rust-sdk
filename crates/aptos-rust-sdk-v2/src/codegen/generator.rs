@@ -17,6 +17,8 @@ pub struct GeneratorConfig {
     pub generate_view_functions: bool,
     /// Whether to generate struct definitions.
     pub generate_structs: bool,
+    /// Whether to generate event type helpers.
+    pub generate_events: bool,
     /// Whether to generate async functions (vs sync).
     pub async_functions: bool,
     /// Custom type mapper.
@@ -34,6 +36,7 @@ impl Default for GeneratorConfig {
             generate_entry_functions: true,
             generate_view_functions: true,
             generate_structs: true,
+            generate_events: true,
             async_functions: true,
             type_mapper: MoveTypeMapper::new(),
             include_address_constant: true,
@@ -69,6 +72,12 @@ impl GeneratorConfig {
     /// Enables or disables struct generation.
     pub fn with_structs(mut self, enabled: bool) -> Self {
         self.generate_structs = enabled;
+        self
+    }
+
+    /// Enables or disables event type generation.
+    pub fn with_events(mut self, enabled: bool) -> Self {
+        self.generate_events = enabled;
         self
     }
 
@@ -152,6 +161,11 @@ impl<'a> ModuleGenerator<'a> {
             self.write_structs(output)?;
         }
 
+        // Event types
+        if self.config.generate_events {
+            self.write_events(output)?;
+        }
+
         // Entry functions
         if self.config.generate_entry_functions {
             self.write_entry_functions(output)?;
@@ -163,6 +177,83 @@ impl<'a> ModuleGenerator<'a> {
         }
 
         Ok(())
+    }
+
+    /// Writes event type helpers.
+    fn write_events(&self, output: &mut String) -> std::fmt::Result {
+        // Find structs that are likely events (heuristic: name ends with "Event")
+        let event_structs: Vec<_> = self
+            .abi
+            .structs
+            .iter()
+            .filter(|s| s.name.ends_with("Event") && !s.is_native)
+            .collect();
+
+        if event_structs.is_empty() {
+            return Ok(());
+        }
+
+        writeln!(output, "// =============================================")?;
+        writeln!(output, "// Event Types")?;
+        writeln!(output, "// =============================================")?;
+        writeln!(output)?;
+
+        // Generate event type enum
+        writeln!(output, "/// All event types defined in this module.")?;
+        writeln!(output, "#[derive(Debug, Clone, PartialEq)]")?;
+        writeln!(output, "pub enum ModuleEvent {{")?;
+        for struct_def in &event_structs {
+            let variant_name = to_pascal_case(&struct_def.name);
+            writeln!(output, "    {}({}),", variant_name, variant_name)?;
+        }
+        writeln!(output, "    /// Unknown event type.")?;
+        writeln!(output, "    Unknown(serde_json::Value),")?;
+        writeln!(output, "}}")?;
+        writeln!(output)?;
+
+        // Generate event type string constants
+        writeln!(output, "/// Event type strings for this module.")?;
+        writeln!(output, "pub mod event_types {{")?;
+        for struct_def in &event_structs {
+            let const_name = to_snake_case(&struct_def.name).to_uppercase();
+            writeln!(
+                output,
+                "    pub const {}: &str = \"{}::{}::{}\";",
+                const_name, self.abi.address, self.abi.name, struct_def.name
+            )?;
+        }
+        writeln!(output, "}}")?;
+        writeln!(output)?;
+
+        // Generate parse_event function
+        writeln!(output, "/// Parses a raw event into a typed ModuleEvent.")?;
+        writeln!(output, "///")?;
+        writeln!(output, "/// # Arguments")?;
+        writeln!(output, "///")?;
+        writeln!(output, "/// * `event_type` - The event type string")?;
+        writeln!(output, "/// * `data` - The event data as JSON")?;
+        writeln!(output, "pub fn parse_event(event_type: &str, data: serde_json::Value) -> AptosResult<ModuleEvent> {{")?;
+        writeln!(output, "    match event_type {{")?;
+        for struct_def in &event_structs {
+            let const_name = to_snake_case(&struct_def.name).to_uppercase();
+            let variant_name = to_pascal_case(&struct_def.name);
+            writeln!(output, "        event_types::{} => {{", const_name)?;
+            writeln!(output, "            let event: {} = serde_json::from_value(data)", variant_name)?;
+            writeln!(output, "                .map_err(|e| AptosError::Internal(format!(\"Failed to parse {}: {{}}\", e)))?;", struct_def.name)?;
+            writeln!(output, "            Ok(ModuleEvent::{}(event))", variant_name)?;
+            writeln!(output, "        }}")?;
+        }
+        writeln!(output, "        _ => Ok(ModuleEvent::Unknown(data)),")?;
+        writeln!(output, "    }}")?;
+        writeln!(output, "}}")?;
+        writeln!(output)?;
+
+        // Generate is_module_event helper
+        writeln!(output, "/// Checks if an event type belongs to this module.")?;
+        writeln!(output, "pub fn is_module_event(event_type: &str) -> bool {{")?;
+        writeln!(output, "    event_type.starts_with(\"{}::{}::\")", self.abi.address, self.abi.name)?;
+        writeln!(output, "}}")?;
+        writeln!(output)
     }
 
     /// Writes the file header comment.
@@ -664,6 +755,52 @@ mod tests {
         }
     }
 
+    fn sample_abi_with_events() -> MoveModuleABI {
+        MoveModuleABI {
+            address: "0x1".to_string(),
+            name: "token".to_string(),
+            exposed_functions: vec![],
+            structs: vec![
+                MoveStructDef {
+                    name: "MintEvent".to_string(),
+                    is_native: false,
+                    abilities: vec!["drop".to_string(), "store".to_string()],
+                    generic_type_params: vec![],
+                    fields: vec![
+                        MoveStructField {
+                            name: "id".to_string(),
+                            typ: "u64".to_string(),
+                        },
+                        MoveStructField {
+                            name: "creator".to_string(),
+                            typ: "address".to_string(),
+                        },
+                    ],
+                },
+                MoveStructDef {
+                    name: "BurnEvent".to_string(),
+                    is_native: false,
+                    abilities: vec!["drop".to_string(), "store".to_string()],
+                    generic_type_params: vec![],
+                    fields: vec![MoveStructField {
+                        name: "id".to_string(),
+                        typ: "u64".to_string(),
+                    }],
+                },
+                MoveStructDef {
+                    name: "Token".to_string(),
+                    is_native: false,
+                    abilities: vec!["key".to_string()],
+                    generic_type_params: vec![],
+                    fields: vec![MoveStructField {
+                        name: "value".to_string(),
+                        typ: "u64".to_string(),
+                    }],
+                },
+            ],
+        }
+    }
+
     #[test]
     fn test_generate_module() {
         let abi = sample_abi();
@@ -731,5 +868,116 @@ mod tests {
         assert!(code.contains("value: u64"));
         // Should have the documentation
         assert!(code.contains("Transfers coins from sender to recipient"));
+    }
+
+    #[test]
+    fn test_generate_events() {
+        let abi = sample_abi_with_events();
+        let generator = ModuleGenerator::new(&abi, GeneratorConfig::default());
+        let code = generator.generate().unwrap();
+
+        // Should generate event enum
+        assert!(code.contains("pub enum ModuleEvent"));
+        assert!(code.contains("MintEvent(MintEvent)"));
+        assert!(code.contains("BurnEvent(BurnEvent)"));
+        assert!(code.contains("Unknown(serde_json::Value)"));
+
+        // Should generate event type constants
+        assert!(code.contains("pub mod event_types"));
+        assert!(code.contains("MINT_EVENT"));
+        assert!(code.contains("BURN_EVENT"));
+
+        // Should generate parse_event function
+        assert!(code.contains("pub fn parse_event"));
+        assert!(code.contains("is_module_event"));
+
+        // Non-event struct (Token) should not be in event enum
+        assert!(!code.contains("Token(Token)"));
+    }
+
+    #[test]
+    fn test_config_disable_events() {
+        let abi = sample_abi_with_events();
+        let config = GeneratorConfig::default().with_events(false);
+        let generator = ModuleGenerator::new(&abi, config);
+        let code = generator.generate().unwrap();
+
+        // Should not generate event helpers
+        assert!(!code.contains("pub enum ModuleEvent"));
+        assert!(!code.contains("pub fn parse_event"));
+    }
+
+    #[test]
+    fn test_config_disable_structs() {
+        let abi = sample_abi();
+        let config = GeneratorConfig::default().with_structs(false);
+        let generator = ModuleGenerator::new(&abi, config);
+        let code = generator.generate().unwrap();
+
+        // Should not generate struct definitions
+        assert!(!code.contains("pub struct Coin"));
+    }
+
+    #[test]
+    fn test_config_sync_functions() {
+        let abi = sample_abi();
+        let config = GeneratorConfig::default().with_async(false);
+        let generator = ModuleGenerator::new(&abi, config);
+        let code = generator.generate().unwrap();
+
+        // Should generate sync view function, not async
+        assert!(code.contains("pub fn view_balance"));
+        assert!(!code.contains("pub async fn view_balance"));
+    }
+
+    #[test]
+    fn test_config_no_address_constant() {
+        let abi = sample_abi();
+        let config = GeneratorConfig {
+            include_address_constant: false,
+            ..Default::default()
+        };
+        let generator = ModuleGenerator::new(&abi, config);
+        let code = generator.generate().unwrap();
+
+        // Should not include module address constant
+        assert!(!code.contains("MODULE_ADDRESS"));
+    }
+
+    #[test]
+    fn test_generator_config_builder() {
+        let config = GeneratorConfig::new()
+            .with_module_name("custom_name")
+            .with_entry_functions(false)
+            .with_view_functions(false)
+            .with_structs(false)
+            .with_events(false)
+            .with_async(false)
+            .with_builder_pattern(true);
+
+        assert_eq!(config.module_name, Some("custom_name".to_string()));
+        assert!(!config.generate_entry_functions);
+        assert!(!config.generate_view_functions);
+        assert!(!config.generate_structs);
+        assert!(!config.generate_events);
+        assert!(!config.async_functions);
+        assert!(config.use_builder_pattern);
+    }
+
+    #[test]
+    fn test_empty_module() {
+        let abi = MoveModuleABI {
+            address: "0x1".to_string(),
+            name: "empty".to_string(),
+            exposed_functions: vec![],
+            structs: vec![],
+        };
+        let generator = ModuleGenerator::new(&abi, GeneratorConfig::default());
+        let code = generator.generate().unwrap();
+
+        // Should still generate valid code
+        assert!(code.contains("Generated Rust bindings"));
+        assert!(code.contains("MODULE_ADDRESS"));
+        assert!(code.contains("MODULE_NAME"));
     }
 }

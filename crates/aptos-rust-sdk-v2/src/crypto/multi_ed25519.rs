@@ -127,7 +127,7 @@ impl MultiEd25519PublicKey {
         let threshold = bytes[bytes.len() - 1];
         let key_bytes = &bytes[..bytes.len() - 1];
 
-        if key_bytes.len() % ED25519_PUBLIC_KEY_LENGTH != 0 {
+        if !key_bytes.len().is_multiple_of(ED25519_PUBLIC_KEY_LENGTH) {
             return Err(AptosError::InvalidPublicKey(format!(
                 "key bytes length {} is not a multiple of {}",
                 key_bytes.len(),

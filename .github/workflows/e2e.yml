@@ -41,7 +41,7 @@ jobs:
           aptos node run-localnet --with-faucet --force-restart &
           sleep 30
           # Wait for localnet to be ready
-          for i in {1..30}; do
+          for i in {1..60}; do
             if curl -s http://127.0.0.1:8080/v1 > /dev/null; then
               echo "Localnet is ready"
               break
@@ -49,9 +49,18 @@ jobs:
             echo "Waiting for localnet... ($i)"
             sleep 2
           done
+          # Verify faucet is also ready
+          for i in {1..30}; do
+            if curl -s http://127.0.0.1:8081/health > /dev/null 2>&1; then
+              echo "Faucet is ready"
+              break
+            fi
+            echo "Waiting for faucet... ($i)"
+            sleep 2
+          done
       
       - name: Run E2E tests
-        run: cargo test -p aptos-rust-sdk-v2 --features "full,faucet" -- --ignored e2e
+        run: cargo test -p aptos-rust-sdk-v2 --features "e2e,full"
         env:
           APTOS_LOCAL_FAUCET_URL: http://127.0.0.1:8081
           APTOS_LOCAL_NODE_URL: http://127.0.0.1:8080/v1
@@ -60,12 +69,11 @@ jobs:
         if: always()
         run: pkill -f "aptos node" || true
 
-  e2e-testnet:
-    name: E2E Tests (Testnet)
+  # Spec tests that require network connectivity
+  spec-tests-network:
+    name: Spec Tests (Network Required)
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    # Only run on main branch to avoid rate limiting
-    if: github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
       
@@ -75,8 +83,32 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
       
-      - name: Run testnet E2E tests
-        run: cargo test -p aptos-rust-sdk-v2 --features "full,faucet" -- --ignored e2e_testnet
+      - name: Install Aptos CLI
+        run: |
+          curl -fsSL "https://aptos.dev/scripts/install_cli.py" | python3
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+      
+      - name: Start localnet
+        run: |
+          aptos node run-localnet --with-faucet --force-restart &
+          sleep 30
+          for i in {1..60}; do
+            if curl -s http://127.0.0.1:8080/v1 > /dev/null; then
+              echo "Localnet is ready"
+              break
+            fi
+            echo "Waiting for localnet... ($i)"
+            sleep 2
+          done
+      
+      - name: Run spec tests
+        run: cargo test --test specs
+        working-directory: specifications/tests/rust
         env:
-          APTOS_NETWORK: testnet
+          APTOS_LOCAL_FAUCET_URL: http://127.0.0.1:8081
+          APTOS_LOCAL_NODE_URL: http://127.0.0.1:8080/v1
+      
+      - name: Stop localnet
+        if: always()
+        run: pkill -f "aptos node" || true
 

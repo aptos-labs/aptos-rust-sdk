@@ -51,18 +51,11 @@ pub struct MoveSourceParser;
 impl MoveSourceParser {
     /// Parses Move source code and extracts module information.
     pub fn parse(source: &str) -> MoveModuleInfo {
-        let mut info = MoveModuleInfo::default();
-
-        // Extract module-level doc
-        info.doc = Self::extract_leading_doc(source);
-
-        // Parse functions
-        info.functions = Self::parse_functions(source);
-
-        // Parse structs
-        info.structs = Self::parse_structs(source);
-
-        info
+        MoveModuleInfo {
+            doc: Self::extract_leading_doc(source),
+            functions: Self::parse_functions(source),
+            structs: Self::parse_structs(source),
+        }
     }
 
     /// Extracts leading documentation comments.
@@ -76,9 +69,10 @@ impl MoveSourceParser {
                 in_doc = true;
                 let doc_content = trimmed.strip_prefix("///").unwrap_or("").trim();
                 doc_lines.push(doc_content.to_string());
-            } else if trimmed.starts_with("module ") || trimmed.starts_with("script ") {
-                break;
-            } else if in_doc && !trimmed.is_empty() && !trimmed.starts_with("//") {
+            } else if trimmed.starts_with("module ")
+                || trimmed.starts_with("script ")
+                || (in_doc && !trimmed.is_empty() && !trimmed.starts_with("//"))
+            {
                 break;
             }
         }
@@ -225,9 +219,9 @@ impl MoveSourceParser {
             let after_fun = &signature[fun_idx..];
 
             // Look for <...> before (
-            if let Some(lt_idx) = after_fun.find('<') {
-                if let Some(gt_idx) = after_fun.find('>') {
-                    if lt_idx < gt_idx {
+            if let Some(lt_idx) = after_fun.find('<')
+                && let Some(gt_idx) = after_fun.find('>')
+                    && lt_idx < gt_idx {
                         let type_params = &after_fun[lt_idx + 1..gt_idx];
                         for param in type_params.split(',') {
                             let param = param.trim();
@@ -241,8 +235,6 @@ impl MoveSourceParser {
                             }
                         }
                     }
-                }
-            }
         }
 
         params
@@ -418,11 +410,10 @@ impl MoveSourceParser {
                         .take_while(|c| c.is_alphanumeric() || *c == '_')
                         .collect();
 
-                    if !field_name.is_empty() {
-                        if let Some(doc) = current_doc.take() {
+                    if !field_name.is_empty()
+                        && let Some(doc) = current_doc.take() {
                             info.field_docs.insert(field_name, doc);
                         }
-                    }
                 } else if !line.starts_with("//") && !line.is_empty() {
                     current_doc = None;
                 }

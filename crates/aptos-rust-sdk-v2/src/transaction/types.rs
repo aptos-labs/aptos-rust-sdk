@@ -58,7 +58,7 @@ impl RawTransaction {
     pub fn signing_message(&self) -> AptosResult<Vec<u8>> {
         let prefix = crate::crypto::sha3_256(b"APTOS::RawTransaction");
         let bcs_bytes =
-            aptos_bcs::to_bytes(self).map_err(|e| crate::error::AptosError::bcs(e))?;
+            aptos_bcs::to_bytes(self).map_err(crate::error::AptosError::bcs)?;
 
         let mut message = Vec::with_capacity(prefix.len() + bcs_bytes.len());
         message.extend_from_slice(&prefix);
@@ -68,7 +68,7 @@ impl RawTransaction {
 
     /// Serializes this transaction to BCS bytes.
     pub fn to_bcs(&self) -> AptosResult<Vec<u8>> {
-        aptos_bcs::to_bytes(self).map_err(|e| crate::error::AptosError::bcs(e))
+        aptos_bcs::to_bytes(self).map_err(crate::error::AptosError::bcs)
     }
 }
 
@@ -92,7 +92,7 @@ impl SignedTransaction {
 
     /// Serializes this signed transaction to BCS bytes.
     pub fn to_bcs(&self) -> AptosResult<Vec<u8>> {
-        aptos_bcs::to_bytes(self).map_err(|e| crate::error::AptosError::bcs(e))
+        aptos_bcs::to_bytes(self).map_err(crate::error::AptosError::bcs)
     }
 
     /// Returns the sender address.
@@ -181,7 +181,7 @@ impl MultiAgentRawTransaction {
             secondary_signer_addresses: &self.secondary_signer_addresses,
         };
 
-        let bcs_bytes = aptos_bcs::to_bytes(&data).map_err(|e| crate::error::AptosError::bcs(e))?;
+        let bcs_bytes = aptos_bcs::to_bytes(&data).map_err(crate::error::AptosError::bcs)?;
 
         let mut message = Vec::with_capacity(prefix.len() + bcs_bytes.len());
         message.extend_from_slice(&prefix);
@@ -248,7 +248,7 @@ impl FeePayerRawTransaction {
             fee_payer_address: &self.fee_payer_address,
         };
 
-        let bcs_bytes = aptos_bcs::to_bytes(&data).map_err(|e| crate::error::AptosError::bcs(e))?;
+        let bcs_bytes = aptos_bcs::to_bytes(&data).map_err(crate::error::AptosError::bcs)?;
 
         let mut message = Vec::with_capacity(prefix.len() + bcs_bytes.len());
         message.extend_from_slice(&prefix);
@@ -309,11 +309,12 @@ mod tests {
 
     #[test]
     fn test_signed_transaction() {
+        use crate::transaction::authenticator::{Ed25519PublicKey, Ed25519Signature};
         let txn = create_test_raw_transaction();
         // Create a dummy authenticator
         let auth = crate::transaction::TransactionAuthenticator::Ed25519 {
-            public_key: vec![0u8; 32],
-            signature: vec![0u8; 64],
+            public_key: Ed25519PublicKey([0u8; 32]),
+            signature: Ed25519Signature([0u8; 64]),
         };
         let signed = SignedTransaction::new(txn, auth);
         assert_eq!(signed.sender(), AccountAddress::ONE);
@@ -321,14 +322,40 @@ mod tests {
 
     #[test]
     fn test_signed_transaction_bcs() {
+        use crate::transaction::authenticator::{Ed25519PublicKey, Ed25519Signature};
         let txn = create_test_raw_transaction();
         let auth = crate::transaction::TransactionAuthenticator::Ed25519 {
-            public_key: vec![0u8; 32],
-            signature: vec![0u8; 64],
+            public_key: Ed25519PublicKey([0u8; 32]),
+            signature: Ed25519Signature([0u8; 64]),
         };
         let signed = SignedTransaction::new(txn, auth);
         let bcs = signed.to_bcs().unwrap();
         assert!(!bcs.is_empty());
+    }
+
+    #[test]
+    fn test_authenticator_bcs_format() {
+        // Test that Ed25519 authenticator serializes without length prefixes
+        use crate::transaction::authenticator::{Ed25519PublicKey, Ed25519Signature};
+        let auth = crate::transaction::TransactionAuthenticator::Ed25519 {
+            public_key: Ed25519PublicKey([0xab; 32]),
+            signature: Ed25519Signature([0xcd; 64]),
+        };
+        let bcs = aptos_bcs::to_bytes(&auth).unwrap();
+
+        // Print for debugging
+        println!("Authenticator BCS bytes: {}", hex::encode(&bcs));
+        println!("First byte (variant index): {}", bcs[0]);
+        println!("Second byte (first pubkey byte): {}", bcs[1]);
+
+        // Ed25519 variant should be index 0
+        assert_eq!(bcs[0], 0, "Ed25519 variant index should be 0");
+        // Next 32 bytes should be pubkey (no length prefix)
+        assert_eq!(bcs[1], 0xab, "First pubkey byte should be 0xab");
+        // Signature starts at offset 33
+        assert_eq!(bcs[33], 0xcd, "First signature byte should be 0xcd");
+        // Total: 1 (variant) + 32 (pubkey) + 64 (sig) = 97
+        assert_eq!(bcs.len(), 97, "BCS length should be 97");
     }
 
     #[test]

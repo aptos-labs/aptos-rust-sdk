@@ -10,8 +10,8 @@
 
 use aptos_rust_sdk_v2::{
     api::response::{
-        MoveFunction, MoveFunctionGenericTypeParam, MoveModuleABI, MoveStructDef,
-        MoveStructField, MoveStructGenericTypeParam,
+        MoveFunction, MoveModuleABI, MoveStructDef,
+        MoveStructField,
     },
     codegen::{GeneratorConfig, ModuleGenerator, MoveSourceParser},
 };

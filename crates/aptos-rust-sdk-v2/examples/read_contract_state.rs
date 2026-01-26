@@ -32,6 +32,7 @@ struct AccountResource {
 
 /// Staking pool resource (partial)
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)] // Fields required for deserialization
 struct StakePool {
     active: CoinValue,
     inactive: CoinValue,

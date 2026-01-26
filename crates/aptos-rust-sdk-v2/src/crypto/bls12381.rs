@@ -18,9 +18,13 @@ pub const BLS12381_PRIVATE_KEY_LENGTH: usize = 32;
 pub const BLS12381_PUBLIC_KEY_LENGTH: usize = 48;
 /// BLS12-381 signature length in bytes (compressed).
 pub const BLS12381_SIGNATURE_LENGTH: usize = 96;
+/// BLS12-381 proof of possession length in bytes.
+pub const BLS12381_POP_LENGTH: usize = 96;
 
 /// The domain separation tag for BLS signatures in Aptos.
 const DST: &[u8] = b"BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_";
+/// The domain separation tag for BLS proof of possession.
+const DST_POP: &[u8] = b"BLS_POP_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_";
 
 /// A BLS12-381 private key.
 #[derive(Clone, Zeroize)]
@@ -38,6 +42,20 @@ impl Bls12381PrivateKey {
         rand::rngs::OsRng.fill_bytes(&mut ikm);
         let secret_key = SecretKey::key_gen(&ikm, &[]).expect("key generation should not fail");
         Self { inner: secret_key }
+    }
+
+    /// Creates a private key from a 32-byte seed.
+    ///
+    /// This uses the BLS key derivation function to derive a key from the seed.
+    pub fn from_seed(seed: &[u8]) -> AptosResult<Self> {
+        if seed.len() < 32 {
+            return Err(AptosError::InvalidPrivateKey(
+                "seed must be at least 32 bytes".to_string(),
+            ));
+        }
+        let secret_key = SecretKey::key_gen(seed, &[])
+            .map_err(|e| AptosError::InvalidPrivateKey(format!("{:?}", e)))?;
+        Ok(Self { inner: secret_key })
     }
 
     /// Creates a private key from raw bytes.
@@ -82,6 +100,17 @@ impl Bls12381PrivateKey {
     pub fn sign(&self, message: &[u8]) -> Bls12381Signature {
         let signature = self.inner.sign(message, DST, &[]);
         Bls12381Signature { inner: signature }
+    }
+
+    /// Creates a proof of possession for this key pair.
+    ///
+    /// A proof of possession (PoP) proves ownership of the private key
+    /// and prevents rogue key attacks in aggregate signature schemes.
+    pub fn create_proof_of_possession(&self) -> Bls12381ProofOfPossession {
+        let pk = self.public_key();
+        let pk_bytes = pk.to_bytes();
+        let pop = self.inner.sign(&pk_bytes, DST_POP, &[]);
+        Bls12381ProofOfPossession { inner: pop }
     }
 }
 
@@ -149,6 +178,27 @@ impl Bls12381PublicKey {
         } else {
             Err(AptosError::SignatureVerificationFailed)
         }
+    }
+}
+
+impl Bls12381PublicKey {
+    /// Aggregates multiple public keys into a single aggregated public key.
+    ///
+    /// The aggregated public key can be used to verify an aggregated signature.
+    ///
+    /// WARNING: This assumes all public keys have had their proofs-of-possession verified.
+    pub fn aggregate(public_keys: &[&Bls12381PublicKey]) -> AptosResult<Bls12381PublicKey> {
+        if public_keys.is_empty() {
+            return Err(AptosError::InvalidPublicKey(
+                "cannot aggregate empty list of public keys".to_string(),
+            ));
+        }
+        let blst_pks: Vec<&BlstPublicKey> = public_keys.iter().map(|pk| &pk.inner).collect();
+        let agg_pk = blst::min_pk::AggregatePublicKey::aggregate(&blst_pks, false)
+            .map_err(|e| AptosError::InvalidPublicKey(format!("{:?}", e)))?;
+        Ok(Bls12381PublicKey {
+            inner: agg_pk.to_public_key(),
+        })
     }
 }
 
@@ -251,6 +301,26 @@ impl Bls12381Signature {
     }
 }
 
+impl Bls12381Signature {
+    /// Aggregates multiple signatures into a single aggregated signature.
+    ///
+    /// The aggregated signature can be verified against an aggregated public key
+    /// for the same message, or against individual public keys for different messages.
+    pub fn aggregate(signatures: &[&Bls12381Signature]) -> AptosResult<Bls12381Signature> {
+        if signatures.is_empty() {
+            return Err(AptosError::InvalidSignature(
+                "cannot aggregate empty list of signatures".to_string(),
+            ));
+        }
+        let blst_sigs: Vec<&BlstSignature> = signatures.iter().map(|s| &s.inner).collect();
+        let agg_sig = blst::min_pk::AggregateSignature::aggregate(&blst_sigs, false)
+            .map_err(|e| AptosError::InvalidSignature(format!("{:?}", e)))?;
+        Ok(Bls12381Signature {
+            inner: agg_sig.to_signature(),
+        })
+    }
+}
+
 impl Signature for Bls12381Signature {
     type PublicKey = Bls12381PublicKey;
     const LENGTH: usize = BLS12381_SIGNATURE_LENGTH;
@@ -301,6 +371,80 @@ impl<'de> Deserialize<'de> for Bls12381Signature {
             let bytes = Vec::<u8>::deserialize(deserializer)?;
             Self::from_bytes(&bytes).map_err(serde::de::Error::custom)
         }
+    }
+}
+
+/// A BLS12-381 proof of possession.
+///
+/// A proof of possession (PoP) proves ownership of the private key corresponding
+/// to a public key. This prevents rogue key attacks in aggregate signature schemes.
+#[derive(Clone, PartialEq, Eq)]
+pub struct Bls12381ProofOfPossession {
+    inner: BlstSignature,
+}
+
+impl Bls12381ProofOfPossession {
+    /// Creates a proof of possession from compressed bytes (96 bytes).
+    pub fn from_bytes(bytes: &[u8]) -> AptosResult<Self> {
+        if bytes.len() != BLS12381_POP_LENGTH {
+            return Err(AptosError::InvalidSignature(format!(
+                "expected {} bytes, got {}",
+                BLS12381_POP_LENGTH,
+                bytes.len()
+            )));
+        }
+        let pop = BlstSignature::from_bytes(bytes)
+            .map_err(|e| AptosError::InvalidSignature(format!("{:?}", e)))?;
+        Ok(Self { inner: pop })
+    }
+
+    /// Creates a proof of possession from a hex string.
+    pub fn from_hex(hex_str: &str) -> AptosResult<Self> {
+        let hex_str = hex_str.strip_prefix("0x").unwrap_or(hex_str);
+        let bytes = hex::decode(hex_str)?;
+        Self::from_bytes(&bytes)
+    }
+
+    /// Returns the proof of possession as compressed bytes (96 bytes).
+    pub fn to_bytes(&self) -> Vec<u8> {
+        self.inner.compress().to_vec()
+    }
+
+    /// Returns the proof of possession as a hex string.
+    pub fn to_hex(&self) -> String {
+        format!("0x{}", hex::encode(self.inner.compress()))
+    }
+
+    /// Verifies this proof of possession against a public key.
+    ///
+    /// Returns Ok(()) if the PoP is valid, or an error if invalid.
+    pub fn verify(&self, public_key: &Bls12381PublicKey) -> AptosResult<()> {
+        let pk_bytes = public_key.to_bytes();
+        let result = self.inner.verify(
+            true,
+            &pk_bytes,
+            DST_POP,
+            &[],
+            &public_key.inner,
+            true,
+        );
+        if result == BLST_ERROR::BLST_SUCCESS {
+            Ok(())
+        } else {
+            Err(AptosError::SignatureVerificationFailed)
+        }
+    }
+}
+
+impl fmt::Debug for Bls12381ProofOfPossession {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Bls12381ProofOfPossession({})", self.to_hex())
+    }
+}
+
+impl fmt::Display for Bls12381ProofOfPossession {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.to_hex())
     }
 }
 

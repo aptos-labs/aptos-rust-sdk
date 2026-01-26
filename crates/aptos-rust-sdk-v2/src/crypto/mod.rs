@@ -82,8 +82,9 @@ pub use secp256r1::{
 // Re-export BLS12-381 types
 #[cfg(feature = "bls")]
 pub use bls12381::{
-    Bls12381PrivateKey, Bls12381PublicKey, Bls12381Signature,
-    BLS12381_PRIVATE_KEY_LENGTH, BLS12381_PUBLIC_KEY_LENGTH, BLS12381_SIGNATURE_LENGTH,
+    Bls12381PrivateKey, Bls12381ProofOfPossession, Bls12381PublicKey, Bls12381Signature,
+    BLS12381_POP_LENGTH, BLS12381_PRIVATE_KEY_LENGTH, BLS12381_PUBLIC_KEY_LENGTH, 
+    BLS12381_SIGNATURE_LENGTH,
 };
 
 /// The authentication key scheme byte for Ed25519 single-key accounts.

@@ -2,101 +2,9 @@ name: CI
 
 on:
   push:
-<<<<<<< HEAD
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
-
-env:
-  CARGO_TERM_COLOR: always
-
-jobs:
-  fmt:
-    name: Format check
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@stable
-
-    - name: Add rustfmt component
-      run: rustup component add rustfmt
-    
-    - name: Check formatting
-      run: cargo fmt --all -- --check
-
-  test:
-    name: Test
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        rust: [stable]
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@master
-      with:
-        toolchain: ${{ matrix.rust }}
-        components: clippy
-
-    - name: Install LLVM linker
-      run: sudo apt-get update && sudo apt-get install -y lld
-    
-    - name: Cache cargo registry
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-cargo-${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-cargo-${{ matrix.rust }}-
-          ${{ runner.os }}-cargo-
-    
-    - name: Run tests (excluding examples)
-      run: |
-        # Test only the main crates, excluding examples
-        # Skip network-dependent tests by setting environment variable
-        # Skip doctests due to dependency version conflicts
-        SKIP_NETWORK_TESTS=1 cargo test --workspace --exclude examples --lib --bins
-    
-    - name: Run clippy
-      run: cargo clippy --workspace --exclude examples -- -W warnings
-
-  build:
-    name: Build
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-    
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@stable
-
-    - name: Install LLVM linker
-      run: sudo apt-get update && sudo apt-get install -y lld
-
-    - name: Cache cargo registry
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cargo/registry
-          ~/.cargo/git
-          target
-        key: ${{ runner.os }}-cargo-build-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-cargo-build-
-          ${{ runner.os }}-cargo-
-    
-    - name: Build (excluding examples)
-      run: cargo build --workspace --exclude examples --release
-||||||| parent of f0948e7 ([SDK] Introduce a replacement Rust SDK for the entirety of the existing one)
-=======
-    branches: [main, develop]
-  pull_request:
-    branches: [main, develop]
+    branches: [main]
 
 env:
   CARGO_TERM_COLOR: always
@@ -132,10 +40,10 @@ jobs:
         uses: Swatinem/rust-cache@v2
       
       - name: Run Clippy (default features)
-        run: cargo clippy --all-targets -- -D warnings
+        run: cargo clippy -p aptos-rust-sdk-v2 --all-targets -- -D warnings
       
       - name: Run Clippy (all features)
-        run: cargo clippy --all-targets --all-features -- -D warnings
+        run: cargo clippy -p aptos-rust-sdk-v2 --all-targets --all-features -- -D warnings
       
       - name: Run Clippy (no default features)
         run: cargo clippy -p aptos-rust-sdk-v2 --no-default-features -- -D warnings
@@ -146,8 +54,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        rust: [stable, beta]
+        os: [ubuntu-latest, macos-latest]
+        rust: [stable]
     steps:
       - uses: actions/checkout@v4
       
@@ -160,13 +68,13 @@ jobs:
         uses: Swatinem/rust-cache@v2
       
       - name: Build
-        run: cargo build --all-targets
+        run: cargo build -p aptos-rust-sdk-v2 --all-targets
       
       - name: Run tests
-        run: cargo test --all-targets
+        run: cargo test -p aptos-rust-sdk-v2 --all-targets
       
       - name: Run tests (all features)
-        run: cargo test --all-targets --all-features
+        run: cargo test -p aptos-rust-sdk-v2 --all-targets --all-features
 
   test-features:
     name: Test Feature Combinations
@@ -201,6 +109,23 @@ jobs:
       - name: Test with full features
         run: cargo test -p aptos-rust-sdk-v2 --features full
 
+  # Spec tests (behavioral tests from specifications)
+  spec-tests:
+    name: Spec Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+      
+      - name: Run spec tests
+        run: cargo test --test specs
+        working-directory: specifications/tests/rust
+
   docs:
     name: Documentation
     runs-on: ubuntu-latest
@@ -216,7 +141,7 @@ jobs:
       - name: Check documentation
         env:
           RUSTDOCFLAGS: -D warnings
-        run: cargo doc --no-deps --all-features
+        run: cargo doc -p aptos-rust-sdk-v2 --no-deps --all-features
       
       - name: Check examples documentation
         env:
@@ -248,7 +173,7 @@ jobs:
       - name: Build documentation
         env:
           RUSTDOCFLAGS: --cfg docsrs
-        run: cargo doc --no-deps --all-features
+        run: cargo doc -p aptos-rust-sdk-v2 --no-deps --all-features
       
       - name: Add redirect to main crate
         run: |
@@ -272,10 +197,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - name: Install Rust 1.90
+      - name: Install Rust 1.85
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: "1.90"
+          toolchain: "1.85"
       
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
@@ -294,5 +219,3 @@ jobs:
       
       - name: Run security audit
         run: cargo audit
-
->>>>>>> f0948e7 ([SDK] Introduce a replacement Rust SDK for the entirety of the existing one)

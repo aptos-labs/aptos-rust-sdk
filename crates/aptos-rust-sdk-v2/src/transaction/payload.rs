@@ -4,11 +4,47 @@ use crate::types::{MoveModuleId, TypeTag};
 use serde::{Deserialize, Serialize};
 
 /// The payload of a transaction, specifying what action to take.
+///
+/// Note: Variant indices must match Aptos core for BCS compatibility:
+/// - 0: Script
+/// - 1: ModuleBundle (deprecated)
+/// - 2: EntryFunction
+/// - 3: Multisig
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TransactionPayload {
-    /// Execute a script with bytecode.
+    /// Execute a script with bytecode (variant 0).
     Script(Script),
-    /// Call an entry function on a module.
+    /// Deprecated module bundle payload (variant 1).
+    /// This variant exists only for BCS compatibility.
+    #[doc(hidden)]
+    ModuleBundle(DeprecatedModuleBundle),
+    /// Call an entry function on a module (variant 2).
+    EntryFunction(EntryFunction),
+    /// Multisig transaction payload (variant 3).
+    Multisig(Multisig),
+}
+
+/// Deprecated module bundle payload.
+/// This type exists only for BCS enum variant compatibility.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeprecatedModuleBundle {
+    #[doc(hidden)]
+    _private: (),
+}
+
+/// Multisig transaction payload.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Multisig {
+    /// The multisig account address.
+    pub multisig_address: crate::types::AccountAddress,
+    /// The inner transaction payload (optional).
+    pub transaction_payload: Option<MultisigTransactionPayload>,
+}
+
+/// Inner payload for multisig transactions.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MultisigTransactionPayload {
+    /// Entry function call.
     EntryFunction(EntryFunction),
 }
 
@@ -148,8 +184,8 @@ impl EntryFunction {
             type_args: vec![],
             args: vec![
                 aptos_bcs::to_bytes(&recipient)
-                    .map_err(|e| crate::error::AptosError::bcs(e))?,
-                aptos_bcs::to_bytes(&amount).map_err(|e| crate::error::AptosError::bcs(e))?,
+                    .map_err(crate::error::AptosError::bcs)?,
+                aptos_bcs::to_bytes(&amount).map_err(crate::error::AptosError::bcs)?,
             ],
         })
     }
@@ -173,8 +209,8 @@ impl EntryFunction {
             type_args: vec![coin_type],
             args: vec![
                 aptos_bcs::to_bytes(&recipient)
-                    .map_err(|e| crate::error::AptosError::bcs(e))?,
-                aptos_bcs::to_bytes(&amount).map_err(|e| crate::error::AptosError::bcs(e))?,
+                    .map_err(crate::error::AptosError::bcs)?,
+                aptos_bcs::to_bytes(&amount).map_err(crate::error::AptosError::bcs)?,
             ],
         })
     }

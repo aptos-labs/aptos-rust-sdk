@@ -128,8 +128,8 @@ impl MoveTypeMapper {
         }
 
         // Handle Option types (0x1::option::Option<T>)
-        if move_type.contains("::option::Option<") {
-            if let Some(start) = move_type.find("Option<") {
+        if move_type.contains("::option::Option<")
+            && let Some(start) = move_type.find("Option<") {
                 let rest = &move_type[start + 7..];
                 if let Some(end) = rest.rfind('>') {
                     let inner = &rest[..end];
@@ -137,7 +137,6 @@ impl MoveTypeMapper {
                     return RustType::new(format!("Option<{}>", inner_type.path));
                 }
             }
-        }
 
         // Handle String type
         if move_type == "0x1::string::String" || move_type.ends_with("::string::String") {

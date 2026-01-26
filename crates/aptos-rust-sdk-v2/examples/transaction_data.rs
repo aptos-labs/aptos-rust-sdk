@@ -11,7 +11,6 @@
 use aptos_rust_sdk_v2::{
     account::Ed25519Account,
     transaction::EntryFunction,
-    types::AccountAddress,
     Aptos, AptosConfig,
 };
 use serde::Deserialize;
@@ -51,7 +50,7 @@ async fn main() -> anyhow::Result<()> {
 
     let payload = EntryFunction::apt_transfer(recipient.address(), 10_000_000)?;
     let pending = aptos.sign_and_submit(&sender, payload.into()).await?;
-    let txn_hash = pending.data.hash.clone();
+    let txn_hash = pending.data.hash;
     println!("Submitted transaction: {}", txn_hash);
 
     // Wait for the transaction
@@ -115,26 +114,22 @@ async fn main() -> anyhow::Result<()> {
 
             // Parse specific event types
             if event_type.contains("DepositEvent") {
-                if let Some(data) = event.get("data") {
-                    if let Ok(deposit) = serde_json::from_value::<DepositEvent>(data.clone()) {
+                if let Some(data) = event.get("data")
+                    && let Ok(deposit) = serde_json::from_value::<DepositEvent>(data.clone()) {
                         let amount: u64 = deposit.amount.parse().unwrap_or(0);
                         println!("    Amount deposited: {} APT", amount as f64 / 100_000_000.0);
                     }
-                }
             } else if event_type.contains("WithdrawEvent") {
-                if let Some(data) = event.get("data") {
-                    if let Ok(withdraw) = serde_json::from_value::<WithdrawEvent>(data.clone()) {
+                if let Some(data) = event.get("data")
+                    && let Ok(withdraw) = serde_json::from_value::<WithdrawEvent>(data.clone()) {
                         let amount: u64 = withdraw.amount.parse().unwrap_or(0);
                         println!("    Amount withdrawn: {} APT", amount as f64 / 100_000_000.0);
                     }
-                }
-            } else if event_type.contains("CreateAccountEvent") {
-                if let Some(data) = event.get("data") {
-                    if let Ok(create) = serde_json::from_value::<CreateAccountEvent>(data.clone()) {
+            } else if event_type.contains("CreateAccountEvent")
+                && let Some(data) = event.get("data")
+                    && let Ok(create) = serde_json::from_value::<CreateAccountEvent>(data.clone()) {
                         println!("    Created account: {}", create.created);
                     }
-                }
-            }
 
             // Show raw data for debugging
             if let Some(data) = event.get("data") {
@@ -224,8 +219,8 @@ async fn main() -> anyhow::Result<()> {
         )
         .await?;
 
-    if let Some(coin) = apt_resource.data.data.get("coin") {
-        if let Some(value) = coin.get("value").and_then(|v| v.as_str()) {
+    if let Some(coin) = apt_resource.data.data.get("coin")
+        && let Some(value) = coin.get("value").and_then(|v| v.as_str()) {
             let balance: u64 = value.parse().unwrap_or(0);
             println!(
                 "\nSender APT balance: {} APT ({} octas)",
@@ -233,7 +228,6 @@ async fn main() -> anyhow::Result<()> {
                 balance
             );
         }
-    }
 
     // ==== Part 6: Get Transaction by Hash (lookup previously submitted) ====
     println!("\n=== Part 6: Lookup Transaction by Hash ===");

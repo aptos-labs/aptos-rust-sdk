@@ -5,7 +5,7 @@
 
 #[cfg(feature = "ed25519")]
 mod crypto_tests {
-    use aptos_rust_sdk_v2::crypto::{Ed25519PrivateKey, Signer, Verifier};
+    use aptos_rust_sdk_v2::crypto::Ed25519PrivateKey;
 
     #[test]
     fn test_sign_verify_roundtrip() {
@@ -80,7 +80,7 @@ mod crypto_tests {
 
 #[cfg(all(feature = "ed25519", feature = "secp256k1"))]
 mod multi_scheme_crypto_tests {
-    use aptos_rust_sdk_v2::crypto::{Ed25519PrivateKey, Secp256k1PrivateKey, Signer, Verifier};
+    use aptos_rust_sdk_v2::crypto::{Ed25519PrivateKey, Secp256k1PrivateKey};
 
     #[test]
     fn test_ed25519_and_secp256k1_produce_different_signatures() {
@@ -175,7 +175,7 @@ mod account_tests {
     fn test_account_from_private_key_hex() {
         // Generate an account and get its private key
         let original = Ed25519Account::generate();
-        let private_key_hex = hex::encode(original.public_key_bytes()); // This would need the actual private key
+        let _private_key_hex = hex::encode(original.public_key_bytes()); // This would need the actual private key
         
         // For now, test that generation works consistently
         let account1 = Ed25519Account::generate();
@@ -200,7 +200,7 @@ mod account_tests {
 
 #[cfg(feature = "ed25519")]
 mod multi_ed25519_tests {
-    use aptos_rust_sdk_v2::account::{Account, MultiEd25519Account};
+    use aptos_rust_sdk_v2::account::MultiEd25519Account;
     use aptos_rust_sdk_v2::crypto::Ed25519PrivateKey;
 
     #[test]
@@ -493,7 +493,7 @@ mod transaction_tests {
 
 #[cfg(feature = "ed25519")]
 mod signing_flow_tests {
-    use aptos_rust_sdk_v2::account::{Account, Ed25519Account};
+    use aptos_rust_sdk_v2::account::Ed25519Account;
     use aptos_rust_sdk_v2::transaction::{
         builder::sign_transaction, EntryFunction, TransactionBuilder, TransactionPayload,
     };
@@ -523,8 +523,8 @@ mod signing_flow_tests {
         // The authenticator type depends on the account type
         match &signed_txn.authenticator {
             aptos_rust_sdk_v2::transaction::TransactionAuthenticator::Ed25519 { public_key, signature } => {
-                assert_eq!(public_key.len(), 32);
-                assert_eq!(signature.len(), 64);
+                assert_eq!(public_key.0.len(), 32);
+                assert_eq!(signature.0.len(), 64);
             }
             _ => panic!("Expected Ed25519 authenticator"),
         }

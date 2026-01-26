@@ -187,16 +187,13 @@ impl AnsClient {
         match result {
             Ok(response) => {
                 // Response is [{ "vec": ["0x..."] }] or [{ "vec": [] }]
-                if let Some(first) = response.data.first() {
-                    if let Some(vec_obj) = first.get("vec") {
-                        if let Some(arr) = vec_obj.as_array() {
-                            if let Some(addr_str) = arr.first().and_then(|v| v.as_str()) {
+                if let Some(first) = response.data.first()
+                    && let Some(vec_obj) = first.get("vec")
+                        && let Some(arr) = vec_obj.as_array()
+                            && let Some(addr_str) = arr.first().and_then(|v| v.as_str()) {
                                 let address = AccountAddress::from_hex(addr_str)?;
                                 return Ok(Some(address));
                             }
-                        }
-                    }
-                }
                 Ok(None)
             }
             Err(AptosError::Api { status_code: 404, .. }) => Ok(None),
@@ -237,10 +234,10 @@ impl AnsClient {
         match result {
             Ok(response) => {
                 // Response format: [{ "vec": [{ "domain_name": "...", "subdomain_name": { "vec": [...] } }] }]
-                if let Some(first) = response.data.first() {
-                    if let Some(vec_obj) = first.get("vec") {
-                        if let Some(arr) = vec_obj.as_array() {
-                            if let Some(name_obj) = arr.first() {
+                if let Some(first) = response.data.first()
+                    && let Some(vec_obj) = first.get("vec")
+                        && let Some(arr) = vec_obj.as_array()
+                            && let Some(name_obj) = arr.first() {
                                 let domain = name_obj
                                     .get("domain_name")
                                     .and_then(|v| v.as_str())
@@ -266,9 +263,6 @@ impl AnsClient {
                                     return Ok(Some(full_name));
                                 }
                             }
-                        }
-                    }
-                }
                 Ok(None)
             }
             Err(AptosError::Api { status_code: 404, .. }) => Ok(None),
@@ -320,17 +314,13 @@ impl AnsClient {
 
         match result {
             Ok(response) => {
-                if let Some(first) = response.data.first() {
-                    if let Some(vec_obj) = first.get("vec") {
-                        if let Some(arr) = vec_obj.as_array() {
-                            if let Some(exp_str) = arr.first().and_then(|v| v.as_str()) {
-                                if let Ok(exp) = exp_str.parse::<u64>() {
+                if let Some(first) = response.data.first()
+                    && let Some(vec_obj) = first.get("vec")
+                        && let Some(arr) = vec_obj.as_array()
+                            && let Some(exp_str) = arr.first().and_then(|v| v.as_str())
+                                && let Ok(exp) = exp_str.parse::<u64>() {
                                     return Ok(Some(exp));
                                 }
-                            }
-                        }
-                    }
-                }
                 Ok(None)
             }
             Err(AptosError::Api { status_code: 404, .. }) => Ok(None),
@@ -356,11 +346,10 @@ impl AnsClient {
     /// ```
     pub async fn resolve(&self, address_or_name: &str) -> AptosResult<AccountAddress> {
         // Try to parse as address first
-        if address_or_name.starts_with("0x") || address_or_name.starts_with("0X") {
-            if let Ok(address) = AccountAddress::from_hex(address_or_name) {
+        if (address_or_name.starts_with("0x") || address_or_name.starts_with("0X"))
+            && let Ok(address) = AccountAddress::from_hex(address_or_name) {
                 return Ok(address);
             }
-        }
 
         // Try as ANS name
         self.get_address(address_or_name)

@@ -79,8 +79,8 @@ impl Mnemonic {
     /// Derives the seed from this mnemonic with a passphrase.
     pub fn to_seed_with_passphrase(&self, passphrase: &str) -> [u8; 64] {
         let mnemonic = bip39::Mnemonic::parse_normalized(&self.phrase).expect("validated mnemonic");
-        let seed = mnemonic.to_seed(passphrase);
-        seed
+        
+        mnemonic.to_seed(passphrase)
     }
 
     /// Derives an Ed25519 private key using the Aptos derivation path.
@@ -120,8 +120,8 @@ fn derive_ed25519_from_seed(seed: &[u8], index: u32) -> AptosResult<[u8; 32]> {
     let path = [
         44 | 0x80000000,      // 44' (purpose)
         637 | 0x80000000,     // 637' (Aptos coin type)
-        0 | 0x80000000,       // 0' (account)
-        0 | 0x80000000,       // 0' (change)
+        0x80000000,       // 0' (account)
+        0x80000000,       // 0' (change)
         index | 0x80000000,   // index' (address index)
     ];
 

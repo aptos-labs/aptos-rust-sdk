@@ -15,6 +15,8 @@ use std::time::Duration;
 
 #[cfg(feature = "faucet")]
 use crate::api::FaucetClient;
+#[cfg(feature = "faucet")]
+use crate::types::HashValue;
 
 #[cfg(feature = "indexer")]
 use crate::api::IndexerClient;
@@ -407,6 +409,8 @@ impl Aptos {
     // === Faucet ===
 
     /// Funds an account using the faucet.
+    ///
+    /// This method waits for the faucet transactions to be confirmed before returning.
     #[cfg(feature = "faucet")]
     pub async fn fund_account(
         &self,
@@ -417,7 +421,21 @@ impl Aptos {
             .faucet
             .as_ref()
             .ok_or_else(|| AptosError::FeatureNotEnabled("faucet".into()))?;
-        faucet.fund(address, amount).await
+        let txn_hashes = faucet.fund(address, amount).await?;
+
+        // Wait for all faucet transactions to be confirmed
+        for hash_str in &txn_hashes {
+            // Hash might have 0x prefix or not
+            let hash_str_clean = hash_str.strip_prefix("0x").unwrap_or(hash_str);
+            if let Ok(hash) = HashValue::from_hex(hash_str_clean) {
+                // Wait for the transaction to be confirmed
+                self.fullnode
+                    .wait_for_transaction(&hash, Some(Duration::from_secs(60)))
+                    .await?;
+            }
+        }
+
+        Ok(txn_hashes)
     }
 
     /// Creates a funded account.
@@ -428,8 +446,6 @@ impl Aptos {
     ) -> AptosResult<crate::account::Ed25519Account> {
         let account = crate::account::Ed25519Account::generate();
         self.fund_account(account.address(), amount).await?;
-        // Wait a bit for the account to be created on chain
-        tokio::time::sleep(Duration::from_secs(2)).await;
         Ok(account)
     }
 
@@ -508,11 +524,10 @@ impl Aptos {
     /// ```
     pub async fn resolve(&self, address_or_name: &str) -> AptosResult<AccountAddress> {
         // Try to parse as address first
-        if address_or_name.starts_with("0x") || address_or_name.starts_with("0X") {
-            if let Ok(address) = AccountAddress::from_hex(address_or_name) {
+        if (address_or_name.starts_with("0x") || address_or_name.starts_with("0X"))
+            && let Ok(address) = AccountAddress::from_hex(address_or_name) {
                 return Ok(address);
             }
-        }
 
         // Try as ANS name
         self.resolve_name(address_or_name)
@@ -680,14 +695,12 @@ mod tests {
     async fn test_get_balance() {
         let server = MockServer::start().await;
 
-        Mock::given(method("GET"))
-            .and(path_regex(r"/v1/accounts/0x[0-9a-f]+/resource/.*CoinStore.*"))
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-                "type": "0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>",
-                "data": {
-                    "coin": {"value": "5000000000"}
-                }
-            })))
+        // get_balance now uses view function instead of CoinStore resource
+        Mock::given(method("POST"))
+            .and(path("/v1/view"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                "5000000000"
+            ])))
             .expect(1)
             .mount(&server)
             .await;

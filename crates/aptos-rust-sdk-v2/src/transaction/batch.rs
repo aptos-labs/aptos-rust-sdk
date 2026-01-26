@@ -775,10 +775,7 @@ mod tests {
 
         SignedTransaction {
             raw_txn,
-            authenticator: TransactionAuthenticator::Ed25519 {
-                public_key: vec![0u8; 32],
-                signature: vec![0u8; 64],
-            },
+            authenticator: TransactionAuthenticator::ed25519(vec![0u8; 32], vec![0u8; 64]),
         }
     }
 }

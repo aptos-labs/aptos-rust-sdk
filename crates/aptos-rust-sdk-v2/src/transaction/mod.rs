@@ -101,7 +101,7 @@ pub use input::{
     functions, move_none, move_some, move_string, move_vec, types as move_types,
     InputEntryFunctionData, InputEntryFunctionDataBuilder, IntoMoveArg, MoveU256,
 };
-pub use payload::{EntryFunction, Script, TransactionPayload};
+pub use payload::{EntryFunction, Script, ScriptArgument, TransactionPayload};
 pub use simulation::{
     SimulatedEvent, SimulationOptions, SimulationResult, StateChange, VmError, VmErrorCategory,
 };

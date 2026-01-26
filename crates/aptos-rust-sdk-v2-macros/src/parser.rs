@@ -3,7 +3,6 @@
 use proc_macro2::Span;
 use std::collections::HashMap;
 use syn::{
-    braced,
     parse::{Parse, ParseStream},
     Ident, LitStr, Result, Token,
 };
@@ -115,6 +114,7 @@ pub struct MoveFunctionInfo {
 #[derive(Debug, Clone, Default)]
 pub struct MoveSourceInfo {
     /// Module documentation.
+    #[allow(dead_code)] // Reserved for future use in generated documentation
     pub doc: Option<String>,
     /// Functions by name.
     pub functions: HashMap<String, MoveFunctionInfo>,
@@ -239,9 +239,9 @@ fn extract_type_params(signature: &str) -> Vec<String> {
     if let Some(fun_idx) = signature.find("fun ") {
         let after_fun = &signature[fun_idx..];
 
-        if let Some(lt_idx) = after_fun.find('<') {
-            if let Some(gt_idx) = after_fun.find('>') {
-                if lt_idx < gt_idx {
+        if let Some(lt_idx) = after_fun.find('<')
+            && let Some(gt_idx) = after_fun.find('>')
+                && lt_idx < gt_idx {
                     let type_params = &after_fun[lt_idx + 1..gt_idx];
                     for param in type_params.split(',') {
                         let param = param.trim();
@@ -254,8 +254,6 @@ fn extract_type_params(signature: &str) -> Vec<String> {
                         }
                     }
                 }
-            }
-        }
     }
 
     params

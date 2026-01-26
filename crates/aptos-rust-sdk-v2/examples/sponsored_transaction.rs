@@ -6,7 +6,7 @@
 //! Run with: `cargo run --example sponsored_transaction --features "ed25519,faucet"`
 
 use aptos_rust_sdk_v2::{
-    account::{Account, Ed25519Account},
+    account::Ed25519Account,
     transaction::{
         builder::sign_fee_payer_transaction, types::FeePayerRawTransaction, EntryFunction,
         TransactionBuilder,

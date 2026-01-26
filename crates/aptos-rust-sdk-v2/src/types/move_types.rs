@@ -194,31 +194,44 @@ pub type MoveStructTag = StructTag;
 ///
 /// Type tags are used to specify types in entry function calls and
 /// to describe the types of resources and values.
+///
+/// Note: Variant indices must match Move core for BCS compatibility:
+/// - 0: Bool
+/// - 1: U8
+/// - 2: U64
+/// - 3: U128
+/// - 4: Address
+/// - 5: Signer
+/// - 6: Vector
+/// - 7: Struct
+/// - 8: U16 (added later)
+/// - 9: U32 (added later)
+/// - 10: U256 (added later)
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum TypeTag {
-    /// Boolean type
+    /// Boolean type (variant 0)
     Bool,
-    /// 8-bit unsigned integer
+    /// 8-bit unsigned integer (variant 1)
     U8,
-    /// 16-bit unsigned integer
-    U16,
-    /// 32-bit unsigned integer
-    U32,
-    /// 64-bit unsigned integer
+    /// 64-bit unsigned integer (variant 2)
     U64,
-    /// 128-bit unsigned integer
+    /// 128-bit unsigned integer (variant 3)
     U128,
-    /// 256-bit unsigned integer
-    U256,
-    /// Address type
+    /// Address type (variant 4)
     Address,
-    /// Signer type (only valid in certain contexts)
+    /// Signer type (variant 5, only valid in certain contexts)
     Signer,
-    /// Vector type with element type
+    /// Vector type with element type (variant 6)
     Vector(Box<TypeTag>),
-    /// Struct type
+    /// Struct type (variant 7)
     Struct(Box<StructTag>),
+    /// 16-bit unsigned integer (variant 8, added later)
+    U16,
+    /// 32-bit unsigned integer (variant 9, added later)
+    U32,
+    /// 256-bit unsigned integer (variant 10, added later)
+    U256,
 }
 
 impl TypeTag {

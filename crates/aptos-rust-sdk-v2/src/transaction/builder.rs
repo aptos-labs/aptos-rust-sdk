@@ -193,23 +193,14 @@ fn make_transaction_authenticator(
             TransactionAuthenticator::multi_ed25519(public_key, signature)
         }
         crate::crypto::MULTI_KEY_SCHEME => {
-            TransactionAuthenticator::multi_key(public_key, signature)
+            // Multi-key uses SingleSender variant with AccountAuthenticator::MultiKey
+            TransactionAuthenticator::single_sender(AccountAuthenticator::multi_key(
+                public_key, signature,
+            ))
         }
-        _ => {
-            // Use single key authenticator for other schemes
-            TransactionAuthenticator::SingleKey {
-                authenticator: crate::transaction::authenticator::SingleKeyAuthenticator {
-                    public_key: crate::transaction::authenticator::AnyPublicKey {
-                        scheme: scheme_to_signature_scheme(scheme),
-                        public_key,
-                    },
-                    signature: crate::transaction::authenticator::AnySignature {
-                        scheme: scheme_to_signature_scheme(scheme),
-                        signature,
-                    },
-                },
-            }
-        }
+        // For other/unknown schemes, default to Ed25519 format
+        // (signature scheme detection happens at the account level)
+        _ => TransactionAuthenticator::ed25519(public_key, signature),
     }
 }
 
@@ -226,24 +217,8 @@ fn make_account_authenticator(
             signature,
         },
         crate::crypto::MULTI_KEY_SCHEME => AccountAuthenticator::multi_key(public_key, signature),
-        _ => {
-            // Use single key authenticator for other schemes
-            AccountAuthenticator::single_key(
-                scheme_to_signature_scheme(scheme),
-                public_key,
-                signature,
-            )
-        }
-    }
-}
-
-/// Converts a scheme byte to a SignatureScheme enum.
-fn scheme_to_signature_scheme(scheme: u8) -> crate::transaction::authenticator::SignatureScheme {
-    match scheme {
-        1 => crate::transaction::authenticator::SignatureScheme::Secp256k1,
-        2 => crate::transaction::authenticator::SignatureScheme::Secp256r1,
-        crate::crypto::KEYLESS_SCHEME => crate::transaction::authenticator::SignatureScheme::Keyless,
-        _ => crate::transaction::authenticator::SignatureScheme::Ed25519,
+        // For other/unknown schemes, default to Ed25519 format
+        _ => AccountAuthenticator::ed25519(public_key, signature),
     }
 }
 
@@ -476,7 +451,7 @@ mod tests {
     #[cfg(feature = "ed25519")]
     #[test]
     fn test_sign_transaction() {
-        use crate::account::{Account, Ed25519Account};
+        use crate::account::Ed25519Account;
 
         let account = Ed25519Account::generate();
         let recipient = AccountAddress::from_hex("0x123").unwrap();
@@ -525,7 +500,7 @@ mod tests {
     #[cfg(feature = "ed25519")]
     #[test]
     fn test_sign_fee_payer_transaction() {
-        use crate::account::{Account, Ed25519Account};
+        use crate::account::Ed25519Account;
 
         let sender = Ed25519Account::generate();
         let fee_payer = Ed25519Account::generate();

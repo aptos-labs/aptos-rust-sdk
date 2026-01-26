@@ -122,6 +122,7 @@ pub trait Account: Send + Sync {
 /// This is useful when you need to store different account types
 /// in the same collection or pass them around generically.
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)] // Keyless account is intentionally large; boxing would complicate API
 pub enum AnyAccount {
     /// An Ed25519 account.
     #[cfg(feature = "ed25519")]

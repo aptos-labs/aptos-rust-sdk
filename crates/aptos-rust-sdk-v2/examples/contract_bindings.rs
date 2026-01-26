@@ -8,7 +8,7 @@
 //! cargo run --example contract_bindings --features "ed25519,macros"
 //! ```
 
-use aptos_rust_sdk_v2::{aptos_contract, types::AccountAddress, Aptos, AptosConfig};
+use aptos_rust_sdk_v2::{aptos_contract, types::AccountAddress};
 
 // ANCHOR: define_contract
 // Generate type-safe bindings from inline ABI

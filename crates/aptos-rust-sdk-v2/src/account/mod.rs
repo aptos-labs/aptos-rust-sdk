@@ -1,4 +1,5 @@
 //! Account management for the Aptos SDK.
+#![allow(clippy::module_inception)] // account::account is intentional naming
 //!
 //! This module provides account types that wrap cryptographic keys
 //! and provide a unified interface for signing transactions.

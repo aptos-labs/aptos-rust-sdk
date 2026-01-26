@@ -71,6 +71,7 @@ impl InputEntryFunctionData {
     /// ```rust,ignore
     /// let builder = InputEntryFunctionData::new("0x1::aptos_account::transfer");
     /// ```
+    #[allow(clippy::new_ret_no_self)] // Returns builder pattern intentionally
     pub fn new(function_id: &str) -> InputEntryFunctionDataBuilder {
         InputEntryFunctionDataBuilder::new(function_id)
     }
@@ -316,7 +317,7 @@ impl InputEntryFunctionDataBuilder {
     /// validation or serialization failed.
     pub fn build(self) -> AptosResult<TransactionPayload> {
         // Check for module parsing error
-        let module = self.module.map_err(|e| AptosError::Transaction(e))?;
+        let module = self.module.map_err(AptosError::Transaction)?;
 
         // Check for any accumulated errors
         if !self.errors.is_empty() {
@@ -333,7 +334,7 @@ impl InputEntryFunctionDataBuilder {
 
     /// Builds just the entry function (without wrapping in TransactionPayload).
     pub fn build_entry_function(self) -> AptosResult<EntryFunction> {
-        let module = self.module.map_err(|e| AptosError::Transaction(e))?;
+        let module = self.module.map_err(AptosError::Transaction)?;
 
         if !self.errors.is_empty() {
             return Err(AptosError::Transaction(self.errors.join("; ")));
@@ -358,7 +359,7 @@ pub trait IntoMoveArg {
 
 impl<T: Serialize> IntoMoveArg for T {
     fn into_move_arg(self) -> AptosResult<Vec<u8>> {
-        aptos_bcs::to_bytes(&self).map_err(|e| AptosError::bcs(e))
+        aptos_bcs::to_bytes(&self).map_err(AptosError::bcs)
     }
 }
 
@@ -425,7 +426,7 @@ pub struct MoveU256(pub [u8; 32]);
 
 impl MoveU256 {
     /// Creates a MoveU256 from a decimal string.
-    pub fn from_str(s: &str) -> AptosResult<Self> {
+    pub fn parse(s: &str) -> AptosResult<Self> {
         // Parse as big integer and convert to little-endian bytes
         let mut bytes = [0u8; 32];
         

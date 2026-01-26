@@ -1,6 +1,6 @@
 //! Code generation for contract bindings.
 
-use crate::abi::{MoveFunction, MoveModuleABI, MoveStructDef, MoveStructField};
+use crate::abi::{MoveFunction, MoveModuleABI, MoveStructDef};
 use crate::parser::MoveSourceInfo;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
@@ -35,8 +35,8 @@ pub fn generate_contract_impl(
         .collect();
 
     // Constants
-    let address_const = format!("{}", address);
-    let module_const = format!("{}", module_name);
+    let address_const = address.to_string();
+    let module_const = module_name.to_string();
 
     quote! {
         /// Generated contract bindings for `#address::#module_name`.
@@ -166,7 +166,7 @@ fn generate_entry_function(
 
     // Type arguments
     let has_type_params = !func.generic_type_params.is_empty();
-    let type_param_names: Vec<_> = source_func
+    let _type_param_names: Vec<_> = source_func
         .map(|f| f.type_param_names.clone())
         .unwrap_or_default();
 
@@ -313,11 +313,10 @@ fn get_param_name(
     source_func: Option<&crate::parser::MoveFunctionInfo>,
 ) -> String {
     // Try to get from source
-    if let Some(func) = source_func {
-        if let Some(name) = func.param_names.get(index) {
+    if let Some(func) = source_func
+        && let Some(name) = func.param_names.get(index) {
             return name.clone();
         }
-    }
 
     // Generate from type
     match move_type {

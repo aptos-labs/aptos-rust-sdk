@@ -84,22 +84,68 @@ See the [`examples/`](examples/) directory for complete working examples:
 - [`multi_agent.rs`](examples/multi_agent.rs) - Multi-signer transactions
 - [`view_function.rs`](examples/view_function.rs) - Read-only queries
 
-## Testing
+## Development
 
-### Running Unit Tests
+### Building
+
+```bash
+# Build with default features (ed25519 + secp256k1)
+cargo build -p aptos-rust-sdk-v2
+
+# Build with all features
+cargo build -p aptos-rust-sdk-v2 --all-features
+
+# Build with specific features only
+cargo build -p aptos-rust-sdk-v2 --features "ed25519,secp256r1,bls"
+
+# Check compilation (faster than build)
+cargo check -p aptos-rust-sdk-v2 --all-features
+
+# Release build (optimized)
+cargo build -p aptos-rust-sdk-v2 --release --all-features
+```
+
+### Linting
+
+```bash
+# Run clippy lints
+cargo clippy -p aptos-rust-sdk-v2 --all-features -- -D warnings
+
+# Check formatting
+cargo fmt -p aptos-rust-sdk-v2 -- --check
+
+# Format code
+cargo fmt -p aptos-rust-sdk-v2
+```
+
+### Testing
+
+#### Unit Tests
 
 ```bash
 # Run unit tests with default features
+cargo test -p aptos-rust-sdk-v2
+
+# Run tests with all features
+cargo test -p aptos-rust-sdk-v2 --all-features
+
+# Run tests with specific features
+cargo test -p aptos-rust-sdk-v2 --features "full"
+
+# Run a specific test by name
+cargo test -p aptos-rust-sdk-v2 test_name
+
+# Run tests with output visible
+cargo test -p aptos-rust-sdk-v2 -- --nocapture
+
+# Run doc tests only
+cargo test -p aptos-rust-sdk-v2 --doc
+
+# Run library tests only (no integration tests)
 cargo test -p aptos-rust-sdk-v2 --lib
-
-# Run unit tests with all features
-cargo test -p aptos-rust-sdk-v2 --lib --features "full"
-
-# Run behavioral tests
-cargo test -p aptos-rust-sdk-v2 --test lib --features "full"
 ```
 
-### Running E2E Tests
+#### E2E Tests
 
 E2E tests require a running Aptos localnet:
 
@@ -109,6 +155,19 @@ aptos node run-localnet
 
 # Terminal 2: Run E2E tests
 cargo test -p aptos-rust-sdk-v2 --features "e2e" -- --ignored
+```
+
+#### Behavioral Tests
+
+The SDK includes Gherkin-based behavioral specification tests:
+
+```bash
+# Run behavioral tests (from workspace root)
+cd specifications/tests/rust
+cargo test
+
+# Run with verbose output
+cargo test -- --nocapture
 ```
 
 ### Code Coverage
@@ -128,7 +187,20 @@ cargo tarpaulin -p aptos-rust-sdk-v2 --features "full,e2e" --ignored --skip-clea
 
 See `tarpaulin.toml` for coverage configuration profiles.
 
-## Documentation
+### Generating Documentation
+
+```bash
+# Generate and open documentation
+cargo doc -p aptos-rust-sdk-v2 --all-features --open
+
+# Generate docs without opening browser
+cargo doc -p aptos-rust-sdk-v2 --all-features
+
+# Include private items in docs
+cargo doc -p aptos-rust-sdk-v2 --all-features --document-private-items
+```
+
+## Resources
 
 - [API Documentation](https://docs.rs/aptos-rust-sdk-v2)
 - [Aptos Developer Documentation](https://aptos.dev)

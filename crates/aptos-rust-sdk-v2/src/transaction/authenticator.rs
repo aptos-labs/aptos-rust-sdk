@@ -1,36 +1,129 @@
 //! Transaction authenticators.
 
 use crate::types::AccountAddress;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+/// Ed25519 public key (32 bytes, fixed size).
+/// Serializes without length prefix (as a fixed-size tuple).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Ed25519PublicKey(pub [u8; 32]);
+
+impl Serialize for Ed25519PublicKey {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        // BCS serializes tuples/arrays without length prefix
+        // Use serialize_tuple to achieve this
+        use serde::ser::SerializeTuple;
+        let mut seq = serializer.serialize_tuple(32)?;
+        for byte in &self.0 {
+            seq.serialize_element(byte)?;
+        }
+        seq.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for Ed25519PublicKey {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct Visitor;
+        impl<'de> serde::de::Visitor<'de> for Visitor {
+            type Value = Ed25519PublicKey;
+            fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "32 bytes")
+            }
+            fn visit_seq<A: serde::de::SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+                let mut arr = [0u8; 32];
+                for (i, byte) in arr.iter_mut().enumerate() {
+                    *byte = seq.next_element()?
+                        .ok_or_else(|| serde::de::Error::invalid_length(i, &self))?;
+                }
+                Ok(Ed25519PublicKey(arr))
+            }
+        }
+        deserializer.deserialize_tuple(32, Visitor)
+    }
+}
+
+impl From<Vec<u8>> for Ed25519PublicKey {
+    fn from(bytes: Vec<u8>) -> Self {
+        let mut arr = [0u8; 32];
+        arr.copy_from_slice(&bytes[..32.min(bytes.len())]);
+        Ed25519PublicKey(arr)
+    }
+}
+
+/// Ed25519 signature (64 bytes, fixed size).
+/// Serializes without length prefix (as a fixed-size tuple).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Ed25519Signature(pub [u8; 64]);
+
+impl Serialize for Ed25519Signature {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        // BCS serializes tuples/arrays without length prefix
+        use serde::ser::SerializeTuple;
+        let mut seq = serializer.serialize_tuple(64)?;
+        for byte in &self.0 {
+            seq.serialize_element(byte)?;
+        }
+        seq.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for Ed25519Signature {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct Visitor;
+        impl<'de> serde::de::Visitor<'de> for Visitor {
+            type Value = Ed25519Signature;
+            fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "64 bytes")
+            }
+            fn visit_seq<A: serde::de::SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+                let mut arr = [0u8; 64];
+                for (i, byte) in arr.iter_mut().enumerate() {
+                    *byte = seq.next_element()?
+                        .ok_or_else(|| serde::de::Error::invalid_length(i, &self))?;
+                }
+                Ok(Ed25519Signature(arr))
+            }
+        }
+        deserializer.deserialize_tuple(64, Visitor)
+    }
+}
+
+impl From<Vec<u8>> for Ed25519Signature {
+    fn from(bytes: Vec<u8>) -> Self {
+        let mut arr = [0u8; 64];
+        arr.copy_from_slice(&bytes[..64.min(bytes.len())]);
+        Ed25519Signature(arr)
+    }
+}
 
 /// An authenticator for a transaction.
 ///
 /// This contains the signature(s) and public key(s) that prove
 /// the transaction was authorized by the sender.
+///
+/// Note: Variant indices must match Aptos core for BCS compatibility:
+/// - 0: Ed25519
+/// - 1: MultiEd25519
+/// - 2: MultiAgent
+/// - 3: FeePayer
+/// - 4: SingleSender (for unified key support)
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TransactionAuthenticator {
-    /// Ed25519 single-key authentication.
+    /// Ed25519 single-key authentication (variant 0).
     Ed25519 {
-        /// The Ed25519 public key.
-        public_key: Vec<u8>,
-        /// The Ed25519 signature.
-        signature: Vec<u8>,
+        /// The Ed25519 public key (32 bytes).
+        public_key: Ed25519PublicKey,
+        /// The Ed25519 signature (64 bytes).
+        signature: Ed25519Signature,
     },
-    /// Multi-Ed25519 authentication.
+    /// Multi-Ed25519 authentication (variant 1).
     MultiEd25519 {
         /// The multi-Ed25519 public key.
         public_key: Vec<u8>,
         /// The multi-Ed25519 signature.
         signature: Vec<u8>,
     },
-    /// Multi-key authentication (mixed signature types).
-    MultiKey {
-        /// The multi-key public key.
-        public_key: Vec<u8>,
-        /// The multi-key signature.
-        signature: Vec<u8>,
-    },
-    /// Multi-agent transaction authentication.
+    /// Multi-agent transaction authentication (variant 2).
     MultiAgent {
         /// The sender's authenticator.
         sender: AccountAuthenticator,
@@ -39,7 +132,7 @@ pub enum TransactionAuthenticator {
         /// Secondary signers' authenticators.
         secondary_signers: Vec<AccountAuthenticator>,
     },
-    /// Fee payer transaction authentication.
+    /// Fee payer transaction authentication (variant 3).
     FeePayer {
         /// The sender's authenticator.
         sender: AccountAuthenticator,
@@ -52,10 +145,11 @@ pub enum TransactionAuthenticator {
         /// The fee payer's authenticator.
         fee_payer_signer: AccountAuthenticator,
     },
-    /// Single key authentication (unified format).
-    SingleKey {
-        /// The authenticator.
-        authenticator: SingleKeyAuthenticator,
+    /// Single sender authentication with account authenticator (variant 4).
+    /// Used for newer single-key and multi-key accounts.
+    SingleSender {
+        /// The account authenticator.
+        sender: AccountAuthenticator,
     },
 }
 
@@ -64,10 +158,10 @@ pub enum TransactionAuthenticator {
 pub enum AccountAuthenticator {
     /// Ed25519 authentication.
     Ed25519 {
-        /// The public key.
-        public_key: Vec<u8>,
-        /// The signature.
-        signature: Vec<u8>,
+        /// The public key (32 bytes).
+        public_key: Ed25519PublicKey,
+        /// The signature (64 bytes).
+        signature: Ed25519Signature,
     },
     /// Multi-Ed25519 authentication.
     MultiEd25519 {
@@ -83,52 +177,6 @@ pub enum AccountAuthenticator {
         /// The signature.
         signature: Vec<u8>,
     },
-    /// Single key authentication.
-    SingleKey {
-        /// The authenticator.
-        authenticator: SingleKeyAuthenticator,
-    },
-}
-
-/// Single key authenticator supporting multiple signature schemes.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SingleKeyAuthenticator {
-    /// The public key with scheme.
-    pub public_key: AnyPublicKey,
-    /// The signature with scheme.
-    pub signature: AnySignature,
-}
-
-/// A public key with its scheme identifier.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AnyPublicKey {
-    /// The signature scheme.
-    pub scheme: SignatureScheme,
-    /// The public key bytes.
-    pub public_key: Vec<u8>,
-}
-
-/// A signature with its scheme identifier.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AnySignature {
-    /// The signature scheme.
-    pub scheme: SignatureScheme,
-    /// The signature bytes.
-    pub signature: Vec<u8>,
-}
-
-/// Supported signature schemes.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[repr(u8)]
-pub enum SignatureScheme {
-    /// Ed25519 signatures.
-    Ed25519 = 0,
-    /// Secp256k1 ECDSA signatures.
-    Secp256k1 = 1,
-    /// Secp256r1 (P-256) ECDSA signatures.
-    Secp256r1 = 2,
-    /// Keyless signatures.
-    Keyless = 5,
 }
 
 /// Ed25519 authenticator helper.
@@ -153,8 +201,8 @@ impl Ed25519Authenticator {
 impl From<Ed25519Authenticator> for TransactionAuthenticator {
     fn from(auth: Ed25519Authenticator) -> Self {
         TransactionAuthenticator::Ed25519 {
-            public_key: auth.public_key,
-            signature: auth.signature,
+            public_key: auth.public_key.into(),
+            signature: auth.signature.into(),
         }
     }
 }
@@ -162,8 +210,8 @@ impl From<Ed25519Authenticator> for TransactionAuthenticator {
 impl From<Ed25519Authenticator> for AccountAuthenticator {
     fn from(auth: Ed25519Authenticator) -> Self {
         AccountAuthenticator::Ed25519 {
-            public_key: auth.public_key,
-            signature: auth.signature,
+            public_key: auth.public_key.into(),
+            signature: auth.signature.into(),
         }
     }
 }
@@ -172,8 +220,8 @@ impl TransactionAuthenticator {
     /// Creates an Ed25519 authenticator.
     pub fn ed25519(public_key: Vec<u8>, signature: Vec<u8>) -> Self {
         Self::Ed25519 {
-            public_key,
-            signature,
+            public_key: public_key.into(),
+            signature: signature.into(),
         }
     }
 
@@ -215,12 +263,10 @@ impl TransactionAuthenticator {
         }
     }
 
-    /// Creates a multi-key authenticator.
-    pub fn multi_key(public_key: Vec<u8>, signature: Vec<u8>) -> Self {
-        Self::MultiKey {
-            public_key,
-            signature,
-        }
+    /// Creates a single sender authenticator.
+    /// This is used for accounts with the unified key model (including multi-key accounts).
+    pub fn single_sender(sender: AccountAuthenticator) -> Self {
+        Self::SingleSender { sender }
     }
 }
 
@@ -228,18 +274,8 @@ impl AccountAuthenticator {
     /// Creates an Ed25519 account authenticator.
     pub fn ed25519(public_key: Vec<u8>, signature: Vec<u8>) -> Self {
         Self::Ed25519 {
-            public_key,
-            signature,
-        }
-    }
-
-    /// Creates a single key account authenticator.
-    pub fn single_key(scheme: SignatureScheme, public_key: Vec<u8>, signature: Vec<u8>) -> Self {
-        Self::SingleKey {
-            authenticator: SingleKeyAuthenticator {
-                public_key: AnyPublicKey { scheme, public_key },
-                signature: AnySignature { scheme, signature },
-            },
+            public_key: public_key.into(),
+            signature: signature.into(),
         }
     }
 
@@ -258,7 +294,12 @@ mod tests {
 
     #[test]
     fn test_ed25519_authenticator() {
-        let auth = Ed25519Authenticator::new(vec![1, 2, 3], vec![4, 5, 6]);
+        let mut pk = [0u8; 32];
+        pk[0..3].copy_from_slice(&[1, 2, 3]);
+        let mut sig = [0u8; 64];
+        sig[0..3].copy_from_slice(&[4, 5, 6]);
+
+        let auth = Ed25519Authenticator::new(pk.to_vec(), sig.to_vec());
         let txn_auth: TransactionAuthenticator = auth.into();
 
         match txn_auth {
@@ -266,8 +307,8 @@ mod tests {
                 public_key,
                 signature,
             } => {
-                assert_eq!(public_key, vec![1, 2, 3]);
-                assert_eq!(signature, vec![4, 5, 6]);
+                assert_eq!(public_key.0[0..3], [1, 2, 3]);
+                assert_eq!(signature.0[0..3], [4, 5, 6]);
             }
             _ => panic!("wrong authenticator type"),
         }
@@ -275,12 +316,31 @@ mod tests {
 
     #[test]
     fn test_multi_agent_authenticator() {
-        let sender = AccountAuthenticator::ed25519(vec![1], vec![2]);
+        let sender = AccountAuthenticator::ed25519(vec![0; 32], vec![0; 64]);
         let auth = TransactionAuthenticator::multi_agent(sender, vec![], vec![]);
 
         match auth {
             TransactionAuthenticator::MultiAgent { .. } => {}
             _ => panic!("wrong authenticator type"),
         }
+    }
+
+    #[test]
+    fn test_ed25519_bcs_format() {
+        // Test that Ed25519 serializes without length prefix
+        let auth = TransactionAuthenticator::Ed25519 {
+            public_key: Ed25519PublicKey([0xab; 32]),
+            signature: Ed25519Signature([0xcd; 64]),
+        };
+        let bcs = aptos_bcs::to_bytes(&auth).unwrap();
+
+        // Ed25519 variant should be index 0
+        assert_eq!(bcs[0], 0, "Ed25519 variant index should be 0");
+        // Next 32 bytes should be the pubkey (no length prefix)
+        assert_eq!(bcs[1], 0xab, "First pubkey byte should be 0xab");
+        // Signature starts at offset 33
+        assert_eq!(bcs[33], 0xcd, "First signature byte should be 0xcd");
+        // Total: 1 (variant) + 32 (pubkey) + 64 (sig) = 97
+        assert_eq!(bcs.len(), 97, "BCS length should be 97");
     }
 }

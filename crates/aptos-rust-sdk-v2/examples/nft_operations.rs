@@ -11,6 +11,7 @@ use aptos_rust_sdk_v2::{types::AccountAddress, Aptos, AptosConfig};
 use serde::Deserialize;
 
 /// Token data from Token V2 standard
+#[allow(dead_code)] // Shown for documentation purposes
 #[derive(Debug, Deserialize)]
 struct TokenData {
     name: String,
@@ -19,6 +20,7 @@ struct TokenData {
 }
 
 /// Collection data
+#[allow(dead_code)] // Shown for documentation purposes
 #[derive(Debug, Deserialize)]
 struct CollectionData {
     name: String,

@@ -10,10 +10,11 @@
 //! - Struct definitions matching Move structs
 //! - Event types for parsing on-chain events
 //!
-//! # Example
+//! # Runtime Code Generation
 //!
 //! ```rust,ignore
 //! use aptos_rust_sdk_v2::codegen::{ModuleGenerator, GeneratorConfig};
+//! use aptos_rust_sdk_v2::api::response::MoveModuleABI;
 //!
 //! // Load ABI from file or API
 //! let abi_json = std::fs::read_to_string("my_module_abi.json")?;
@@ -25,6 +26,31 @@
 //!
 //! // Write to file
 //! std::fs::write("src/generated/my_module.rs", code)?;
+//! ```
+//!
+//! # Build-Time Code Generation
+//!
+//! For compile-time code generation, use the `build_helper` module in your `build.rs`:
+//!
+//! ```rust,ignore
+//! // build.rs
+//! use aptos_rust_sdk_v2::codegen::build_helper;
+//!
+//! fn main() {
+//!     // Generate from local ABI files
+//!     build_helper::generate_from_abi(
+//!         "abi/my_module.json",
+//!         "src/generated/",
+//!     ).expect("code generation failed");
+//!
+//!     // Or generate from a directory of ABIs
+//!     build_helper::generate_from_directory(
+//!         "abi/",
+//!         "src/generated/",
+//!     ).expect("code generation failed");
+//!
+//!     println!("cargo:rerun-if-changed=abi/");
+//! }
 //! ```
 //!
 //! # With Move Source (Better Parameter Names)
@@ -53,8 +79,12 @@
 //!
 //! # Generate from on-chain module with Move source
 //! aptos-codegen --module 0x1::coin --network testnet --source coin.move --output src/
+//!
+//! # Generate from a directory of ABIs
+//! aptos-codegen --input-dir abi/ --output src/generated/
 //! ```
 
+pub mod build_helper;
 mod generator;
 mod move_parser;
 mod types;

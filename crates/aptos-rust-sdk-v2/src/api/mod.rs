@@ -25,5 +25,10 @@ pub use response::{AptosResponse, GasEstimation, LedgerInfo, PendingTransaction}
 pub use faucet::FaucetClient;
 
 #[cfg(feature = "indexer")]
-pub use indexer::IndexerClient;
+pub use indexer::{
+    IndexerClient, PaginationParams, Page, Event, Collection,
+    FungibleAssetBalance, FungibleAssetMetadata, TokenBalance,
+    TokenData, CollectionData, Transaction, CoinActivity, 
+    CoinBalance, ProcessorStatus,
+};
 
