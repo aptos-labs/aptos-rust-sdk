@@ -30,10 +30,38 @@ impl<'de> Deserialize<'de> for Ed25519PublicKey {
 }
 
 impl From<Vec<u8>> for Ed25519PublicKey {
+    /// Converts a Vec<u8> to Ed25519PublicKey.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the input is not exactly 32 bytes. Use `Ed25519PublicKey::try_from_bytes`
+    /// for fallible conversion.
     fn from(bytes: Vec<u8>) -> Self {
+        assert!(
+            bytes.len() == 32,
+            "Ed25519PublicKey requires exactly 32 bytes, got {}",
+            bytes.len()
+        );
         let mut arr = [0u8; 32];
-        arr.copy_from_slice(&bytes[..32.min(bytes.len())]);
+        arr.copy_from_slice(&bytes);
         Ed25519PublicKey(arr)
+    }
+}
+
+impl Ed25519PublicKey {
+    /// Attempts to create an Ed25519PublicKey from a byte slice.
+    ///
+    /// Returns an error if the input is not exactly 32 bytes.
+    pub fn try_from_bytes(bytes: &[u8]) -> crate::error::AptosResult<Self> {
+        if bytes.len() != 32 {
+            return Err(crate::error::AptosError::InvalidPublicKey(format!(
+                "Ed25519PublicKey requires exactly 32 bytes, got {}",
+                bytes.len()
+            )));
+        }
+        let mut arr = [0u8; 32];
+        arr.copy_from_slice(bytes);
+        Ok(Ed25519PublicKey(arr))
     }
 }
 
@@ -64,10 +92,38 @@ impl<'de> Deserialize<'de> for Ed25519Signature {
 }
 
 impl From<Vec<u8>> for Ed25519Signature {
+    /// Converts a Vec<u8> to Ed25519Signature.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the input is not exactly 64 bytes. Use `Ed25519Signature::try_from_bytes`
+    /// for fallible conversion.
     fn from(bytes: Vec<u8>) -> Self {
+        assert!(
+            bytes.len() == 64,
+            "Ed25519Signature requires exactly 64 bytes, got {}",
+            bytes.len()
+        );
         let mut arr = [0u8; 64];
-        arr.copy_from_slice(&bytes[..64.min(bytes.len())]);
+        arr.copy_from_slice(&bytes);
         Ed25519Signature(arr)
+    }
+}
+
+impl Ed25519Signature {
+    /// Attempts to create an Ed25519Signature from a byte slice.
+    ///
+    /// Returns an error if the input is not exactly 64 bytes.
+    pub fn try_from_bytes(bytes: &[u8]) -> crate::error::AptosResult<Self> {
+        if bytes.len() != 64 {
+            return Err(crate::error::AptosError::InvalidSignature(format!(
+                "Ed25519Signature requires exactly 64 bytes, got {}",
+                bytes.len()
+            )));
+        }
+        let mut arr = [0u8; 64];
+        arr.copy_from_slice(bytes);
+        Ok(Ed25519Signature(arr))
     }
 }
 

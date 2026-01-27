@@ -246,6 +246,8 @@ impl FullnodeClient {
     }
 
     /// Waits for a transaction to be committed.
+    ///
+    /// Uses exponential backoff for polling, starting at 200ms and doubling up to 2s.
     pub async fn wait_for_transaction(
         &self,
         hash: &HashValue,
@@ -253,7 +255,11 @@ impl FullnodeClient {
     ) -> AptosResult<AptosResponse<serde_json::Value>> {
         let timeout = timeout.unwrap_or(Duration::from_secs(DEFAULT_TRANSACTION_WAIT_TIMEOUT_SECS));
         let start = std::time::Instant::now();
-        let poll_interval = Duration::from_millis(500);
+
+        // Exponential backoff: start at 200ms, double each time, max 2s
+        let initial_interval = Duration::from_millis(200);
+        let max_interval = Duration::from_secs(2);
+        let mut current_interval = initial_interval;
 
         loop {
             match self.get_transaction_by_hash(hash).await {
@@ -289,7 +295,10 @@ impl FullnodeClient {
                 });
             }
 
-            tokio::time::sleep(poll_interval).await;
+            tokio::time::sleep(current_interval).await;
+
+            // Exponential backoff with cap
+            current_interval = std::cmp::min(current_interval * 2, max_interval);
         }
     }
 
@@ -433,15 +442,16 @@ impl FullnodeClient {
     // === Helper Methods ===
 
     fn build_url(&self, path: &str) -> AptosResult<Url> {
-        let base = self.config.fullnode_url();
-        // Remove trailing /v1 if present and add our path
-        let base_str = base.as_str().trim_end_matches('/');
-        let full_path = if path.is_empty() {
-            base_str.to_string()
-        } else {
-            format!("{}/{}", base_str, path)
-        };
-        Url::parse(&full_path).map_err(AptosError::Url)
+        let mut url = self.config.fullnode_url().clone();
+        if !path.is_empty() {
+            // Ensure base path ends with /
+            if !url.path().ends_with('/') {
+                url.set_path(&format!("{}/", url.path()));
+            }
+            // Append the path segment
+            url.set_path(&format!("{}{}", url.path(), path));
+        }
+        Ok(url)
     }
 
     async fn get_json<T: for<'de> serde::Deserialize<'de>>(
