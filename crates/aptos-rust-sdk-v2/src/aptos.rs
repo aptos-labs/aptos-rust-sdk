@@ -7,11 +7,16 @@ use crate::api::{AnsClient, AptosResponse, FullnodeClient, PendingTransaction};
 use crate::config::{AptosConfig, Network};
 use crate::error::{AptosError, AptosResult};
 use crate::transaction::{
-    EntryFunction, RawTransaction, SignedTransaction, TransactionBuilder, TransactionPayload,
+    RawTransaction, SignedTransaction, TransactionBuilder, TransactionPayload,
 };
-use crate::types::{AccountAddress, ChainId, TypeTag};
+use crate::types::{AccountAddress, ChainId};
 use std::sync::Arc;
 use std::time::Duration;
+
+#[cfg(feature = "ed25519")]
+use crate::transaction::EntryFunction;
+#[cfg(feature = "ed25519")]
+use crate::types::TypeTag;
 
 #[cfg(feature = "faucet")]
 use crate::api::FaucetClient;

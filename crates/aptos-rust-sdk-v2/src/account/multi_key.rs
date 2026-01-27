@@ -27,6 +27,7 @@ pub enum AnyPrivateKey {
 
 impl AnyPrivateKey {
     /// Gets the signature scheme variant.
+    #[allow(unreachable_code)]
     pub fn variant(&self) -> AnyPublicKeyVariant {
         match self {
             #[cfg(feature = "ed25519")]
@@ -35,10 +36,13 @@ impl AnyPrivateKey {
             Self::Secp256k1(_) => AnyPublicKeyVariant::Secp256k1,
             #[cfg(feature = "secp256r1")]
             Self::Secp256r1(_) => AnyPublicKeyVariant::Secp256r1,
+            #[allow(unreachable_patterns)]
+            _ => unreachable!("AnyPrivateKey requires at least one crypto feature to be enabled"),
         }
     }
 
     /// Gets the public key.
+    #[allow(unreachable_code)]
     pub fn public_key(&self) -> AnyPublicKey {
         match self {
             #[cfg(feature = "ed25519")]
@@ -47,10 +51,13 @@ impl AnyPrivateKey {
             Self::Secp256k1(key) => AnyPublicKey::secp256k1(&key.public_key()),
             #[cfg(feature = "secp256r1")]
             Self::Secp256r1(key) => AnyPublicKey::secp256r1(&key.public_key()),
+            #[allow(unreachable_patterns)]
+            _ => unreachable!("AnyPrivateKey requires at least one crypto feature to be enabled"),
         }
     }
 
     /// Signs a message.
+    #[allow(unreachable_code, unused_variables)]
     pub fn sign(&self, message: &[u8]) -> AnySignature {
         match self {
             #[cfg(feature = "ed25519")]
@@ -59,6 +66,8 @@ impl AnyPrivateKey {
             Self::Secp256k1(key) => AnySignature::secp256k1(&key.sign(message)),
             #[cfg(feature = "secp256r1")]
             Self::Secp256r1(key) => AnySignature::secp256r1(&key.sign(message)),
+            #[allow(unreachable_patterns)]
+            _ => unreachable!("AnyPrivateKey requires at least one crypto feature to be enabled"),
         }
     }
 
@@ -82,6 +91,7 @@ impl AnyPrivateKey {
 }
 
 impl Clone for AnyPrivateKey {
+    #[allow(unreachable_code)]
     fn clone(&self) -> Self {
         match self {
             #[cfg(feature = "ed25519")]
@@ -90,6 +100,8 @@ impl Clone for AnyPrivateKey {
             Self::Secp256k1(key) => Self::Secp256k1(key.clone()),
             #[cfg(feature = "secp256r1")]
             Self::Secp256r1(key) => Self::Secp256r1(key.clone()),
+            #[allow(unreachable_patterns)]
+            _ => unreachable!("AnyPrivateKey requires at least one crypto feature to be enabled"),
         }
     }
 }

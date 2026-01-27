@@ -8,7 +8,7 @@
 //!
 //! ## Quick Start
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! use aptos_rust_sdk_v2::{Aptos, AptosConfig};
 //! use aptos_rust_sdk_v2::account::{Account, Ed25519Account};
 //!

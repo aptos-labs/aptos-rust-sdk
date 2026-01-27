@@ -103,6 +103,7 @@ impl AnyPublicKey {
     }
 
     /// Verifies a signature against a message.
+    #[allow(unused_variables)]
     pub fn verify(&self, message: &[u8], signature: &AnySignature) -> AptosResult<()> {
         if signature.variant != self.variant {
             return Err(AptosError::InvalidSignature(format!(

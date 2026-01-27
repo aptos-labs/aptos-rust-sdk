@@ -174,6 +174,31 @@ name = "contract_bindings"
 path = "examples/contract_bindings.rs"
 required-features = ["ed25519", "macros"]
 
+[[example]]
+name = "multisig_v2"
+path = "examples/multisig_v2.rs"
+required-features = ["ed25519", "faucet"]
+
+[[example]]
+name = "advanced_transactions"
+path = "examples/advanced_transactions.rs"
+required-features = ["ed25519", "secp256k1", "faucet"]
+
+[[example]]
+name = "entry_function"
+path = "examples/entry_function.rs"
+required-features = ["ed25519", "faucet"]
+
+[[example]]
+name = "script_transaction"
+path = "examples/script_transaction.rs"
+required-features = ["ed25519", "faucet"]
+
+[[example]]
+name = "transaction_waiting"
+path = "examples/transaction_waiting.rs"
+required-features = ["ed25519", "faucet"]
+
 [[bin]]
 name = "aptos-codegen"
 path = "src/bin/codegen.rs"
