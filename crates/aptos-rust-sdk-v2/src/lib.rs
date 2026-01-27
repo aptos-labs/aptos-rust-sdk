@@ -37,12 +37,12 @@
 //! |---------|---------|-------------|
 //! | `ed25519` | Yes | Ed25519 signature scheme |
 //! | `secp256k1` | Yes | Secp256k1 ECDSA signatures |
+//! | `secp256r1` | Yes | Secp256r1 (P-256) ECDSA signatures |
 //! | `mnemonic` | Yes | BIP-39 mnemonic phrase support for key derivation |
-//! | `secp256r1` | No | Secp256r1 (P-256) ECDSA signatures |
+//! | `indexer` | Yes | GraphQL indexer client |
+//! | `faucet` | Yes | Faucet integration for testnets |
 //! | `bls` | No | BLS12-381 signatures |
 //! | `keyless` | No | OIDC-based keyless authentication |
-//! | `indexer` | No | GraphQL indexer client |
-//! | `faucet` | No | Faucet integration for testnets |
 //! | `macros` | No | Proc macros for type-safe contract bindings |
 //!
 //! ## Modules

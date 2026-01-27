@@ -33,8 +33,8 @@ cargo test -p aptos-rust-sdk-v2 --features "e2e" -- --ignored  # E2E tests (requ
 
 ```bash
 cargo clippy -p aptos-rust-sdk-v2 --all-features -- -D warnings  # Strict linting
-cargo +nightly fmt                             # Format code (uses nightly rustfmt)
-cargo +nightly fmt -- --check                  # Check formatting
+cargo fmt                                      # Format code
+cargo fmt -- --check                           # Check formatting
 ```
 
 ### Running Examples
@@ -108,7 +108,7 @@ The SDK follows a client-centric design with `Aptos` as the main entry point:
 - **Version**: 1.90+ (specified in `rust-toolchain.toml`)
 - **Edition**: 2024
 - **Components**: cargo, clippy, rustc, rust-docs, rust-std
-- **Note**: Uses nightly rustfmt for formatting
+- **Note**: Uses stable rustfmt for formatting
 
 ## Testing Strategy
 

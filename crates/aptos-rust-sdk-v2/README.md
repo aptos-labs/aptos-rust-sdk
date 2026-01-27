@@ -49,12 +49,13 @@ async fn main() -> anyhow::Result<()> {
 |---------|---------|-------------|
 | `ed25519` | ✓ | Ed25519 signature scheme |
 | `secp256k1` | ✓ | Secp256k1 ECDSA signatures |
+| `secp256r1` | ✓ | Secp256r1 (P-256) ECDSA signatures |
 | `mnemonic` | ✓ | BIP-39 mnemonic phrase support for key derivation |
-| `secp256r1` | | Secp256r1 (P-256) ECDSA signatures |
+| `indexer` | ✓ | GraphQL indexer client |
+| `faucet` | ✓ | Faucet integration for testnets |
 | `bls` | | BLS12-381 signatures |
 | `keyless` | | OIDC-based keyless authentication |
-| `indexer` | | GraphQL indexer client |
-| `faucet` | | Faucet integration for testnets |
+| `macros` | | Procedural macros for type-safe contract bindings |
 | `full` | | Enable all features |
 
 ### Minimal Build
@@ -79,18 +80,38 @@ aptos-rust-sdk-v2 = { version = "0.1", features = ["full"] }
 
 See the [`examples/`](examples/) directory for complete working examples:
 
+### Basic Operations
 - [`transfer.rs`](examples/transfer.rs) - Basic APT transfer
-- [`deploy_module.rs`](examples/deploy_module.rs) - Deploy a Move module
-- [`sponsored_transaction.rs`](examples/sponsored_transaction.rs) - Fee payer flow
+- [`view_function.rs`](examples/view_function.rs) - Read-only view function calls
+- [`transaction_data.rs`](examples/transaction_data.rs) - Working with transaction data
+
+### Advanced Transactions
+- [`entry_function.rs`](examples/entry_function.rs) - Entry function transaction building
+- [`script_transaction.rs`](examples/script_transaction.rs) - Script-based transactions
+- [`sponsored_transaction.rs`](examples/sponsored_transaction.rs) - Fee payer (sponsored) transactions
 - [`multi_agent.rs`](examples/multi_agent.rs) - Multi-signer transactions
-- [`view_function.rs`](examples/view_function.rs) - Read-only queries
+- [`transaction_waiting.rs`](examples/transaction_waiting.rs) - Transaction waiting strategies
+- [`advanced_transactions.rs`](examples/advanced_transactions.rs) - Complex transaction combinations
+
+### Account Types
+- [`multi_key_account.rs`](examples/multi_key_account.rs) - Multi-key (mixed signature) accounts
+- [`multi_sig_account.rs`](examples/multi_sig_account.rs) - MultiEd25519 threshold accounts
+- [`multisig_v2.rs`](examples/multisig_v2.rs) - On-chain multisig (governance) accounts
+
+### Smart Contracts
+- [`deploy_module.rs`](examples/deploy_module.rs) - Deploy a Move module
+- [`call_contract.rs`](examples/call_contract.rs) - Call contract entry functions
+- [`read_contract_state.rs`](examples/read_contract_state.rs) - Read contract state
+- [`nft_operations.rs`](examples/nft_operations.rs) - NFT/Digital Asset interactions
+- [`codegen.rs`](examples/codegen.rs) - Contract binding generation
+- [`contract_bindings.rs`](examples/contract_bindings.rs) - Using generated type-safe bindings
 
 ## Development
 
 ### Building
 
 ```bash
-# Build with default features (ed25519 + secp256k1)
+# Build with default features
 cargo build -p aptos-rust-sdk-v2
 
 # Build with all features

@@ -68,6 +68,7 @@ mod account_tests {
     use aptos_rust_sdk_v2::account::Ed25519Account;
 
     #[tokio::test]
+    #[ignore]
     async fn e2e_create_and_fund_account() {
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
@@ -95,6 +96,7 @@ mod account_tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn e2e_create_funded_account_helper() {
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
@@ -117,6 +119,7 @@ mod account_tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn e2e_get_sequence_number() {
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
@@ -137,6 +140,7 @@ mod account_tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn e2e_account_not_found() {
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
@@ -161,6 +165,7 @@ mod transfer_tests {
     use aptos_rust_sdk_v2::account::Ed25519Account;
 
     #[tokio::test]
+    #[ignore]
     async fn e2e_transfer_apt() {
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
@@ -200,6 +205,7 @@ mod transfer_tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn e2e_multiple_transfers() {
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
@@ -234,6 +240,7 @@ mod transfer_tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn e2e_transfer_insufficient_balance() {
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
@@ -270,6 +277,7 @@ mod view_tests {
     use aptos_rust_sdk_v2::account::Ed25519Account;
 
     #[tokio::test]
+    #[ignore]
     async fn e2e_view_timestamp() {
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
@@ -290,6 +298,7 @@ mod view_tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn e2e_view_coin_balance() {
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
@@ -316,6 +325,7 @@ mod view_tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn e2e_view_account_exists() {
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
@@ -341,6 +351,7 @@ mod view_tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn e2e_view_nonexistent_account() {
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
@@ -371,6 +382,7 @@ mod transaction_tests {
     use aptos_rust_sdk_v2::transaction::{EntryFunction, builder::sign_transaction};
 
     #[tokio::test]
+    #[ignore]
     async fn e2e_build_sign_submit_transaction() {
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
@@ -419,6 +431,7 @@ mod transaction_tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn e2e_simulate_transaction() {
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
@@ -454,6 +467,7 @@ mod transaction_tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn e2e_get_transaction_by_hash() {
         use aptos_rust_sdk_v2::types::HashValue;
 
@@ -483,6 +497,7 @@ mod transaction_tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn e2e_transaction_expiration() {
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
@@ -522,6 +537,7 @@ mod ledger_tests {
     use super::*;
 
     #[tokio::test]
+    #[ignore]
     async fn e2e_get_ledger_info() {
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
@@ -551,6 +567,7 @@ mod ledger_tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn e2e_chain_id_from_ledger() {
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
@@ -582,6 +599,7 @@ mod multi_signer_tests {
     };
 
     #[tokio::test]
+    #[ignore]
     async fn e2e_fee_payer_transaction() {
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
@@ -646,6 +664,7 @@ mod multi_signer_tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn e2e_multi_agent_transaction() {
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
@@ -723,6 +742,7 @@ mod multi_key_e2e_tests {
     };
 
     #[tokio::test]
+    #[ignore]
     async fn e2e_multi_key_account_transfer() {
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
@@ -803,6 +823,7 @@ mod state_tests {
     use super::*;
 
     #[tokio::test]
+    #[ignore]
     async fn e2e_get_account_resource() {
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
@@ -831,6 +852,7 @@ mod state_tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn e2e_get_coin_store_resource() {
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");

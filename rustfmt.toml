@@ -1,25 +1,10 @@
 # Rust formatting configuration
-# Run: cargo +nightly fmt
+# Run: cargo fmt
 
-# Stable options
+# Stable options only (compatible with stable rustfmt)
 edition = "2024"
 max_width = 100
 hard_tabs = false
 tab_spaces = 4
 newline_style = "Auto"
 use_small_heuristics = "Default"
-
-# Nightly options (requires nightly rustfmt)
-# To use: cargo +nightly fmt
-unstable_features = true
-imports_granularity = "Crate"
-group_imports = "StdExternalCrate"
-format_code_in_doc_comments = true
-format_macro_matchers = true
-format_strings = false
-normalize_comments = true
-normalize_doc_attributes = true
-reorder_impl_items = true
-wrap_comments = true
-comment_width = 100
-

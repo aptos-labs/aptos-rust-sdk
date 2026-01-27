@@ -18,7 +18,7 @@ A user-friendly, idiomatic Rust SDK for the Aptos blockchain with feature parity
 
 ## Prerequisites
 
-- Rust toolchain 1.85+ (tracked in `rust-toolchain.toml`)
+- Rust toolchain 1.90+ (tracked in `rust-toolchain.toml`)
 - Access to an Aptos fullnode REST endpoint (mainnet/testnet/devnet/localnet)
 
 ## Quick Start
@@ -59,12 +59,13 @@ async fn main() -> anyhow::Result<()> {
 |---------|---------|-------------|
 | `ed25519` | ✓ | Ed25519 signature scheme |
 | `secp256k1` | ✓ | Secp256k1 ECDSA signatures |
+| `secp256r1` | ✓ | Secp256r1 (P-256) ECDSA signatures |
 | `mnemonic` | ✓ | BIP-39 mnemonic phrase support for key derivation |
-| `secp256r1` | | Secp256r1 (P-256) ECDSA signatures |
+| `indexer` | ✓ | GraphQL indexer client |
+| `faucet` | ✓ | Faucet integration for testnets |
 | `bls` | | BLS12-381 signatures |
 | `keyless` | | OIDC-based keyless authentication |
-| `indexer` | | GraphQL indexer client |
-| `faucet` | | Faucet integration for testnets |
+| `macros` | | Procedural macros for type-safe contract bindings |
 | `full` | | Enable all features |
 
 ### Minimal Build
@@ -89,16 +90,31 @@ aptos-rust-sdk-v2 = { git = "https://github.com/aptos-labs/aptos-rust-sdk", pack
 
 See the [`crates/aptos-rust-sdk-v2/examples/`](crates/aptos-rust-sdk-v2/examples/) directory for complete working examples:
 
+### Basic Operations
 - [`transfer.rs`](crates/aptos-rust-sdk-v2/examples/transfer.rs) - Basic APT transfer
-- [`deploy_module.rs`](crates/aptos-rust-sdk-v2/examples/deploy_module.rs) - Deploy a Move module
-- [`sponsored_transaction.rs`](crates/aptos-rust-sdk-v2/examples/sponsored_transaction.rs) - Fee payer flow
+- [`view_function.rs`](crates/aptos-rust-sdk-v2/examples/view_function.rs) - Read-only view function calls
+- [`transaction_data.rs`](crates/aptos-rust-sdk-v2/examples/transaction_data.rs) - Working with transaction data
+
+### Advanced Transactions
+- [`entry_function.rs`](crates/aptos-rust-sdk-v2/examples/entry_function.rs) - Entry function transaction building
+- [`script_transaction.rs`](crates/aptos-rust-sdk-v2/examples/script_transaction.rs) - Script-based transactions
+- [`sponsored_transaction.rs`](crates/aptos-rust-sdk-v2/examples/sponsored_transaction.rs) - Fee payer (sponsored) transactions
 - [`multi_agent.rs`](crates/aptos-rust-sdk-v2/examples/multi_agent.rs) - Multi-signer transactions
-- [`view_function.rs`](crates/aptos-rust-sdk-v2/examples/view_function.rs) - Read-only queries
-- [`multi_key_account.rs`](crates/aptos-rust-sdk-v2/examples/multi_key_account.rs) - Multi-key account operations
-- [`multi_sig_account.rs`](crates/aptos-rust-sdk-v2/examples/multi_sig_account.rs) - Multi-sig v2 accounts
-- [`nft_operations.rs`](crates/aptos-rust-sdk-v2/examples/nft_operations.rs) - NFT interactions
+- [`transaction_waiting.rs`](crates/aptos-rust-sdk-v2/examples/transaction_waiting.rs) - Transaction waiting strategies
+- [`advanced_transactions.rs`](crates/aptos-rust-sdk-v2/examples/advanced_transactions.rs) - Complex transaction combinations
+
+### Account Types
+- [`multi_key_account.rs`](crates/aptos-rust-sdk-v2/examples/multi_key_account.rs) - Multi-key (mixed signature) accounts
+- [`multi_sig_account.rs`](crates/aptos-rust-sdk-v2/examples/multi_sig_account.rs) - MultiEd25519 threshold accounts
+- [`multisig_v2.rs`](crates/aptos-rust-sdk-v2/examples/multisig_v2.rs) - On-chain multisig (governance) accounts
+
+### Smart Contracts
+- [`deploy_module.rs`](crates/aptos-rust-sdk-v2/examples/deploy_module.rs) - Deploy a Move module
+- [`call_contract.rs`](crates/aptos-rust-sdk-v2/examples/call_contract.rs) - Call contract entry functions
+- [`read_contract_state.rs`](crates/aptos-rust-sdk-v2/examples/read_contract_state.rs) - Read contract state
+- [`nft_operations.rs`](crates/aptos-rust-sdk-v2/examples/nft_operations.rs) - NFT/Digital Asset interactions
 - [`codegen.rs`](crates/aptos-rust-sdk-v2/examples/codegen.rs) - Contract binding generation
-- [`contract_bindings.rs`](crates/aptos-rust-sdk-v2/examples/contract_bindings.rs) - Using generated bindings
+- [`contract_bindings.rs`](crates/aptos-rust-sdk-v2/examples/contract_bindings.rs) - Using generated type-safe bindings
 
 ## Development
 
@@ -135,8 +151,11 @@ cargo test -p aptos-rust-sdk-v2 --features "e2e" -- --ignored
 # Run clippy
 cargo clippy -p aptos-rust-sdk-v2 --all-features -- -D warnings
 
-# Format code (uses nightly rustfmt)
-cargo +nightly fmt
+# Format code
+cargo fmt
+
+# Check formatting
+cargo fmt -- --check
 ```
 
 ## Resources
