@@ -334,7 +334,7 @@ mod tests {
 
     #[test]
     fn test_authenticator_bcs_format() {
-        // Test that Ed25519 authenticator serializes without length prefixes
+        // Test that Ed25519 authenticator serializes WITH length prefixes (Aptos BCS format)
         use crate::transaction::authenticator::{Ed25519PublicKey, Ed25519Signature};
         let auth = crate::transaction::TransactionAuthenticator::Ed25519 {
             public_key: Ed25519PublicKey([0xab; 32]),
@@ -345,16 +345,21 @@ mod tests {
         // Print for debugging
         println!("Authenticator BCS bytes: {}", hex::encode(&bcs));
         println!("First byte (variant index): {}", bcs[0]);
-        println!("Second byte (first pubkey byte): {}", bcs[1]);
+        println!("Second byte (length prefix): {}", bcs[1]);
+        println!("Third byte (first pubkey byte): {}", bcs[2]);
 
         // Ed25519 variant should be index 0
         assert_eq!(bcs[0], 0, "Ed25519 variant index should be 0");
-        // Next 32 bytes should be pubkey (no length prefix)
-        assert_eq!(bcs[1], 0xab, "First pubkey byte should be 0xab");
-        // Signature starts at offset 33
-        assert_eq!(bcs[33], 0xcd, "First signature byte should be 0xcd");
-        // Total: 1 (variant) + 32 (pubkey) + 64 (sig) = 97
-        assert_eq!(bcs.len(), 97, "BCS length should be 97");
+        // Next byte is length prefix for pubkey (32 = 0x20)
+        assert_eq!(bcs[1], 32, "Pubkey length prefix should be 32");
+        // Next 32 bytes should be pubkey
+        assert_eq!(bcs[2], 0xab, "First pubkey byte should be 0xab");
+        // After pubkey (1 + 1 + 32 = 34), length prefix for signature (64 = 0x40)
+        assert_eq!(bcs[34], 64, "Signature length prefix should be 64");
+        // Signature starts at offset 35
+        assert_eq!(bcs[35], 0xcd, "First signature byte should be 0xcd");
+        // Total: 1 (variant) + 1 (pubkey len) + 32 (pubkey) + 1 (sig len) + 64 (sig) = 99
+        assert_eq!(bcs.len(), 99, "BCS length should be 99");
     }
 
     #[test]

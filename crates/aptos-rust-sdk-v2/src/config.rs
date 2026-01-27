@@ -519,6 +519,24 @@ mod tests {
     }
 
     #[test]
+    fn test_devnet_config() {
+        let config = AptosConfig::devnet();
+        assert_eq!(config.network(), Network::Devnet);
+        assert!(config.fullnode_url().as_str().contains("devnet"));
+        assert!(config.faucet_url().is_some());
+        assert!(config.indexer_url().is_some());
+    }
+
+    #[test]
+    fn test_local_config() {
+        let config = AptosConfig::local();
+        assert_eq!(config.network(), Network::Local);
+        assert!(config.fullnode_url().as_str().contains("127.0.0.1"));
+        assert!(config.faucet_url().is_some());
+        assert!(config.indexer_url().is_none());
+    }
+
+    #[test]
     fn test_custom_config() {
         let config = AptosConfig::custom("https://custom.example.com/v1").unwrap();
         assert_eq!(config.network(), Network::Custom);
@@ -526,6 +544,12 @@ mod tests {
             config.fullnode_url().as_str(),
             "https://custom.example.com/v1"
         );
+    }
+
+    #[test]
+    fn test_custom_config_invalid_url() {
+        let result = AptosConfig::custom("not a valid url");
+        assert!(result.is_err());
     }
 
     #[test]
@@ -601,9 +625,82 @@ mod tests {
     }
 
     #[test]
+    fn test_pool_config_builder_tcp_keepalive() {
+        let config = PoolConfig::builder()
+            .tcp_keepalive(Duration::from_secs(30))
+            .build();
+        assert_eq!(config.tcp_keepalive, Some(Duration::from_secs(30)));
+
+        let config = PoolConfig::builder().no_tcp_keepalive().build();
+        assert_eq!(config.tcp_keepalive, None);
+    }
+
+    #[test]
+    fn test_pool_config_builder_unlimited_idle() {
+        let config = PoolConfig::builder().unlimited_idle_per_host().build();
+        assert_eq!(config.max_idle_per_host, None);
+    }
+
+    #[test]
     fn test_aptos_config_with_pool() {
         let config = AptosConfig::testnet().with_pool(PoolConfig::high_throughput());
 
         assert_eq!(config.pool_config.max_idle_total, 256);
+    }
+
+    #[test]
+    fn test_aptos_config_with_indexer_url() {
+        let config = AptosConfig::testnet()
+            .with_indexer_url("https://custom-indexer.example.com/graphql")
+            .unwrap();
+        assert_eq!(
+            config.indexer_url().unwrap().as_str(),
+            "https://custom-indexer.example.com/graphql"
+        );
+    }
+
+    #[test]
+    fn test_aptos_config_with_faucet_url() {
+        let config = AptosConfig::mainnet()
+            .with_faucet_url("https://custom-faucet.example.com")
+            .unwrap();
+        assert_eq!(
+            config.faucet_url().unwrap().as_str(),
+            "https://custom-faucet.example.com/"
+        );
+    }
+
+    #[test]
+    fn test_aptos_config_default() {
+        let config = AptosConfig::default();
+        assert_eq!(config.network(), Network::Devnet);
+    }
+
+    #[test]
+    fn test_network_chain_id() {
+        assert_eq!(Network::Mainnet.chain_id().id(), 1);
+        assert_eq!(Network::Testnet.chain_id().id(), 2);
+        assert_eq!(Network::Devnet.chain_id().id(), 165);
+        assert_eq!(Network::Local.chain_id().id(), 4);
+        assert_eq!(Network::Custom.chain_id().id(), 0);
+    }
+
+    #[test]
+    fn test_network_as_str() {
+        assert_eq!(Network::Mainnet.as_str(), "mainnet");
+        assert_eq!(Network::Testnet.as_str(), "testnet");
+        assert_eq!(Network::Devnet.as_str(), "devnet");
+        assert_eq!(Network::Local.as_str(), "local");
+        assert_eq!(Network::Custom.as_str(), "custom");
+    }
+
+    #[test]
+    fn test_aptos_config_getters() {
+        let config = AptosConfig::testnet();
+
+        assert_eq!(config.timeout(), Duration::from_secs(30));
+        assert!(config.retry_config().max_retries > 0);
+        assert!(config.pool_config().max_idle_total > 0);
+        assert_eq!(config.chain_id().id(), 2);
     }
 }

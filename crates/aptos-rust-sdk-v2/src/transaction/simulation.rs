@@ -662,4 +662,232 @@ mod tests {
         assert_eq!(result.changes().len(), 1);
         assert!(result.changes()[0].is_write());
     }
+
+    #[test]
+    fn test_simulation_options_default() {
+        let opts = SimulationOptions::default();
+        assert!(!opts.estimate_gas_only);
+        assert!(opts.sequence_number_override.is_none());
+        assert!(opts.gas_unit_price_override.is_none());
+        assert!(opts.max_gas_amount_override.is_none());
+    }
+
+    #[test]
+    fn test_simulation_options_builder() {
+        let opts = SimulationOptions::new()
+            .estimate_gas_only()
+            .with_sequence_number(5)
+            .with_gas_unit_price(200)
+            .with_max_gas_amount(500_000);
+
+        assert!(opts.estimate_gas_only);
+        assert_eq!(opts.sequence_number_override, Some(5));
+        assert_eq!(opts.gas_unit_price_override, Some(200));
+        assert_eq!(opts.max_gas_amount_override, Some(500_000));
+    }
+
+    #[test]
+    fn test_vm_error_category_resource_not_found() {
+        assert_eq!(
+            VmErrorCategory::from_status("RESOURCE_NOT_FOUND"),
+            VmErrorCategory::ResourceNotFound
+        );
+    }
+
+    #[test]
+    fn test_vm_error_category_module_not_found() {
+        assert_eq!(
+            VmErrorCategory::from_status("MODULE_NOT_PUBLISHED"),
+            VmErrorCategory::ModuleNotFound
+        );
+    }
+
+    #[test]
+    fn test_vm_error_category_function_not_found() {
+        assert_eq!(
+            VmErrorCategory::from_status("FUNCTION_NOT_FOUND"),
+            VmErrorCategory::FunctionNotFound
+        );
+    }
+
+    #[test]
+    fn test_vm_error_category_type_mismatch() {
+        assert_eq!(
+            VmErrorCategory::from_status("TYPE_MISMATCH"),
+            VmErrorCategory::TypeMismatch
+        );
+        assert_eq!(
+            VmErrorCategory::from_status("TYPE_ERROR"),
+            VmErrorCategory::TypeMismatch
+        );
+    }
+
+    #[test]
+    fn test_vm_error_category_unknown() {
+        assert_eq!(
+            VmErrorCategory::from_status("SOME_RANDOM_ERROR"),
+            VmErrorCategory::Unknown
+        );
+    }
+
+    #[test]
+    fn test_simulation_result_accessors() {
+        let json = serde_json::json!({
+            "success": true,
+            "vm_status": "Executed successfully",
+            "gas_used": "1500",
+            "max_gas_amount": "200000",
+            "gas_unit_price": "100",
+            "hash": "0xabc123",
+            "changes": [],
+            "events": []
+        });
+
+        let result = SimulationResult::from_json(json).unwrap();
+        assert!(result.success());
+        assert!(!result.failed());
+        assert_eq!(result.vm_status(), "Executed successfully");
+        assert_eq!(result.gas_used(), 1500);
+        assert_eq!(result.max_gas_amount(), 200000);
+        assert_eq!(result.gas_unit_price(), 100);
+        assert_eq!(result.gas_cost(), 150000); // 1500 * 100
+        assert_eq!(result.hash(), "0xabc123");
+        assert!(result.events().is_empty());
+        assert!(result.changes().is_empty());
+    }
+
+    #[test]
+    fn test_simulation_result_from_response() {
+        let response = vec![serde_json::json!({
+            "success": true,
+            "vm_status": "Executed successfully",
+            "gas_used": "100",
+            "max_gas_amount": "200000",
+            "gas_unit_price": "100",
+            "hash": "0x123",
+            "changes": [],
+            "events": []
+        })];
+
+        let result = SimulationResult::from_response(response).unwrap();
+        assert!(result.success());
+    }
+
+    #[test]
+    fn test_simulation_result_from_empty_response() {
+        let response: Vec<serde_json::Value> = vec![];
+        let result = SimulationResult::from_response(response);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_state_change_delete() {
+        let json = serde_json::json!({
+            "success": true,
+            "vm_status": "Executed successfully",
+            "gas_used": "100",
+            "max_gas_amount": "200000",
+            "gas_unit_price": "100",
+            "hash": "0x123",
+            "changes": [
+                {
+                    "type": "delete_resource",
+                    "address": "0x1",
+                    "data": {}
+                }
+            ],
+            "events": []
+        });
+
+        let result = SimulationResult::from_json(json).unwrap();
+        assert_eq!(result.changes().len(), 1);
+        assert!(result.changes()[0].is_delete());
+        assert!(!result.changes()[0].is_write());
+    }
+
+    #[test]
+    fn test_simulation_result_with_vm_error() {
+        let json = serde_json::json!({
+            "success": false,
+            "vm_status": "INSUFFICIENT_BALANCE",
+            "gas_used": "0",
+            "max_gas_amount": "200000",
+            "gas_unit_price": "100",
+            "hash": "0x123",
+            "changes": [],
+            "events": []
+        });
+
+        let result = SimulationResult::from_json(json).unwrap();
+        assert!(result.failed());
+        assert!(result.is_insufficient_balance());
+        assert!(!result.is_out_of_gas());
+        assert!(!result.is_sequence_number_error());
+    }
+
+    #[test]
+    fn test_simulation_result_out_of_gas() {
+        let json = serde_json::json!({
+            "success": false,
+            "vm_status": "OUT_OF_GAS",
+            "gas_used": "200000",
+            "max_gas_amount": "200000",
+            "gas_unit_price": "100",
+            "hash": "0x123",
+            "changes": [],
+            "events": []
+        });
+
+        let result = SimulationResult::from_json(json).unwrap();
+        assert!(result.is_out_of_gas());
+    }
+
+    #[test]
+    fn test_simulation_result_sequence_error() {
+        let json = serde_json::json!({
+            "success": false,
+            "vm_status": "SEQUENCE_NUMBER_TOO_OLD",
+            "gas_used": "0",
+            "max_gas_amount": "200000",
+            "gas_unit_price": "100",
+            "hash": "0x123",
+            "changes": [],
+            "events": []
+        });
+
+        let result = SimulationResult::from_json(json).unwrap();
+        assert!(result.is_sequence_number_error());
+    }
+
+    #[test]
+    fn test_simulated_event_parsing() {
+        let json = serde_json::json!({
+            "success": true,
+            "vm_status": "Executed successfully",
+            "gas_used": "100",
+            "max_gas_amount": "200000",
+            "gas_unit_price": "100",
+            "hash": "0x123",
+            "changes": [],
+            "events": [
+                {
+                    "type": "0x1::coin::WithdrawEvent",
+                    "sequence_number": "10",
+                    "data": {"amount": "500"}
+                },
+                {
+                    "type": "0x1::coin::DepositEvent",
+                    "sequence_number": "20",
+                    "data": {"amount": "500"}
+                }
+            ]
+        });
+
+        let result = SimulationResult::from_json(json).unwrap();
+        assert_eq!(result.events().len(), 2);
+        assert_eq!(result.events()[0].event_type, "0x1::coin::WithdrawEvent");
+        assert_eq!(result.events()[0].sequence_number, 10);
+        assert_eq!(result.events()[1].event_type, "0x1::coin::DepositEvent");
+        assert_eq!(result.events()[1].sequence_number, 20);
+    }
 }

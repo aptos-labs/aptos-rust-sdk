@@ -3,46 +3,29 @@
 use crate::types::AccountAddress;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-/// Ed25519 public key (32 bytes, fixed size).
-/// Serializes without length prefix (as a fixed-size tuple).
+/// Ed25519 public key (32 bytes).
+/// Serializes WITH a length prefix as required by Aptos BCS format.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Ed25519PublicKey(pub [u8; 32]);
 
 impl Serialize for Ed25519PublicKey {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        // BCS serializes tuples/arrays without length prefix
-        // Use serialize_tuple to achieve this
-        use serde::ser::SerializeTuple;
-        let mut seq = serializer.serialize_tuple(32)?;
-        for byte in &self.0 {
-            seq.serialize_element(byte)?;
-        }
-        seq.end()
+        // Aptos BCS format requires a length prefix for public keys
+        // Use serde_bytes to serialize with ULEB128 length prefix
+        serde_bytes::Bytes::new(&self.0).serialize(serializer)
     }
 }
 
 impl<'de> Deserialize<'de> for Ed25519PublicKey {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        struct Visitor;
-        impl<'de> serde::de::Visitor<'de> for Visitor {
-            type Value = Ed25519PublicKey;
-            fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                write!(f, "32 bytes")
-            }
-            fn visit_seq<A: serde::de::SeqAccess<'de>>(
-                self,
-                mut seq: A,
-            ) -> Result<Self::Value, A::Error> {
-                let mut arr = [0u8; 32];
-                for (i, byte) in arr.iter_mut().enumerate() {
-                    *byte = seq
-                        .next_element()?
-                        .ok_or_else(|| serde::de::Error::invalid_length(i, &self))?;
-                }
-                Ok(Ed25519PublicKey(arr))
-            }
+        // Deserialize with length prefix
+        let bytes: Vec<u8> = serde_bytes::deserialize(deserializer)?;
+        if bytes.len() != 32 {
+            return Err(serde::de::Error::invalid_length(bytes.len(), &"32 bytes"));
         }
-        deserializer.deserialize_tuple(32, Visitor)
+        let mut arr = [0u8; 32];
+        arr.copy_from_slice(&bytes);
+        Ok(Ed25519PublicKey(arr))
     }
 }
 
@@ -54,45 +37,29 @@ impl From<Vec<u8>> for Ed25519PublicKey {
     }
 }
 
-/// Ed25519 signature (64 bytes, fixed size).
-/// Serializes without length prefix (as a fixed-size tuple).
+/// Ed25519 signature (64 bytes).
+/// Serializes WITH a length prefix as required by Aptos BCS format.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Ed25519Signature(pub [u8; 64]);
 
 impl Serialize for Ed25519Signature {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        // BCS serializes tuples/arrays without length prefix
-        use serde::ser::SerializeTuple;
-        let mut seq = serializer.serialize_tuple(64)?;
-        for byte in &self.0 {
-            seq.serialize_element(byte)?;
-        }
-        seq.end()
+        // Aptos BCS format requires a length prefix for signatures
+        // Use serde_bytes to serialize with ULEB128 length prefix
+        serde_bytes::Bytes::new(&self.0).serialize(serializer)
     }
 }
 
 impl<'de> Deserialize<'de> for Ed25519Signature {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        struct Visitor;
-        impl<'de> serde::de::Visitor<'de> for Visitor {
-            type Value = Ed25519Signature;
-            fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                write!(f, "64 bytes")
-            }
-            fn visit_seq<A: serde::de::SeqAccess<'de>>(
-                self,
-                mut seq: A,
-            ) -> Result<Self::Value, A::Error> {
-                let mut arr = [0u8; 64];
-                for (i, byte) in arr.iter_mut().enumerate() {
-                    *byte = seq
-                        .next_element()?
-                        .ok_or_else(|| serde::de::Error::invalid_length(i, &self))?;
-                }
-                Ok(Ed25519Signature(arr))
-            }
+        // Deserialize with length prefix
+        let bytes: Vec<u8> = serde_bytes::deserialize(deserializer)?;
+        if bytes.len() != 64 {
+            return Err(serde::de::Error::invalid_length(bytes.len(), &"64 bytes"));
         }
-        deserializer.deserialize_tuple(64, Visitor)
+        let mut arr = [0u8; 64];
+        arr.copy_from_slice(&bytes);
+        Ok(Ed25519Signature(arr))
     }
 }
 
@@ -335,7 +302,7 @@ mod tests {
 
     #[test]
     fn test_ed25519_bcs_format() {
-        // Test that Ed25519 serializes without length prefix
+        // Test that Ed25519 serializes WITH length prefixes (Aptos BCS format)
         let auth = TransactionAuthenticator::Ed25519 {
             public_key: Ed25519PublicKey([0xab; 32]),
             signature: Ed25519Signature([0xcd; 64]),
@@ -344,11 +311,204 @@ mod tests {
 
         // Ed25519 variant should be index 0
         assert_eq!(bcs[0], 0, "Ed25519 variant index should be 0");
-        // Next 32 bytes should be the pubkey (no length prefix)
-        assert_eq!(bcs[1], 0xab, "First pubkey byte should be 0xab");
-        // Signature starts at offset 33
-        assert_eq!(bcs[33], 0xcd, "First signature byte should be 0xcd");
-        // Total: 1 (variant) + 32 (pubkey) + 64 (sig) = 97
-        assert_eq!(bcs.len(), 97, "BCS length should be 97");
+        // Next byte is length prefix for pubkey (32 = 0x20)
+        assert_eq!(bcs[1], 32, "Pubkey length prefix should be 32");
+        // Next 32 bytes should be the pubkey
+        assert_eq!(bcs[2], 0xab, "First pubkey byte should be 0xab");
+        // After pubkey (1 + 1 + 32 = 34), length prefix for signature (64 = 0x40)
+        assert_eq!(bcs[34], 64, "Signature length prefix should be 64");
+        // Signature starts at offset 35
+        assert_eq!(bcs[35], 0xcd, "First signature byte should be 0xcd");
+        // Total: 1 (variant) + 1 (pubkey len) + 32 (pubkey) + 1 (sig len) + 64 (sig) = 99
+        assert_eq!(bcs.len(), 99, "BCS length should be 99");
+    }
+
+    #[test]
+    fn test_ed25519_authenticator_into_account_authenticator() {
+        let auth = Ed25519Authenticator::new(vec![0xaa; 32], vec![0xbb; 64]);
+        let account_auth: AccountAuthenticator = auth.into();
+
+        match account_auth {
+            AccountAuthenticator::Ed25519 {
+                public_key,
+                signature,
+            } => {
+                assert_eq!(public_key.0[0], 0xaa);
+                assert_eq!(signature.0[0], 0xbb);
+            }
+            _ => panic!("Expected Ed25519 variant"),
+        }
+    }
+
+    #[test]
+    fn test_transaction_authenticator_ed25519() {
+        let auth = TransactionAuthenticator::ed25519(vec![0x11; 32], vec![0x22; 64]);
+        match auth {
+            TransactionAuthenticator::Ed25519 {
+                public_key,
+                signature,
+            } => {
+                assert_eq!(public_key.0[0], 0x11);
+                assert_eq!(signature.0[0], 0x22);
+            }
+            _ => panic!("Expected Ed25519 variant"),
+        }
+    }
+
+    #[test]
+    fn test_transaction_authenticator_multi_ed25519() {
+        let auth = TransactionAuthenticator::multi_ed25519(vec![0x33; 64], vec![0x44; 128]);
+        match auth {
+            TransactionAuthenticator::MultiEd25519 {
+                public_key,
+                signature,
+            } => {
+                assert_eq!(public_key.len(), 64);
+                assert_eq!(signature.len(), 128);
+            }
+            _ => panic!("Expected MultiEd25519 variant"),
+        }
+    }
+
+    #[test]
+    fn test_fee_payer_authenticator() {
+        let sender = AccountAuthenticator::ed25519(vec![0; 32], vec![0; 64]);
+        let fee_payer = AccountAuthenticator::ed25519(vec![1; 32], vec![1; 64]);
+        let fee_payer_address = AccountAddress::from_hex("0x123").unwrap();
+
+        let auth = TransactionAuthenticator::fee_payer(
+            sender,
+            vec![],
+            vec![],
+            fee_payer_address,
+            fee_payer,
+        );
+
+        match auth {
+            TransactionAuthenticator::FeePayer {
+                fee_payer_address: addr,
+                ..
+            } => {
+                assert_eq!(addr, fee_payer_address);
+            }
+            _ => panic!("Expected FeePayer variant"),
+        }
+    }
+
+    #[test]
+    fn test_single_sender_authenticator() {
+        let sender = AccountAuthenticator::ed25519(vec![0x55; 32], vec![0x66; 64]);
+        let auth = TransactionAuthenticator::single_sender(sender);
+
+        match auth {
+            TransactionAuthenticator::SingleSender { sender } => match sender {
+                AccountAuthenticator::Ed25519 { public_key, .. } => {
+                    assert_eq!(public_key.0[0], 0x55);
+                }
+                _ => panic!("Expected Ed25519 sender"),
+            },
+            _ => panic!("Expected SingleSender variant"),
+        }
+    }
+
+    #[test]
+    fn test_account_authenticator_multi_key() {
+        let auth = AccountAuthenticator::multi_key(vec![0x77; 100], vec![0x88; 200]);
+        match auth {
+            AccountAuthenticator::MultiKey {
+                public_key,
+                signature,
+            } => {
+                assert_eq!(public_key.len(), 100);
+                assert_eq!(signature.len(), 200);
+            }
+            _ => panic!("Expected MultiKey variant"),
+        }
+    }
+
+    #[test]
+    fn test_ed25519_public_key_from_vec() {
+        let pk: Ed25519PublicKey = vec![0x12; 32].into();
+        assert_eq!(pk.0[0], 0x12);
+        assert_eq!(pk.0.len(), 32);
+    }
+
+    #[test]
+    fn test_ed25519_signature_from_vec() {
+        let sig: Ed25519Signature = vec![0x34; 64].into();
+        assert_eq!(sig.0[0], 0x34);
+        assert_eq!(sig.0.len(), 64);
+    }
+
+    #[test]
+    fn test_ed25519_public_key_bcs_roundtrip() {
+        let pk = Ed25519PublicKey([0xef; 32]);
+        let serialized = aptos_bcs::to_bytes(&pk).unwrap();
+        // Aptos BCS format: 1 byte length prefix (32) + 32 bytes = 33 bytes
+        assert_eq!(serialized.len(), 33);
+        assert_eq!(serialized[0], 32); // Length prefix
+        let deserialized: Ed25519PublicKey = aptos_bcs::from_bytes(&serialized).unwrap();
+        assert_eq!(pk, deserialized);
+    }
+
+    #[test]
+    fn test_ed25519_signature_bcs_roundtrip() {
+        let sig = Ed25519Signature([0x99; 64]);
+        let serialized = aptos_bcs::to_bytes(&sig).unwrap();
+        let deserialized: Ed25519Signature = aptos_bcs::from_bytes(&serialized).unwrap();
+        assert_eq!(sig, deserialized);
+    }
+
+    #[test]
+    fn test_multi_agent_with_secondary_signers() {
+        let sender = AccountAuthenticator::ed25519(vec![0; 32], vec![0; 64]);
+        let secondary_signer1 = AccountAuthenticator::ed25519(vec![1; 32], vec![1; 64]);
+        let secondary_signer2 = AccountAuthenticator::ed25519(vec![2; 32], vec![2; 64]);
+        let addr1 = AccountAddress::from_hex("0x111").unwrap();
+        let addr2 = AccountAddress::from_hex("0x222").unwrap();
+
+        let auth = TransactionAuthenticator::multi_agent(
+            sender,
+            vec![addr1, addr2],
+            vec![secondary_signer1, secondary_signer2],
+        );
+
+        match auth {
+            TransactionAuthenticator::MultiAgent {
+                secondary_signer_addresses,
+                secondary_signers,
+                ..
+            } => {
+                assert_eq!(secondary_signer_addresses.len(), 2);
+                assert_eq!(secondary_signers.len(), 2);
+            }
+            _ => panic!("Expected MultiAgent variant"),
+        }
+    }
+
+    #[test]
+    fn test_transaction_authenticator_bcs_roundtrip() {
+        let auth = TransactionAuthenticator::Ed25519 {
+            public_key: Ed25519PublicKey([0x11; 32]),
+            signature: Ed25519Signature([0x22; 64]),
+        };
+
+        let serialized = aptos_bcs::to_bytes(&auth).unwrap();
+        let deserialized: TransactionAuthenticator = aptos_bcs::from_bytes(&serialized).unwrap();
+
+        assert_eq!(auth, deserialized);
+    }
+
+    #[test]
+    fn test_account_authenticator_bcs_roundtrip() {
+        let auth = AccountAuthenticator::Ed25519 {
+            public_key: Ed25519PublicKey([0x33; 32]),
+            signature: Ed25519Signature([0x44; 64]),
+        };
+
+        let serialized = aptos_bcs::to_bytes(&auth).unwrap();
+        let deserialized: AccountAuthenticator = aptos_bcs::from_bytes(&serialized).unwrap();
+
+        assert_eq!(auth, deserialized);
     }
 }

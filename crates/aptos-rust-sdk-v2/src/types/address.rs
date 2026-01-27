@@ -392,4 +392,147 @@ mod tests {
         assert_eq!(set.len(), 2);
         assert!(set.contains(&AccountAddress::ONE));
     }
+
+    #[test]
+    fn test_from_array() {
+        let bytes = [0x12u8; ADDRESS_LENGTH];
+        let addr: AccountAddress = bytes.into();
+        assert_eq!(addr.as_bytes(), &bytes);
+    }
+
+    #[test]
+    fn test_bcs_serialization() {
+        let addr = AccountAddress::ONE;
+        let serialized = aptos_bcs::to_bytes(&addr).unwrap();
+        let deserialized: AccountAddress = aptos_bcs::from_bytes(&serialized).unwrap();
+        assert_eq!(addr, deserialized);
+    }
+
+    #[test]
+    fn test_bcs_serialization_roundtrip_all_special() {
+        let addresses = [
+            AccountAddress::ZERO,
+            AccountAddress::ONE,
+            AccountAddress::THREE,
+            AccountAddress::FOUR,
+        ];
+
+        for addr in &addresses {
+            let serialized = aptos_bcs::to_bytes(addr).unwrap();
+            let deserialized: AccountAddress = aptos_bcs::from_bytes(&serialized).unwrap();
+            assert_eq!(addr, &deserialized);
+        }
+    }
+
+    #[test]
+    fn test_from_hex_too_long() {
+        // More than 64 hex characters (32 bytes)
+        let long_hex = "0x".to_string() + &"a".repeat(65);
+        let result = AccountAddress::from_hex(&long_hex);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_from_hex_empty() {
+        let result = AccountAddress::from_hex("");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_from_hex_just_prefix() {
+        let result = AccountAddress::from_hex("0x");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_from_hex_with_leading_zeros() {
+        let addr = AccountAddress::from_hex("0x0000000000000001").unwrap();
+        assert_eq!(addr, AccountAddress::ONE);
+    }
+
+    #[test]
+    fn test_short_string_non_special() {
+        // Create an address that isn't "special" (first 15 bytes not all zeros)
+        let mut bytes = [0u8; ADDRESS_LENGTH];
+        bytes[0] = 0xab;
+        bytes[ADDRESS_LENGTH - 1] = 0xcd;
+        let addr = AccountAddress::new(bytes);
+
+        // Should return full hex without stripping zeros
+        let short = addr.to_short_string();
+        assert!(short.starts_with("0x"));
+        // Non-special addresses return the full form
+        assert_eq!(short.len(), 66);
+    }
+
+    #[test]
+    fn test_to_hex() {
+        let addr = AccountAddress::ONE;
+        let hex = addr.to_hex();
+        assert!(hex.starts_with("0x"));
+        assert_eq!(hex.len(), 66);
+        assert!(hex.ends_with("1"));
+    }
+
+    #[test]
+    fn test_json_deserialization_short() {
+        // JSON with short address
+        let json = "\"0x1\"";
+        let addr: AccountAddress = serde_json::from_str(json).unwrap();
+        assert_eq!(addr, AccountAddress::ONE);
+    }
+
+    #[test]
+    fn test_clone() {
+        let addr = AccountAddress::ONE;
+        let cloned = addr.clone();
+        assert_eq!(addr, cloned);
+    }
+
+    #[test]
+    fn test_copy() {
+        let addr = AccountAddress::ONE;
+        let copied = addr; // Copy
+        assert_eq!(addr, copied);
+    }
+
+    #[test]
+    fn test_default() {
+        let addr = AccountAddress::default();
+        assert_eq!(addr, AccountAddress::ZERO);
+    }
+
+    #[test]
+    fn test_from_hex_mixed_case() {
+        let addr1 = AccountAddress::from_hex("0xAbCdEf").unwrap();
+        let addr2 = AccountAddress::from_hex("0xabcdef").unwrap();
+        let addr3 = AccountAddress::from_hex("0xABCDEF").unwrap();
+        assert_eq!(addr1, addr2);
+        assert_eq!(addr2, addr3);
+    }
+
+    #[test]
+    fn test_special_address_boundary() {
+        // Address with non-zero first 31 bytes is not special
+        let mut bytes = [0u8; ADDRESS_LENGTH];
+        bytes[14] = 1; // Set byte 14 to non-zero
+        let addr = AccountAddress::new(bytes);
+        assert!(!addr.is_special());
+
+        // Address with all zeros in first 31 bytes and last byte 1-15 is special
+        let mut bytes = [0u8; ADDRESS_LENGTH];
+        bytes[ADDRESS_LENGTH - 1] = 0x0f; // 15 is the max for special
+        let addr = AccountAddress::new(bytes);
+        assert!(addr.is_special());
+
+        // Address with last byte >= 16 is NOT special
+        let mut bytes = [0u8; ADDRESS_LENGTH];
+        bytes[ADDRESS_LENGTH - 1] = 0x10; // 16 is NOT special
+        let addr = AccountAddress::new(bytes);
+        assert!(!addr.is_special());
+
+        // Address with last byte == 0 is NOT special (it's ZERO)
+        let addr = AccountAddress::ZERO;
+        assert!(!addr.is_special());
+    }
 }

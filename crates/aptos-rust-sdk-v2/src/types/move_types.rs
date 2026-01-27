@@ -759,4 +759,239 @@ mod tests {
             "0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>"
         );
     }
+
+    #[test]
+    fn test_identifier_bcs_serialization() {
+        let id = Identifier::new("test_function").unwrap();
+        let serialized = aptos_bcs::to_bytes(&id).unwrap();
+        let deserialized: Identifier = aptos_bcs::from_bytes(&serialized).unwrap();
+        assert_eq!(id, deserialized);
+    }
+
+    #[test]
+    fn test_module_id_new() {
+        let module =
+            MoveModuleId::new(AccountAddress::ONE, Identifier::new("test_module").unwrap());
+        assert_eq!(module.address, AccountAddress::ONE);
+        assert_eq!(module.name.as_str(), "test_module");
+    }
+
+    #[test]
+    fn test_module_id_bcs_serialization() {
+        let module = MoveModuleId::from_str_strict("0x1::coin").unwrap();
+        let serialized = aptos_bcs::to_bytes(&module).unwrap();
+        let deserialized: MoveModuleId = aptos_bcs::from_bytes(&serialized).unwrap();
+        assert_eq!(module, deserialized);
+    }
+
+    #[test]
+    fn test_struct_tag_new() {
+        let tag = StructTag::new(
+            AccountAddress::from_hex("0x123").unwrap(),
+            Identifier::new("my_module").unwrap(),
+            Identifier::new("MyStruct").unwrap(),
+            vec![TypeTag::U64, TypeTag::Bool],
+        );
+        assert_eq!(tag.address, AccountAddress::from_hex("0x123").unwrap());
+        assert_eq!(tag.module.as_str(), "my_module");
+        assert_eq!(tag.name.as_str(), "MyStruct");
+        assert_eq!(tag.type_args.len(), 2);
+    }
+
+    #[test]
+    fn test_struct_tag_display_with_type_args() {
+        let tag = StructTag::new(
+            AccountAddress::ONE,
+            Identifier::new("coin").unwrap(),
+            Identifier::new("CoinStore").unwrap(),
+            vec![TypeTag::aptos_coin()],
+        );
+        let display = tag.to_string();
+        assert!(display.contains("CoinStore"));
+        assert!(display.contains("<"));
+        assert!(display.contains(">"));
+    }
+
+    #[test]
+    fn test_struct_tag_bcs_serialization() {
+        let tag = StructTag::aptos_coin();
+        let serialized = aptos_bcs::to_bytes(&tag).unwrap();
+        let deserialized: StructTag = aptos_bcs::from_bytes(&serialized).unwrap();
+        assert_eq!(tag, deserialized);
+    }
+
+    #[test]
+    fn test_type_tag_vector_constructor() {
+        let vec_type = TypeTag::vector(TypeTag::Address);
+        if let TypeTag::Vector(inner) = vec_type {
+            assert_eq!(*inner, TypeTag::Address);
+        } else {
+            panic!("Expected Vector type");
+        }
+    }
+
+    #[test]
+    fn test_type_tag_struct_constructor() {
+        let struct_type = TypeTag::struct_tag(StructTag::aptos_coin());
+        if let TypeTag::Struct(s) = struct_type {
+            assert_eq!(s.name.as_str(), "AptosCoin");
+        } else {
+            panic!("Expected Struct type");
+        }
+    }
+
+    #[test]
+    fn test_type_tag_from_str_u16_u32_u256() {
+        assert_eq!(TypeTag::from_str_strict("u16").unwrap(), TypeTag::U16);
+        assert_eq!(TypeTag::from_str_strict("u32").unwrap(), TypeTag::U32);
+        assert_eq!(TypeTag::from_str_strict("u256").unwrap(), TypeTag::U256);
+    }
+
+    #[test]
+    fn test_type_tag_from_str_vector_of_struct() {
+        let tag = TypeTag::from_str_strict("vector<0x1::aptos_coin::AptosCoin>").unwrap();
+        if let TypeTag::Vector(inner) = tag {
+            if let TypeTag::Struct(s) = *inner {
+                assert_eq!(s.name.as_str(), "AptosCoin");
+            } else {
+                panic!("Expected Struct inside Vector");
+            }
+        } else {
+            panic!("Expected Vector type");
+        }
+    }
+
+    #[test]
+    fn test_type_tag_from_str_struct_with_multiple_type_args() {
+        let tag = TypeTag::from_str_strict("0x1::table::Table<address, u64>").unwrap();
+        if let TypeTag::Struct(s) = tag {
+            assert_eq!(s.name.as_str(), "Table");
+            assert_eq!(s.type_args.len(), 2);
+            assert_eq!(s.type_args[0], TypeTag::Address);
+            assert_eq!(s.type_args[1], TypeTag::U64);
+        } else {
+            panic!("Expected Struct type");
+        }
+    }
+
+    #[test]
+    fn test_type_tag_from_str_malformed_generic() {
+        // Missing closing bracket
+        assert!(TypeTag::from_str_strict("vector<u8").is_err());
+        // Missing opening bracket
+        assert!(TypeTag::from_str_strict("vectoru8>").is_err());
+        // Malformed struct generic
+        assert!(TypeTag::from_str_strict("0x1::coin::Store<u64").is_err());
+    }
+
+    #[test]
+    fn test_type_tag_bcs_serialization() {
+        let types = vec![
+            TypeTag::Bool,
+            TypeTag::U8,
+            TypeTag::U16,
+            TypeTag::U32,
+            TypeTag::U64,
+            TypeTag::U128,
+            TypeTag::U256,
+            TypeTag::Address,
+            TypeTag::Signer,
+            TypeTag::vector(TypeTag::U8),
+            TypeTag::aptos_coin(),
+        ];
+
+        for t in types {
+            let serialized = aptos_bcs::to_bytes(&t).unwrap();
+            let deserialized: TypeTag = aptos_bcs::from_bytes(&serialized).unwrap();
+            assert_eq!(t, deserialized);
+        }
+    }
+
+    #[test]
+    fn test_entry_function_id_new() {
+        let module = MoveModuleId::from_str_strict("0x1::coin").unwrap();
+        let name = Identifier::new("transfer").unwrap();
+        let func = EntryFunctionId::new(module, name);
+        assert_eq!(func.to_string(), "0x1::coin::transfer");
+    }
+
+    #[test]
+    fn test_entry_function_id_from_str() {
+        let func: EntryFunctionId = "0x1::coin::transfer".parse().unwrap();
+        assert_eq!(func.module.address, AccountAddress::ONE);
+        assert_eq!(func.module.name.as_str(), "coin");
+        assert_eq!(func.name.as_str(), "transfer");
+    }
+
+    #[test]
+    fn test_move_type_new_and_as_str() {
+        let t = MoveType::new("0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>");
+        assert_eq!(
+            t.as_str(),
+            "0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>"
+        );
+    }
+
+    #[test]
+    fn test_move_type_display() {
+        let t = MoveType::new("bool");
+        assert_eq!(format!("{}", t), "bool");
+    }
+
+    #[test]
+    fn test_move_struct_fields() {
+        let mut fields = serde_json::Map::new();
+        fields.insert("value".to_string(), serde_json::json!("1000"));
+        let s = MoveStruct { fields };
+        assert_eq!(s.fields.get("value").unwrap(), &serde_json::json!("1000"));
+    }
+
+    #[test]
+    fn test_move_value_null() {
+        let val = MoveValue::Null;
+        assert!(val.as_bool().is_none());
+        assert!(val.as_u64().is_none());
+        assert!(val.as_str().is_none());
+        assert!(val.as_address().is_none());
+        assert!(val.as_vec().is_none());
+    }
+
+    #[test]
+    fn test_move_value_struct() {
+        let mut fields = serde_json::Map::new();
+        fields.insert("name".to_string(), serde_json::json!("test"));
+        let s = MoveStruct { fields };
+        let val = MoveValue::Struct(s);
+
+        // Struct doesn't have direct accessors
+        if let MoveValue::Struct(inner) = val {
+            assert!(inner.fields.contains_key("name"));
+        } else {
+            panic!("Expected Struct");
+        }
+    }
+
+    #[test]
+    fn test_move_value_json_roundtrip() {
+        // Test values that have unambiguous JSON representations
+        let val = MoveValue::Bool(true);
+        let json = serde_json::to_string(&val).unwrap();
+        let deserialized: MoveValue = serde_json::from_str(&json).unwrap();
+        assert_eq!(val, deserialized);
+
+        let val = MoveValue::Null;
+        let json = serde_json::to_string(&val).unwrap();
+        let deserialized: MoveValue = serde_json::from_str(&json).unwrap();
+        assert_eq!(val, deserialized);
+
+        // Note: String and Number both serialize to JSON strings
+        // and are both deserialized as the same variant based on serde's untagged enum logic
+        let val = MoveValue::Number("12345".to_string());
+        let json = serde_json::to_string(&val).unwrap();
+        assert_eq!(json, "\"12345\"");
+
+        let val = MoveValue::String("hello".to_string());
+        let json = serde_json::to_string(&val).unwrap();
+        assert_eq!(json, "\"hello\"");
+    }
 }

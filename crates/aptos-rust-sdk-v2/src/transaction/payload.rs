@@ -254,4 +254,155 @@ mod tests {
         assert_eq!(entry_fn.module.name.as_str(), "coin");
         assert_eq!(entry_fn.function, "transfer");
     }
+
+    #[test]
+    fn test_entry_function_new() {
+        let module = MoveModuleId::from_str_strict("0x1::test_module").unwrap();
+        let entry_fn = EntryFunction::new(
+            module.clone(),
+            "test_function",
+            vec![TypeTag::U64],
+            vec![vec![1, 2, 3]],
+        );
+
+        assert_eq!(entry_fn.module, module);
+        assert_eq!(entry_fn.function, "test_function");
+        assert_eq!(entry_fn.type_args.len(), 1);
+        assert_eq!(entry_fn.args.len(), 1);
+    }
+
+    #[test]
+    fn test_coin_transfer() {
+        let recipient = AccountAddress::from_hex("0x456").unwrap();
+        let coin_type = TypeTag::aptos_coin();
+        let entry_fn = EntryFunction::coin_transfer(coin_type, recipient, 5000).unwrap();
+
+        assert_eq!(entry_fn.module.address, AccountAddress::ONE);
+        assert_eq!(entry_fn.module.name.as_str(), "coin");
+        assert_eq!(entry_fn.function, "transfer");
+        assert_eq!(entry_fn.type_args.len(), 1);
+        assert_eq!(entry_fn.args.len(), 2);
+    }
+
+    #[test]
+    fn test_script_new() {
+        let code = vec![0x01, 0x02, 0x03];
+        let type_args = vec![TypeTag::U64];
+        let args = vec![ScriptArgument::U64(100)];
+        let script = Script::new(code.clone(), type_args.clone(), args);
+
+        assert_eq!(script.code, code);
+        assert_eq!(script.type_args.len(), 1);
+        assert_eq!(script.args.len(), 1);
+    }
+
+    #[test]
+    fn test_script_argument_variants() {
+        let u8_arg = ScriptArgument::U8(255);
+        let u16_arg = ScriptArgument::U16(65535);
+        let u32_arg = ScriptArgument::U32(4294967295);
+        let u64_arg = ScriptArgument::U64(18446744073709551615);
+        let u128_arg = ScriptArgument::U128(340282366920938463463374607431768211455);
+        let bool_arg = ScriptArgument::Bool(true);
+        let addr_arg = ScriptArgument::Address(AccountAddress::ONE);
+        let bytes_arg = ScriptArgument::U8Vector(vec![1, 2, 3]);
+        let u256_arg = ScriptArgument::U256([0xff; 32]);
+
+        // Test BCS serialization roundtrip
+        let args = vec![
+            u8_arg.clone(),
+            u16_arg.clone(),
+            u32_arg.clone(),
+            u64_arg.clone(),
+            u128_arg.clone(),
+            bool_arg.clone(),
+            addr_arg.clone(),
+            bytes_arg.clone(),
+            u256_arg.clone(),
+        ];
+
+        for arg in args {
+            let serialized = aptos_bcs::to_bytes(&arg).unwrap();
+            let deserialized: ScriptArgument = aptos_bcs::from_bytes(&serialized).unwrap();
+            assert_eq!(deserialized, arg);
+        }
+    }
+
+    #[test]
+    fn test_transaction_payload_from_entry_function() {
+        let entry_fn = EntryFunction::apt_transfer(AccountAddress::ONE, 100).unwrap();
+        let payload: TransactionPayload = entry_fn.into();
+
+        match payload {
+            TransactionPayload::EntryFunction(ef) => {
+                assert_eq!(ef.function, "transfer");
+            }
+            _ => panic!("Expected EntryFunction variant"),
+        }
+    }
+
+    #[test]
+    fn test_transaction_payload_from_script() {
+        let script = Script::new(vec![0x01], vec![], vec![]);
+        let payload: TransactionPayload = script.into();
+
+        match payload {
+            TransactionPayload::Script(s) => {
+                assert_eq!(s.code, vec![0x01]);
+            }
+            _ => panic!("Expected Script variant"),
+        }
+    }
+
+    #[test]
+    fn test_multisig_payload() {
+        let entry_fn = EntryFunction::apt_transfer(AccountAddress::ONE, 100).unwrap();
+        let multisig = Multisig {
+            multisig_address: AccountAddress::from_hex("0x999").unwrap(),
+            transaction_payload: Some(MultisigTransactionPayload::EntryFunction(entry_fn)),
+        };
+
+        let payload = TransactionPayload::Multisig(multisig.clone());
+        match payload {
+            TransactionPayload::Multisig(m) => {
+                assert_eq!(m.multisig_address, multisig.multisig_address);
+                assert!(m.transaction_payload.is_some());
+            }
+            _ => panic!("Expected Multisig variant"),
+        }
+    }
+
+    #[test]
+    fn test_entry_function_bcs_serialization() {
+        let entry_fn = EntryFunction::apt_transfer(AccountAddress::ONE, 1000).unwrap();
+        let serialized = aptos_bcs::to_bytes(&entry_fn).unwrap();
+        let deserialized: EntryFunction = aptos_bcs::from_bytes(&serialized).unwrap();
+
+        assert_eq!(entry_fn.module, deserialized.module);
+        assert_eq!(entry_fn.function, deserialized.function);
+        assert_eq!(entry_fn.type_args, deserialized.type_args);
+        assert_eq!(entry_fn.args, deserialized.args);
+    }
+
+    #[test]
+    fn test_transaction_payload_bcs_serialization() {
+        let entry_fn = EntryFunction::apt_transfer(AccountAddress::ONE, 1000).unwrap();
+        let payload = TransactionPayload::EntryFunction(entry_fn);
+
+        let serialized = aptos_bcs::to_bytes(&payload).unwrap();
+        let deserialized: TransactionPayload = aptos_bcs::from_bytes(&serialized).unwrap();
+
+        assert_eq!(payload, deserialized);
+    }
+
+    #[test]
+    fn test_from_function_id_invalid() {
+        // Missing module separator
+        let result = EntryFunction::from_function_id("0x1coin::transfer", vec![], vec![]);
+        assert!(result.is_err());
+
+        // Invalid address
+        let result = EntryFunction::from_function_id("invalid::module::function", vec![], vec![]);
+        assert!(result.is_err());
+    }
 }

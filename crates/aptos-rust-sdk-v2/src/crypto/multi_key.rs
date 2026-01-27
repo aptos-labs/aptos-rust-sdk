@@ -628,6 +628,149 @@ mod tests {
     use super::*;
 
     #[test]
+    fn test_any_public_key_variant_from_byte() {
+        assert_eq!(
+            AnyPublicKeyVariant::from_byte(0).unwrap(),
+            AnyPublicKeyVariant::Ed25519
+        );
+        assert_eq!(
+            AnyPublicKeyVariant::from_byte(1).unwrap(),
+            AnyPublicKeyVariant::Secp256k1
+        );
+        assert_eq!(
+            AnyPublicKeyVariant::from_byte(2).unwrap(),
+            AnyPublicKeyVariant::Secp256r1
+        );
+        assert_eq!(
+            AnyPublicKeyVariant::from_byte(3).unwrap(),
+            AnyPublicKeyVariant::Keyless
+        );
+        assert!(AnyPublicKeyVariant::from_byte(4).is_err());
+        assert!(AnyPublicKeyVariant::from_byte(255).is_err());
+    }
+
+    #[test]
+    fn test_any_public_key_variant_as_byte() {
+        assert_eq!(AnyPublicKeyVariant::Ed25519.as_byte(), 0);
+        assert_eq!(AnyPublicKeyVariant::Secp256k1.as_byte(), 1);
+        assert_eq!(AnyPublicKeyVariant::Secp256r1.as_byte(), 2);
+        assert_eq!(AnyPublicKeyVariant::Keyless.as_byte(), 3);
+    }
+
+    #[test]
+    fn test_any_public_key_new() {
+        let pk = AnyPublicKey::new(AnyPublicKeyVariant::Ed25519, vec![0x11; 32]);
+        assert_eq!(pk.variant, AnyPublicKeyVariant::Ed25519);
+        assert_eq!(pk.bytes.len(), 32);
+        assert_eq!(pk.bytes[0], 0x11);
+    }
+
+    #[test]
+    fn test_any_public_key_to_bcs_bytes() {
+        let pk = AnyPublicKey::new(AnyPublicKeyVariant::Ed25519, vec![0xaa; 32]);
+        let bcs = pk.to_bcs_bytes();
+
+        // Format: variant_byte || length (u32 LE) || bytes
+        assert_eq!(bcs[0], 0); // Ed25519 variant
+        assert_eq!(&bcs[1..5], &32u32.to_le_bytes()); // length
+        assert_eq!(bcs[5], 0xaa); // first byte of key
+    }
+
+    #[test]
+    fn test_any_public_key_debug() {
+        let pk = AnyPublicKey::new(AnyPublicKeyVariant::Secp256k1, vec![0xbb; 33]);
+        let debug = format!("{:?}", pk);
+        assert!(debug.contains("Secp256k1"));
+        assert!(debug.contains("0x"));
+    }
+
+    #[test]
+    fn test_any_signature_new() {
+        let sig = AnySignature::new(AnyPublicKeyVariant::Ed25519, vec![0xcc; 64]);
+        assert_eq!(sig.variant, AnyPublicKeyVariant::Ed25519);
+        assert_eq!(sig.bytes.len(), 64);
+    }
+
+    #[test]
+    fn test_any_signature_to_bcs_bytes() {
+        let sig = AnySignature::new(AnyPublicKeyVariant::Ed25519, vec![0xdd; 64]);
+        let bcs = sig.to_bcs_bytes();
+
+        assert_eq!(bcs[0], 0); // Ed25519 variant
+        assert_eq!(&bcs[1..5], &64u32.to_le_bytes()); // length
+        assert_eq!(bcs[5], 0xdd); // first byte of signature
+    }
+
+    #[test]
+    fn test_any_signature_debug() {
+        let sig = AnySignature::new(AnyPublicKeyVariant::Secp256r1, vec![0xee; 64]);
+        let debug = format!("{:?}", sig);
+        assert!(debug.contains("Secp256r1"));
+        assert!(debug.contains("64 bytes"));
+    }
+
+    #[test]
+    fn test_any_public_key_verify_mismatched_variant() {
+        let pk = AnyPublicKey::new(AnyPublicKeyVariant::Ed25519, vec![0; 32]);
+        let sig = AnySignature::new(AnyPublicKeyVariant::Secp256k1, vec![0; 64]);
+
+        let result = pk.verify(b"message", &sig);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("variant"));
+    }
+
+    #[test]
+    fn test_multi_key_signature_insufficient_sigs() {
+        // Empty signatures should fail
+        let result = MultiKeySignature::new(vec![]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_multi_key_signature_duplicate_indices() {
+        let sig1 = AnySignature::new(AnyPublicKeyVariant::Ed25519, vec![0; 64]);
+        let sig2 = AnySignature::new(AnyPublicKeyVariant::Ed25519, vec![1; 64]);
+
+        // Duplicate index should fail
+        let result = MultiKeySignature::new(vec![(0, sig1.clone()), (0, sig2)]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_multi_key_signature_index_out_of_range() {
+        let sig = AnySignature::new(AnyPublicKeyVariant::Ed25519, vec![0; 64]);
+
+        // Index 32 is out of range (0-31)
+        let result = MultiKeySignature::new(vec![(32, sig)]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_multi_key_signature_basic() {
+        let sig1 = AnySignature::new(AnyPublicKeyVariant::Ed25519, vec![0xaa; 64]);
+        let sig2 = AnySignature::new(AnyPublicKeyVariant::Ed25519, vec![0xbb; 64]);
+
+        let multi_sig = MultiKeySignature::new(vec![(0, sig1), (5, sig2)]).unwrap();
+
+        assert_eq!(multi_sig.num_signatures(), 2);
+        assert!(multi_sig.has_signature(0));
+        assert!(!multi_sig.has_signature(1));
+        assert!(multi_sig.has_signature(5));
+    }
+
+    #[test]
+    fn test_multi_key_signature_debug_display() {
+        let sig = AnySignature::new(AnyPublicKeyVariant::Ed25519, vec![0; 64]);
+        let multi_sig = MultiKeySignature::new(vec![(0, sig)]).unwrap();
+
+        let debug = format!("{:?}", multi_sig);
+        let display = format!("{}", multi_sig);
+
+        assert!(debug.contains("MultiKeySignature"));
+        assert!(display.starts_with("0x"));
+    }
+
+    #[test]
     #[cfg(feature = "ed25519")]
     fn test_multi_key_public_key_creation() {
         use crate::crypto::Ed25519PrivateKey;

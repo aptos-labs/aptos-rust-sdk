@@ -778,4 +778,144 @@ mod tests {
             authenticator: TransactionAuthenticator::ed25519(vec![0u8; 32], vec![0u8; 64]),
         }
     }
+
+    #[test]
+    fn test_batch_summary_all_succeeded() {
+        let results = vec![
+            BatchTransactionResult {
+                index: 0,
+                transaction: create_dummy_signed_txn(),
+                result: Ok(BatchTransactionStatus::Confirmed {
+                    hash: "0x1".to_string(),
+                    success: true,
+                    version: 100,
+                    gas_used: 500,
+                }),
+            },
+            BatchTransactionResult {
+                index: 1,
+                transaction: create_dummy_signed_txn(),
+                result: Ok(BatchTransactionStatus::Confirmed {
+                    hash: "0x2".to_string(),
+                    success: true,
+                    version: 101,
+                    gas_used: 600,
+                }),
+            },
+        ];
+
+        let summary = BatchSummary::from_results(&results);
+        assert_eq!(summary.total, 2);
+        assert_eq!(summary.succeeded, 2);
+        assert_eq!(summary.failed, 0);
+        assert!(summary.all_succeeded());
+        assert!(!summary.has_failures());
+    }
+
+    #[test]
+    fn test_batch_summary_with_pending() {
+        let results = vec![
+            BatchTransactionResult {
+                index: 0,
+                transaction: create_dummy_signed_txn(),
+                result: Ok(BatchTransactionStatus::Pending {
+                    hash: "0x1".to_string(),
+                }),
+            },
+            BatchTransactionResult {
+                index: 1,
+                transaction: create_dummy_signed_txn(),
+                result: Ok(BatchTransactionStatus::Confirmed {
+                    hash: "0x2".to_string(),
+                    success: true,
+                    version: 101,
+                    gas_used: 600,
+                }),
+            },
+        ];
+
+        let summary = BatchSummary::from_results(&results);
+        assert_eq!(summary.total, 2);
+        assert_eq!(summary.succeeded, 1);
+        assert_eq!(summary.pending, 1);
+        assert!(!summary.all_succeeded());
+    }
+
+    #[test]
+    fn test_batch_summary_with_errors() {
+        let results = vec![BatchTransactionResult {
+            index: 0,
+            transaction: create_dummy_signed_txn(),
+            result: Err(AptosError::Transaction("failed".to_string())),
+        }];
+
+        let summary = BatchSummary::from_results(&results);
+        assert_eq!(summary.total, 1);
+        assert_eq!(summary.failed, 1);
+        assert!(summary.has_failures());
+    }
+
+    #[test]
+    fn test_batch_builder_with_max_gas() {
+        let builder = TransactionBatchBuilder::new()
+            .sender(AccountAddress::ONE)
+            .starting_sequence_number(0)
+            .chain_id(ChainId::testnet())
+            .max_gas_amount(500_000)
+            .add_payload(TransactionPayload::Script(crate::transaction::Script {
+                code: vec![],
+                type_args: vec![],
+                args: vec![],
+            }));
+
+        let transactions = builder.build().unwrap();
+        assert_eq!(transactions.len(), 1);
+        assert_eq!(transactions[0].max_gas_amount, 500_000);
+    }
+
+    #[test]
+    fn test_batch_builder_with_expiration() {
+        let builder = TransactionBatchBuilder::new()
+            .sender(AccountAddress::ONE)
+            .starting_sequence_number(0)
+            .chain_id(ChainId::testnet())
+            .expiration_secs(3600) // 1 hour from now
+            .add_payload(TransactionPayload::Script(crate::transaction::Script {
+                code: vec![],
+                type_args: vec![],
+                args: vec![],
+            }));
+
+        let transactions = builder.build().unwrap();
+        // Expiration should be set to some future timestamp (> current time)
+        assert!(transactions[0].expiration_timestamp_secs > 0);
+    }
+
+    #[test]
+    fn test_batch_builder_empty_payloads() {
+        let builder = TransactionBatchBuilder::new()
+            .sender(AccountAddress::ONE)
+            .starting_sequence_number(0)
+            .chain_id(ChainId::testnet());
+
+        // Empty payloads returns empty vec, not error
+        let result = builder.build();
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().len(), 0);
+    }
+
+    #[test]
+    fn test_batch_result_transaction_accessor() {
+        let signed_txn = create_dummy_signed_txn();
+        let result = BatchTransactionResult {
+            index: 0,
+            transaction: signed_txn.clone(),
+            result: Ok(BatchTransactionStatus::Pending {
+                hash: "0x123".to_string(),
+            }),
+        };
+
+        assert_eq!(result.index, 0);
+        assert_eq!(result.transaction.raw_txn.sender, AccountAddress::ONE);
+    }
 }
