@@ -3,8 +3,8 @@
 //! The [`Aptos`] struct provides a unified interface for all SDK functionality.
 
 use crate::account::Account;
-use crate::api::{AnsClient, AptosResponse, FullnodeClient, PendingTransaction};
-use crate::config::{AptosConfig, Network};
+use crate::api::{AptosResponse, FullnodeClient, PendingTransaction};
+use crate::config::AptosConfig;
 use crate::error::{AptosError, AptosResult};
 use crate::transaction::{
     RawTransaction, SignedTransaction, TransactionBuilder, TransactionPayload,
@@ -45,11 +45,6 @@ use crate::api::IndexerClient;
 ///     let ledger = aptos.ledger_info().await?;
 ///     println!("Ledger version: {:?}", ledger.version());
 ///
-///     // Resolve an ANS name
-///     if let Some(addr) = aptos.resolve_name("alice.apt").await? {
-///         println!("alice.apt -> {}", addr);
-///     }
-///
 ///     Ok(())
 /// }
 /// ```
@@ -57,7 +52,6 @@ use crate::api::IndexerClient;
 pub struct Aptos {
     config: AptosConfig,
     fullnode: Arc<FullnodeClient>,
-    ans: Option<AnsClient>,
     #[cfg(feature = "faucet")]
     faucet: Option<FaucetClient>,
     #[cfg(feature = "indexer")]
@@ -68,14 +62,6 @@ impl Aptos {
     /// Creates a new Aptos client with the given configuration.
     pub fn new(config: AptosConfig) -> AptosResult<Self> {
         let fullnode = Arc::new(FullnodeClient::new(config.clone())?);
-        let network = config.network();
-
-        // ANS is only available on mainnet and testnet
-        let ans = if matches!(network, Network::Mainnet | Network::Testnet) {
-            AnsClient::from_fullnode(fullnode.clone(), network).ok()
-        } else {
-            None
-        };
 
         #[cfg(feature = "faucet")]
         let faucet = FaucetClient::new(config.clone()).ok();
@@ -86,7 +72,6 @@ impl Aptos {
         Ok(Self {
             config,
             fullnode,
-            ans,
             #[cfg(feature = "faucet")]
             faucet,
             #[cfg(feature = "indexer")]
@@ -122,13 +107,6 @@ impl Aptos {
     /// Returns the fullnode client.
     pub fn fullnode(&self) -> &FullnodeClient {
         &self.fullnode
-    }
-
-    /// Returns the ANS client, if available.
-    ///
-    /// ANS is only available on mainnet and testnet.
-    pub fn ans(&self) -> Option<&AnsClient> {
-        self.ans.as_ref()
     }
 
     /// Returns the faucet client, if available.
@@ -464,107 +442,6 @@ impl Aptos {
         let account = crate::account::Ed25519Account::generate();
         self.fund_account(account.address(), amount).await?;
         Ok(account)
-    }
-
-    // === ANS (Aptos Names Service) ===
-
-    /// Resolves an ANS name to an address.
-    ///
-    /// Accepts names with or without the `.apt` suffix.
-    ///
-    /// # Arguments
-    ///
-    /// * `name` - The ANS name to resolve (e.g., "alice" or "alice.apt")
-    ///
-    /// # Returns
-    ///
-    /// The resolved address, or `None` if the name is not registered.
-    ///
-    /// # Example
-    ///
-    /// ```rust,ignore
-    /// let aptos = Aptos::mainnet()?;
-    /// if let Some(addr) = aptos.resolve_name("alice.apt").await? {
-    ///     println!("alice.apt -> {}", addr);
-    /// }
-    /// ```
-    pub async fn resolve_name(&self, name: &str) -> AptosResult<Option<AccountAddress>> {
-        let ans = self.ans.as_ref().ok_or_else(|| {
-            AptosError::FeatureNotEnabled("ANS (only available on mainnet/testnet)".into())
-        })?;
-        ans.get_address(name).await
-    }
-
-    /// Gets the primary ANS name for an address.
-    ///
-    /// # Arguments
-    ///
-    /// * `address` - The address to look up
-    ///
-    /// # Returns
-    ///
-    /// The primary name (with `.apt` suffix), or `None` if no primary name is set.
-    ///
-    /// # Example
-    ///
-    /// ```rust,ignore
-    /// let aptos = Aptos::mainnet()?;
-    /// if let Some(name) = aptos.get_primary_name(address).await? {
-    ///     println!("{} -> {}", address, name);
-    /// }
-    /// ```
-    pub async fn get_primary_name(&self, address: AccountAddress) -> AptosResult<Option<String>> {
-        let ans = self.ans.as_ref().ok_or_else(|| {
-            AptosError::FeatureNotEnabled("ANS (only available on mainnet/testnet)".into())
-        })?;
-        ans.get_primary_name(address).await
-    }
-
-    /// Resolves an address or ANS name to an address.
-    ///
-    /// This is a convenience function that accepts either a hex address (0x...)
-    /// or an ANS name and returns the resolved address.
-    ///
-    /// # Arguments
-    ///
-    /// * `address_or_name` - Either a hex address or an ANS name
-    ///
-    /// # Example
-    ///
-    /// ```rust,ignore
-    /// let aptos = Aptos::mainnet()?;
-    /// // Both work:
-    /// let addr = aptos.resolve("alice.apt").await?;
-    /// let addr = aptos.resolve("0x123...").await?;
-    /// ```
-    pub async fn resolve(&self, address_or_name: &str) -> AptosResult<AccountAddress> {
-        // Try to parse as address first
-        if (address_or_name.starts_with("0x") || address_or_name.starts_with("0X"))
-            && let Ok(address) = AccountAddress::from_hex(address_or_name)
-        {
-            return Ok(address);
-        }
-
-        // Try as ANS name
-        self.resolve_name(address_or_name)
-            .await?
-            .ok_or_else(|| AptosError::NotFound(format!("ANS name not found: {}", address_or_name)))
-    }
-
-    /// Checks if an ANS name is available for registration.
-    ///
-    /// # Arguments
-    ///
-    /// * `name` - The name to check (with or without `.apt` suffix)
-    ///
-    /// # Returns
-    ///
-    /// `true` if the name is available, `false` if taken.
-    pub async fn is_name_available(&self, name: &str) -> AptosResult<bool> {
-        let ans = self.ans.as_ref().ok_or_else(|| {
-            AptosError::FeatureNotEnabled("ANS (only available on mainnet/testnet)".into())
-        })?;
-        ans.is_name_available(name).await
     }
 
     // === Transaction Batching ===

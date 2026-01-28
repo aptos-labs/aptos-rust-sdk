@@ -30,7 +30,6 @@ These documents serve to:
 | [14-auto-retry-backoff.md](./14-auto-retry-backoff.md) | ✅ Implemented | P1 |
 | [15-connection-pooling.md](./15-connection-pooling.md) | ✅ Implemented | P2 |
 | [16-sponsored-transactions.md](./16-sponsored-transactions.md) | ✅ Implemented | P1 |
-| [17-ans-integration.md](./17-ans-integration.md) | ✅ Implemented | P1 |
 | [18-transaction-batching.md](./18-transaction-batching.md) | ✅ Implemented | P1 |
 | [19-input-entry-function-data.md](./19-input-entry-function-data.md) | ✅ Implemented | P1 |
 | [20-secp256r1-passkey.md](./20-secp256r1-passkey.md) | ✅ Implemented | P2 |

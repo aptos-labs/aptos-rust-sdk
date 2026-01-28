@@ -50,27 +50,9 @@
 //! - [`account`] - Account management and key generation
 //! - [`crypto`] - Cryptographic primitives and signature schemes
 //! - [`transaction`] - Transaction building and signing
-//! - [`api`] - REST and GraphQL API clients (including ANS)
+//! - [`api`] - REST and GraphQL API clients
 //! - [`types`] - Core Aptos types
 //! - [`codegen`] - Code generation from Move ABIs
-//!
-//! ## ANS (Aptos Names Service)
-//!
-//! The SDK includes built-in support for ANS name resolution:
-//!
-//! ```rust,ignore
-//! let aptos = Aptos::mainnet()?;
-//!
-//! // Resolve a name to an address
-//! let addr = aptos.resolve_name("alice.apt").await?;
-//!
-//! // Get the primary name for an address
-//! let name = aptos.get_primary_name(addr).await?;
-//!
-//! // Resolve either address or name (convenience method)
-//! let addr = aptos.resolve("alice.apt").await?;
-//! let addr = aptos.resolve("0x1234...").await?;
-//! ```
 
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![forbid(unsafe_code)]
