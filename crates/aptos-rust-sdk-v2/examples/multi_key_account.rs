@@ -20,7 +20,7 @@ async fn main() -> anyhow::Result<()> {
     // 1. Setup Aptos client for testnet
     let config = AptosConfig::testnet();
     let aptos = Aptos::new(config)?;
-    println!("Connected to testnet (chain_id: {})", aptos.chain_id());
+    println!("Connected to testnet (chain_id: {})", aptos.chain_id().id());
 
     // 2. Generate individual private keys of different types
     println!("\n--- Creating Mixed Key Types ---");
@@ -59,10 +59,7 @@ async fn main() -> anyhow::Result<()> {
         .await?;
     tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
-    let balance = aptos
-        .get_balance(multi_key_account.address())
-        .await
-        .unwrap_or(0);
+    let balance = aptos.get_balance(multi_key_account.address()).await?;
     println!(
         "Balance: {} octas ({} APT)",
         balance,

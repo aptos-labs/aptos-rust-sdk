@@ -485,7 +485,8 @@ mod tests {
     #[test]
     fn test_clone() {
         let addr = AccountAddress::ONE;
-        let cloned = addr.clone();
+        // AccountAddress is Copy, so we can just copy it
+        let cloned = addr;
         assert_eq!(addr, cloned);
     }
 

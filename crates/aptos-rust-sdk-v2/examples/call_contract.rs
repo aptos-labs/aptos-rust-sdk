@@ -106,8 +106,8 @@ async fn main() -> anyhow::Result<()> {
 
         match resource_result {
             Ok(_) => println!("  APT CoinStore already registered"),
-            Err(_) => {
-                // Register the coin store
+            Err(e) if e.is_not_found() => {
+                // Register the coin store since it doesn't exist
                 let payload = EntryFunction::new(
                     MoveModuleId::from_str_strict("0x1::managed_coin")?,
                     "register",
@@ -127,6 +127,10 @@ async fn main() -> anyhow::Result<()> {
                         .get("version")
                         .unwrap_or(&serde_json::json!("N/A"))
                 );
+            }
+            Err(e) => {
+                // Propagate other errors (network issues, etc.)
+                return Err(e.into());
             }
         }
     }

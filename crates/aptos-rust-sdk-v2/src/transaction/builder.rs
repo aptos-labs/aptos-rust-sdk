@@ -203,6 +203,14 @@ fn make_transaction_authenticator(
                 public_key, signature,
             ))
         }
+        crate::crypto::SINGLE_KEY_SCHEME => {
+            // Single-key scheme is used by Secp256k1 and Secp256r1 accounts
+            // Uses SingleSender variant with AccountAuthenticator::MultiKey
+            // (MultiKey can handle variable-length keys and signatures)
+            TransactionAuthenticator::single_sender(AccountAuthenticator::multi_key(
+                public_key, signature,
+            ))
+        }
         // For other/unknown schemes, default to Ed25519 format
         // (signature scheme detection happens at the account level)
         _ => TransactionAuthenticator::ed25519(public_key, signature),

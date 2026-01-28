@@ -44,10 +44,16 @@ async fn main() -> anyhow::Result<()> {
     // such as a multi-sig wallet or a swap that needs both parties to sign
 
     // Build a payload (using a simple transfer for demonstration)
-    // Note: A real multi-agent use case would be something like:
-    // - Atomic swaps between users
-    // - Multi-sig operations
-    // - Escrow releases
+    //
+    // IMPORTANT: This example demonstrates the multi-agent API mechanics, but uses
+    // `aptos_account::transfer` which only requires a single signer. In production,
+    // you would use an entry function that actually requires multiple signers, such as:
+    // - Atomic swaps between users (requires both parties to sign)
+    // - Multi-party escrow operations
+    // - Custom contracts with multiple signer parameters
+    //
+    // The secondary signer here is included to show how to construct and sign
+    // a multi-agent transaction, but doesn't affect the on-chain execution.
     let payload = TransactionPayload::EntryFunction(EntryFunction {
         module: MoveModuleId::from_str_strict("0x1::aptos_account")?,
         function: "transfer".to_string(),

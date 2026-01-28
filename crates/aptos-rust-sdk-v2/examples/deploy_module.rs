@@ -48,13 +48,15 @@ async fn main() -> anyhow::Result<()> {
     let metadata = fs::read("build/MyModule/package-metadata.bcs")?;
     
     // Create publish payload using code::publish_package_txn
+    // Note: metadata and module_bytecode are already byte vectors read from disk,
+    // they are passed directly as entry function arguments (vector<u8>)
     let payload = EntryFunction::new(
         MoveModuleId::from_str_strict("0x1::code")?,
         "publish_package_txn",
         vec![],
         vec![
-            aptos_bcs::to_bytes(&metadata)?,
-            aptos_bcs::to_bytes(&vec![module_bytecode])?,
+            metadata,
+            vec![module_bytecode],
         ],
     );
     

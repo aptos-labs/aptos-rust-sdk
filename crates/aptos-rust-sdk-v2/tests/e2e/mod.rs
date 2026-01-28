@@ -439,9 +439,7 @@ mod transaction_tests {
     #[ignore]
     async fn e2e_simulate_transaction() {
         use aptos_rust_sdk_v2::account::Account;
-        use aptos_rust_sdk_v2::transaction::authenticator::{
-            Ed25519PublicKey, Ed25519Signature,
-        };
+        use aptos_rust_sdk_v2::transaction::authenticator::{Ed25519PublicKey, Ed25519Signature};
         use aptos_rust_sdk_v2::transaction::{SignedTransaction, TransactionAuthenticator};
 
         let config = get_test_config();

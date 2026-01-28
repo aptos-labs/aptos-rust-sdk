@@ -30,7 +30,7 @@ impl<'de> Deserialize<'de> for Ed25519PublicKey {
 }
 
 impl From<Vec<u8>> for Ed25519PublicKey {
-    /// Converts a Vec<u8> to Ed25519PublicKey.
+    /// Converts a `Vec<u8>` to `Ed25519PublicKey`.
     ///
     /// # Panics
     ///
@@ -92,7 +92,7 @@ impl<'de> Deserialize<'de> for Ed25519Signature {
 }
 
 impl From<Vec<u8>> for Ed25519Signature {
-    /// Converts a Vec<u8> to Ed25519Signature.
+    /// Converts a `Vec<u8>` to `Ed25519Signature`.
     ///
     /// # Panics
     ///
