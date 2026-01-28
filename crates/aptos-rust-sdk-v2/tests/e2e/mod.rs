@@ -357,7 +357,7 @@ mod view_tests {
         let aptos = Aptos::new(config).expect("failed to create client");
 
         let random_address = Ed25519Account::generate().address();
-        println!("Random address: {}", random_address.to_string());
+        println!("Random address: {}", random_address);
 
         let result = aptos
             .view(
