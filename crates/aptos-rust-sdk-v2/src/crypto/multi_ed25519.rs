@@ -14,6 +14,9 @@ use std::fmt;
 /// Maximum number of keys in a multi-Ed25519 account.
 pub const MAX_NUM_OF_KEYS: usize = 32;
 
+// Compile-time assertion: MAX_NUM_OF_KEYS must fit in u8 for bitmap operations
+const _: () = assert!(MAX_NUM_OF_KEYS <= u8::MAX as usize);
+
 /// Minimum threshold (at least 1 signature required).
 pub const MIN_THRESHOLD: u8 = 1;
 
@@ -342,10 +345,11 @@ impl MultiEd25519Signature {
             )));
         }
 
-        // Parse signatures
+        // Parse signatures (MAX_NUM_OF_KEYS is 32, which fits in u8)
         let mut signatures = Vec::with_capacity(num_sigs);
         let mut sig_idx = 0;
 
+        #[allow(clippy::cast_possible_truncation)]
         for bit_pos in 0..(MAX_NUM_OF_KEYS as u8) {
             let byte_idx = (bit_pos / 8) as usize;
             let bit_idx = bit_pos % 8;

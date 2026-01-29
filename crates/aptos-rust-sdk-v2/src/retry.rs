@@ -108,6 +108,7 @@ impl RetryConfig {
     }
 
     /// Calculates the delay for a given attempt number.
+    #[allow(clippy::cast_possible_truncation)] // Delay is bounded by max_delay_ms
     pub fn delay_for_attempt(&self, attempt: u32) -> Duration {
         if attempt == 0 {
             return Duration::from_millis(0);

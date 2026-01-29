@@ -137,7 +137,6 @@ impl MoveSourceParser {
                 doc_lines.insert(0, doc_content.to_string());
             } else if prev_line.is_empty() || prev_line.starts_with("#[") {
                 // Skip empty lines and attributes
-                continue;
             } else {
                 break;
             }
@@ -361,7 +360,7 @@ impl MoveSourceParser {
                 let doc_content = prev_line.strip_prefix("///").unwrap_or("").trim();
                 doc_lines.insert(0, doc_content.to_string());
             } else if prev_line.is_empty() || prev_line.starts_with("#[") {
-                continue;
+                // Skip empty lines and attributes
             } else {
                 break;
             }
@@ -474,7 +473,7 @@ impl EnrichedFunctionInfo {
 
         // Get type parameter names
         if let Some(src) = source_info {
-            info.type_param_names = src.type_param_names.clone();
+            info.type_param_names.clone_from(&src.type_param_names);
         }
         // Fill in missing type param names
         while info.type_param_names.len() < abi_type_params_count {

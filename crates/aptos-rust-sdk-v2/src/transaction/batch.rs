@@ -388,7 +388,7 @@ impl SignedTransactionBatch {
             });
 
             // Stop on first failure if sequential
-            if results.last().map(|r| r.result.is_err()).unwrap_or(false) {
+            if results.last().is_some_and(|r| r.result.is_err()) {
                 break;
             }
         }

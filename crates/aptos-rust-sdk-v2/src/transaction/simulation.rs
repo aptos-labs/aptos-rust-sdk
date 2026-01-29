@@ -224,24 +224,21 @@ impl SimulationResult {
     pub fn is_insufficient_balance(&self) -> bool {
         self.vm_error
             .as_ref()
-            .map(|e| e.is_insufficient_balance())
-            .unwrap_or(false)
+            .is_some_and(|e| e.is_insufficient_balance())
     }
 
     /// Checks if the failure is due to sequence number issues.
     pub fn is_sequence_number_error(&self) -> bool {
         self.vm_error
             .as_ref()
-            .map(|e| e.is_sequence_number_error())
-            .unwrap_or(false)
+            .is_some_and(|e| e.is_sequence_number_error())
     }
 
     /// Checks if the failure is due to out of gas.
     pub fn is_out_of_gas(&self) -> bool {
         self.vm_error
             .as_ref()
-            .map(|e| e.is_out_of_gas())
-            .unwrap_or(false)
+            .is_some_and(|e| e.is_out_of_gas())
     }
 
     /// Returns a user-friendly error message if the simulation failed.

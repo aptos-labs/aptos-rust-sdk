@@ -11,6 +11,9 @@ use std::fmt;
 /// Maximum number of keys in a multi-key account.
 pub const MAX_NUM_OF_KEYS: usize = 32;
 
+// Compile-time assertion: MAX_NUM_OF_KEYS must fit in u8 for bitmap operations
+const _: () = assert!(MAX_NUM_OF_KEYS <= u8::MAX as usize);
+
 /// Minimum threshold (at least 1 signature required).
 pub const MIN_THRESHOLD: u8 = 1;
 
@@ -92,6 +95,7 @@ impl AnyPublicKey {
     }
 
     /// Serializes to BCS format: variant_byte || length || bytes
+    #[allow(clippy::cast_possible_truncation)] // Public key bytes are < 100 bytes
     pub fn to_bcs_bytes(&self) -> Vec<u8> {
         let mut result = Vec::with_capacity(1 + 4 + self.bytes.len());
         result.push(self.variant.as_byte());
@@ -200,6 +204,7 @@ impl AnySignature {
     }
 
     /// Serializes to BCS format: variant_byte || length || bytes
+    #[allow(clippy::cast_possible_truncation)] // Signature bytes are < 100 bytes
     pub fn to_bcs_bytes(&self) -> Vec<u8> {
         let mut result = Vec::with_capacity(1 + 4 + self.bytes.len());
         result.push(self.variant.as_byte());
@@ -293,10 +298,11 @@ impl MultiKeyPublicKey {
     /// Serializes to bytes for authentication key derivation.
     ///
     /// Format: num_keys || pk1_bcs || pk2_bcs || ... || threshold
+    #[allow(clippy::cast_possible_truncation)] // public_keys.len() <= MAX_NUM_OF_KEYS (32)
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
 
-        // Number of keys (1 byte)
+        // Number of keys (1 byte, validated in new())
         bytes.push(self.public_keys.len() as u8);
 
         // Each public key in BCS format
@@ -512,10 +518,11 @@ impl MultiKeySignature {
     /// Serializes to bytes.
     ///
     /// Format: num_signatures || sig1_bcs || sig2_bcs || ... || bitmap (4 bytes)
+    #[allow(clippy::cast_possible_truncation)] // signatures.len() <= MAX_NUM_OF_KEYS (32)
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
 
-        // Number of signatures
+        // Number of signatures (validated in new())
         bytes.push(self.signatures.len() as u8);
 
         // Each signature in BCS format (ordered by index)
@@ -552,8 +559,9 @@ impl MultiKeySignature {
         let mut offset = 1;
         let mut signatures = Vec::with_capacity(num_sigs);
 
-        // Determine signer indices from bitmap
+        // Determine signer indices from bitmap (MAX_NUM_OF_KEYS is 32, fits in u8)
         let mut signer_indices = Vec::new();
+        #[allow(clippy::cast_possible_truncation)]
         for bit_pos in 0..(MAX_NUM_OF_KEYS as u8) {
             let byte_idx = (bit_pos / 8) as usize;
             let bit_idx = bit_pos % 8;

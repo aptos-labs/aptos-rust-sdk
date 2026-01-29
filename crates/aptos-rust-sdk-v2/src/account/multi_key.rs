@@ -171,7 +171,8 @@ impl MultiKeyAccount {
         let multi_public_key = MultiKeyPublicKey::new(public_keys, threshold)?;
         let address = multi_public_key.to_address();
 
-        // Index the private keys
+        // Index the private keys (safe: validated by MultiKeyPublicKey::new above)
+        #[allow(clippy::cast_possible_truncation)]
         let indexed_keys: Vec<_> = private_keys
             .into_iter()
             .enumerate()

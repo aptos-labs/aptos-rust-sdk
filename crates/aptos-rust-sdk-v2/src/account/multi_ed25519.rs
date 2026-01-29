@@ -79,7 +79,8 @@ impl MultiEd25519Account {
         let multi_public_key = MultiEd25519PublicKey::new(public_keys, threshold)?;
         let address = multi_public_key.to_address();
 
-        // Index the private keys
+        // Index the private keys (safe: validated by MultiEd25519PublicKey::new above)
+        #[allow(clippy::cast_possible_truncation)]
         let indexed_keys: Vec<_> = private_keys
             .into_iter()
             .enumerate()
