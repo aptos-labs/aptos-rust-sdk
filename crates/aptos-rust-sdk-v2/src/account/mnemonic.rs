@@ -79,8 +79,17 @@ impl Mnemonic {
     }
 
     /// Derives the seed from this mnemonic with a passphrase.
+    ///
+    /// # Panics
+    ///
+    /// This function will never panic in normal operation because the mnemonic
+    /// phrase is validated during construction (`from_phrase` or `generate`).
+    /// The internal `expect` is a defensive check that should be unreachable.
     pub fn to_seed_with_passphrase(&self, passphrase: &str) -> [u8; 64] {
-        let mnemonic = bip39::Mnemonic::parse_normalized(&self.phrase).expect("validated mnemonic");
+        // SAFETY: The mnemonic phrase was validated during construction.
+        // This expect should never trigger in normal operation.
+        let mnemonic = bip39::Mnemonic::parse_normalized(&self.phrase)
+            .expect("internal error: mnemonic was validated during construction");
 
         mnemonic.to_seed(passphrase)
     }

@@ -153,6 +153,20 @@ pub enum AptosError {
     Other(#[from] anyhow::Error),
 }
 
+/// Maximum length for error messages to prevent excessive memory usage in logs.
+const MAX_ERROR_MESSAGE_LENGTH: usize = 1000;
+
+/// Patterns that might indicate sensitive information in error messages.
+const SENSITIVE_PATTERNS: &[&str] = &[
+    "private_key",
+    "secret",
+    "password",
+    "mnemonic",
+    "seed",
+    "bearer",
+    "authorization",
+];
+
 impl AptosError {
     /// Creates a new BCS error
     pub fn bcs<E: fmt::Display>(err: E) -> Self {
@@ -215,6 +229,98 @@ impl AptosError {
                 matches!(status_code, 429 | 500 | 502 | 503 | 504)
             }
             _ => false,
+        }
+    }
+
+    /// Returns a sanitized version of the error message safe for logging.
+    ///
+    /// This method:
+    /// - Removes control characters that could corrupt logs
+    /// - Truncates very long messages to prevent log flooding
+    /// - Redacts patterns that might indicate sensitive information
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use aptos_rust_sdk_v2::AptosError;
+    ///
+    /// let err = AptosError::api(500, "Internal server error with details...");
+    /// let safe_msg = err.sanitized_message();
+    /// // safe_msg is guaranteed to be safe for logging
+    /// ```
+    pub fn sanitized_message(&self) -> String {
+        let raw_message = self.to_string();
+        Self::sanitize_string(&raw_message)
+    }
+
+    /// Sanitizes a string for safe logging.
+    fn sanitize_string(s: &str) -> String {
+        // Remove control characters (except newline and tab for readability)
+        let cleaned: String = s
+            .chars()
+            .filter(|c| !c.is_control() || *c == '\n' || *c == '\t')
+            .collect();
+
+        // Check for sensitive patterns (case-insensitive)
+        let lower = cleaned.to_lowercase();
+        for pattern in SENSITIVE_PATTERNS {
+            if lower.contains(pattern) {
+                return format!(
+                    "[REDACTED: message contained sensitive pattern '{}']",
+                    pattern
+                );
+            }
+        }
+
+        // Truncate if too long
+        if cleaned.len() > MAX_ERROR_MESSAGE_LENGTH {
+            format!(
+                "{}... [truncated, total length: {}]",
+                &cleaned[..MAX_ERROR_MESSAGE_LENGTH],
+                cleaned.len()
+            )
+        } else {
+            cleaned
+        }
+    }
+
+    /// Returns the error message suitable for display to end users.
+    ///
+    /// This is a more conservative sanitization that provides less detail
+    /// but is safer for user-facing error messages.
+    pub fn user_message(&self) -> &'static str {
+        match self {
+            Self::Http(_) => "Network error occurred",
+            Self::Json(_) => "Failed to process response",
+            Self::Bcs(_) => "Failed to process data",
+            Self::Url(_) => "Invalid URL",
+            Self::Hex(_) => "Invalid hex format",
+            Self::InvalidAddress(_) => "Invalid account address",
+            Self::InvalidPublicKey(_) => "Invalid public key",
+            Self::InvalidPrivateKey(_) => "Invalid private key",
+            Self::InvalidSignature(_) => "Invalid signature",
+            Self::SignatureVerificationFailed => "Signature verification failed",
+            Self::InvalidTypeTag(_) => "Invalid type format",
+            Self::Transaction(_) => "Transaction error",
+            Self::SimulationFailed(_) => "Transaction simulation failed",
+            Self::SubmissionFailed(_) => "Transaction submission failed",
+            Self::ExecutionFailed { .. } => "Transaction execution failed",
+            Self::TransactionTimeout { .. } => "Transaction timed out",
+            Self::Api { status_code: 404, .. } => "Resource not found",
+            Self::Api { status_code: 429, .. } => "Rate limit exceeded",
+            Self::Api { status_code, .. } if *status_code >= 500 => "Server error",
+            Self::Api { .. } => "API error",
+            Self::RateLimited { .. } => "Rate limit exceeded",
+            Self::NotFound(_) => "Resource not found",
+            Self::AccountNotFound(_) => "Account not found",
+            Self::InvalidMnemonic(_) => "Invalid recovery phrase",
+            Self::InvalidJwt(_) => "Invalid authentication token",
+            Self::KeyDerivation(_) => "Key derivation failed",
+            Self::InsufficientSignatures { .. } => "Insufficient signatures",
+            Self::FeatureNotEnabled(_) => "Feature not enabled",
+            Self::Config(_) => "Configuration error",
+            Self::Internal(_) => "Internal error",
+            Self::Other(_) => "An error occurred",
         }
     }
 }
@@ -402,5 +508,52 @@ mod tests {
     fn test_key_derivation() {
         let err = AptosError::KeyDerivation("failed".to_string());
         assert!(err.to_string().contains("derivation"));
+    }
+
+    #[test]
+    fn test_sanitized_message_basic() {
+        let err = AptosError::api(400, "bad request");
+        let sanitized = err.sanitized_message();
+        assert!(sanitized.contains("bad request"));
+    }
+
+    #[test]
+    fn test_sanitized_message_truncates_long_messages() {
+        let long_message = "x".repeat(2000);
+        let err = AptosError::api(500, long_message);
+        let sanitized = err.sanitized_message();
+        assert!(sanitized.len() < 1200); // Should be truncated
+        assert!(sanitized.contains("truncated"));
+    }
+
+    #[test]
+    fn test_sanitized_message_removes_control_chars() {
+        let err = AptosError::api(400, "bad\x00request\x1f");
+        let sanitized = err.sanitized_message();
+        assert!(!sanitized.contains('\x00'));
+        assert!(!sanitized.contains('\x1f'));
+    }
+
+    #[test]
+    fn test_sanitized_message_redacts_sensitive_patterns() {
+        let err = AptosError::Internal("private_key: abc123".to_string());
+        let sanitized = err.sanitized_message();
+        assert!(sanitized.contains("REDACTED"));
+        assert!(!sanitized.contains("abc123"));
+
+        let err = AptosError::Internal("mnemonic phrase here".to_string());
+        let sanitized = err.sanitized_message();
+        assert!(sanitized.contains("REDACTED"));
+    }
+
+    #[test]
+    fn test_user_message() {
+        assert_eq!(AptosError::api(404, "not found").user_message(), "Resource not found");
+        assert_eq!(AptosError::api(429, "rate limited").user_message(), "Rate limit exceeded");
+        assert_eq!(AptosError::api(500, "internal error").user_message(), "Server error");
+        assert_eq!(
+            AptosError::InvalidAddress("bad".to_string()).user_message(),
+            "Invalid account address"
+        );
     }
 }

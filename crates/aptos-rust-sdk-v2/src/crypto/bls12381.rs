@@ -37,10 +37,19 @@ pub struct Bls12381PrivateKey {
 
 impl Bls12381PrivateKey {
     /// Generates a new random BLS12-381 private key.
+    ///
+    /// # Panics
+    ///
+    /// This function will not panic in normal operation. The internal `expect`
+    /// is a defensive check for the blst library's key generation, which only
+    /// fails if the input keying material (IKM) is less than 32 bytes. Since
+    /// we always provide exactly 32 bytes of random data, this cannot fail.
     pub fn generate() -> Self {
         let mut ikm = [0u8; 32];
         rand::rngs::OsRng.fill_bytes(&mut ikm);
-        let secret_key = SecretKey::key_gen(&ikm, &[]).expect("key generation should not fail");
+        // SAFETY: key_gen only fails if IKM is < 32 bytes. We provide exactly 32.
+        let secret_key = SecretKey::key_gen(&ikm, &[])
+            .expect("internal error: BLS key generation failed with 32-byte IKM");
         Self { inner: secret_key }
     }
 

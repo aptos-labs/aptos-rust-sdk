@@ -504,7 +504,44 @@ impl AudClaim {
     }
 }
 
+/// Decodes JWT claims without performing signature validation.
+///
+/// # Security Notice
+///
+/// **IMPORTANT**: This function intentionally disables JWT signature validation.
+/// This is NOT a security vulnerability - it is by design for the keyless account flow.
+///
+/// ## Why signature validation is disabled here:
+///
+/// In the Aptos keyless authentication flow, JWT signature verification is performed
+/// separately through a different mechanism:
+///
+/// 1. The user obtains a JWT from an OIDC provider (Google, Apple, etc.)
+/// 2. This function extracts claims (iss, aud, sub, nonce) for address derivation
+/// 3. The actual cryptographic verification happens via:
+///    - The pepper service validates the JWT before returning a pepper
+///    - The prover service validates the JWT before generating a ZK proof
+///    - On-chain verification uses the ZK proof to validate the JWT was legitimate
+///
+/// The ZK proof cryptographically proves that the user possessed a valid JWT from
+/// the claimed issuer, without revealing the JWT itself on-chain.
+///
+/// ## Do NOT use this function for general JWT validation
+///
+/// This function should ONLY be used within the keyless account creation flow where
+/// JWT authenticity is verified through the pepper/prover services and ZK proofs.
+/// For general JWT validation, use the `jsonwebtoken` crate with proper signature
+/// verification using the OIDC provider's JWKS endpoint.
+///
+/// ## Security model
+///
+/// - Pepper service: Validates JWT signature using OIDC provider's JWKS
+/// - Prover service: Validates JWT signature before generating proof
+/// - Blockchain: Verifies ZK proof that commits to valid JWT claims
 fn decode_claims(jwt: &str) -> AptosResult<JwtClaims> {
+    // SECURITY: Signature validation is intentionally disabled.
+    // See function documentation for the security rationale.
+    // JWT authenticity is verified by pepper/prover services and ZK proofs.
     let mut validation = Validation::new(Algorithm::RS256);
     validation.insecure_disable_signature_validation();
     validation.validate_aud = false;

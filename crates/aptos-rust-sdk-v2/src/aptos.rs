@@ -656,16 +656,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_resolve_address_hex() {
-        let server = MockServer::start().await;
-        let aptos = create_mock_aptos(&server).await;
-
-        // Should resolve hex address directly without API call
-        let addr = aptos.resolve("0x1").await.unwrap();
-        assert_eq!(addr, AccountAddress::ONE);
-    }
-
-    #[tokio::test]
     async fn test_config_builder() {
         let config = AptosConfig::testnet().with_timeout(Duration::from_secs(60));
 

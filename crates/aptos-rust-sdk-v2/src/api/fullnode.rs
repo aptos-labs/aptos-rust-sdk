@@ -60,9 +60,26 @@ pub struct FullnodeClient {
 
 impl FullnodeClient {
     /// Creates a new fullnode client.
+    ///
+    /// # TLS Security
+    ///
+    /// This client uses `reqwest` with its default TLS configuration, which:
+    /// - Validates server certificates against the system's certificate store
+    /// - Requires valid TLS certificates for HTTPS connections
+    /// - Uses secure TLS versions (TLS 1.2+)
+    ///
+    /// All Aptos network endpoints (mainnet, testnet, devnet) use HTTPS with
+    /// valid certificates. The local configuration uses HTTP for development.
+    ///
+    /// For custom deployments requiring custom CA certificates, use the
+    /// `REQUESTS_CA_BUNDLE` or `SSL_CERT_FILE` environment variables, or
+    /// configure a custom `reqwest::Client` and use `from_client()`.
     pub fn new(config: AptosConfig) -> AptosResult<Self> {
         let pool = config.pool_config();
 
+        // SECURITY: TLS certificate validation is enabled by default via reqwest.
+        // The client will reject connections to servers with invalid certificates.
+        // All production Aptos endpoints use HTTPS with valid certificates.
         let mut builder = Client::builder()
             .timeout(config.timeout)
             .pool_max_idle_per_host(pool.max_idle_per_host.unwrap_or(usize::MAX))

@@ -86,6 +86,12 @@ struct GraphQLError {
 
 impl IndexerClient {
     /// Creates a new indexer client.
+    ///
+    /// # TLS Security
+    ///
+    /// This client uses `reqwest` with its default TLS configuration, which
+    /// validates server certificates against the system's certificate store.
+    /// All Aptos indexer endpoints use HTTPS with valid certificates.
     pub fn new(config: AptosConfig) -> AptosResult<Self> {
         let indexer_url = config
             .indexer_url()
@@ -94,6 +100,7 @@ impl IndexerClient {
 
         let pool = config.pool_config();
 
+        // SECURITY: TLS certificate validation is enabled by default via reqwest.
         let mut builder = Client::builder()
             .timeout(config.timeout)
             .pool_max_idle_per_host(pool.max_idle_per_host.unwrap_or(usize::MAX))

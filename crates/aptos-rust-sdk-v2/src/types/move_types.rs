@@ -2,12 +2,27 @@
 //!
 //! This module provides Rust types that mirror the Move type system,
 //! including type tags, struct tags, and move values.
+//!
+//! # Security
+//!
+//! All parsing functions enforce length limits to prevent denial-of-service
+//! attacks via excessive memory allocation or CPU usage.
 
 use crate::error::{AptosError, AptosResult};
 use crate::types::AccountAddress;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::str::FromStr;
+
+/// Maximum length for type tag strings to prevent DoS via excessive parsing.
+/// This limit is generous enough for any realistic type tag while preventing abuse.
+const MAX_TYPE_TAG_LENGTH: usize = 1024;
+
+/// Maximum length for identifier strings.
+const MAX_IDENTIFIER_LENGTH: usize = 128;
+
+/// Maximum depth for nested type arguments (e.g., vector<vector<vector<...>>>).
+const MAX_TYPE_NESTING_DEPTH: usize = 8;
 
 /// An identifier in Move (module name, function name, etc.).
 ///
@@ -19,6 +34,11 @@ pub struct Identifier(String);
 
 impl Identifier {
     /// Creates a new identifier, validating the format.
+    ///
+    /// # Security
+    ///
+    /// This function enforces a length limit of 128 characters to prevent
+    /// denial-of-service attacks via excessive memory allocation.
     pub fn new(s: impl Into<String>) -> AptosResult<Self> {
         let s = s.into();
         if s.is_empty() {
@@ -26,7 +46,16 @@ impl Identifier {
                 "identifier cannot be empty".into(),
             ));
         }
-        let first = s.chars().next().unwrap();
+        // Security: enforce length limit to prevent DoS
+        if s.len() > MAX_IDENTIFIER_LENGTH {
+            return Err(AptosError::InvalidTypeTag(format!(
+                "identifier too long: {} bytes (max {})",
+                s.len(),
+                MAX_IDENTIFIER_LENGTH
+            )));
+        }
+        // Safe to unwrap: we already checked s is not empty
+        let first = s.chars().next().expect("string is not empty");
         if !first.is_ascii_alphabetic() && first != '_' {
             return Err(AptosError::InvalidTypeTag(format!(
                 "identifier must start with letter or underscore: {}",
@@ -262,6 +291,11 @@ impl TypeTag {
     /// - Vector types: vector<element_type>
     /// - Generic struct types: address::module::StructName<TypeArg1, TypeArg2>
     ///
+    /// # Security
+    ///
+    /// This function enforces length and depth limits to prevent denial-of-service
+    /// attacks via excessive parsing or memory allocation.
+    ///
     /// # Example
     ///
     /// ```rust
@@ -273,6 +307,28 @@ impl TypeTag {
     /// ```
     pub fn from_str_strict(s: &str) -> AptosResult<Self> {
         let s = s.trim();
+
+        // Security: enforce length limit to prevent DoS
+        if s.len() > MAX_TYPE_TAG_LENGTH {
+            return Err(AptosError::InvalidTypeTag(format!(
+                "type tag too long: {} bytes (max {})",
+                s.len(),
+                MAX_TYPE_TAG_LENGTH
+            )));
+        }
+
+        Self::parse_type_tag_with_depth(s, 0)
+    }
+
+    /// Internal parser with depth tracking to prevent stack overflow.
+    fn parse_type_tag_with_depth(s: &str, depth: usize) -> AptosResult<Self> {
+        // Security: prevent excessive nesting depth
+        if depth > MAX_TYPE_NESTING_DEPTH {
+            return Err(AptosError::InvalidTypeTag(format!(
+                "type tag nesting too deep: {} levels (max {})",
+                depth, MAX_TYPE_NESTING_DEPTH
+            )));
+        }
 
         // Check primitive types first
         match s {
@@ -291,16 +347,16 @@ impl TypeTag {
         // Check for vector type
         if s.starts_with("vector<") && s.ends_with('>') {
             let inner = &s[7..s.len() - 1];
-            let inner_tag = TypeTag::from_str_strict(inner)?;
+            let inner_tag = Self::parse_type_tag_with_depth(inner, depth + 1)?;
             return Ok(TypeTag::Vector(Box::new(inner_tag)));
         }
 
         // Parse as struct type (address::module::name or with generics)
-        Self::parse_struct_type(s)
+        Self::parse_struct_type_with_depth(s, depth)
     }
 
-    /// Parses a struct type tag (with optional type arguments).
-    fn parse_struct_type(s: &str) -> AptosResult<Self> {
+    /// Parses a struct type tag with depth tracking.
+    fn parse_struct_type_with_depth(s: &str, depth: usize) -> AptosResult<Self> {
         // Find the opening < for generics (if any)
         let generic_start = s.find('<');
 
@@ -331,7 +387,7 @@ impl TypeTag {
 
         // Parse type arguments if present
         let type_args = if let Some(args_str) = type_args_str {
-            Self::parse_type_args(args_str)?
+            Self::parse_type_args_with_depth(args_str, depth)?
         } else {
             vec![]
         };
@@ -344,24 +400,24 @@ impl TypeTag {
         })))
     }
 
-    /// Parses comma-separated type arguments.
-    fn parse_type_args(s: &str) -> AptosResult<Vec<TypeTag>> {
+    /// Parses comma-separated type arguments with depth tracking.
+    fn parse_type_args_with_depth(s: &str, depth: usize) -> AptosResult<Vec<TypeTag>> {
         if s.trim().is_empty() {
             return Ok(vec![]);
         }
 
         let mut result = Vec::new();
-        let mut depth = 0;
+        let mut bracket_depth = 0;
         let mut start = 0;
 
         for (i, c) in s.char_indices() {
             match c {
-                '<' => depth += 1,
-                '>' => depth -= 1,
-                ',' if depth == 0 => {
+                '<' => bracket_depth += 1,
+                '>' => bracket_depth -= 1,
+                ',' if bracket_depth == 0 => {
                     let arg = s[start..i].trim();
                     if !arg.is_empty() {
-                        result.push(TypeTag::from_str_strict(arg)?);
+                        result.push(Self::parse_type_tag_with_depth(arg, depth + 1)?);
                     }
                     start = i + 1;
                 }
@@ -372,7 +428,7 @@ impl TypeTag {
         // Handle the last argument
         let last_arg = s[start..].trim();
         if !last_arg.is_empty() {
-            result.push(TypeTag::from_str_strict(last_arg)?);
+            result.push(Self::parse_type_tag_with_depth(last_arg, depth + 1)?);
         }
 
         Ok(result)
@@ -993,5 +1049,46 @@ mod tests {
         let val = MoveValue::String("hello".to_string());
         let json = serde_json::to_string(&val).unwrap();
         assert_eq!(json, "\"hello\"");
+    }
+
+    // Security tests for input length limits
+
+    #[test]
+    fn test_identifier_length_limit() {
+        // Valid length
+        let valid = "a".repeat(128);
+        assert!(Identifier::new(&valid).is_ok());
+
+        // Too long
+        let too_long = "a".repeat(129);
+        let result = Identifier::new(&too_long);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("too long"));
+    }
+
+    #[test]
+    fn test_type_tag_length_limit() {
+        // Valid length
+        let valid = format!("0x1::{}::Test", "a".repeat(100));
+        assert!(TypeTag::from_str_strict(&valid).is_ok());
+
+        // Too long
+        let too_long = format!("0x1::{}::Test", "a".repeat(2000));
+        let result = TypeTag::from_str_strict(&too_long);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("too long"));
+    }
+
+    #[test]
+    fn test_type_tag_nesting_depth_limit() {
+        // Valid nesting depth
+        let valid = "vector<vector<vector<u8>>>";
+        assert!(TypeTag::from_str_strict(valid).is_ok());
+
+        // Too deeply nested (9 levels)
+        let too_deep = "vector<vector<vector<vector<vector<vector<vector<vector<vector<u8>>>>>>>>>";
+        let result = TypeTag::from_str_strict(too_deep);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("too deep"));
     }
 }
