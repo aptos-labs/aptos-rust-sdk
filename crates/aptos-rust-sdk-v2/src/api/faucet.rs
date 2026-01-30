@@ -46,7 +46,7 @@ pub struct FaucetClient {
 pub(crate) enum FaucetResponse {
     /// Direct array of transaction hashes (localnet format).
     Direct(Vec<String>),
-    /// Object with txn_hashes field (some older/alternative formats).
+    /// Object with `txn_hashes` field (some older/alternative formats).
     Object { txn_hashes: Vec<String> },
 }
 

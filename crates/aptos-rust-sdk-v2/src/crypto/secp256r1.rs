@@ -1,7 +1,7 @@
 //! Secp256r1 (P-256) ECDSA signature scheme implementation.
 //!
 //! Secp256r1, also known as P-256 or prime256v1, is commonly used in
-//! WebAuthn and passkey implementations.
+//! `WebAuthn` and passkey implementations.
 
 use crate::crypto::traits::{PublicKey, Signature, Signer, Verifier};
 use crate::error::{AptosError, AptosResult};

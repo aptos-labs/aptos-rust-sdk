@@ -7,8 +7,8 @@ use serde::{Deserialize, Serialize};
 ///
 /// Note: Variant indices must match Aptos core for BCS compatibility:
 /// - 0: Script
-/// - 1: ModuleBundle (deprecated)
-/// - 2: EntryFunction
+/// - 1: `ModuleBundle` (deprecated)
+/// - 2: `EntryFunction`
 /// - 3: Multisig
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TransactionPayload {
@@ -150,7 +150,7 @@ impl EntryFunction {
     ///
     /// # Arguments
     ///
-    /// * `function_id` - Full function ID (e.g., "0x1::coin::transfer")
+    /// * `function_id` - Full function ID (e.g., "`0x1::coin::transfer`")
     /// * `type_args` - Type arguments
     /// * `args` - BCS-encoded arguments
     pub fn from_function_id(

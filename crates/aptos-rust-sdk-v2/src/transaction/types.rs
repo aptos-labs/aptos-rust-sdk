@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 /// The raw transaction that a client signs.
 ///
-/// A RawTransaction contains all the details of a transaction before
+/// A `RawTransaction` contains all the details of a transaction before
 /// it is signed, including the sender, payload, gas parameters, and
 /// expiration time.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

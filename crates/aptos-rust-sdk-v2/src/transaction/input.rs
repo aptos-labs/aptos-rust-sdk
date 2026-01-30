@@ -64,7 +64,7 @@ impl InputEntryFunctionData {
     ///
     /// # Arguments
     ///
-    /// * `function_id` - The full function identifier (e.g., "0x1::coin::transfer")
+    /// * `function_id` - The full function identifier (e.g., "`0x1::coin::transfer`")
     ///
     /// # Example
     ///
@@ -118,7 +118,7 @@ impl InputEntryFunctionData {
     ///
     /// # Arguments
     ///
-    /// * `coin_type` - The coin type (e.g., "0x1::aptos_coin::AptosCoin")
+    /// * `coin_type` - The coin type (e.g., "`0x1::aptos_coin::AptosCoin`")
     /// * `recipient` - The recipient address
     /// * `amount` - Amount in the coin's smallest unit
     pub fn transfer_coin(
@@ -230,7 +230,7 @@ impl InputEntryFunctionDataBuilder {
     ///
     /// # Arguments
     ///
-    /// * `type_arg` - A type tag string (e.g., "0x1::aptos_coin::AptosCoin")
+    /// * `type_arg` - A type tag string (e.g., "`0x1::aptos_coin::AptosCoin`")
     ///
     /// # Example
     ///
@@ -248,7 +248,7 @@ impl InputEntryFunctionDataBuilder {
         self
     }
 
-    /// Adds a type argument from a TypeTag.
+    /// Adds a type argument from a `TypeTag`.
     pub fn type_arg_typed(mut self, type_arg: TypeTag) -> Self {
         self.type_args.push(type_arg);
         self
@@ -339,7 +339,7 @@ impl InputEntryFunctionDataBuilder {
         }))
     }
 
-    /// Builds just the entry function (without wrapping in TransactionPayload).
+    /// Builds just the entry function (without wrapping in `TransactionPayload`).
     pub fn build_entry_function(self) -> AptosResult<EntryFunction> {
         let module = self.module.map_err(AptosError::Transaction)?;
 
@@ -397,7 +397,7 @@ pub fn move_string(s: &str) -> String {
     s.to_string()
 }
 
-/// Helper to create an Option::Some argument for Move.
+/// Helper to create an `Option::Some` argument for Move.
 ///
 /// # Example
 ///
@@ -413,7 +413,7 @@ pub fn move_some<T: Serialize>(value: T) -> Vec<u8> {
     bytes
 }
 
-/// Helper to create an Option::None argument for Move.
+/// Helper to create an `Option::None` argument for Move.
 ///
 /// # Example
 ///
@@ -432,7 +432,7 @@ pub fn move_none() -> Vec<u8> {
 pub struct MoveU256(pub [u8; 32]);
 
 impl MoveU256 {
-    /// Creates a MoveU256 from a decimal string.
+    /// Creates a `MoveU256` from a decimal string.
     pub fn parse(s: &str) -> AptosResult<Self> {
         // Parse as big integer and convert to little-endian bytes
         let mut bytes = [0u8; 32];
@@ -446,14 +446,14 @@ impl MoveU256 {
         Err(AptosError::Transaction(format!("Invalid u256: {s}")))
     }
 
-    /// Creates a MoveU256 from a u128.
+    /// Creates a `MoveU256` from a u128.
     pub fn from_u128(val: u128) -> Self {
         let mut bytes = [0u8; 32];
         bytes[..16].copy_from_slice(&val.to_le_bytes());
         Self(bytes)
     }
 
-    /// Creates a MoveU256 from raw bytes (little-endian).
+    /// Creates a `MoveU256` from raw bytes (little-endian).
     pub fn from_le_bytes(bytes: [u8; 32]) -> Self {
         Self(bytes)
     }

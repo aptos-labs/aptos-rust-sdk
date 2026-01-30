@@ -69,7 +69,6 @@
     clippy::return_self_not_must_use, // Builder pattern doesn't need must_use
     clippy::missing_errors_doc,       // Error documentation is at the error type level
     clippy::missing_panics_doc,       // We document panics where relevant
-    clippy::doc_markdown,             // Too many false positives for type names in docs
     clippy::match_same_arms,          // Sometimes intentionally explicit for clarity TODO: Remove, this showed a couple of issues
     clippy::struct_excessive_bools,   // Config structs often have boolean options
     clippy::cast_precision_loss,      // Acceptable for display/logging purposes

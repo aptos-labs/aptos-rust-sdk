@@ -573,7 +573,7 @@ impl FullnodeClient {
         }
     }
 
-    /// Legacy handle_response - delegates to static version.
+    /// Legacy `handle_response` - delegates to static version.
     #[allow(dead_code)]
     async fn handle_response<T: for<'de> serde::Deserialize<'de>>(
         &self,

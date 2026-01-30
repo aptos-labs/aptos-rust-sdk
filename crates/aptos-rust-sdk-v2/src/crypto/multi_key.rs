@@ -1,7 +1,7 @@
-//! MultiKey signature scheme implementation.
+//! `MultiKey` signature scheme implementation.
 //!
-//! MultiKey enables M-of-N threshold signatures with mixed key types.
-//! Unlike MultiEd25519, each key can be a different signature scheme
+//! `MultiKey` enables M-of-N threshold signatures with mixed key types.
+//! Unlike `MultiEd25519`, each key can be a different signature scheme
 //! (Ed25519, Secp256k1, Secp256r1, etc.).
 
 use crate::error::{AptosError, AptosResult};
@@ -61,7 +61,7 @@ pub struct AnyPublicKey {
 }
 
 impl AnyPublicKey {
-    /// Creates a new AnyPublicKey.
+    /// Creates a new `AnyPublicKey`.
     pub fn new(variant: AnyPublicKeyVariant, bytes: Vec<u8>) -> Self {
         Self { variant, bytes }
     }
@@ -93,7 +93,7 @@ impl AnyPublicKey {
         }
     }
 
-    /// Serializes to BCS format: variant_byte || length || bytes
+    /// Serializes to BCS format: `variant_byte` || length || bytes
     #[allow(clippy::cast_possible_truncation)] // Public key bytes are < 100 bytes
     pub fn to_bcs_bytes(&self) -> Vec<u8> {
         let mut result = Vec::with_capacity(1 + 4 + self.bytes.len());
@@ -170,7 +170,7 @@ pub struct AnySignature {
 }
 
 impl AnySignature {
-    /// Creates a new AnySignature.
+    /// Creates a new `AnySignature`.
     pub fn new(variant: AnyPublicKeyVariant, bytes: Vec<u8>) -> Self {
         Self { variant, bytes }
     }
@@ -202,7 +202,7 @@ impl AnySignature {
         }
     }
 
-    /// Serializes to BCS format: variant_byte || length || bytes
+    /// Serializes to BCS format: `variant_byte` || length || bytes
     #[allow(clippy::cast_possible_truncation)] // Signature bytes are < 100 bytes
     pub fn to_bcs_bytes(&self) -> Vec<u8> {
         let mut result = Vec::with_capacity(1 + 4 + self.bytes.len());
@@ -296,7 +296,7 @@ impl MultiKeyPublicKey {
 
     /// Serializes to bytes for authentication key derivation.
     ///
-    /// Format: num_keys || pk1_bcs || pk2_bcs || ... || threshold
+    /// Format: `num_keys` || `pk1_bcs` || `pk2_bcs` || ... || threshold
     #[allow(clippy::cast_possible_truncation)] // public_keys.len() <= MAX_NUM_OF_KEYS (32)
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::new();
@@ -441,7 +441,7 @@ impl MultiKeySignature {
     ///
     /// # Arguments
     ///
-    /// * `signatures` - Vec of (signer_index, signature) pairs
+    /// * `signatures` - Vec of (`signer_index`, signature) pairs
     pub fn new(mut signatures: Vec<(u8, AnySignature)>) -> AptosResult<Self> {
         if signatures.is_empty() {
             return Err(AptosError::InvalidSignature(
@@ -514,7 +514,7 @@ impl MultiKeySignature {
 
     /// Serializes to bytes.
     ///
-    /// Format: num_signatures || sig1_bcs || sig2_bcs || ... || bitmap (4 bytes)
+    /// Format: `num_signatures` || `sig1_bcs` || `sig2_bcs` || ... || bitmap (4 bytes)
     #[allow(clippy::cast_possible_truncation)] // signatures.len() <= MAX_NUM_OF_KEYS (32)
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::new();

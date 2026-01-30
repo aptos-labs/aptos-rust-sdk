@@ -103,7 +103,7 @@ pub const KEYLESS_SCHEME: u8 = 5;
 
 /// Derives an authentication key from a public key and scheme.
 ///
-/// The authentication key is SHA3-256(public_key_bytes || scheme_byte).
+/// The authentication key is SHA3-256(public_key_bytes || `scheme_byte`).
 pub fn derive_authentication_key(public_key: &[u8], scheme: u8) -> [u8; 32] {
     use sha3::{Digest, Sha3_256};
     let mut hasher = Sha3_256::new();

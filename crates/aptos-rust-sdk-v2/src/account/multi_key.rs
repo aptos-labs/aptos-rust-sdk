@@ -1,4 +1,4 @@
-//! MultiKey account implementation.
+//! `MultiKey` account implementation.
 //!
 //! This module provides the [`MultiKeyAccount`] type for M-of-N
 //! threshold signature accounts with mixed key types.

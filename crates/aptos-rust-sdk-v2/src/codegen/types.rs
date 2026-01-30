@@ -5,7 +5,7 @@ use std::collections::HashMap;
 /// A Rust type representation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RustType {
-    /// The full type path (e.g., "`Vec<u8>`", "AccountAddress").
+    /// The full type path (e.g., "`Vec<u8>`", "`AccountAddress`").
     pub path: String,
     /// Whether this type requires BCS serialization as an argument.
     pub needs_bcs: bool,
@@ -200,7 +200,7 @@ impl MoveTypeMapper {
     }
 }
 
-/// Converts a snake_case or other string to PascalCase.
+/// Converts a `snake_case` or other string to `PascalCase`.
 pub fn to_pascal_case(s: &str) -> String {
     let mut result = String::new();
     let mut capitalize_next = true;
@@ -219,7 +219,7 @@ pub fn to_pascal_case(s: &str) -> String {
     result
 }
 
-/// Converts a PascalCase or other string to snake_case.
+/// Converts a `PascalCase` or other string to `snake_case`.
 pub fn to_snake_case(s: &str) -> String {
     let mut result = String::new();
 

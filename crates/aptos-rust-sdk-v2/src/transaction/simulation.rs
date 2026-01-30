@@ -255,7 +255,7 @@ impl SimulationResult {
 /// A state change from a simulated transaction.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StateChange {
-    /// Type of change (write_resource, delete_resource, etc.)
+    /// Type of change (`write_resource`, `delete_resource`, etc.)
     pub change_type: String,
     /// Address affected.
     pub address: String,
@@ -342,7 +342,7 @@ pub struct VmError {
     pub status: String,
     /// Abort code (if applicable).
     pub abort_code: Option<u64>,
-    /// Location of the error (module::function).
+    /// Location of the error (`module::function`).
     pub location: Option<String>,
 }
 

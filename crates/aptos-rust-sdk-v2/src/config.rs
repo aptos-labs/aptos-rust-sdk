@@ -93,7 +93,7 @@ impl PoolConfig {
     }
 }
 
-/// Builder for PoolConfig.
+/// Builder for `PoolConfig`.
 #[derive(Debug, Clone, Default)]
 pub struct PoolConfigBuilder {
     max_idle_per_host: Option<usize>,

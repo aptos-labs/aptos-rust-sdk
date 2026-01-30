@@ -104,7 +104,7 @@ impl MultiEd25519PublicKey {
 
     /// Serializes the public key to bytes.
     ///
-    /// Format: public_key_1 || public_key_2 || ... || public_key_n || threshold
+    /// Format: `public_key_1` || `public_key_2` || ... || `public_key_n` || threshold
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::with_capacity(self.public_keys.len() * ED25519_PUBLIC_KEY_LENGTH + 1);
         for pk in &self.public_keys {
@@ -271,7 +271,7 @@ impl MultiEd25519Signature {
     ///
     /// # Arguments
     ///
-    /// * `signatures` - Vec of (signer_index, signature) pairs
+    /// * `signatures` - Vec of (`signer_index`, signature) pairs
     ///
     /// The signer indices must be in ascending order and within bounds.
     pub fn new(mut signatures: Vec<(u8, Ed25519Signature)>) -> AptosResult<Self> {
@@ -321,7 +321,7 @@ impl MultiEd25519Signature {
 
     /// Creates a signature from bytes.
     ///
-    /// Format: signature_1 || signature_2 || ... || signature_m || bitmap (4 bytes)
+    /// Format: `signature_1` || `signature_2` || ... || `signature_m` || bitmap (4 bytes)
     pub fn from_bytes(bytes: &[u8]) -> AptosResult<Self> {
         if bytes.len() < 4 {
             return Err(AptosError::InvalidSignature("bytes too short".into()));

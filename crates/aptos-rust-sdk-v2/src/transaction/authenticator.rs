@@ -49,7 +49,7 @@ impl From<Vec<u8>> for Ed25519PublicKey {
 }
 
 impl Ed25519PublicKey {
-    /// Attempts to create an Ed25519PublicKey from a byte slice.
+    /// Attempts to create an `Ed25519PublicKey` from a byte slice.
     ///
     /// Returns an error if the input is not exactly 32 bytes.
     pub fn try_from_bytes(bytes: &[u8]) -> crate::error::AptosResult<Self> {
@@ -111,7 +111,7 @@ impl From<Vec<u8>> for Ed25519Signature {
 }
 
 impl Ed25519Signature {
-    /// Attempts to create an Ed25519Signature from a byte slice.
+    /// Attempts to create an `Ed25519Signature` from a byte slice.
     ///
     /// Returns an error if the input is not exactly 64 bytes.
     pub fn try_from_bytes(bytes: &[u8]) -> crate::error::AptosResult<Self> {
@@ -134,10 +134,10 @@ impl Ed25519Signature {
 ///
 /// Note: Variant indices must match Aptos core for BCS compatibility:
 /// - 0: Ed25519
-/// - 1: MultiEd25519
-/// - 2: MultiAgent
-/// - 3: FeePayer
-/// - 4: SingleSender (for unified key support)
+/// - 1: `MultiEd25519`
+/// - 2: `MultiAgent`
+/// - 3: `FeePayer`
+/// - 4: `SingleSender` (for unified key support)
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TransactionAuthenticator {
     /// Ed25519 single-key authentication (variant 0).

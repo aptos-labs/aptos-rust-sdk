@@ -68,7 +68,7 @@ impl Default for RetryConfig {
 }
 
 impl RetryConfig {
-    /// Creates a new builder for RetryConfig.
+    /// Creates a new builder for `RetryConfig`.
     pub fn builder() -> RetryConfigBuilder {
         RetryConfigBuilder::default()
     }
@@ -154,7 +154,7 @@ impl RetryConfig {
     }
 }
 
-/// Builder for RetryConfig.
+/// Builder for `RetryConfig`.
 #[derive(Debug, Clone, Default)]
 pub struct RetryConfigBuilder {
     max_retries: Option<u32>,
@@ -219,7 +219,7 @@ impl RetryConfigBuilder {
         self
     }
 
-    /// Builds the RetryConfig.
+    /// Builds the `RetryConfig`.
     pub fn build(self) -> RetryConfig {
         let default = RetryConfig::default();
         RetryConfig {

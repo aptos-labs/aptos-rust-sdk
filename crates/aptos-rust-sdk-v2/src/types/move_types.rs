@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::str::FromStr;
 
-/// Maximum length for type tag strings to prevent DoS via excessive parsing.
+/// Maximum length for type tag strings to prevent `DoS` via excessive parsing.
 /// This limit is generous enough for any realistic type tag while preventing abuse.
 const MAX_TYPE_TAG_LENGTH: usize = 1024;
 
@@ -94,7 +94,7 @@ impl FromStr for Identifier {
     }
 }
 
-/// A Move module identifier (address::module_name).
+/// A Move module identifier (`address::module_name`).
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct MoveModuleId {
     /// The address where the module is published.
@@ -109,7 +109,7 @@ impl MoveModuleId {
         Self { address, name }
     }
 
-    /// Parses a module ID from a string (e.g., "0x1::coin").
+    /// Parses a module ID from a string (e.g., "`0x1::coin`").
     pub fn from_str_strict(s: &str) -> AptosResult<Self> {
         let parts: Vec<&str> = s.split("::").collect();
         if parts.len() != 2 {
@@ -183,7 +183,7 @@ impl StructTag {
         })
     }
 
-    /// The AptosCoin struct tag (0x1::aptos_coin::AptosCoin).
+    /// The `AptosCoin` struct tag (`0x1::aptos_coin::AptosCoin`).
     pub fn aptos_coin() -> Self {
         Self {
             address: AccountAddress::ONE,
@@ -217,7 +217,7 @@ impl fmt::Display for StructTag {
     }
 }
 
-/// Alias for StructTag used in some API responses.
+/// Alias for `StructTag` used in some API responses.
 pub type MoveStructTag = StructTag;
 
 /// A type tag represents a Move type.
@@ -275,7 +275,7 @@ impl TypeTag {
         Self::Struct(Box::new(tag))
     }
 
-    /// Returns the AptosCoin type tag (0x1::aptos_coin::AptosCoin).
+    /// Returns the `AptosCoin` type tag (`0x1::aptos_coin::AptosCoin`).
     pub fn aptos_coin() -> Self {
         Self::Struct(Box::new(StructTag::aptos_coin()))
     }
@@ -284,9 +284,9 @@ impl TypeTag {
     ///
     /// Supports:
     /// - Primitive types: bool, u8, u16, u32, u64, u128, u256, address, signer
-    /// - Struct types: address::module::StructName
-    /// - Vector types: vector<element_type>
-    /// - Generic struct types: address::module::StructName<TypeArg1, TypeArg2>
+    /// - Struct types: `address::module::StructName`
+    /// - Vector types: vector<`element_type`>
+    /// - Generic struct types: `address::module::StructName`<`TypeArg1`, `TypeArg2`>
     ///
     /// # Security
     ///
@@ -447,7 +447,7 @@ impl fmt::Display for TypeTag {
     }
 }
 
-/// An entry function identifier (address::module::function).
+/// An entry function identifier (`address::module::function`).
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct EntryFunctionId {
     /// The module containing the function.
@@ -462,7 +462,7 @@ impl EntryFunctionId {
         Self { module, name }
     }
 
-    /// Parses an entry function ID from a string (e.g., "0x1::coin::transfer").
+    /// Parses an entry function ID from a string (e.g., "`0x1::coin::transfer`").
     pub fn from_str_strict(s: &str) -> AptosResult<Self> {
         let parts: Vec<&str> = s.split("::").collect();
         if parts.len() != 3 {
@@ -499,7 +499,7 @@ impl FromStr for EntryFunctionId {
 pub struct MoveType(String);
 
 impl MoveType {
-    /// Creates a new MoveType from a string.
+    /// Creates a new `MoveType` from a string.
     pub fn new(s: impl Into<String>) -> Self {
         Self(s.into())
     }
