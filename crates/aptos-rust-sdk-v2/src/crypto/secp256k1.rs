@@ -72,6 +72,24 @@ impl Secp256k1PrivateKey {
         Self::from_bytes(&bytes)
     }
 
+    /// Creates a private key from AIP-80 format string.
+    ///
+    /// AIP-80 format: `secp256k1-priv-0x{hex_bytes}`
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the format is invalid or the key bytes are invalid.
+    pub fn from_aip80(s: &str) -> AptosResult<Self> {
+        const PREFIX: &str = "secp256k1-priv-";
+        if let Some(hex_part) = s.strip_prefix(PREFIX) {
+            Self::from_hex(hex_part)
+        } else {
+            Err(AptosError::InvalidPrivateKey(format!(
+                "invalid AIP-80 format: expected prefix '{PREFIX}'"
+            )))
+        }
+    }
+
     /// Returns the private key as bytes.
     pub fn to_bytes(&self) -> [u8; SECP256K1_PRIVATE_KEY_LENGTH] {
         self.inner.to_bytes().into()
@@ -80,6 +98,13 @@ impl Secp256k1PrivateKey {
     /// Returns the private key as a hex string.
     pub fn to_hex(&self) -> String {
         format!("0x{}", hex::encode(self.inner.to_bytes()))
+    }
+
+    /// Returns the private key in AIP-80 format.
+    ///
+    /// AIP-80 format: `secp256k1-priv-0x{hex_bytes}`
+    pub fn to_aip80(&self) -> String {
+        format!("secp256k1-priv-{}", self.to_hex())
     }
 
     /// Returns the corresponding public key.
@@ -154,22 +179,46 @@ impl Secp256k1PublicKey {
         Self::from_bytes(&bytes)
     }
 
+    /// Creates a public key from AIP-80 format string.
+    ///
+    /// AIP-80 format: `secp256k1-pub-0x{hex_bytes}`
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the format is invalid or the key bytes are invalid.
+    pub fn from_aip80(s: &str) -> AptosResult<Self> {
+        const PREFIX: &str = "secp256k1-pub-";
+        if let Some(hex_part) = s.strip_prefix(PREFIX) {
+            Self::from_hex(hex_part)
+        } else {
+            Err(AptosError::InvalidPublicKey(format!(
+                "invalid AIP-80 format: expected prefix '{PREFIX}'"
+            )))
+        }
+    }
+
     /// Returns the public key as compressed bytes (33 bytes).
     pub fn to_bytes(&self) -> Vec<u8> {
         self.inner.to_sec1_bytes().to_vec()
     }
 
     /// Returns the public key as uncompressed bytes (65 bytes).
-    #[allow(dead_code)] // Public API
     pub fn to_uncompressed_bytes(&self) -> Vec<u8> {
         #[allow(unused_imports)]
         use k256::elliptic_curve::sec1::ToEncodedPoint;
         self.inner.to_encoded_point(false).as_bytes().to_vec()
     }
 
-    /// Returns the public key as a hex string.
+    /// Returns the public key as a hex string (compressed format).
     pub fn to_hex(&self) -> String {
         format!("0x{}", hex::encode(self.to_bytes()))
+    }
+
+    /// Returns the public key in AIP-80 format (compressed).
+    ///
+    /// AIP-80 format: `secp256k1-pub-0x{hex_bytes}`
+    pub fn to_aip80(&self) -> String {
+        format!("secp256k1-pub-{}", self.to_hex())
     }
 
     /// Verifies a signature against a message.
@@ -201,8 +250,19 @@ impl Secp256k1PublicKey {
     }
 
     /// Derives the account address for this public key.
+    ///
+    /// Uses the `SingleKey` authentication scheme (`scheme_id` = 2):
+    /// `auth_key = SHA3-256(BCS(AnyPublicKey::Secp256k1) || 0x02)`
+    ///
+    /// Where `BCS(AnyPublicKey::Secp256k1)` = `0x01 || ULEB128(65) || uncompressed_public_key`
     pub fn to_address(&self) -> crate::types::AccountAddress {
-        crate::crypto::derive_address(&self.to_bytes(), crate::crypto::SINGLE_KEY_SCHEME)
+        // BCS format: variant_byte || ULEB128(length) || uncompressed_public_key
+        let uncompressed = self.to_uncompressed_bytes();
+        let mut bcs_bytes = Vec::with_capacity(1 + 1 + uncompressed.len());
+        bcs_bytes.push(0x01); // Secp256k1 variant
+        bcs_bytes.push(65); // ULEB128(65) = 0x41, but 65 < 128 so it's just 65
+        bcs_bytes.extend_from_slice(&uncompressed);
+        crate::crypto::derive_address(&bcs_bytes, crate::crypto::SINGLE_KEY_SCHEME)
     }
 }
 

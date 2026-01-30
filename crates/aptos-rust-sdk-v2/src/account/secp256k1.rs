@@ -94,7 +94,13 @@ impl Account for Secp256k1Account {
     }
 
     fn authentication_key(&self) -> AuthenticationKey {
-        let key = derive_authentication_key(&self.public_key.to_bytes(), SINGLE_KEY_SCHEME);
+        // Use correct BCS format: variant_byte || ULEB128(length) || uncompressed_public_key
+        let uncompressed = self.public_key.to_uncompressed_bytes();
+        let mut bcs_bytes = Vec::with_capacity(1 + 1 + uncompressed.len());
+        bcs_bytes.push(0x01); // Secp256k1 variant
+        bcs_bytes.push(65); // ULEB128(65) = 65
+        bcs_bytes.extend_from_slice(&uncompressed);
+        let key = derive_authentication_key(&bcs_bytes, SINGLE_KEY_SCHEME);
         AuthenticationKey::new(key)
     }
 
@@ -103,7 +109,8 @@ impl Account for Secp256k1Account {
     }
 
     fn public_key_bytes(&self) -> Vec<u8> {
-        self.public_key.to_bytes()
+        // Return uncompressed format (65 bytes) as required by Aptos protocol
+        self.public_key.to_uncompressed_bytes()
     }
 
     fn signature_scheme(&self) -> u8 {
@@ -176,7 +183,7 @@ mod tests {
     fn test_public_key_bytes() {
         let account = Secp256k1Account::generate();
         let bytes = account.public_key_bytes();
-        assert_eq!(bytes.len(), 33); // Compressed public key
+        assert_eq!(bytes.len(), 65); // Uncompressed public key (required by Aptos protocol)
     }
 
     #[test]

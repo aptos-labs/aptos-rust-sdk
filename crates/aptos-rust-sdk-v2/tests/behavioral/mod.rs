@@ -795,3 +795,200 @@ mod transaction_bcs_tests {
         assert_eq!(msg1, msg2);
     }
 }
+
+/// Authentication key derivation cross-validation tests.
+///
+/// These tests verify that authentication key derivation produces the expected
+/// results according to the Aptos specification. The expected values can be
+/// validated against aptos-core implementations.
+#[cfg(all(feature = "ed25519", feature = "secp256k1", feature = "secp256r1"))]
+mod auth_key_tests {
+    use aptos_rust_sdk_v2::account::{Account, Ed25519Account, Ed25519SingleKeyAccount};
+    use aptos_rust_sdk_v2::crypto::{
+        ED25519_SCHEME, Ed25519PrivateKey, SINGLE_KEY_SCHEME, Secp256k1PrivateKey,
+        Secp256r1PrivateKey, derive_authentication_key,
+    };
+
+    /// Test that Ed25519 legacy auth key derivation is: SHA3-256(pubkey || 0x00)
+    #[test]
+    fn test_ed25519_legacy_auth_key_derivation() {
+        // Create a deterministic key for testing
+        let private_key = Ed25519PrivateKey::from_bytes(&[1u8; 32]).unwrap();
+        let public_key = private_key.public_key();
+
+        // Derive auth key manually
+        let expected_auth_key = derive_authentication_key(&public_key.to_bytes(), ED25519_SCHEME);
+
+        // Derive via account
+        let account = Ed25519Account::from_private_key(private_key);
+        let actual_auth_key = account.authentication_key();
+
+        assert_eq!(
+            expected_auth_key,
+            *actual_auth_key.as_bytes(),
+            "Ed25519 legacy auth key derivation mismatch"
+        );
+
+        // Verify address equals auth key for Ed25519
+        assert_eq!(
+            account.address().to_bytes(),
+            expected_auth_key,
+            "Ed25519 address should equal auth key"
+        );
+    }
+
+    /// Test that Ed25519 SingleKey auth key derivation is:
+    /// SHA3-256(BCS(AnyPublicKey::Ed25519) || 0x02)
+    #[test]
+    fn test_ed25519_single_key_auth_key_derivation() {
+        // Create a deterministic key for testing
+        let private_key = Ed25519PrivateKey::from_bytes(&[1u8; 32]).unwrap();
+        let public_key = private_key.public_key();
+
+        // Build BCS(AnyPublicKey::Ed25519) = 0x00 || ULEB128(32) || pubkey_bytes
+        let pk_bytes = public_key.to_bytes();
+        let mut bcs_any_pubkey = Vec::with_capacity(1 + 1 + pk_bytes.len());
+        bcs_any_pubkey.push(0x00); // Ed25519 variant
+        bcs_any_pubkey.push(32); // ULEB128(32)
+        bcs_any_pubkey.extend_from_slice(&pk_bytes);
+
+        let expected_auth_key = derive_authentication_key(&bcs_any_pubkey, SINGLE_KEY_SCHEME);
+
+        // Derive via account
+        let account = Ed25519SingleKeyAccount::from_private_key(private_key);
+        let actual_auth_key = account.authentication_key();
+
+        assert_eq!(
+            expected_auth_key,
+            *actual_auth_key.as_bytes(),
+            "Ed25519 SingleKey auth key derivation mismatch"
+        );
+    }
+
+    /// Test that same private key produces DIFFERENT addresses for legacy vs SingleKey
+    #[test]
+    fn test_ed25519_legacy_vs_single_key_different_addresses() {
+        let private_key = Ed25519PrivateKey::from_bytes(&[2u8; 32]).unwrap();
+
+        let legacy_account = Ed25519Account::from_private_key(private_key.clone());
+        let single_key_account = Ed25519SingleKeyAccount::from_private_key(private_key);
+
+        // Addresses MUST be different
+        assert_ne!(
+            legacy_account.address(),
+            single_key_account.address(),
+            "Legacy and SingleKey Ed25519 accounts should have different addresses"
+        );
+
+        // But they should have the same public key
+        assert_eq!(
+            legacy_account.public_key().to_bytes(),
+            single_key_account.public_key().to_bytes(),
+            "Legacy and SingleKey Ed25519 accounts should have same public key"
+        );
+    }
+
+    /// Test that Secp256k1 SingleKey auth key derivation uses uncompressed pubkey:
+    /// SHA3-256(BCS(AnyPublicKey::Secp256k1) || 0x02)
+    #[test]
+    fn test_secp256k1_auth_key_uses_uncompressed_pubkey() {
+        let private_key = Secp256k1PrivateKey::from_bytes(&[3u8; 32]).unwrap();
+        let public_key = private_key.public_key();
+
+        // Verify uncompressed pubkey is 65 bytes
+        let uncompressed = public_key.to_uncompressed_bytes();
+        assert_eq!(
+            uncompressed.len(),
+            65,
+            "Secp256k1 uncompressed pubkey should be 65 bytes"
+        );
+        assert_eq!(
+            uncompressed[0], 0x04,
+            "Uncompressed pubkey should start with 0x04"
+        );
+
+        // Build BCS(AnyPublicKey::Secp256k1) = 0x01 || ULEB128(65) || uncompressed_pubkey
+        let mut bcs_any_pubkey = Vec::with_capacity(1 + 1 + uncompressed.len());
+        bcs_any_pubkey.push(0x01); // Secp256k1 variant
+        bcs_any_pubkey.push(65); // ULEB128(65)
+        bcs_any_pubkey.extend_from_slice(&uncompressed);
+
+        let expected_auth_key = derive_authentication_key(&bcs_any_pubkey, SINGLE_KEY_SCHEME);
+
+        // The address from to_address() should match
+        let actual_address = public_key.to_address();
+        assert_eq!(
+            actual_address.to_bytes(),
+            expected_auth_key,
+            "Secp256k1 address derivation mismatch - should use uncompressed pubkey"
+        );
+    }
+
+    /// Test that Secp256r1 SingleKey auth key derivation uses uncompressed pubkey:
+    /// SHA3-256(BCS(AnyPublicKey::Secp256r1) || 0x02)
+    #[test]
+    fn test_secp256r1_auth_key_uses_uncompressed_pubkey() {
+        let private_key = Secp256r1PrivateKey::from_bytes(&[4u8; 32]).unwrap();
+        let public_key = private_key.public_key();
+
+        // Verify uncompressed pubkey is 65 bytes
+        let uncompressed = public_key.to_uncompressed_bytes();
+        assert_eq!(
+            uncompressed.len(),
+            65,
+            "Secp256r1 uncompressed pubkey should be 65 bytes"
+        );
+        assert_eq!(
+            uncompressed[0], 0x04,
+            "Uncompressed pubkey should start with 0x04"
+        );
+
+        // Build BCS(AnyPublicKey::Secp256r1) = 0x02 || ULEB128(65) || uncompressed_pubkey
+        let mut bcs_any_pubkey = Vec::with_capacity(1 + 1 + uncompressed.len());
+        bcs_any_pubkey.push(0x02); // Secp256r1 variant
+        bcs_any_pubkey.push(65); // ULEB128(65)
+        bcs_any_pubkey.extend_from_slice(&uncompressed);
+
+        let expected_auth_key = derive_authentication_key(&bcs_any_pubkey, SINGLE_KEY_SCHEME);
+
+        // The address from to_address() should match
+        let actual_address = public_key.to_address();
+        assert_eq!(
+            actual_address.to_bytes(),
+            expected_auth_key,
+            "Secp256r1 address derivation mismatch - should use uncompressed pubkey"
+        );
+    }
+
+    /// Test that scheme bytes are correct
+    #[test]
+    fn test_scheme_byte_values() {
+        use aptos_rust_sdk_v2::crypto::{KEYLESS_SCHEME, MULTI_ED25519_SCHEME, MULTI_KEY_SCHEME};
+
+        assert_eq!(ED25519_SCHEME, 0, "Ed25519 scheme should be 0");
+        assert_eq!(MULTI_ED25519_SCHEME, 1, "MultiEd25519 scheme should be 1");
+        assert_eq!(SINGLE_KEY_SCHEME, 2, "SingleKey scheme should be 2");
+        assert_eq!(MULTI_KEY_SCHEME, 3, "MultiKey scheme should be 3");
+        assert_eq!(KEYLESS_SCHEME, 5, "Keyless scheme should be 5");
+    }
+
+    /// Test that auth key derivation is deterministic
+    #[test]
+    fn test_auth_key_derivation_is_deterministic() {
+        let private_key = Ed25519PrivateKey::from_bytes(&[5u8; 32]).unwrap();
+
+        let account1 = Ed25519Account::from_private_key(private_key.clone());
+        let account2 = Ed25519Account::from_private_key(private_key);
+
+        assert_eq!(
+            account1.address(),
+            account2.address(),
+            "Same private key should produce same address"
+        );
+        assert_eq!(
+            account1.authentication_key().as_bytes(),
+            account2.authentication_key().as_bytes(),
+            "Same private key should produce same auth key"
+        );
+    }
+}

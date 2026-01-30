@@ -235,10 +235,19 @@ fn make_transaction_authenticator(
             ))
         }
         crate::crypto::SINGLE_KEY_SCHEME => {
-            // Single-key scheme is used by Secp256k1 and Secp256r1 accounts
+            // Single-key scheme is used by Secp256k1, Secp256r1, and Ed25519SingleKey accounts
             // Uses SingleSender variant with AccountAuthenticator::SingleKey
             Ok(TransactionAuthenticator::single_sender(
                 AccountAuthenticator::single_key(public_key, signature),
+            ))
+        }
+        #[cfg(feature = "keyless")]
+        crate::crypto::KEYLESS_SCHEME => {
+            // Keyless accounts use SingleSender variant with AccountAuthenticator::SingleKey
+            // The public key is the ephemeral Ed25519 key, and the signature is a BCS-serialized
+            // KeylessSignature struct containing the ephemeral signature and ZK proof
+            Ok(TransactionAuthenticator::single_sender(
+                AccountAuthenticator::keyless(public_key, signature),
             ))
         }
         _ => Err(AptosError::InvalidSignature(format!(
@@ -269,6 +278,8 @@ fn make_account_authenticator(
         crate::crypto::MULTI_KEY_SCHEME => {
             Ok(AccountAuthenticator::multi_key(public_key, signature))
         }
+        #[cfg(feature = "keyless")]
+        crate::crypto::KEYLESS_SCHEME => Ok(AccountAuthenticator::keyless(public_key, signature)),
         _ => Err(AptosError::InvalidSignature(format!(
             "unknown signature scheme: {scheme}"
         ))),

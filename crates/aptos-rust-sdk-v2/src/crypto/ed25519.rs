@@ -83,6 +83,34 @@ impl Ed25519PrivateKey {
         Self::from_bytes(&bytes)
     }
 
+    /// Creates a private key from AIP-80 format string.
+    ///
+    /// AIP-80 format: `ed25519-priv-0x{hex_bytes}`
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the format is invalid or the key bytes are invalid.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use aptos_rust_sdk_v2::crypto::Ed25519PrivateKey;
+    ///
+    /// let key = Ed25519PrivateKey::from_aip80(
+    ///     "ed25519-priv-0x0000000000000000000000000000000000000000000000000000000000000001"
+    /// ).unwrap();
+    /// ```
+    pub fn from_aip80(s: &str) -> AptosResult<Self> {
+        const PREFIX: &str = "ed25519-priv-";
+        if let Some(hex_part) = s.strip_prefix(PREFIX) {
+            Self::from_hex(hex_part)
+        } else {
+            Err(AptosError::InvalidPrivateKey(format!(
+                "invalid AIP-80 format: expected prefix '{PREFIX}'"
+            )))
+        }
+    }
+
     /// Returns the private key as bytes.
     ///
     /// **Warning**: Handle the returned bytes carefully to avoid leaking
@@ -94,6 +122,23 @@ impl Ed25519PrivateKey {
     /// Returns the private key as a hex string.
     pub fn to_hex(&self) -> String {
         format!("0x{}", hex::encode(self.inner.to_bytes()))
+    }
+
+    /// Returns the private key in AIP-80 format.
+    ///
+    /// AIP-80 format: `ed25519-priv-0x{hex_bytes}`
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use aptos_rust_sdk_v2::crypto::Ed25519PrivateKey;
+    ///
+    /// let key = Ed25519PrivateKey::generate();
+    /// let aip80 = key.to_aip80();
+    /// assert!(aip80.starts_with("ed25519-priv-0x"));
+    /// ```
+    pub fn to_aip80(&self) -> String {
+        format!("ed25519-priv-{}", self.to_hex())
     }
 
     /// Returns the corresponding public key.
@@ -185,6 +230,24 @@ impl Ed25519PublicKey {
         Self::from_bytes(&bytes)
     }
 
+    /// Creates a public key from AIP-80 format string.
+    ///
+    /// AIP-80 format: `ed25519-pub-0x{hex_bytes}`
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the format is invalid or the key bytes are invalid.
+    pub fn from_aip80(s: &str) -> AptosResult<Self> {
+        const PREFIX: &str = "ed25519-pub-";
+        if let Some(hex_part) = s.strip_prefix(PREFIX) {
+            Self::from_hex(hex_part)
+        } else {
+            Err(AptosError::InvalidPublicKey(format!(
+                "invalid AIP-80 format: expected prefix '{PREFIX}'"
+            )))
+        }
+    }
+
     /// Returns the public key as bytes.
     pub fn to_bytes(&self) -> [u8; ED25519_PUBLIC_KEY_LENGTH] {
         self.inner.to_bytes()
@@ -193,6 +256,13 @@ impl Ed25519PublicKey {
     /// Returns the public key as a hex string.
     pub fn to_hex(&self) -> String {
         format!("0x{}", hex::encode(self.inner.to_bytes()))
+    }
+
+    /// Returns the public key in AIP-80 format.
+    ///
+    /// AIP-80 format: `ed25519-pub-0x{hex_bytes}`
+    pub fn to_aip80(&self) -> String {
+        format!("ed25519-pub-{}", self.to_hex())
     }
 
     /// Verifies a signature against a message.

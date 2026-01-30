@@ -522,6 +522,89 @@ impl Serialize for MoveU256 {
     }
 }
 
+/// An i128 value for Move arguments.
+///
+/// Move's i128 is a 128-bit signed integer, represented as 16 bytes in little-endian
+/// using two's complement representation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MoveI128(pub i128);
+
+impl MoveI128 {
+    /// Creates a new `MoveI128` from an i128 value.
+    pub fn new(val: i128) -> Self {
+        Self(val)
+    }
+}
+
+impl Serialize for MoveI128 {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        // BCS serializes i128 as 16 little-endian bytes (two's complement)
+        use serde::ser::SerializeTuple;
+        let bytes = self.0.to_le_bytes();
+        let mut tuple = serializer.serialize_tuple(16)?;
+        for byte in &bytes {
+            tuple.serialize_element(byte)?;
+        }
+        tuple.end()
+    }
+}
+
+impl From<i128> for MoveI128 {
+    fn from(val: i128) -> Self {
+        Self(val)
+    }
+}
+
+/// An i256 value for Move arguments.
+///
+/// Move's i256 is a 256-bit signed integer, represented as 32 bytes in little-endian
+/// using two's complement representation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MoveI256(pub [u8; 32]);
+
+impl MoveI256 {
+    /// Creates a `MoveI256` from an i128 value.
+    pub fn from_i128(val: i128) -> Self {
+        let mut bytes = [0u8; 32];
+        let val_bytes = val.to_le_bytes();
+        bytes[..16].copy_from_slice(&val_bytes);
+        // Sign extend for negative values
+        if val < 0 {
+            bytes[16..].fill(0xFF);
+        }
+        Self(bytes)
+    }
+
+    /// Creates a `MoveI256` from raw bytes (little-endian, two's complement).
+    pub fn from_le_bytes(bytes: [u8; 32]) -> Self {
+        Self(bytes)
+    }
+}
+
+impl Serialize for MoveI256 {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        // BCS serializes i256 as 32 little-endian bytes (as a tuple of bytes, not a vec)
+        use serde::ser::SerializeTuple;
+        let mut tuple = serializer.serialize_tuple(32)?;
+        for byte in &self.0 {
+            tuple.serialize_element(byte)?;
+        }
+        tuple.end()
+    }
+}
+
+impl From<i128> for MoveI256 {
+    fn from(val: i128) -> Self {
+        Self::from_i128(val)
+    }
+}
+
 /// Common function IDs for convenience.
 pub mod functions {
     /// APT transfer function.

@@ -6,10 +6,12 @@
 //!
 //! # Account Types
 //!
-//! - [`Ed25519Account`] - Single-key Ed25519 account (most common)
+//! - [`Ed25519Account`] - Single-key Ed25519 account (legacy format, most common)
+//! - [`Ed25519SingleKeyAccount`] - Ed25519 account using modern `SingleKey` format
 //! - [`MultiEd25519Account`] - M-of-N multi-signature Ed25519 account
 //! - [`Secp256k1Account`] - Single-key Secp256k1 account (Bitcoin/Ethereum curve)
 //! - [`Secp256r1Account`] - Single-key Secp256r1/P-256 account (WebAuthn/Passkey)
+//! - [`MultiKeyAccount`] - M-of-N multi-signature account with mixed key types
 //! - [`KeylessAccount`] - OIDC-based keyless account
 //!
 //! # Example
@@ -43,7 +45,7 @@ mod secp256r1;
 
 pub use account::{Account, AnyAccount, AuthenticationKey};
 #[cfg(feature = "ed25519")]
-pub use ed25519::Ed25519Account;
+pub use ed25519::{Ed25519Account, Ed25519SingleKeyAccount};
 #[cfg(feature = "keyless")]
 pub use keyless::{
     EphemeralKeyPair, HttpPepperService, HttpProverService, KeylessAccount, KeylessSignature,

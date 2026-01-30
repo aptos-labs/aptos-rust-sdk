@@ -96,12 +96,15 @@ pub use batch::{
 };
 pub use builder::{TransactionBuilder, sign_transaction};
 pub use input::{
-    InputEntryFunctionData, InputEntryFunctionDataBuilder, IntoMoveArg, MoveU256, functions,
-    move_none, move_some, move_string, move_vec, types as move_types,
+    InputEntryFunctionData, InputEntryFunctionDataBuilder, IntoMoveArg, MoveI128, MoveI256,
+    MoveU256, functions, move_none, move_some, move_string, move_vec, types as move_types,
 };
 pub use payload::{EntryFunction, Script, ScriptArgument, TransactionPayload};
 pub use simulation::{
     SimulatedEvent, SimulationOptions, SimulationResult, StateChange, VmError, VmErrorCategory,
 };
 pub use sponsored::{PartiallySigned, Sponsor, SponsoredTransactionBuilder, sponsor_transaction};
-pub use types::{RawTransaction, SignedTransaction, TransactionInfo};
+pub use types::{
+    RawTransaction, RawTransactionOrderless, SignedTransaction, SignedTransactionOrderless,
+    TransactionInfo,
+};

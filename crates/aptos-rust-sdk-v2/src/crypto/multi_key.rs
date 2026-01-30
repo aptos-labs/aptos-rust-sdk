@@ -80,31 +80,34 @@ impl AnyPublicKey {
     }
 
     /// Creates a Secp256k1 public key.
+    /// Uses uncompressed format (65 bytes) as required by the Aptos protocol.
     #[cfg(feature = "secp256k1")]
     pub fn secp256k1(public_key: &crate::crypto::Secp256k1PublicKey) -> Self {
         Self {
             variant: AnyPublicKeyVariant::Secp256k1,
-            bytes: public_key.to_bytes(),
+            bytes: public_key.to_uncompressed_bytes(),
         }
     }
 
     /// Creates a Secp256r1 public key.
+    /// Uses uncompressed format (65 bytes) as required by the Aptos protocol.
     #[cfg(feature = "secp256r1")]
     pub fn secp256r1(public_key: &crate::crypto::Secp256r1PublicKey) -> Self {
         Self {
             variant: AnyPublicKeyVariant::Secp256r1,
-            bytes: public_key.to_bytes(),
+            bytes: public_key.to_uncompressed_bytes(),
         }
     }
 
-    /// Serializes to BCS format: `variant_byte` || length || bytes
-    #[allow(clippy::cast_possible_truncation)] // Public key bytes are < 100 bytes
+    /// Serializes to BCS format: `variant_byte` || ULEB128(length) || bytes
+    ///
+    /// This is the correct BCS serialization format for `AnyPublicKey` used
+    /// in authentication key derivation: `SHA3-256(BCS(AnyPublicKey) || scheme_id)`
     pub fn to_bcs_bytes(&self) -> Vec<u8> {
-        let mut result = Vec::with_capacity(1 + 4 + self.bytes.len());
+        let mut result = Vec::with_capacity(1 + 1 + self.bytes.len());
         result.push(self.variant.as_byte());
-        // BCS uses ULEB128 for length, but for simplicity we'll use a u32
-        let len = self.bytes.len() as u32;
-        result.extend_from_slice(&len.to_le_bytes());
+        // BCS uses ULEB128 for vector lengths
+        result.extend(uleb128_encode(self.bytes.len()));
         result.extend_from_slice(&self.bytes);
         result
     }
@@ -137,12 +140,14 @@ impl AnyPublicKey {
             }
             #[cfg(feature = "secp256k1")]
             AnyPublicKeyVariant::Secp256k1 => {
+                // Public key can be either compressed (33 bytes) or uncompressed (65 bytes)
                 let pk = crate::crypto::Secp256k1PublicKey::from_bytes(&self.bytes)?;
                 let sig = crate::crypto::Secp256k1Signature::from_bytes(&signature.bytes)?;
                 pk.verify(message, &sig)
             }
             #[cfg(feature = "secp256r1")]
             AnyPublicKeyVariant::Secp256r1 => {
+                // Public key can be either compressed (33 bytes) or uncompressed (65 bytes)
                 let pk = crate::crypto::Secp256r1PublicKey::from_bytes(&self.bytes)?;
                 let sig = crate::crypto::Secp256r1Signature::from_bytes(&signature.bytes)?;
                 pk.verify(message, &sig)
@@ -215,16 +220,49 @@ impl AnySignature {
         }
     }
 
-    /// Serializes to BCS format: `variant_byte` || length || bytes
-    #[allow(clippy::cast_possible_truncation)] // Signature bytes are < 100 bytes
+    /// Serializes to BCS format: `variant_byte` || ULEB128(length) || bytes
     pub fn to_bcs_bytes(&self) -> Vec<u8> {
-        let mut result = Vec::with_capacity(1 + 4 + self.bytes.len());
+        let mut result = Vec::with_capacity(1 + 1 + self.bytes.len());
         result.push(self.variant.as_byte());
-        let len = self.bytes.len() as u32;
-        result.extend_from_slice(&len.to_le_bytes());
+        // BCS uses ULEB128 for vector lengths
+        result.extend(uleb128_encode(self.bytes.len()));
         result.extend_from_slice(&self.bytes);
         result
     }
+}
+
+/// Encodes a value as `ULEB128` (unsigned `LEB128`).
+/// BCS uses `ULEB128` for encoding vector/sequence lengths.
+#[allow(clippy::cast_possible_truncation)] // value & 0x7F is always <= 127
+fn uleb128_encode(mut value: usize) -> Vec<u8> {
+    let mut result = Vec::new();
+    loop {
+        let byte = (value & 0x7F) as u8;
+        value >>= 7;
+        if value == 0 {
+            result.push(byte);
+            break;
+        }
+        result.push(byte | 0x80);
+    }
+    result
+}
+
+/// Decodes a `ULEB128` value from bytes, returning `(value, bytes_consumed)`.
+fn uleb128_decode(bytes: &[u8]) -> Option<(usize, usize)> {
+    let mut result: usize = 0;
+    let mut shift = 0;
+    for (i, &byte) in bytes.iter().enumerate() {
+        result |= ((byte & 0x7F) as usize) << shift;
+        if byte & 0x80 == 0 {
+            return Some((result, i + 1));
+        }
+        shift += 7;
+        if shift >= 64 {
+            return None; // Overflow
+        }
+    }
+    None
 }
 
 impl fmt::Debug for AnySignature {
@@ -370,19 +408,11 @@ impl MultiKeyPublicKey {
             let variant = AnyPublicKeyVariant::from_byte(bytes[offset])?;
             offset += 1;
 
-            if offset + 4 > bytes.len() {
-                return Err(AptosError::InvalidPublicKey(
-                    "bytes too short for length".into(),
-                ));
-            }
-
-            let len = u32::from_le_bytes([
-                bytes[offset],
-                bytes[offset + 1],
-                bytes[offset + 2],
-                bytes[offset + 3],
-            ]) as usize;
-            offset += 4;
+            // Decode ULEB128 length
+            let (len, len_bytes) = uleb128_decode(&bytes[offset..]).ok_or_else(|| {
+                AptosError::InvalidPublicKey("invalid ULEB128 length encoding".into())
+            })?;
+            offset += len_bytes;
 
             if offset + len > bytes.len() {
                 return Err(AptosError::InvalidPublicKey(
@@ -636,19 +666,12 @@ impl MultiKeySignature {
             let variant = AnyPublicKeyVariant::from_byte(bytes[offset])?;
             offset += 1;
 
-            if offset + 4 > bitmap_start {
-                return Err(AptosError::InvalidSignature(
-                    "bytes too short for length".into(),
-                ));
-            }
-
-            let len = u32::from_le_bytes([
-                bytes[offset],
-                bytes[offset + 1],
-                bytes[offset + 2],
-                bytes[offset + 3],
-            ]) as usize;
-            offset += 4;
+            // Decode ULEB128 length
+            let (len, len_bytes) =
+                uleb128_decode(&bytes[offset..bitmap_start]).ok_or_else(|| {
+                    AptosError::InvalidSignature("invalid ULEB128 length encoding".into())
+                })?;
+            offset += len_bytes;
 
             if offset + len > bitmap_start {
                 return Err(AptosError::InvalidSignature(
@@ -730,10 +753,11 @@ mod tests {
         let pk = AnyPublicKey::new(AnyPublicKeyVariant::Ed25519, vec![0xaa; 32]);
         let bcs = pk.to_bcs_bytes();
 
-        // Format: variant_byte || length (u32 LE) || bytes
+        // Format: variant_byte || ULEB128(length) || bytes
         assert_eq!(bcs[0], 0); // Ed25519 variant
-        assert_eq!(&bcs[1..5], &32u32.to_le_bytes()); // length
-        assert_eq!(bcs[5], 0xaa); // first byte of key
+        assert_eq!(bcs[1], 32); // ULEB128(32) = 0x20 (since 32 < 128)
+        assert_eq!(bcs[2], 0xaa); // first byte of key
+        assert_eq!(bcs.len(), 1 + 1 + 32); // variant + length + bytes
     }
 
     #[test]
@@ -756,9 +780,11 @@ mod tests {
         let sig = AnySignature::new(AnyPublicKeyVariant::Ed25519, vec![0xdd; 64]);
         let bcs = sig.to_bcs_bytes();
 
+        // Format: variant_byte || ULEB128(length) || bytes
         assert_eq!(bcs[0], 0); // Ed25519 variant
-        assert_eq!(&bcs[1..5], &64u32.to_le_bytes()); // length
-        assert_eq!(bcs[5], 0xdd); // first byte of signature
+        assert_eq!(bcs[1], 64); // ULEB128(64) = 0x40 (since 64 < 128)
+        assert_eq!(bcs[2], 0xdd); // first byte of signature
+        assert_eq!(bcs.len(), 1 + 1 + 64); // variant + length + bytes
     }
 
     #[test]

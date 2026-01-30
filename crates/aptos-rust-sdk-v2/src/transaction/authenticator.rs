@@ -193,36 +193,46 @@ pub enum TransactionAuthenticator {
 /// An authenticator for a single account (not the full transaction).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AccountAuthenticator {
-    /// Ed25519 authentication.
+    /// Ed25519 authentication (variant 0).
     Ed25519 {
         /// The public key (32 bytes).
         public_key: Ed25519PublicKey,
         /// The signature (64 bytes).
         signature: Ed25519Signature,
     },
-    /// Multi-Ed25519 authentication.
+    /// Multi-Ed25519 authentication (variant 1).
     MultiEd25519 {
         /// The public key.
         public_key: Vec<u8>,
         /// The signature.
         signature: Vec<u8>,
     },
-    /// Single-key authentication (ed25519, secp256k1 and secp256r1).
+    /// Single-key authentication (ed25519, secp256k1 and secp256r1) (variant 2).
     SingleKey {
-        /// The public key.
+        /// The public key (BCS-serialized `AnyPublicKey`).
         public_key: Vec<u8>,
-        /// The signature.
+        /// The signature (BCS-serialized `AnySignature`).
         signature: Vec<u8>,
     },
-    /// Multi-key authentication (mixed signature types).
+    /// Multi-key authentication (mixed signature types) (variant 3).
     MultiKey {
         /// The public key.
         public_key: Vec<u8>,
         /// The signature.
         signature: Vec<u8>,
     },
-    /// No account authenticator used for simulation only.
+    /// No account authenticator used for simulation only (variant 4).
     NoAccountAuthenticator,
+    /// Keyless (OIDC-based) authentication (variant 5).
+    /// Uses ephemeral keys and ZK proofs for authentication.
+    #[cfg(feature = "keyless")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "keyless")))]
+    Keyless {
+        /// The ephemeral public key bytes.
+        public_key: Vec<u8>,
+        /// The BCS-serialized `KeylessSignature` containing ephemeral signature and ZK proof.
+        signature: Vec<u8>,
+    },
 }
 
 /// Ed25519 authenticator helper.
@@ -343,6 +353,21 @@ impl AccountAuthenticator {
     /// Creates a no account authenticator.
     pub fn no_account_authenticator() -> Self {
         Self::NoAccountAuthenticator
+    }
+
+    /// Creates a keyless account authenticator.
+    ///
+    /// # Arguments
+    ///
+    /// * `public_key` - The ephemeral public key bytes
+    /// * `signature` - The BCS-serialized `KeylessSignature`
+    #[cfg(feature = "keyless")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "keyless")))]
+    pub fn keyless(public_key: Vec<u8>, signature: Vec<u8>) -> Self {
+        Self::Keyless {
+            public_key,
+            signature,
+        }
     }
 }
 

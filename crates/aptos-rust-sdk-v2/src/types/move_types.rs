@@ -276,6 +276,19 @@ pub enum TypeTag {
     U32,
     /// 256-bit unsigned integer (variant 10, added later)
     U256,
+    // Signed integer types (added for completeness - may not be supported on all networks)
+    /// 8-bit signed integer (variant 11)
+    I8,
+    /// 16-bit signed integer (variant 12)
+    I16,
+    /// 32-bit signed integer (variant 13)
+    I32,
+    /// 64-bit signed integer (variant 14)
+    I64,
+    /// 128-bit signed integer (variant 15)
+    I128,
+    /// 256-bit signed integer (variant 16)
+    I256,
 }
 
 impl TypeTag {
@@ -355,6 +368,12 @@ impl TypeTag {
             "u64" => return Ok(TypeTag::U64),
             "u128" => return Ok(TypeTag::U128),
             "u256" => return Ok(TypeTag::U256),
+            "i8" => return Ok(TypeTag::I8),
+            "i16" => return Ok(TypeTag::I16),
+            "i32" => return Ok(TypeTag::I32),
+            "i64" => return Ok(TypeTag::I64),
+            "i128" => return Ok(TypeTag::I128),
+            "i256" => return Ok(TypeTag::I256),
             "address" => return Ok(TypeTag::Address),
             "signer" => return Ok(TypeTag::Signer),
             _ => {}
@@ -459,6 +478,12 @@ impl fmt::Display for TypeTag {
             TypeTag::U64 => write!(f, "u64"),
             TypeTag::U128 => write!(f, "u128"),
             TypeTag::U256 => write!(f, "u256"),
+            TypeTag::I8 => write!(f, "i8"),
+            TypeTag::I16 => write!(f, "i16"),
+            TypeTag::I32 => write!(f, "i32"),
+            TypeTag::I64 => write!(f, "i64"),
+            TypeTag::I128 => write!(f, "i128"),
+            TypeTag::I256 => write!(f, "i256"),
             TypeTag::Address => write!(f, "address"),
             TypeTag::Signer => write!(f, "signer"),
             TypeTag::Vector(inner) => write!(f, "vector<{inner}>"),
