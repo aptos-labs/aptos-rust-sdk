@@ -115,12 +115,14 @@ impl RetryConfig {
         }
 
         // Calculate base delay with exponential backoff
+        #[allow(clippy::cast_precision_loss)] // Delay is bounded by max_delay_ms
         let base_delay = self.initial_delay_ms as f64
             * self
                 .exponential_base
                 .powi(attempt.saturating_sub(1).cast_signed());
 
         // Cap at max delay
+        #[allow(clippy::cast_precision_loss)] // Delay is bounded by max_delay_ms
         let capped_delay = base_delay.min(self.max_delay_ms as f64);
 
         // Add jitter if enabled

@@ -8,6 +8,7 @@ use std::fmt::Write;
 
 /// Configuration for code generation.
 #[derive(Debug, Clone)]
+#[allow(clippy::struct_excessive_bools)] // Config structs often have boolean options
 pub struct GeneratorConfig {
     /// The module name for the generated code (defaults to module name from ABI).
     pub module_name: Option<String>,
@@ -306,6 +307,7 @@ impl<'a> ModuleGenerator<'a> {
     }
 
     /// Writes import statements.
+    #[allow(clippy::unused_self)] // Some methods take &self for future extensibility
     fn write_imports(&self, output: &mut String) -> std::fmt::Result {
         writeln!(output, "use aptos_rust_sdk_v2::{{")?;
         writeln!(output, "    account::Account,")?;
@@ -767,6 +769,7 @@ impl<'a> ModuleGenerator<'a> {
     }
 
     /// Creates a JSON expression for a view function argument.
+    #[allow(clippy::unused_self)] // Some methods take &self for future extensibility
     fn view_arg_json_expr(&self, move_type: &str, var_name: &str) -> String {
         match move_type {
             "address" => format!("serde_json::json!({var_name}.to_string())"),

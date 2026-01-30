@@ -355,6 +355,8 @@ impl fmt::Debug for MultiEd25519Account {
                     self.num_owned_keys()
                 ),
             )
+            .field("public_key", &self.public_key)
+            .field("private_keys", &self.private_keys)
             .finish()
     }
 }

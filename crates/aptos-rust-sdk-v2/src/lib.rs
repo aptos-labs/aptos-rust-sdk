@@ -69,12 +69,7 @@
     clippy::missing_errors_doc,       // Error documentation is at the error type level
     clippy::missing_panics_doc,       // We document panics where relevant
     clippy::match_same_arms,          // Sometimes intentionally explicit for clarity TODO: Remove, this showed a couple of issues
-    clippy::struct_excessive_bools,   // Config structs often have boolean options
-    clippy::cast_precision_loss,      // Acceptable for display/logging purposes
     clippy::unnecessary_wraps,        // Some wraps are for API consistency
-    clippy::unused_self,              // Some methods take &self for future extensibility
-    clippy::missing_fields_in_debug,  // Debug impls may intentionally omit sensitive fields
-    clippy::format_push_string        // format!() for complex strings is more readable
 )]
 
 pub mod account;

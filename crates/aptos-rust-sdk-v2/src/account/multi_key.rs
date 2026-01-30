@@ -411,6 +411,8 @@ impl fmt::Debug for MultiKeyAccount {
                 ),
             )
             .field("types", &self.key_types())
+            .field("public_key", &self.public_key)
+            .field("private_keys", &self.private_keys)
             .finish()
     }
 }
