@@ -61,7 +61,7 @@ impl FaucetResponse {
 
 impl FaucetClient {
     /// Creates a new faucet client.
-    pub fn new(config: AptosConfig) -> AptosResult<Self> {
+    pub fn new(config: &AptosConfig) -> AptosResult<Self> {
         let faucet_url = config
             .faucet_url()
             .cloned()
@@ -171,11 +171,11 @@ mod tests {
 
     #[test]
     fn test_faucet_client_creation() {
-        let client = FaucetClient::new(AptosConfig::testnet());
+        let client = FaucetClient::new(&AptosConfig::testnet());
         assert!(client.is_ok());
 
         // Mainnet has no faucet
-        let client = FaucetClient::new(AptosConfig::mainnet());
+        let client = FaucetClient::new(&AptosConfig::mainnet());
         assert!(client.is_err());
     }
 
@@ -185,7 +185,7 @@ mod tests {
             .with_faucet_url(&server.uri())
             .unwrap()
             .without_retry();
-        FaucetClient::new(config).unwrap()
+        FaucetClient::new(&config).unwrap()
     }
 
     #[tokio::test]
@@ -268,7 +268,7 @@ mod tests {
             .with_faucet_url(&server.uri())
             .unwrap()
             .without_retry();
-        let client = FaucetClient::new(config).unwrap();
+        let client = FaucetClient::new(&config).unwrap();
         let result = client.fund(AccountAddress::ONE, 100_000_000).await;
 
         assert!(result.is_err());

@@ -96,23 +96,23 @@ impl PoolConfig {
 /// Builder for PoolConfig.
 #[derive(Debug, Clone, Default)]
 pub struct PoolConfigBuilder {
-    max_idle_per_host: Option<Option<usize>>,
+    max_idle_per_host: Option<usize>,
     max_idle_total: Option<usize>,
     idle_timeout: Option<Duration>,
-    tcp_keepalive: Option<Option<Duration>>,
+    tcp_keepalive: Option<Duration>,
     tcp_nodelay: Option<bool>,
 }
 
 impl PoolConfigBuilder {
     /// Sets the maximum idle connections per host.
     pub fn max_idle_per_host(mut self, max: usize) -> Self {
-        self.max_idle_per_host = Some(Some(max));
+        self.max_idle_per_host = Some(max);
         self
     }
 
     /// Removes the limit on idle connections per host.
     pub fn unlimited_idle_per_host(mut self) -> Self {
-        self.max_idle_per_host = Some(None);
+        self.max_idle_per_host = None;
         self
     }
 
@@ -130,13 +130,13 @@ impl PoolConfigBuilder {
 
     /// Sets the TCP keepalive interval.
     pub fn tcp_keepalive(mut self, interval: Duration) -> Self {
-        self.tcp_keepalive = Some(Some(interval));
+        self.tcp_keepalive = Some(interval);
         self
     }
 
     /// Disables TCP keepalive.
     pub fn no_tcp_keepalive(mut self) -> Self {
-        self.tcp_keepalive = Some(None);
+        self.tcp_keepalive = None;
         self
     }
 
@@ -150,10 +150,10 @@ impl PoolConfigBuilder {
     pub fn build(self) -> PoolConfig {
         let default = PoolConfig::default();
         PoolConfig {
-            max_idle_per_host: self.max_idle_per_host.unwrap_or(default.max_idle_per_host),
+            max_idle_per_host: self.max_idle_per_host.or(default.max_idle_per_host),
             max_idle_total: self.max_idle_total.unwrap_or(default.max_idle_total),
             idle_timeout: self.idle_timeout.unwrap_or(default.idle_timeout),
-            tcp_keepalive: self.tcp_keepalive.unwrap_or(default.tcp_keepalive),
+            tcp_keepalive: self.tcp_keepalive.or(default.tcp_keepalive),
             tcp_nodelay: self.tcp_nodelay.unwrap_or(default.tcp_nodelay),
         }
     }

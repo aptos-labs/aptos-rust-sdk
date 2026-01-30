@@ -177,14 +177,14 @@ pub fn generate_from_abis(
     abi_paths: &[impl AsRef<Path>],
     output_dir: impl AsRef<Path>,
 ) -> AptosResult<()> {
-    generate_from_abis_with_config(abi_paths, output_dir, BuildConfig::default())
+    generate_from_abis_with_config(abi_paths, output_dir, &BuildConfig::default())
 }
 
 /// Generates Rust code from multiple ABI files with custom configuration.
 pub fn generate_from_abis_with_config(
     abi_paths: &[impl AsRef<Path>],
     output_dir: impl AsRef<Path>,
-    config: BuildConfig,
+    config: &BuildConfig,
 ) -> AptosResult<()> {
     let output_dir = output_dir.as_ref();
     let mut module_names = Vec::new();
@@ -303,14 +303,14 @@ fn generate_mod_file(module_names: &[String]) -> String {
     content.push('\n');
 
     for name in module_names {
-        content.push_str(&format!("pub mod {};\n", name));
+        content.push_str(&format!("pub mod {name};\n"));
     }
     content.push('\n');
 
     // Re-export all modules
     content.push_str("// Re-exports for convenience\n");
     for name in module_names {
-        content.push_str(&format!("pub use {}::*;\n", name));
+        content.push_str(&format!("pub use {name}::*;\n"));
     }
 
     content

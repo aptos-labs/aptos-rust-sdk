@@ -64,10 +64,10 @@ impl Aptos {
         let fullnode = Arc::new(FullnodeClient::new(config.clone())?);
 
         #[cfg(feature = "faucet")]
-        let faucet = FaucetClient::new(config.clone()).ok();
+        let faucet = FaucetClient::new(&config).ok();
 
         #[cfg(feature = "indexer")]
-        let indexer = IndexerClient::new(config.clone()).ok();
+        let indexer = IndexerClient::new(&config).ok();
 
         Ok(Self {
             config,

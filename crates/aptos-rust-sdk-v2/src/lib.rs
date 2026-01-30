@@ -83,15 +83,9 @@
     clippy::cast_possible_wrap,       // Handled with validation
     clippy::cast_sign_loss,           // Handled with validation
     clippy::cast_lossless,            // Explicit casts are clearer in some contexts
-    clippy::uninlined_format_args,    // format!("{}", x) vs format!("{x}") is stylistic
     clippy::unnecessary_wraps,        // Some wraps are for API consistency
-    clippy::trivially_copy_pass_by_ref, // Consistency in method signatures
-    clippy::needless_pass_by_value,   // Some values are consumed for API clarity
     clippy::unused_self,              // Some methods take &self for future extensibility
-    clippy::option_option,            // Option<Option<T>> is sometimes the right model
     clippy::if_not_else,              // if !x {} is often clearer than if x {} else {}
-    clippy::manual_let_else,          // let-else is not always clearer
-    clippy::match_bool,               // match on bool is sometimes clearer than if-else
     clippy::missing_fields_in_debug,  // Debug impls may intentionally omit sensitive fields
     clippy::format_push_string        // format!() for complex strings is more readable
 )]

@@ -92,7 +92,7 @@ impl IndexerClient {
     /// This client uses `reqwest` with its default TLS configuration, which
     /// validates server certificates against the system's certificate store.
     /// All Aptos indexer endpoints use HTTPS with valid certificates.
-    pub fn new(config: AptosConfig) -> AptosResult<Self> {
+    pub fn new(config: &AptosConfig) -> AptosResult<Self> {
         let indexer_url = config
             .indexer_url()
             .cloned()
@@ -898,7 +898,7 @@ mod tests {
 
     #[test]
     fn test_indexer_client_creation() {
-        let client = IndexerClient::new(AptosConfig::testnet());
+        let client = IndexerClient::new(&AptosConfig::testnet());
         assert!(client.is_ok());
     }
 
