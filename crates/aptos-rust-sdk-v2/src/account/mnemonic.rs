@@ -38,8 +38,7 @@ impl Mnemonic {
             24 => 32, // 256 bits
             _ => {
                 return Err(AptosError::InvalidMnemonic(format!(
-                    "invalid word count: {}, must be 12, 15, 18, 21, or 24",
-                    word_count
+                    "invalid word count: {word_count}, must be 12, 15, 18, 21, or 24"
                 )));
             }
         };
@@ -129,11 +128,11 @@ fn derive_ed25519_from_seed(seed: &[u8], index: u32) -> AptosResult<[u8; 32]> {
     // Aptos derivation path: m/44'/637'/0'/0'/index'
     // All indices are hardened (with 0x80000000 offset)
     let path = [
-        44 | 0x80000000,    // 44' (purpose)
-        637 | 0x80000000,   // 637' (Aptos coin type)
-        0x80000000,         // 0' (account)
-        0x80000000,         // 0' (change)
-        index | 0x80000000, // index' (address index)
+        44 | 0x8000_0000,    // 44' (purpose)
+        637 | 0x8000_0000,   // 637' (Aptos coin type)
+        0x8000_0000,         // 0' (account)
+        0x8000_0000,         // 0' (change)
+        index | 0x8000_0000, // index' (address index)
     ];
 
     for child_index in path {

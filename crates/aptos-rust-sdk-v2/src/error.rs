@@ -265,10 +265,7 @@ impl AptosError {
         let lower = cleaned.to_lowercase();
         for pattern in SENSITIVE_PATTERNS {
             if lower.contains(pattern) {
-                return format!(
-                    "[REDACTED: message contained sensitive pattern '{}']",
-                    pattern
-                );
+                return format!("[REDACTED: message contained sensitive pattern '{pattern}']");
             }
         }
 
@@ -306,12 +303,16 @@ impl AptosError {
             Self::SubmissionFailed(_) => "Transaction submission failed",
             Self::ExecutionFailed { .. } => "Transaction execution failed",
             Self::TransactionTimeout { .. } => "Transaction timed out",
-            Self::Api { status_code: 404, .. } => "Resource not found",
-            Self::Api { status_code: 429, .. } => "Rate limit exceeded",
+            Self::NotFound(_)
+            | Self::Api {
+                status_code: 404, ..
+            } => "Resource not found",
+            Self::RateLimited { .. }
+            | Self::Api {
+                status_code: 429, ..
+            } => "Rate limit exceeded",
             Self::Api { status_code, .. } if *status_code >= 500 => "Server error",
             Self::Api { .. } => "API error",
-            Self::RateLimited { .. } => "Rate limit exceeded",
-            Self::NotFound(_) => "Resource not found",
             Self::AccountNotFound(_) => "Account not found",
             Self::InvalidMnemonic(_) => "Invalid recovery phrase",
             Self::InvalidJwt(_) => "Invalid authentication token",
@@ -548,9 +549,18 @@ mod tests {
 
     #[test]
     fn test_user_message() {
-        assert_eq!(AptosError::api(404, "not found").user_message(), "Resource not found");
-        assert_eq!(AptosError::api(429, "rate limited").user_message(), "Rate limit exceeded");
-        assert_eq!(AptosError::api(500, "internal error").user_message(), "Server error");
+        assert_eq!(
+            AptosError::api(404, "not found").user_message(),
+            "Resource not found"
+        );
+        assert_eq!(
+            AptosError::api(429, "rate limited").user_message(),
+            "Rate limit exceeded"
+        );
+        assert_eq!(
+            AptosError::api(500, "internal error").user_message(),
+            "Server error"
+        );
         assert_eq!(
             AptosError::InvalidAddress("bad".to_string()).user_message(),
             "Invalid account address"

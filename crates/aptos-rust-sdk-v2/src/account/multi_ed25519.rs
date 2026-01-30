@@ -75,7 +75,10 @@ impl MultiEd25519Account {
             )));
         }
 
-        let public_keys: Vec<_> = private_keys.iter().map(|k| k.public_key()).collect();
+        let public_keys: Vec<_> = private_keys
+            .iter()
+            .map(Ed25519PrivateKey::public_key)
+            .collect();
         let multi_public_key = MultiEd25519PublicKey::new(public_keys, threshold)?;
         let address = multi_public_key.to_address();
 
@@ -124,16 +127,14 @@ impl MultiEd25519Account {
         for (index, key) in &private_keys {
             if *index as usize >= multi_public_key.num_keys() {
                 return Err(AptosError::InvalidPrivateKey(format!(
-                    "private key index {} out of bounds",
-                    index
+                    "private key index {index} out of bounds"
                 )));
             }
             // Verify the private key matches the public key at that index
             let expected_pk = &multi_public_key.public_keys()[*index as usize];
             if key.public_key() != *expected_pk {
                 return Err(AptosError::InvalidPrivateKey(format!(
-                    "private key at index {} doesn't match public key",
-                    index
+                    "private key at index {index} doesn't match public key"
                 )));
             }
         }
@@ -255,8 +256,7 @@ impl MultiEd25519Account {
                 .find(|(i, _)| *i == index)
                 .ok_or_else(|| {
                     AptosError::InvalidPrivateKey(format!(
-                        "don't have private key at index {}",
-                        index
+                        "don't have private key at index {index}"
                     ))
                 })?;
 
@@ -311,8 +311,7 @@ impl MultiEd25519Account {
             .find(|(i, _)| *i == key_index)
             .ok_or_else(|| {
                 AptosError::InvalidPrivateKey(format!(
-                    "don't have private key at index {}",
-                    key_index
+                    "don't have private key at index {key_index}"
                 ))
             })?;
 

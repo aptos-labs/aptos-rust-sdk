@@ -78,7 +78,7 @@ where
 /// SHA3-256(domain_separator || bcs_bytes)
 #[allow(dead_code)] // Public API for users
 pub fn signing_message(domain: &str, bcs_bytes: &[u8]) -> [u8; 32] {
-    sha3_256_of([format!("APTOS::{}", domain).as_bytes(), bcs_bytes])
+    sha3_256_of([format!("APTOS::{domain}").as_bytes(), bcs_bytes])
 }
 
 #[cfg(test)]

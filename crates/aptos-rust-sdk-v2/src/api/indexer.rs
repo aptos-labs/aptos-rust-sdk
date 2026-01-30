@@ -192,7 +192,12 @@ impl IndexerClient {
         &self,
         address: AccountAddress,
     ) -> AptosResult<Vec<FungibleAssetBalance>> {
-        let query = r#"
+        #[derive(Deserialize)]
+        struct Response {
+            current_fungible_asset_balances: Vec<FungibleAssetBalance>,
+        }
+
+        let query = r"
             query GetFungibleAssetBalances($address: String!) {
                 current_fungible_asset_balances(
                     where: { owner_address: { _eq: $address } }
@@ -206,16 +211,11 @@ impl IndexerClient {
                     }
                 }
             }
-        "#;
+        ";
 
         let variables = serde_json::json!({
             "address": address.to_string()
         });
-
-        #[derive(Deserialize)]
-        struct Response {
-            current_fungible_asset_balances: Vec<FungibleAssetBalance>,
-        }
 
         let response: Response = self.query(query, Some(variables)).await?;
         Ok(response.current_fungible_asset_balances)
@@ -226,7 +226,12 @@ impl IndexerClient {
         &self,
         address: AccountAddress,
     ) -> AptosResult<Vec<TokenBalance>> {
-        let query = r#"
+        #[derive(Deserialize)]
+        struct Response {
+            current_token_ownerships_v2: Vec<TokenBalance>,
+        }
+
+        let query = r"
             query GetAccountTokens($address: String!) {
                 current_token_ownerships_v2(
                     where: { owner_address: { _eq: $address }, amount: { _gt: 0 } }
@@ -243,16 +248,11 @@ impl IndexerClient {
                     }
                 }
             }
-        "#;
+        ";
 
         let variables = serde_json::json!({
             "address": address.to_string()
         });
-
-        #[derive(Deserialize)]
-        struct Response {
-            current_token_ownerships_v2: Vec<TokenBalance>,
-        }
 
         let response: Response = self.query(query, Some(variables)).await?;
         Ok(response.current_token_ownerships_v2)
@@ -264,7 +264,12 @@ impl IndexerClient {
         address: AccountAddress,
         limit: Option<u32>,
     ) -> AptosResult<Vec<Transaction>> {
-        let query = r#"
+        #[derive(Deserialize)]
+        struct Response {
+            account_transactions: Vec<Transaction>,
+        }
+
+        let query = r"
             query GetAccountTransactions($address: String!, $limit: Int!) {
                 account_transactions(
                     where: { account_address: { _eq: $address } }
@@ -279,17 +284,12 @@ impl IndexerClient {
                     }
                 }
             }
-        "#;
+        ";
 
         let variables = serde_json::json!({
             "address": address.to_string(),
             "limit": limit.unwrap_or(25)
         });
-
-        #[derive(Deserialize)]
-        struct Response {
-            account_transactions: Vec<Transaction>,
-        }
 
         let response: Response = self.query(query, Some(variables)).await?;
         Ok(response.account_transactions)
@@ -467,12 +467,28 @@ impl IndexerClient {
         address: AccountAddress,
         pagination: Option<PaginationParams>,
     ) -> AptosResult<Page<TokenBalance>> {
+        #[derive(Deserialize)]
+        struct AggregateCount {
+            count: u64,
+        }
+
+        #[derive(Deserialize)]
+        struct Aggregate {
+            aggregate: Option<AggregateCount>,
+        }
+
+        #[derive(Deserialize)]
+        struct Response {
+            current_token_ownerships_v2: Vec<TokenBalance>,
+            current_token_ownerships_v2_aggregate: Aggregate,
+        }
+
         let pagination = pagination.unwrap_or(PaginationParams {
             limit: 25,
             offset: 0,
         });
 
-        let query = r#"
+        let query = r"
             query GetAccountTokens($address: String!, $limit: Int!, $offset: Int!) {
                 current_token_ownerships_v2(
                     where: { owner_address: { _eq: $address }, amount: { _gt: 0 } }
@@ -498,7 +514,7 @@ impl IndexerClient {
                     }
                 }
             }
-        "#;
+        ";
 
         let variables = serde_json::json!({
             "address": address.to_string(),
@@ -506,29 +522,14 @@ impl IndexerClient {
             "offset": pagination.offset
         });
 
-        #[derive(Deserialize)]
-        struct AggregateCount {
-            count: u64,
-        }
-
-        #[derive(Deserialize)]
-        struct Aggregate {
-            aggregate: Option<AggregateCount>,
-        }
-
-        #[derive(Deserialize)]
-        struct Response {
-            current_token_ownerships_v2: Vec<TokenBalance>,
-            current_token_ownerships_v2_aggregate: Aggregate,
-        }
-
         let response: Response = self.query(query, Some(variables)).await?;
         let total_count = response
             .current_token_ownerships_v2_aggregate
             .aggregate
             .map(|a| a.count);
         let has_more = total_count.is_some_and(|total| {
-            (pagination.offset as u64 + response.current_token_ownerships_v2.len() as u64) < total
+            (u64::from(pagination.offset) + response.current_token_ownerships_v2.len() as u64)
+                < total
         });
 
         Ok(Page {
@@ -544,12 +545,28 @@ impl IndexerClient {
         address: AccountAddress,
         pagination: Option<PaginationParams>,
     ) -> AptosResult<Page<Transaction>> {
+        #[derive(Deserialize)]
+        struct AggregateCount {
+            count: u64,
+        }
+
+        #[derive(Deserialize)]
+        struct Aggregate {
+            aggregate: Option<AggregateCount>,
+        }
+
+        #[derive(Deserialize)]
+        struct Response {
+            account_transactions: Vec<Transaction>,
+            account_transactions_aggregate: Aggregate,
+        }
+
         let pagination = pagination.unwrap_or(PaginationParams {
             limit: 25,
             offset: 0,
         });
 
-        let query = r#"
+        let query = r"
             query GetAccountTransactions($address: String!, $limit: Int!, $offset: Int!) {
                 account_transactions(
                     where: { account_address: { _eq: $address } }
@@ -572,7 +589,7 @@ impl IndexerClient {
                     }
                 }
             }
-        "#;
+        ";
 
         let variables = serde_json::json!({
             "address": address.to_string(),
@@ -580,29 +597,13 @@ impl IndexerClient {
             "offset": pagination.offset
         });
 
-        #[derive(Deserialize)]
-        struct AggregateCount {
-            count: u64,
-        }
-
-        #[derive(Deserialize)]
-        struct Aggregate {
-            aggregate: Option<AggregateCount>,
-        }
-
-        #[derive(Deserialize)]
-        struct Response {
-            account_transactions: Vec<Transaction>,
-            account_transactions_aggregate: Aggregate,
-        }
-
         let response: Response = self.query(query, Some(variables)).await?;
         let total_count = response
             .account_transactions_aggregate
             .aggregate
             .map(|a| a.count);
         let has_more = total_count.is_some_and(|total| {
-            (pagination.offset as u64 + response.account_transactions.len() as u64) < total
+            (u64::from(pagination.offset) + response.account_transactions.len() as u64) < total
         });
 
         Ok(Page {
@@ -618,7 +619,12 @@ impl IndexerClient {
         event_type: &str,
         limit: Option<u32>,
     ) -> AptosResult<Vec<Event>> {
-        let query = r#"
+        #[derive(Deserialize)]
+        struct Response {
+            events: Vec<Event>,
+        }
+
+        let query = r"
             query GetEventsByType($type: String!, $limit: Int!) {
                 events(
                     where: { type: { _eq: $type } }
@@ -633,17 +639,12 @@ impl IndexerClient {
                     creation_number
                 }
             }
-        "#;
+        ";
 
         let variables = serde_json::json!({
             "type": event_type,
             "limit": limit.unwrap_or(25)
         });
-
-        #[derive(Deserialize)]
-        struct Response {
-            events: Vec<Event>,
-        }
 
         let response: Response = self.query(query, Some(variables)).await?;
         Ok(response.events)
@@ -655,7 +656,12 @@ impl IndexerClient {
         address: AccountAddress,
         limit: Option<u32>,
     ) -> AptosResult<Vec<Event>> {
-        let query = r#"
+        #[derive(Deserialize)]
+        struct Response {
+            events: Vec<Event>,
+        }
+
+        let query = r"
             query GetEventsByAccount($address: String!, $limit: Int!) {
                 events(
                     where: { account_address: { _eq: $address } }
@@ -670,17 +676,12 @@ impl IndexerClient {
                     creation_number
                 }
             }
-        "#;
+        ";
 
         let variables = serde_json::json!({
             "address": address.to_string(),
             "limit": limit.unwrap_or(25)
         });
-
-        #[derive(Deserialize)]
-        struct Response {
-            events: Vec<Event>,
-        }
 
         let response: Response = self.query(query, Some(variables)).await?;
         Ok(response.events)
@@ -691,7 +692,12 @@ impl IndexerClient {
         &self,
         collection_address: AccountAddress,
     ) -> AptosResult<Collection> {
-        let query = r#"
+        #[derive(Deserialize)]
+        struct Response {
+            current_collections_v2: Vec<Collection>,
+        }
+
+        let query = r"
             query GetCollection($address: String!) {
                 current_collections_v2(
                     where: { collection_id: { _eq: $address } }
@@ -706,16 +712,11 @@ impl IndexerClient {
                     description
                 }
             }
-        "#;
+        ";
 
         let variables = serde_json::json!({
             "address": collection_address.to_string()
         });
-
-        #[derive(Deserialize)]
-        struct Response {
-            current_collections_v2: Vec<Collection>,
-        }
 
         let response: Response = self.query(query, Some(variables)).await?;
         response
@@ -723,7 +724,7 @@ impl IndexerClient {
             .into_iter()
             .next()
             .ok_or_else(|| {
-                AptosError::NotFound(format!("Collection not found: {}", collection_address))
+                AptosError::NotFound(format!("Collection not found: {collection_address}"))
             })
     }
 
@@ -733,12 +734,17 @@ impl IndexerClient {
         collection_address: AccountAddress,
         pagination: Option<PaginationParams>,
     ) -> AptosResult<Page<TokenBalance>> {
+        #[derive(Deserialize)]
+        struct Response {
+            current_token_ownerships_v2: Vec<TokenBalance>,
+        }
+
         let pagination = pagination.unwrap_or(PaginationParams {
             limit: 25,
             offset: 0,
         });
 
-        let query = r#"
+        let query = r"
             query GetCollectionTokens($address: String!, $limit: Int!, $offset: Int!) {
                 current_token_ownerships_v2(
                     where: { 
@@ -764,18 +770,13 @@ impl IndexerClient {
                     }
                 }
             }
-        "#;
+        ";
 
         let variables = serde_json::json!({
             "address": collection_address.to_string(),
             "limit": pagination.limit,
             "offset": pagination.offset
         });
-
-        #[derive(Deserialize)]
-        struct Response {
-            current_token_ownerships_v2: Vec<TokenBalance>,
-        }
 
         let response: Response = self.query(query, Some(variables)).await?;
         let items_count = response.current_token_ownerships_v2.len();
@@ -792,7 +793,12 @@ impl IndexerClient {
         &self,
         address: AccountAddress,
     ) -> AptosResult<Vec<CoinBalance>> {
-        let query = r#"
+        #[derive(Deserialize)]
+        struct Response {
+            current_coin_balances: Vec<CoinBalance>,
+        }
+
+        let query = r"
             query GetCoinBalances($address: String!) {
                 current_coin_balances(
                     where: { owner_address: { _eq: $address } }
@@ -801,16 +807,11 @@ impl IndexerClient {
                     amount
                 }
             }
-        "#;
+        ";
 
         let variables = serde_json::json!({
             "address": address.to_string()
         });
-
-        #[derive(Deserialize)]
-        struct Response {
-            current_coin_balances: Vec<CoinBalance>,
-        }
 
         let response: Response = self.query(query, Some(variables)).await?;
         Ok(response.current_coin_balances)
@@ -822,7 +823,12 @@ impl IndexerClient {
         address: AccountAddress,
         limit: Option<u32>,
     ) -> AptosResult<Vec<CoinActivity>> {
-        let query = r#"
+        #[derive(Deserialize)]
+        struct Response {
+            coin_activities: Vec<CoinActivity>,
+        }
+
+        let query = r"
             query GetCoinActivities($address: String!, $limit: Int!) {
                 coin_activities(
                     where: { owner_address: { _eq: $address } }
@@ -834,17 +840,12 @@ impl IndexerClient {
                     coin_type
                 }
             }
-        "#;
+        ";
 
         let variables = serde_json::json!({
             "address": address.to_string(),
             "limit": limit.unwrap_or(25)
         });
-
-        #[derive(Deserialize)]
-        struct Response {
-            coin_activities: Vec<CoinActivity>,
-        }
 
         let response: Response = self.query(query, Some(variables)).await?;
         Ok(response.coin_activities)
@@ -852,7 +853,12 @@ impl IndexerClient {
 
     /// Gets the processor status to check indexer health.
     pub async fn get_processor_status(&self) -> AptosResult<Vec<ProcessorStatus>> {
-        let query = r#"
+        #[derive(Deserialize)]
+        struct Response {
+            processor_status: Vec<ProcessorStatus>,
+        }
+
+        let query = r"
             query GetProcessorStatus {
                 processor_status {
                     processor
@@ -860,12 +866,7 @@ impl IndexerClient {
                     last_updated
                 }
             }
-        "#;
-
-        #[derive(Deserialize)]
-        struct Response {
-            processor_status: Vec<ProcessorStatus>,
-        }
+        ";
 
         let response: Response = self.query(query, None).await?;
         Ok(response.processor_status)

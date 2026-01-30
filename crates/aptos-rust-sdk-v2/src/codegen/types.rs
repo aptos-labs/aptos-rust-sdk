@@ -160,12 +160,12 @@ impl MoveTypeMapper {
 
                 // Create a pascal case name
                 let rust_name = to_pascal_case(base_name);
-                return RustType::new(rust_name).with_doc(format!("Move type: {}", move_type));
+                return RustType::new(rust_name).with_doc(format!("Move type: {move_type}"));
             }
         }
 
         // Default: use serde_json::Value for unknown types
-        RustType::new("serde_json::Value").with_doc(format!("Unknown Move type: {}", move_type))
+        RustType::new("serde_json::Value").with_doc(format!("Unknown Move type: {move_type}"))
     }
 
     /// Maps a Move type to a BCS argument encoding expression.
@@ -174,22 +174,22 @@ impl MoveTypeMapper {
 
         if !rust_type.needs_bcs {
             // Primitives that don't need special handling
-            return format!("aptos_bcs::to_bytes(&{}).unwrap()", var_name);
+            return format!("aptos_bcs::to_bytes(&{var_name}).unwrap()");
         }
 
         match move_type {
-            "address" => format!("aptos_bcs::to_bytes(&{}).unwrap()", var_name),
+            "address" => format!("aptos_bcs::to_bytes(&{var_name}).unwrap()"),
             _ if move_type.starts_with("vector<u8>") => {
-                format!("aptos_bcs::to_bytes(&{}).unwrap()", var_name)
+                format!("aptos_bcs::to_bytes(&{var_name}).unwrap()")
             }
             _ if move_type.starts_with("vector<") => {
-                format!("aptos_bcs::to_bytes(&{}).unwrap()", var_name)
+                format!("aptos_bcs::to_bytes(&{var_name}).unwrap()")
             }
-            "0x1::string::String" => format!("aptos_bcs::to_bytes(&{}).unwrap()", var_name),
+            "0x1::string::String" => format!("aptos_bcs::to_bytes(&{var_name}).unwrap()"),
             _ if move_type.ends_with("::string::String") => {
-                format!("aptos_bcs::to_bytes(&{}).unwrap()", var_name)
+                format!("aptos_bcs::to_bytes(&{var_name}).unwrap()")
             }
-            _ => format!("aptos_bcs::to_bytes(&{}).unwrap()", var_name),
+            _ => format!("aptos_bcs::to_bytes(&{var_name}).unwrap()"),
         }
     }
 

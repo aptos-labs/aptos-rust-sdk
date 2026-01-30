@@ -110,7 +110,7 @@ impl AccountAddress {
         }
 
         // Zero-pad to full length
-        let padded = format!("{:0>64}", hex_string);
+        let padded = format!("{hex_string:0>64}");
         let bytes = hex::decode(&padded)?;
 
         let mut address = [0u8; ADDRESS_LENGTH];
@@ -157,7 +157,7 @@ impl AccountAddress {
         if trimmed.is_empty() {
             "0x0".to_string()
         } else {
-            format!("0x{}", trimmed)
+            format!("0x{trimmed}")
         }
     }
 

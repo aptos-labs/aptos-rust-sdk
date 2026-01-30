@@ -164,8 +164,6 @@ impl MultiAgentRawTransaction {
 
     /// Generates the signing message for multi-agent transactions.
     pub fn signing_message(&self) -> AptosResult<Vec<u8>> {
-        let prefix = crate::crypto::sha3_256(b"APTOS::RawTransactionWithData");
-
         // Serialize as RawTransactionWithData::MultiAgent variant
         #[derive(Serialize)]
         enum RawTransactionWithData<'a> {
@@ -174,6 +172,8 @@ impl MultiAgentRawTransaction {
                 secondary_signer_addresses: &'a Vec<AccountAddress>,
             },
         }
+
+        let prefix = crate::crypto::sha3_256(b"APTOS::RawTransactionWithData");
 
         let data = RawTransactionWithData::MultiAgent {
             raw_txn: &self.raw_txn,
@@ -225,8 +225,6 @@ impl FeePayerRawTransaction {
 
     /// Generates the signing message for fee payer transactions.
     pub fn signing_message(&self) -> AptosResult<Vec<u8>> {
-        let prefix = crate::crypto::sha3_256(b"APTOS::RawTransactionWithData");
-
         #[derive(Serialize)]
         enum RawTransactionWithData<'a> {
             #[allow(dead_code)]
@@ -240,6 +238,7 @@ impl FeePayerRawTransaction {
                 fee_payer_address: &'a AccountAddress,
             },
         }
+        let prefix = crate::crypto::sha3_256(b"APTOS::RawTransactionWithData");
 
         let data = RawTransactionWithData::MultiAgentWithFeePayer {
             raw_txn: &self.raw_txn,

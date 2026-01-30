@@ -518,7 +518,7 @@ impl EnrichedFunctionInfo {
             t if t.contains("::string::String") => "name".to_string(),
             t if t.contains("::object::Object") => "object".to_string(),
             t if t.contains("::option::Option") => "maybe_value".to_string(),
-            _ => format!("arg{}", index),
+            _ => format!("arg{index}"),
         }
     }
 

@@ -217,7 +217,7 @@ impl InputEntryFunctionDataBuilder {
                 errors: Vec::new(),
             },
             Err(e) => Self {
-                module: Err(format!("Invalid function ID '{}': {}", function_id, e)),
+                module: Err(format!("Invalid function ID '{function_id}': {e}")),
                 function: String::new(),
                 type_args: Vec::new(),
                 args: Vec::new(),
@@ -243,7 +243,7 @@ impl InputEntryFunctionDataBuilder {
             Ok(tag) => self.type_args.push(tag),
             Err(e) => self
                 .errors
-                .push(format!("Invalid type argument '{}': {}", type_arg, e)),
+                .push(format!("Invalid type argument '{type_arg}': {e}")),
         }
         self
     }
@@ -295,7 +295,7 @@ impl InputEntryFunctionDataBuilder {
             Ok(bytes) => self.args.push(bytes),
             Err(e) => self
                 .errors
-                .push(format!("Failed to serialize argument: {}", e)),
+                .push(format!("Failed to serialize argument: {e}")),
         }
         self
     }
@@ -443,7 +443,7 @@ impl MoveU256 {
             return Ok(Self(bytes));
         }
 
-        Err(AptosError::Transaction(format!("Invalid u256: {}", s)))
+        Err(AptosError::Transaction(format!("Invalid u256: {s}")))
     }
 
     /// Creates a MoveU256 from a u128.

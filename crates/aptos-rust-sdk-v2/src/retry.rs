@@ -116,7 +116,9 @@ impl RetryConfig {
 
         // Calculate base delay with exponential backoff
         let base_delay = self.initial_delay_ms as f64
-            * self.exponential_base.powi(attempt.saturating_sub(1) as i32);
+            * self
+                .exponential_base
+                .powi(attempt.saturating_sub(1).cast_signed());
 
         // Cap at max delay
         let capped_delay = base_delay.min(self.max_delay_ms as f64);
@@ -130,6 +132,7 @@ impl RetryConfig {
             capped_delay
         };
 
+        #[allow(clippy::cast_sign_loss)] // Delay is bounded by max_delay_ms
         Duration::from_millis(final_delay as u64)
     }
 
@@ -142,11 +145,9 @@ impl RetryConfig {
     pub fn is_retryable_error(&self, error: &AptosError) -> bool {
         match error {
             // Network errors are typically transient
-            AptosError::Http(_) => true,
+            AptosError::Http(_) | AptosError::RateLimited { .. } => true,
             // API errors with retryable status codes
             AptosError::Api { status_code, .. } => self.is_retryable_status(*status_code),
-            // Rate limiting
-            AptosError::RateLimited { .. } => true,
             // Other errors are not retried
             _ => false,
         }

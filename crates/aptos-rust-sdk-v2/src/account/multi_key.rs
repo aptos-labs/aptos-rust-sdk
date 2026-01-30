@@ -167,7 +167,7 @@ impl MultiKeyAccount {
             )));
         }
 
-        let public_keys: Vec<_> = private_keys.iter().map(|k| k.public_key()).collect();
+        let public_keys: Vec<_> = private_keys.iter().map(AnyPrivateKey::public_key).collect();
         let multi_public_key = MultiKeyPublicKey::new(public_keys, threshold)?;
         let address = multi_public_key.to_address();
 
@@ -206,8 +206,7 @@ impl MultiKeyAccount {
         for (index, key) in &private_keys {
             if *index as usize >= multi_public_key.num_keys() {
                 return Err(AptosError::InvalidPrivateKey(format!(
-                    "private key index {} out of bounds",
-                    index
+                    "private key index {index} out of bounds"
                 )));
             }
             // Verify the private key matches the public key at that index
@@ -215,8 +214,7 @@ impl MultiKeyAccount {
             let actual_pk = key.public_key();
             if expected_pk.variant != actual_pk.variant || expected_pk.bytes != actual_pk.bytes {
                 return Err(AptosError::InvalidPrivateKey(format!(
-                    "private key at index {} doesn't match public key",
-                    index
+                    "private key at index {index} doesn't match public key"
                 )));
             }
         }
@@ -329,8 +327,7 @@ impl MultiKeyAccount {
                 .find(|(i, _)| *i == index)
                 .ok_or_else(|| {
                     AptosError::InvalidPrivateKey(format!(
-                        "don't have private key at index {}",
-                        index
+                        "don't have private key at index {index}"
                     ))
                 })?;
 
@@ -369,8 +366,7 @@ impl MultiKeyAccount {
             .find(|(i, _)| *i == key_index)
             .ok_or_else(|| {
                 AptosError::InvalidPrivateKey(format!(
-                    "don't have private key at index {}",
-                    key_index
+                    "don't have private key at index {key_index}"
                 ))
             })?;
 

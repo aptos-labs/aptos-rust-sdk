@@ -112,7 +112,7 @@ impl FaucetClient {
     ///
     /// The transaction hashes of the funding transactions.
     pub async fn fund(&self, address: AccountAddress, amount: u64) -> AptosResult<Vec<String>> {
-        let url = self.build_url(&format!("mint?address={}&amount={}", address, amount))?;
+        let url = self.build_url(&format!("mint?address={address}&amount={amount}"))?;
         let client = self.client.clone();
         let retry_config = self.retry_config.clone();
 
@@ -157,7 +157,7 @@ impl FaucetClient {
 
     fn build_url(&self, path: &str) -> AptosResult<Url> {
         let base = self.faucet_url.as_str().trim_end_matches('/');
-        Url::parse(&format!("{}/{}", base, path)).map_err(AptosError::Url)
+        Url::parse(&format!("{base}/{path}")).map_err(AptosError::Url)
     }
 }
 

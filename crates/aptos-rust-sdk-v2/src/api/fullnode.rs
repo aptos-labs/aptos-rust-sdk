@@ -126,7 +126,7 @@ impl FullnodeClient {
         &self,
         address: AccountAddress,
     ) -> AptosResult<AptosResponse<AccountData>> {
-        let url = self.build_url(&format!("accounts/{}", address))?;
+        let url = self.build_url(&format!("accounts/{address}"))?;
         self.get_json(url).await
     }
 
@@ -136,7 +136,7 @@ impl FullnodeClient {
         account
             .data
             .sequence_number()
-            .map_err(|e| AptosError::Internal(format!("failed to parse sequence number: {}", e)))
+            .map_err(|e| AptosError::Internal(format!("failed to parse sequence number: {e}")))
     }
 
     /// Gets all resources for an account.
@@ -144,7 +144,7 @@ impl FullnodeClient {
         &self,
         address: AccountAddress,
     ) -> AptosResult<AptosResponse<Vec<Resource>>> {
-        let url = self.build_url(&format!("accounts/{}/resources", address))?;
+        let url = self.build_url(&format!("accounts/{address}/resources"))?;
         self.get_json(url).await
     }
 
@@ -167,7 +167,7 @@ impl FullnodeClient {
         &self,
         address: AccountAddress,
     ) -> AptosResult<AptosResponse<Vec<MoveModule>>> {
-        let url = self.build_url(&format!("accounts/{}/modules", address))?;
+        let url = self.build_url(&format!("accounts/{address}/modules"))?;
         self.get_json(url).await
     }
 
@@ -177,7 +177,7 @@ impl FullnodeClient {
         address: AccountAddress,
         module_name: &str,
     ) -> AptosResult<AptosResponse<MoveModule>> {
-        let url = self.build_url(&format!("accounts/{}/module/{}", address, module_name))?;
+        let url = self.build_url(&format!("accounts/{address}/module/{module_name}"))?;
         self.get_json(url).await
     }
 
@@ -258,7 +258,7 @@ impl FullnodeClient {
         &self,
         hash: &HashValue,
     ) -> AptosResult<AptosResponse<serde_json::Value>> {
-        let url = self.build_url(&format!("transactions/by_hash/{}", hash))?;
+        let url = self.build_url(&format!("transactions/by_hash/{hash}"))?;
         self.get_json(url).await
     }
 
@@ -284,7 +284,10 @@ impl FullnodeClient {
                     // Check if transaction is committed (has version)
                     if response.data.get("version").is_some() {
                         // Check success
-                        let success = response.data.get("success").and_then(|v| v.as_bool());
+                        let success = response
+                            .data
+                            .get("success")
+                            .and_then(serde_json::Value::as_bool);
                         if success == Some(false) {
                             let vm_status = response
                                 .data
@@ -438,7 +441,7 @@ impl FullnodeClient {
         height: u64,
         with_transactions: bool,
     ) -> AptosResult<AptosResponse<serde_json::Value>> {
-        let mut url = self.build_url(&format!("blocks/by_height/{}", height))?;
+        let mut url = self.build_url(&format!("blocks/by_height/{height}"))?;
         url.query_pairs_mut()
             .append_pair("with_transactions", &with_transactions.to_string());
         self.get_json(url).await
@@ -450,7 +453,7 @@ impl FullnodeClient {
         version: u64,
         with_transactions: bool,
     ) -> AptosResult<AptosResponse<serde_json::Value>> {
-        let mut url = self.build_url(&format!("blocks/by_version/{}", version))?;
+        let mut url = self.build_url(&format!("blocks/by_version/{version}"))?;
         url.query_pairs_mut()
             .append_pair("with_transactions", &with_transactions.to_string());
         self.get_json(url).await
@@ -533,7 +536,7 @@ impl FullnodeClient {
             .headers()
             .get("x-aptos-cursor")
             .and_then(|v| v.to_str().ok())
-            .map(|s| s.to_string());
+            .map(ToString::to_string);
 
         if status.is_success() {
             let data: T = response.json().await?;
@@ -556,8 +559,10 @@ impl FullnodeClient {
             let error_code = body
                 .get("error_code")
                 .and_then(|v| v.as_str())
-                .map(|s| s.to_string());
-            let vm_error_code = body.get("vm_error_code").and_then(|v| v.as_u64());
+                .map(ToString::to_string);
+            let vm_error_code = body
+                .get("vm_error_code")
+                .and_then(serde_json::Value::as_u64);
 
             Err(AptosError::api_with_details(
                 status.as_u16(),

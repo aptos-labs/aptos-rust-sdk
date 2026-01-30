@@ -81,7 +81,7 @@ impl HashValue {
         };
 
         let hex_string = std::str::from_utf8(hex_str)
-            .map_err(|e| AptosError::Internal(format!("Invalid UTF-8 in hex string: {}", e)))?;
+            .map_err(|e| AptosError::Internal(format!("Invalid UTF-8 in hex string: {e}")))?;
 
         if hex_string.len() != HASH_LENGTH * 2 {
             return Err(AptosError::Internal(format!(

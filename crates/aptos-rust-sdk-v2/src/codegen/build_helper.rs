@@ -132,7 +132,7 @@ pub fn generate_from_abi_with_config(
     })?;
 
     let abi: MoveModuleABI = serde_json::from_str(&abi_content)
-        .map_err(|e| AptosError::Config(format!("Failed to parse ABI JSON: {}", e)))?;
+        .map_err(|e| AptosError::Config(format!("Failed to parse ABI JSON: {e}")))?;
 
     // Generate code
     let generator = ModuleGenerator::new(&abi, config.generator_config);
@@ -140,14 +140,14 @@ pub fn generate_from_abi_with_config(
 
     // Create output directory
     fs::create_dir_all(output_dir)
-        .map_err(|e| AptosError::Config(format!("Failed to create output directory: {}", e)))?;
+        .map_err(|e| AptosError::Config(format!("Failed to create output directory: {e}")))?;
 
     // Write output file
     let output_filename = format!("{}.rs", abi.name);
     let output_path = output_dir.join(&output_filename);
 
     fs::write(&output_path, &code)
-        .map_err(|e| AptosError::Config(format!("Failed to write output file: {}", e)))?;
+        .map_err(|e| AptosError::Config(format!("Failed to write output file: {e}")))?;
 
     if config.print_cargo_instructions {
         println!("cargo:rerun-if-changed={}", abi_path.display());
@@ -214,14 +214,14 @@ pub fn generate_from_abis_with_config(
 
         // Create output directory
         fs::create_dir_all(output_dir)
-            .map_err(|e| AptosError::Config(format!("Failed to create output directory: {}", e)))?;
+            .map_err(|e| AptosError::Config(format!("Failed to create output directory: {e}")))?;
 
         // Write output file
         let output_filename = format!("{}.rs", abi.name);
         let output_path = output_dir.join(&output_filename);
 
         fs::write(&output_path, &code)
-            .map_err(|e| AptosError::Config(format!("Failed to write output file: {}", e)))?;
+            .map_err(|e| AptosError::Config(format!("Failed to write output file: {e}")))?;
 
         module_names.push(abi.name);
 
@@ -236,7 +236,7 @@ pub fn generate_from_abis_with_config(
         let mod_path = output_dir.join("mod.rs");
 
         fs::write(&mod_path, mod_content)
-            .map_err(|e| AptosError::Config(format!("Failed to write mod.rs: {}", e)))?;
+            .map_err(|e| AptosError::Config(format!("Failed to write mod.rs: {e}")))?;
     }
 
     Ok(())
@@ -260,14 +260,14 @@ pub fn generate_from_abi_with_source(
 
     // Read and parse ABI
     let abi_content = fs::read_to_string(abi_path)
-        .map_err(|e| AptosError::Config(format!("Failed to read ABI file: {}", e)))?;
+        .map_err(|e| AptosError::Config(format!("Failed to read ABI file: {e}")))?;
 
     let abi: MoveModuleABI = serde_json::from_str(&abi_content)
-        .map_err(|e| AptosError::Config(format!("Failed to parse ABI JSON: {}", e)))?;
+        .map_err(|e| AptosError::Config(format!("Failed to parse ABI JSON: {e}")))?;
 
     // Read and parse Move source
     let source_content = fs::read_to_string(source_path)
-        .map_err(|e| AptosError::Config(format!("Failed to read Move source: {}", e)))?;
+        .map_err(|e| AptosError::Config(format!("Failed to read Move source: {e}")))?;
 
     let source_info = MoveSourceParser::parse(&source_content);
 
@@ -278,14 +278,14 @@ pub fn generate_from_abi_with_source(
 
     // Create output directory
     fs::create_dir_all(output_dir)
-        .map_err(|e| AptosError::Config(format!("Failed to create output directory: {}", e)))?;
+        .map_err(|e| AptosError::Config(format!("Failed to create output directory: {e}")))?;
 
     // Write output file
     let output_filename = format!("{}.rs", abi.name);
     let output_path = output_dir.join(&output_filename);
 
     fs::write(&output_path, &code)
-        .map_err(|e| AptosError::Config(format!("Failed to write output file: {}", e)))?;
+        .map_err(|e| AptosError::Config(format!("Failed to write output file: {e}")))?;
 
     println!("cargo:rerun-if-changed={}", abi_path.display());
     println!("cargo:rerun-if-changed={}", source_path.display());
@@ -335,10 +335,10 @@ pub fn generate_from_directory(
     let abi_dir = abi_dir.as_ref();
 
     let entries = fs::read_dir(abi_dir)
-        .map_err(|e| AptosError::Config(format!("Failed to read ABI directory: {}", e)))?;
+        .map_err(|e| AptosError::Config(format!("Failed to read ABI directory: {e}")))?;
 
     let abi_paths: Vec<_> = entries
-        .filter_map(|e| e.ok())
+        .filter_map(Result::ok)
         .filter(|e| e.path().extension().is_some_and(|ext| ext == "json"))
         .map(|e| e.path())
         .collect();
@@ -351,7 +351,7 @@ pub fn generate_from_directory(
     }
 
     // Convert PathBuf to Path references for the function
-    let path_refs: Vec<&Path> = abi_paths.iter().map(|p| p.as_path()).collect();
+    let path_refs: Vec<&Path> = abi_paths.iter().map(std::path::PathBuf::as_path).collect();
     generate_from_abis(&path_refs, output_dir)
 }
 

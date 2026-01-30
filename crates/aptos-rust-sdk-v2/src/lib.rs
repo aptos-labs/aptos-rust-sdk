@@ -65,24 +65,14 @@
 )]
 // Pedantic lint exceptions - these are intentionally allowed
 #![allow(
-    clippy::module_name_repetitions,  // Common pattern in Rust SDKs (e.g., AptosConfig in config module)
     clippy::must_use_candidate,       // Too noisy for SDK functions
     clippy::return_self_not_must_use, // Builder pattern doesn't need must_use
     clippy::missing_errors_doc,       // Error documentation is at the error type level
     clippy::missing_panics_doc,       // We document panics where relevant
     clippy::doc_markdown,             // Too many false positives for type names in docs
-    clippy::items_after_statements,   // Test code often has helper structs after setup
-    clippy::too_many_lines,           // Some functions are long but readable
-    clippy::similar_names,            // Similar variable names are sometimes intentional
-    clippy::redundant_closure_for_method_calls, // Closures are often clearer than method refs
-    clippy::match_same_arms,          // Sometimes intentionally explicit for clarity
-    clippy::needless_raw_string_hashes, // Raw strings with # are sometimes for visual consistency
-    clippy::unreadable_literal,       // Hex literals like 0x80000000 are standard in BIP-44
+    clippy::match_same_arms,          // Sometimes intentionally explicit for clarity TODO: Remove, this showed a couple of issues
     clippy::struct_excessive_bools,   // Config structs often have boolean options
     clippy::cast_precision_loss,      // Acceptable for display/logging purposes
-    clippy::cast_possible_wrap,       // Handled with validation
-    clippy::cast_sign_loss,           // Handled with validation
-    clippy::cast_lossless,            // Explicit casts are clearer in some contexts
     clippy::unnecessary_wraps,        // Some wraps are for API consistency
     clippy::unused_self,              // Some methods take &self for future extensibility
     clippy::if_not_else,              // if !x {} is often clearer than if x {} else {}

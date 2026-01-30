@@ -58,14 +58,12 @@ impl Identifier {
         let first = s.chars().next().expect("string is not empty");
         if !first.is_ascii_alphabetic() && first != '_' {
             return Err(AptosError::InvalidTypeTag(format!(
-                "identifier must start with letter or underscore: {}",
-                s
+                "identifier must start with letter or underscore: {s}"
             )));
         }
         if !s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
             return Err(AptosError::InvalidTypeTag(format!(
-                "identifier contains invalid characters: {}",
-                s
+                "identifier contains invalid characters: {s}"
             )));
         }
         Ok(Self(s))
@@ -116,8 +114,7 @@ impl MoveModuleId {
         let parts: Vec<&str> = s.split("::").collect();
         if parts.len() != 2 {
             return Err(AptosError::InvalidTypeTag(format!(
-                "invalid module ID format: {}",
-                s
+                "invalid module ID format: {s}"
             )));
         }
         let address = AccountAddress::from_str(parts[0])?;
@@ -212,7 +209,7 @@ impl fmt::Display for StructTag {
                 if i > 0 {
                     write!(f, ", ")?;
                 }
-                write!(f, "{}", arg)?;
+                write!(f, "{arg}")?;
             }
             write!(f, ">")?;
         }
@@ -325,8 +322,7 @@ impl TypeTag {
         // Security: prevent excessive nesting depth
         if depth > MAX_TYPE_NESTING_DEPTH {
             return Err(AptosError::InvalidTypeTag(format!(
-                "type tag nesting too deep: {} levels (max {})",
-                depth, MAX_TYPE_NESTING_DEPTH
+                "type tag nesting too deep: {depth} levels (max {MAX_TYPE_NESTING_DEPTH})"
             )));
         }
 
@@ -363,8 +359,7 @@ impl TypeTag {
         let (base, type_args_str) = if let Some(idx) = generic_start {
             if !s.ends_with('>') {
                 return Err(AptosError::InvalidTypeTag(format!(
-                    "malformed generic type: {}",
-                    s
+                    "malformed generic type: {s}"
                 )));
             }
             (&s[..idx], Some(&s[idx + 1..s.len() - 1]))
@@ -376,8 +371,7 @@ impl TypeTag {
         let parts: Vec<&str> = base.split("::").collect();
         if parts.len() != 3 {
             return Err(AptosError::InvalidTypeTag(format!(
-                "invalid struct type format (expected address::module::name): {}",
-                s
+                "invalid struct type format (expected address::module::name): {s}"
             )));
         }
 
@@ -447,8 +441,8 @@ impl fmt::Display for TypeTag {
             TypeTag::U256 => write!(f, "u256"),
             TypeTag::Address => write!(f, "address"),
             TypeTag::Signer => write!(f, "signer"),
-            TypeTag::Vector(inner) => write!(f, "vector<{}>", inner),
-            TypeTag::Struct(tag) => write!(f, "{}", tag),
+            TypeTag::Vector(inner) => write!(f, "vector<{inner}>"),
+            TypeTag::Struct(tag) => write!(f, "{tag}"),
         }
     }
 }
@@ -473,8 +467,7 @@ impl EntryFunctionId {
         let parts: Vec<&str> = s.split("::").collect();
         if parts.len() != 3 {
             return Err(AptosError::InvalidTypeTag(format!(
-                "invalid entry function ID format: {}",
-                s
+                "invalid entry function ID format: {s}"
             )));
         }
         let address = AccountAddress::from_str(parts[0])?;
@@ -589,8 +582,7 @@ impl MoveValue {
     /// Tries to extract a string value.
     pub fn as_str(&self) -> Option<&str> {
         match self {
-            MoveValue::String(s) => Some(s),
-            MoveValue::Number(s) => Some(s),
+            MoveValue::String(s) | MoveValue::Number(s) => Some(s),
             _ => None,
         }
     }

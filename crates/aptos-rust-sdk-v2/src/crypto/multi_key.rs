@@ -40,8 +40,7 @@ impl AnyPublicKeyVariant {
             2 => Ok(Self::Secp256r1),
             3 => Ok(Self::Keyless),
             _ => Err(AptosError::InvalidPublicKey(format!(
-                "unknown public key variant: {}",
-                byte
+                "unknown public key variant: {byte}"
             ))),
         }
     }
@@ -325,8 +324,7 @@ impl MultiKeyPublicKey {
         let num_keys = bytes[0] as usize;
         if num_keys == 0 || num_keys > MAX_NUM_OF_KEYS {
             return Err(AptosError::InvalidPublicKey(format!(
-                "invalid number of keys: {}",
-                num_keys
+                "invalid number of keys: {num_keys}"
             )));
         }
 
@@ -475,8 +473,7 @@ impl MultiKeySignature {
             }
             if last_index == Some(*index) {
                 return Err(AptosError::InvalidSignature(format!(
-                    "duplicate signer index {}",
-                    index
+                    "duplicate signer index {index}"
                 )));
             }
             last_index = Some(*index);
@@ -545,8 +542,7 @@ impl MultiKeySignature {
         let num_sigs = bytes[0] as usize;
         if num_sigs == 0 || num_sigs > MAX_NUM_OF_KEYS {
             return Err(AptosError::InvalidSignature(format!(
-                "invalid number of signatures: {}",
-                num_sigs
+                "invalid number of signatures: {num_sigs}"
             )));
         }
 

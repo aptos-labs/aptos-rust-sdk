@@ -82,8 +82,8 @@ impl BatchTransactionStatus {
     /// Returns the transaction hash if available.
     pub fn hash(&self) -> Option<&str> {
         match self {
-            BatchTransactionStatus::Pending { hash } => Some(hash),
-            BatchTransactionStatus::Confirmed { hash, .. } => Some(hash),
+            BatchTransactionStatus::Pending { hash }
+            | BatchTransactionStatus::Confirmed { hash, .. } => Some(hash),
             BatchTransactionStatus::Failed { .. } => None,
         }
     }
@@ -413,11 +413,11 @@ async fn submit_and_wait_single(
         .to_string();
     let success = data
         .get("success")
-        .and_then(|v| v.as_bool())
+        .and_then(serde_json::Value::as_bool)
         .unwrap_or(false);
     let version = data
         .get("version")
-        .and_then(|v| v.as_str())
+        .and_then(serde_json::Value::as_str)
         .and_then(|s| s.parse().ok())
         .unwrap_or(0);
     let gas_used = data
@@ -570,7 +570,7 @@ impl<'a> BatchOperations<'a> {
         let payloads: Vec<_> = transfers
             .into_iter()
             .map(|(recipient, amount)| {
-                EntryFunction::apt_transfer(recipient, amount).map(|ef| ef.into())
+                EntryFunction::apt_transfer(recipient, amount).map(TransactionPayload::from)
             })
             .collect::<AptosResult<Vec<_>>>()?;
 

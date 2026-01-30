@@ -305,8 +305,7 @@ impl MultiEd25519Signature {
             }
             if last_index == Some(*index) {
                 return Err(AptosError::InvalidSignature(format!(
-                    "duplicate signer index {}",
-                    index
+                    "duplicate signer index {index}"
                 )));
             }
             last_index = Some(*index);

@@ -138,7 +138,7 @@ impl<'a> ModuleGenerator<'a> {
         let mut output = String::new();
 
         self.write_all(&mut output)
-            .map_err(|e| AptosError::Internal(format!("Code generation failed: {}", e)))?;
+            .map_err(|e| AptosError::Internal(format!("Code generation failed: {e}")))?;
 
         Ok(output)
     }
@@ -204,7 +204,7 @@ impl<'a> ModuleGenerator<'a> {
         writeln!(output, "pub enum ModuleEvent {{")?;
         for struct_def in &event_structs {
             let variant_name = to_pascal_case(&struct_def.name);
-            writeln!(output, "    {}({}),", variant_name, variant_name)?;
+            writeln!(output, "    {variant_name}({variant_name}),")?;
         }
         writeln!(output, "    /// Unknown event type.")?;
         writeln!(output, "    Unknown(serde_json::Value),")?;
@@ -240,22 +240,17 @@ impl<'a> ModuleGenerator<'a> {
         for struct_def in &event_structs {
             let const_name = to_snake_case(&struct_def.name).to_uppercase();
             let variant_name = to_pascal_case(&struct_def.name);
-            writeln!(output, "        event_types::{} => {{", const_name)?;
+            writeln!(output, "        event_types::{const_name} => {{")?;
             writeln!(
                 output,
-                "            let event: {} = serde_json::from_value(data)",
-                variant_name
+                "            let event: {variant_name} = serde_json::from_value(data)"
             )?;
             writeln!(
                 output,
                 "                .map_err(|e| AptosError::Internal(format!(\"Failed to parse {}: {{}}\", e)))?;",
                 struct_def.name
             )?;
-            writeln!(
-                output,
-                "            Ok(ModuleEvent::{}(event))",
-                variant_name
-            )?;
+            writeln!(output, "            Ok(ModuleEvent::{variant_name}(event))")?;
             writeln!(output, "        }}")?;
         }
         writeln!(output, "        _ => Ok(ModuleEvent::Unknown(data)),")?;
@@ -384,7 +379,7 @@ impl<'a> ModuleGenerator<'a> {
                 .generic_type_params
                 .iter()
                 .enumerate()
-                .map(|(i, _)| format!("T{}", i))
+                .map(|(i, _)| format!("T{i}"))
                 .collect();
 
             writeln!(
@@ -394,7 +389,7 @@ impl<'a> ModuleGenerator<'a> {
                 type_params.join(", ")
             )?;
         } else {
-            writeln!(output, "pub struct {} {{", rust_name)?;
+            writeln!(output, "pub struct {rust_name} {{")?;
         }
 
         // Fields
@@ -420,7 +415,7 @@ impl<'a> ModuleGenerator<'a> {
         };
 
         if let Some(doc) = &rust_type.doc {
-            writeln!(output, "    /// {}", doc)?;
+            writeln!(output, "    /// {doc}")?;
         }
 
         // Add serde rename if field name differs
@@ -474,7 +469,7 @@ impl<'a> ModuleGenerator<'a> {
         // Documentation from source or generated
         if let Some(doc) = &enriched.doc {
             for line in doc.lines() {
-                writeln!(output, "/// {}", line)?;
+                writeln!(output, "/// {line}")?;
             }
             writeln!(output, "///")?;
         } else {
@@ -507,7 +502,7 @@ impl<'a> ModuleGenerator<'a> {
         }
 
         // Function signature
-        write!(output, "pub fn {}(", rust_name)?;
+        write!(output, "pub fn {rust_name}(")?;
 
         // Parameters with meaningful names
         let mut param_strs = Vec::new();
@@ -538,7 +533,7 @@ impl<'a> ModuleGenerator<'a> {
         for (name, move_type, _) in &params {
             let safe_name = Self::safe_param_name(name);
             let bcs_expr = self.config.type_mapper.to_bcs_arg(move_type, &safe_name);
-            writeln!(output, "        {},", bcs_expr)?;
+            writeln!(output, "        {bcs_expr},")?;
         }
         writeln!(output, "    ];")?;
         writeln!(output)?;
@@ -664,7 +659,7 @@ impl<'a> ModuleGenerator<'a> {
         // Documentation from source or generated
         if let Some(doc) = &enriched.doc {
             for line in doc.lines() {
-                writeln!(output, "/// {}", line)?;
+                writeln!(output, "/// {line}")?;
             }
             writeln!(output, "///")?;
         } else {
@@ -699,7 +694,7 @@ impl<'a> ModuleGenerator<'a> {
             writeln!(output, "///")?;
             writeln!(output, "/// # Returns")?;
             writeln!(output, "///")?;
-            writeln!(output, "/// `{}`", return_type)?;
+            writeln!(output, "/// `{return_type}`")?;
         }
 
         // Function signature
@@ -709,7 +704,7 @@ impl<'a> ModuleGenerator<'a> {
             ""
         };
 
-        write!(output, "pub {}fn {}(aptos: &Aptos", async_kw, rust_name)?;
+        write!(output, "pub {async_kw}fn {rust_name}(aptos: &Aptos")?;
 
         // Parameters with meaningful names
         for (name, _, rust_type) in &params {
@@ -742,7 +737,7 @@ impl<'a> ModuleGenerator<'a> {
         for (name, move_type, _) in &params {
             let safe_name = Self::safe_param_name(name);
             let arg_expr = self.view_arg_json_expr(move_type, &safe_name);
-            writeln!(output, "        {},", arg_expr)?;
+            writeln!(output, "        {arg_expr},")?;
         }
         writeln!(output, "    ];")?;
         writeln!(output)?;
@@ -755,8 +750,7 @@ impl<'a> ModuleGenerator<'a> {
         };
         writeln!(
             output,
-            "    aptos.view(&function_id, type_args, args){}",
-            await_kw
+            "    aptos.view(&function_id, type_args, args){await_kw}"
         )?;
         writeln!(output, "}}")?;
         writeln!(output)
@@ -765,18 +759,18 @@ impl<'a> ModuleGenerator<'a> {
     /// Creates a JSON expression for a view function argument.
     fn view_arg_json_expr(&self, move_type: &str, var_name: &str) -> String {
         match move_type {
-            "address" => format!("serde_json::json!({}.to_string())", var_name),
+            "address" => format!("serde_json::json!({var_name}.to_string())"),
             "bool" | "u8" | "u16" | "u32" | "u64" | "u128" => {
-                format!("serde_json::json!({}.to_string())", var_name)
+                format!("serde_json::json!({var_name}.to_string())")
             }
             _ if move_type.starts_with("vector<u8>") => {
-                format!("serde_json::json!(hex::encode({}))", var_name)
+                format!("serde_json::json!(hex::encode({var_name}))")
             }
-            "0x1::string::String" => format!("serde_json::json!({})", var_name),
+            "0x1::string::String" => format!("serde_json::json!({var_name})"),
             _ if move_type.ends_with("::string::String") => {
-                format!("serde_json::json!({})", var_name)
+                format!("serde_json::json!({var_name})")
             }
-            _ => format!("serde_json::json!({})", var_name),
+            _ => format!("serde_json::json!({var_name})"),
         }
     }
 }

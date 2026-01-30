@@ -213,6 +213,8 @@ fn make_transaction_authenticator(
         }
         // For other/unknown schemes, default to Ed25519 format
         // (signature scheme detection happens at the account level)
+        // TODO: throw error if it doesn't match a scheme
+        //TODO: Where's Single Key scheme?
         _ => TransactionAuthenticator::ed25519(public_key, signature),
     }
 }
@@ -231,6 +233,8 @@ fn make_account_authenticator(
         },
         crate::crypto::MULTI_KEY_SCHEME => AccountAuthenticator::multi_key(public_key, signature),
         // For other/unknown schemes, default to Ed25519 format
+        // TODO: throw error if it doesn't match a scheme
+        //TODO: Where's Single Key scheme?
         _ => AccountAuthenticator::ed25519(public_key, signature),
     }
 }

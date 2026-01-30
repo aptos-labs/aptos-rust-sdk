@@ -77,43 +77,43 @@ impl SimulationResult {
     pub fn from_json(data: serde_json::Value) -> AptosResult<Self> {
         let success = data
             .get("success")
-            .and_then(|v| v.as_bool())
+            .and_then(serde_json::Value::as_bool)
             .unwrap_or(false);
 
         let vm_status = data
             .get("vm_status")
-            .and_then(|v| v.as_str())
+            .and_then(serde_json::Value::as_str)
             .unwrap_or("Unknown")
             .to_string();
 
         let gas_used = data
             .get("gas_used")
-            .and_then(|v| v.as_str())
+            .and_then(serde_json::Value::as_str)
             .and_then(|s| s.parse().ok())
             .unwrap_or(0);
 
         let max_gas_amount = data
             .get("max_gas_amount")
-            .and_then(|v| v.as_str())
+            .and_then(serde_json::Value::as_str)
             .and_then(|s| s.parse().ok())
             .unwrap_or(0);
 
         let gas_unit_price = data
             .get("gas_unit_price")
-            .and_then(|v| v.as_str())
+            .and_then(serde_json::Value::as_str)
             .and_then(|s| s.parse().ok())
             .unwrap_or(0);
 
         let hash = data
             .get("hash")
-            .and_then(|v| v.as_str())
+            .and_then(serde_json::Value::as_str)
             .unwrap_or("")
             .to_string();
 
         // Parse state changes
         let changes = data
             .get("changes")
-            .and_then(|v| v.as_array())
+            .and_then(serde_json::Value::as_array)
             .map(|arr| {
                 arr.iter()
                     .filter_map(|c| StateChange::from_json(c).ok())
@@ -224,21 +224,19 @@ impl SimulationResult {
     pub fn is_insufficient_balance(&self) -> bool {
         self.vm_error
             .as_ref()
-            .is_some_and(|e| e.is_insufficient_balance())
+            .is_some_and(VmError::is_insufficient_balance)
     }
 
     /// Checks if the failure is due to sequence number issues.
     pub fn is_sequence_number_error(&self) -> bool {
         self.vm_error
             .as_ref()
-            .is_some_and(|e| e.is_sequence_number_error())
+            .is_some_and(VmError::is_sequence_number_error)
     }
 
     /// Checks if the failure is due to out of gas.
     pub fn is_out_of_gas(&self) -> bool {
-        self.vm_error
-            .as_ref()
-            .is_some_and(|e| e.is_out_of_gas())
+        self.vm_error.as_ref().is_some_and(VmError::is_out_of_gas)
     }
 
     /// Returns a user-friendly error message if the simulation failed.
@@ -249,7 +247,7 @@ impl SimulationResult {
 
         self.vm_error
             .as_ref()
-            .map(|e| e.user_message())
+            .map(VmError::user_message)
             .or_else(|| Some(self.vm_status.clone()))
     }
 }
@@ -274,23 +272,23 @@ impl StateChange {
         Ok(Self {
             change_type: json
                 .get("type")
-                .and_then(|v| v.as_str())
+                .and_then(serde_json::Value::as_str)
                 .unwrap_or("unknown")
                 .to_string(),
             address: json
                 .get("address")
-                .and_then(|v| v.as_str())
+                .and_then(serde_json::Value::as_str)
                 .unwrap_or("")
                 .to_string(),
             resource_type: json
                 .get("data")
                 .and_then(|d| d.get("type"))
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string()),
+                .and_then(serde_json::Value::as_str)
+                .map(ToString::to_string),
             module: json
                 .get("module")
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string()),
+                .and_then(serde_json::Value::as_str)
+                .map(ToString::to_string),
             data: json.get("data").cloned(),
         })
     }
@@ -412,7 +410,7 @@ impl VmError {
             }
             VmErrorCategory::MoveAbort => {
                 if let Some(code) = self.abort_code {
-                    format!("Transaction aborted with code {}", code)
+                    format!("Transaction aborted with code {code}")
                 } else {
                     "Transaction was aborted by the Move VM".to_string()
                 }

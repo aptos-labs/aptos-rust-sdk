@@ -344,6 +344,8 @@ fn make_account_authenticator(
         },
         crate::crypto::MULTI_KEY_SCHEME => AccountAuthenticator::multi_key(public_key, signature),
         // For other/unknown schemes, default to Ed25519 format
+        // TODO: throw error if it doesn't match a scheme
+        //TODO: Where's Single Key scheme?
         _ => AccountAuthenticator::ed25519(public_key, signature),
     }
 }
@@ -428,7 +430,7 @@ impl PartiallySigned {
     pub fn is_complete(&self) -> bool {
         self.sender_auth.is_some()
             && self.fee_payer_auth.is_some()
-            && self.secondary_auths.iter().all(|auth| auth.is_some())
+            && self.secondary_auths.iter().all(Option::is_some)
     }
 
     /// Finalizes the transaction if all signatures are present.
@@ -448,7 +450,7 @@ impl PartiallySigned {
             .enumerate()
             .map(|(i, auth)| {
                 auth.ok_or_else(|| {
-                    AptosError::transaction(format!("missing secondary signer {} signature", i))
+                    AptosError::transaction(format!("missing secondary signer {i} signature"))
                 })
             })
             .collect();
