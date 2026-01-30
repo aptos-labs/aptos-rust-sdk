@@ -115,7 +115,7 @@ impl FullnodeClient {
 
     /// Gets the current ledger information.
     pub async fn get_ledger_info(&self) -> AptosResult<AptosResponse<LedgerInfo>> {
-        let url = self.build_url("")?;
+        let url = self.build_url("");
         self.get_json(url).await
     }
 
@@ -126,7 +126,7 @@ impl FullnodeClient {
         &self,
         address: AccountAddress,
     ) -> AptosResult<AptosResponse<AccountData>> {
-        let url = self.build_url(&format!("accounts/{address}"))?;
+        let url = self.build_url(&format!("accounts/{address}"));
         self.get_json(url).await
     }
 
@@ -144,7 +144,7 @@ impl FullnodeClient {
         &self,
         address: AccountAddress,
     ) -> AptosResult<AptosResponse<Vec<Resource>>> {
-        let url = self.build_url(&format!("accounts/{address}/resources"))?;
+        let url = self.build_url(&format!("accounts/{address}/resources"));
         self.get_json(url).await
     }
 
@@ -158,7 +158,7 @@ impl FullnodeClient {
             "accounts/{}/resource/{}",
             address,
             urlencoding::encode(resource_type)
-        ))?;
+        ));
         self.get_json(url).await
     }
 
@@ -167,7 +167,7 @@ impl FullnodeClient {
         &self,
         address: AccountAddress,
     ) -> AptosResult<AptosResponse<Vec<MoveModule>>> {
-        let url = self.build_url(&format!("accounts/{address}/modules"))?;
+        let url = self.build_url(&format!("accounts/{address}/modules"));
         self.get_json(url).await
     }
 
@@ -177,7 +177,7 @@ impl FullnodeClient {
         address: AccountAddress,
         module_name: &str,
     ) -> AptosResult<AptosResponse<MoveModule>> {
-        let url = self.build_url(&format!("accounts/{address}/module/{module_name}"))?;
+        let url = self.build_url(&format!("accounts/{address}/module/{module_name}"));
         self.get_json(url).await
     }
 
@@ -217,7 +217,7 @@ impl FullnodeClient {
         &self,
         signed_txn: &SignedTransaction,
     ) -> AptosResult<AptosResponse<PendingTransaction>> {
-        let url = self.build_url("transactions")?;
+        let url = self.build_url("transactions");
         let bcs_bytes = signed_txn.to_bcs()?;
         let client = self.client.clone();
         let retry_config = self.retry_config.clone();
@@ -258,7 +258,7 @@ impl FullnodeClient {
         &self,
         hash: &HashValue,
     ) -> AptosResult<AptosResponse<serde_json::Value>> {
-        let url = self.build_url(&format!("transactions/by_hash/{hash}"))?;
+        let url = self.build_url(&format!("transactions/by_hash/{hash}"));
         self.get_json(url).await
     }
 
@@ -327,7 +327,7 @@ impl FullnodeClient {
         &self,
         signed_txn: &SignedTransaction,
     ) -> AptosResult<AptosResponse<Vec<serde_json::Value>>> {
-        let url = self.build_url("transactions/simulate")?;
+        let url = self.build_url("transactions/simulate");
         let bcs_bytes = signed_txn.to_bcs()?;
         let client = self.client.clone();
         let retry_config = self.retry_config.clone();
@@ -357,7 +357,7 @@ impl FullnodeClient {
 
     /// Gets the current gas estimation.
     pub async fn estimate_gas_price(&self) -> AptosResult<AptosResponse<GasEstimation>> {
-        let url = self.build_url("estimate_gas_price")?;
+        let url = self.build_url("estimate_gas_price");
         self.get_json(url).await
     }
 
@@ -370,7 +370,7 @@ impl FullnodeClient {
         type_args: Vec<String>,
         args: Vec<serde_json::Value>,
     ) -> AptosResult<AptosResponse<Vec<serde_json::Value>>> {
-        let url = self.build_url("view")?;
+        let url = self.build_url("view");
 
         let body = serde_json::json!({
             "function": function,
@@ -418,7 +418,7 @@ impl FullnodeClient {
             address,
             urlencoding::encode(event_handle_struct),
             field_name
-        ))?;
+        ));
 
         {
             let mut query = url.query_pairs_mut();
@@ -441,7 +441,7 @@ impl FullnodeClient {
         height: u64,
         with_transactions: bool,
     ) -> AptosResult<AptosResponse<serde_json::Value>> {
-        let mut url = self.build_url(&format!("blocks/by_height/{height}"))?;
+        let mut url = self.build_url(&format!("blocks/by_height/{height}"));
         url.query_pairs_mut()
             .append_pair("with_transactions", &with_transactions.to_string());
         self.get_json(url).await
@@ -453,7 +453,7 @@ impl FullnodeClient {
         version: u64,
         with_transactions: bool,
     ) -> AptosResult<AptosResponse<serde_json::Value>> {
-        let mut url = self.build_url(&format!("blocks/by_version/{version}"))?;
+        let mut url = self.build_url(&format!("blocks/by_version/{version}"));
         url.query_pairs_mut()
             .append_pair("with_transactions", &with_transactions.to_string());
         self.get_json(url).await
@@ -461,7 +461,7 @@ impl FullnodeClient {
 
     // === Helper Methods ===
 
-    fn build_url(&self, path: &str) -> AptosResult<Url> {
+    fn build_url(&self, path: &str) -> Url {
         let mut url = self.config.fullnode_url().clone();
         if !path.is_empty() {
             // Ensure base path ends with /
@@ -471,7 +471,7 @@ impl FullnodeClient {
             // Append the path segment
             url.set_path(&format!("{}{}", url.path(), path));
         }
-        Ok(url)
+        url
     }
 
     async fn get_json<T: for<'de> serde::Deserialize<'de>>(
@@ -594,7 +594,7 @@ mod tests {
     #[test]
     fn test_build_url() {
         let client = FullnodeClient::new(AptosConfig::testnet()).unwrap();
-        let url = client.build_url("accounts/0x1").unwrap();
+        let url = client.build_url("accounts/0x1");
         assert!(url.as_str().contains("accounts/0x1"));
     }
 

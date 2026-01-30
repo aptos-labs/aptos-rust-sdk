@@ -114,29 +114,21 @@ impl SimulationResult {
         let changes = data
             .get("changes")
             .and_then(serde_json::Value::as_array)
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|c| StateChange::from_json(c).ok())
-                    .collect()
-            })
+            .map(|arr| arr.iter().map(StateChange::from_json).collect())
             .unwrap_or_default();
 
         // Parse events
         let events = data
             .get("events")
             .and_then(|v| v.as_array())
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|e| SimulatedEvent::from_json(e).ok())
-                    .collect()
-            })
+            .map(|arr| arr.iter().map(SimulatedEvent::from_json).collect())
             .unwrap_or_default();
 
         // Parse VM error if present
         let vm_error = if success {
             None
         } else {
-            VmError::from_status(&vm_status)
+            Some(VmError::from_status(&vm_status))
         };
 
         Ok(Self {
@@ -268,8 +260,8 @@ pub struct StateChange {
 }
 
 impl StateChange {
-    fn from_json(json: &serde_json::Value) -> AptosResult<Self> {
-        Ok(Self {
+    fn from_json(json: &serde_json::Value) -> Self {
+        Self {
             change_type: json
                 .get("type")
                 .and_then(serde_json::Value::as_str)
@@ -290,7 +282,7 @@ impl StateChange {
                 .and_then(serde_json::Value::as_str)
                 .map(ToString::to_string),
             data: json.get("data").cloned(),
-        })
+        }
     }
 
     /// Returns true if this is a resource write.
@@ -316,8 +308,8 @@ pub struct SimulatedEvent {
 }
 
 impl SimulatedEvent {
-    fn from_json(json: &serde_json::Value) -> AptosResult<Self> {
-        Ok(Self {
+    fn from_json(json: &serde_json::Value) -> Self {
+        Self {
             event_type: json
                 .get("type")
                 .and_then(|v| v.as_str())
@@ -329,7 +321,7 @@ impl SimulatedEvent {
                 .and_then(|s| s.parse().ok())
                 .unwrap_or(0),
             data: json.get("data").cloned().unwrap_or(serde_json::Value::Null),
-        })
+        }
     }
 }
 
@@ -347,7 +339,7 @@ pub struct VmError {
 }
 
 impl VmError {
-    fn from_status(status: &str) -> Option<Self> {
+    fn from_status(status: &str) -> Self {
         let category = VmErrorCategory::from_status(status);
 
         // Try to extract abort code
@@ -371,12 +363,12 @@ impl VmError {
             None
         };
 
-        Some(Self {
+        Self {
             category,
             status: status.to_string(),
             abort_code,
             location,
-        })
+        }
     }
 
     /// Returns true if this is an insufficient balance error.
