@@ -56,6 +56,10 @@ impl Bls12381PrivateKey {
     /// Creates a private key from a 32-byte seed.
     ///
     /// This uses the BLS key derivation function to derive a key from the seed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the seed is less than 32 bytes or if key derivation fails.
     pub fn from_seed(seed: &[u8]) -> AptosResult<Self> {
         if seed.len() < 32 {
             return Err(AptosError::InvalidPrivateKey(
@@ -63,11 +67,15 @@ impl Bls12381PrivateKey {
             ));
         }
         let secret_key = SecretKey::key_gen(seed, &[])
-            .map_err(|e| AptosError::InvalidPrivateKey(format!("{:?}", e)))?;
+            .map_err(|e| AptosError::InvalidPrivateKey(format!("{e:?}")))?;
         Ok(Self { inner: secret_key })
     }
 
     /// Creates a private key from raw bytes.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the bytes length is not 32 bytes or if the key deserialization fails.
     pub fn from_bytes(bytes: &[u8]) -> AptosResult<Self> {
         if bytes.len() != BLS12381_PRIVATE_KEY_LENGTH {
             return Err(AptosError::InvalidPrivateKey(format!(
@@ -77,11 +85,15 @@ impl Bls12381PrivateKey {
             )));
         }
         let secret_key = SecretKey::from_bytes(bytes)
-            .map_err(|e| AptosError::InvalidPrivateKey(format!("{:?}", e)))?;
+            .map_err(|e| AptosError::InvalidPrivateKey(format!("{e:?}")))?;
         Ok(Self { inner: secret_key })
     }
 
     /// Creates a private key from a hex string.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if hex decoding fails or if the resulting bytes are invalid.
     pub fn from_hex(hex_str: &str) -> AptosResult<Self> {
         let hex_str = hex_str.strip_prefix("0x").unwrap_or(hex_str);
         let bytes = hex::decode(hex_str)?;
@@ -113,7 +125,7 @@ impl Bls12381PrivateKey {
 
     /// Creates a proof of possession for this key pair.
     ///
-    /// A proof of possession (PoP) proves ownership of the private key
+    /// A proof of possession (`PoP`) proves ownership of the private key
     /// and prevents rogue key attacks in aggregate signature schemes.
     pub fn create_proof_of_possession(&self) -> Bls12381ProofOfPossession {
         let pk = self.public_key();
@@ -149,6 +161,10 @@ pub struct Bls12381PublicKey {
 
 impl Bls12381PublicKey {
     /// Creates a public key from compressed bytes (48 bytes).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the bytes length is not 48 bytes or if the key deserialization fails.
     pub fn from_bytes(bytes: &[u8]) -> AptosResult<Self> {
         if bytes.len() != BLS12381_PUBLIC_KEY_LENGTH {
             return Err(AptosError::InvalidPublicKey(format!(
@@ -158,11 +174,15 @@ impl Bls12381PublicKey {
             )));
         }
         let public_key = BlstPublicKey::from_bytes(bytes)
-            .map_err(|e| AptosError::InvalidPublicKey(format!("{:?}", e)))?;
+            .map_err(|e| AptosError::InvalidPublicKey(format!("{e:?}")))?;
         Ok(Self { inner: public_key })
     }
 
     /// Creates a public key from a hex string.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if hex decoding fails or if the resulting bytes are invalid.
     pub fn from_hex(hex_str: &str) -> AptosResult<Self> {
         let hex_str = hex_str.strip_prefix("0x").unwrap_or(hex_str);
         let bytes = hex::decode(hex_str)?;
@@ -180,6 +200,10 @@ impl Bls12381PublicKey {
     }
 
     /// Verifies a signature against a message.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if signature verification fails.
     pub fn verify(&self, message: &[u8], signature: &Bls12381Signature) -> AptosResult<()> {
         let result = signature
             .inner
@@ -198,6 +222,10 @@ impl Bls12381PublicKey {
     /// The aggregated public key can be used to verify an aggregated signature.
     ///
     /// WARNING: This assumes all public keys have had their proofs-of-possession verified.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the list of public keys is empty or if aggregation fails.
     pub fn aggregate(public_keys: &[&Bls12381PublicKey]) -> AptosResult<Bls12381PublicKey> {
         if public_keys.is_empty() {
             return Err(AptosError::InvalidPublicKey(
@@ -206,7 +234,7 @@ impl Bls12381PublicKey {
         }
         let blst_pks: Vec<&BlstPublicKey> = public_keys.iter().map(|pk| &pk.inner).collect();
         let agg_pk = blst::min_pk::AggregatePublicKey::aggregate(&blst_pks, false)
-            .map_err(|e| AptosError::InvalidPublicKey(format!("{:?}", e)))?;
+            .map_err(|e| AptosError::InvalidPublicKey(format!("{e:?}")))?;
         Ok(Bls12381PublicKey {
             inner: agg_pk.to_public_key(),
         })
@@ -216,6 +244,11 @@ impl Bls12381PublicKey {
 impl PublicKey for Bls12381PublicKey {
     const LENGTH: usize = BLS12381_PUBLIC_KEY_LENGTH;
 
+    /// Creates a public key from compressed bytes (48 bytes).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the bytes length is not 48 bytes or if the key deserialization fails.
     fn from_bytes(bytes: &[u8]) -> AptosResult<Self> {
         Bls12381PublicKey::from_bytes(bytes)
     }
@@ -228,6 +261,11 @@ impl PublicKey for Bls12381PublicKey {
 impl Verifier for Bls12381PublicKey {
     type Signature = Bls12381Signature;
 
+    /// Verifies a signature against a message.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if signature verification fails.
     fn verify(&self, message: &[u8], signature: &Bls12381Signature) -> AptosResult<()> {
         Bls12381PublicKey::verify(self, message, signature)
     }
@@ -281,6 +319,10 @@ pub struct Bls12381Signature {
 
 impl Bls12381Signature {
     /// Creates a signature from compressed bytes (96 bytes).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the bytes length is not 96 bytes or if the signature deserialization fails.
     pub fn from_bytes(bytes: &[u8]) -> AptosResult<Self> {
         if bytes.len() != BLS12381_SIGNATURE_LENGTH {
             return Err(AptosError::InvalidSignature(format!(
@@ -290,11 +332,15 @@ impl Bls12381Signature {
             )));
         }
         let signature = BlstSignature::from_bytes(bytes)
-            .map_err(|e| AptosError::InvalidSignature(format!("{:?}", e)))?;
+            .map_err(|e| AptosError::InvalidSignature(format!("{e:?}")))?;
         Ok(Self { inner: signature })
     }
 
     /// Creates a signature from a hex string.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if hex decoding fails or if the resulting bytes are invalid.
     pub fn from_hex(hex_str: &str) -> AptosResult<Self> {
         let hex_str = hex_str.strip_prefix("0x").unwrap_or(hex_str);
         let bytes = hex::decode(hex_str)?;
@@ -317,6 +363,10 @@ impl Bls12381Signature {
     ///
     /// The aggregated signature can be verified against an aggregated public key
     /// for the same message, or against individual public keys for different messages.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the list of signatures is empty or if aggregation fails.
     pub fn aggregate(signatures: &[&Bls12381Signature]) -> AptosResult<Bls12381Signature> {
         if signatures.is_empty() {
             return Err(AptosError::InvalidSignature(
@@ -325,7 +375,7 @@ impl Bls12381Signature {
         }
         let blst_sigs: Vec<&BlstSignature> = signatures.iter().map(|s| &s.inner).collect();
         let agg_sig = blst::min_pk::AggregateSignature::aggregate(&blst_sigs, false)
-            .map_err(|e| AptosError::InvalidSignature(format!("{:?}", e)))?;
+            .map_err(|e| AptosError::InvalidSignature(format!("{e:?}")))?;
         Ok(Bls12381Signature {
             inner: agg_sig.to_signature(),
         })
@@ -336,6 +386,11 @@ impl Signature for Bls12381Signature {
     type PublicKey = Bls12381PublicKey;
     const LENGTH: usize = BLS12381_SIGNATURE_LENGTH;
 
+    /// Creates a signature from compressed bytes (96 bytes).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the bytes length is not 96 bytes or if the signature deserialization fails.
     fn from_bytes(bytes: &[u8]) -> AptosResult<Self> {
         Bls12381Signature::from_bytes(bytes)
     }
@@ -387,7 +442,7 @@ impl<'de> Deserialize<'de> for Bls12381Signature {
 
 /// A BLS12-381 proof of possession.
 ///
-/// A proof of possession (PoP) proves ownership of the private key corresponding
+/// A proof of possession (`PoP`) proves ownership of the private key corresponding
 /// to a public key. This prevents rogue key attacks in aggregate signature schemes.
 #[derive(Clone, PartialEq, Eq)]
 pub struct Bls12381ProofOfPossession {
@@ -396,6 +451,10 @@ pub struct Bls12381ProofOfPossession {
 
 impl Bls12381ProofOfPossession {
     /// Creates a proof of possession from compressed bytes (96 bytes).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the bytes length is not 96 bytes or if the proof of possession deserialization fails.
     pub fn from_bytes(bytes: &[u8]) -> AptosResult<Self> {
         if bytes.len() != BLS12381_POP_LENGTH {
             return Err(AptosError::InvalidSignature(format!(
@@ -405,11 +464,15 @@ impl Bls12381ProofOfPossession {
             )));
         }
         let pop = BlstSignature::from_bytes(bytes)
-            .map_err(|e| AptosError::InvalidSignature(format!("{:?}", e)))?;
+            .map_err(|e| AptosError::InvalidSignature(format!("{e:?}")))?;
         Ok(Self { inner: pop })
     }
 
     /// Creates a proof of possession from a hex string.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if hex decoding fails or if the resulting bytes are invalid.
     pub fn from_hex(hex_str: &str) -> AptosResult<Self> {
         let hex_str = hex_str.strip_prefix("0x").unwrap_or(hex_str);
         let bytes = hex::decode(hex_str)?;
@@ -428,7 +491,11 @@ impl Bls12381ProofOfPossession {
 
     /// Verifies this proof of possession against a public key.
     ///
-    /// Returns Ok(()) if the PoP is valid, or an error if invalid.
+    /// Returns Ok(()) if the `PoP` is valid, or an error if invalid.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if proof of possession verification fails.
     pub fn verify(&self, public_key: &Bls12381PublicKey) -> AptosResult<()> {
         let pk_bytes = public_key.to_bytes();
         let result = self

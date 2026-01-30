@@ -22,6 +22,10 @@ pub trait Verifier {
     type Signature: Signature;
 
     /// Verifies that the signature is valid for the given message.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the signature is invalid for the message.
     fn verify(&self, message: &[u8], signature: &Self::Signature) -> AptosResult<()>;
 }
 
@@ -31,6 +35,10 @@ pub trait PublicKey: Clone + Sized {
     const LENGTH: usize;
 
     /// Creates a public key from bytes.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the bytes have an invalid length or format.
     fn from_bytes(bytes: &[u8]) -> AptosResult<Self>;
 
     /// Returns the public key as bytes.
@@ -51,6 +59,10 @@ pub trait Signature: Clone + Sized {
     const LENGTH: usize;
 
     /// Creates a signature from bytes.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the bytes have an invalid length or format.
     fn from_bytes(bytes: &[u8]) -> AptosResult<Self>;
 
     /// Returns the signature as bytes.

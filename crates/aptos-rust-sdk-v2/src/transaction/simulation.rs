@@ -62,6 +62,10 @@ pub struct SimulationResult {
 
 impl SimulationResult {
     /// Parses a simulation result from the API response.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the response is empty or if parsing the JSON fails.
     pub fn from_response(response: Vec<serde_json::Value>) -> AptosResult<Self> {
         let data = response.into_iter().next().ok_or_else(|| AptosError::Api {
             status_code: 200,
@@ -74,6 +78,10 @@ impl SimulationResult {
     }
 
     /// Parses a simulation result from JSON.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the JSON structure is invalid or missing required fields.
     pub fn from_json(data: serde_json::Value) -> AptosResult<Self> {
         let success = data
             .get("success")

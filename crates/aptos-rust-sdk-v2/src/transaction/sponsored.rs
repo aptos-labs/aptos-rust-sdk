@@ -192,6 +192,10 @@ impl SponsoredTransactionBuilder {
     ///
     /// This returns a `FeePayerRawTransaction` that can be signed later
     /// by the sender, secondary signers, and fee payer.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `sender`, `sequence_number`, `payload`, `chain_id`, or `fee_payer` is not set.
     pub fn build(self) -> AptosResult<FeePayerRawTransaction> {
         let sender = self
             .sender_address
@@ -251,6 +255,10 @@ impl SponsoredTransactionBuilder {
     ///     .chain_id(ChainId::testnet())
     ///     .build_and_sign(&user, &[], &sponsor)?;
     /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if building the transaction fails or if any signer fails to sign.
     pub fn build_and_sign<S, F>(
         self,
         sender: &S,
@@ -287,6 +295,10 @@ impl SponsoredTransactionBuilder {
 ///     &fee_payer_account,
 /// )?;
 /// ```
+///
+/// # Errors
+///
+/// Returns an error if generating the signing message fails or if any signer fails to sign.
 pub fn sign_sponsored_transaction<S, F>(
     fee_payer_txn: &FeePayerRawTransaction,
     sender: &S,
@@ -306,7 +318,7 @@ where
         sender.signature_scheme(),
         sender_public_key,
         sender_signature,
-    );
+    )?;
 
     // Sign with secondary signers
     let mut secondary_auths = Vec::with_capacity(secondary_signers.len());
@@ -317,7 +329,7 @@ where
             signer.signature_scheme(),
             public_key,
             signature,
-        ));
+        )?);
     }
 
     // Sign with fee payer
@@ -327,7 +339,7 @@ where
         fee_payer.signature_scheme(),
         fee_payer_public_key,
         fee_payer_signature,
-    );
+    )?;
 
     let authenticator = TransactionAuthenticator::fee_payer(
         sender_auth,
@@ -344,22 +356,30 @@ where
 }
 
 /// Creates an account authenticator from signature components.
+///
+/// # Errors
+///
+/// Returns an error if the signature scheme is not recognized.
 fn make_account_authenticator(
     scheme: u8,
     public_key: Vec<u8>,
     signature: Vec<u8>,
-) -> AccountAuthenticator {
+) -> AptosResult<AccountAuthenticator> {
     match scheme {
-        crate::crypto::ED25519_SCHEME => AccountAuthenticator::ed25519(public_key, signature),
-        crate::crypto::MULTI_ED25519_SCHEME => AccountAuthenticator::MultiEd25519 {
+        crate::crypto::ED25519_SCHEME => Ok(AccountAuthenticator::ed25519(public_key, signature)),
+        crate::crypto::MULTI_ED25519_SCHEME => Ok(AccountAuthenticator::MultiEd25519 {
             public_key,
             signature,
-        },
-        crate::crypto::MULTI_KEY_SCHEME => AccountAuthenticator::multi_key(public_key, signature),
-        // For other/unknown schemes, default to Ed25519 format
-        // TODO: throw error if it doesn't match a scheme
-        //TODO: Where's Single Key scheme?
-        _ => AccountAuthenticator::ed25519(public_key, signature),
+        }),
+        crate::crypto::SINGLE_KEY_SCHEME => {
+            Ok(AccountAuthenticator::single_key(public_key, signature))
+        }
+        crate::crypto::MULTI_KEY_SCHEME => {
+            Ok(AccountAuthenticator::multi_key(public_key, signature))
+        }
+        _ => Err(AptosError::InvalidSignature(format!(
+            "unknown signature scheme: {scheme}"
+        ))),
     }
 }
 
@@ -393,6 +413,11 @@ impl PartiallySigned {
     }
 
     /// Signs as the sender.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if generating the signing message fails, if signing fails,
+    /// or if the signature scheme is not recognized.
     pub fn sign_as_sender<A: Account>(&mut self, sender: &A) -> AptosResult<()> {
         let signing_message = self.fee_payer_txn.signing_message()?;
         let signature = sender.sign(&signing_message)?;
@@ -401,11 +426,16 @@ impl PartiallySigned {
             sender.signature_scheme(),
             public_key,
             signature,
-        ));
+        )?);
         Ok(())
     }
 
     /// Signs as a secondary signer at the given index.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the index is out of bounds, if generating the signing message fails,
+    /// if signing fails, or if the signature scheme is not recognized.
     pub fn sign_as_secondary<A: Account>(&mut self, index: usize, signer: &A) -> AptosResult<()> {
         if index >= self.secondary_auths.len() {
             return Err(AptosError::transaction(format!(
@@ -422,11 +452,16 @@ impl PartiallySigned {
             signer.signature_scheme(),
             public_key,
             signature,
-        ));
+        )?);
         Ok(())
     }
 
     /// Signs as the fee payer.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if generating the signing message fails, if signing fails,
+    /// or if the signature scheme is not recognized.
     pub fn sign_as_fee_payer<A: Account>(&mut self, fee_payer: &A) -> AptosResult<()> {
         let signing_message = self.fee_payer_txn.signing_message()?;
         let signature = fee_payer.sign(&signing_message)?;
@@ -435,7 +470,7 @@ impl PartiallySigned {
             fee_payer.signature_scheme(),
             public_key,
             signature,
-        ));
+        )?);
         Ok(())
     }
 
@@ -449,6 +484,10 @@ impl PartiallySigned {
     /// Finalizes the transaction if all signatures are present.
     ///
     /// Returns an error if any signatures are missing.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the sender signature, fee payer signature, or any secondary signer signature is missing.
     pub fn finalize(self) -> AptosResult<SignedTransaction> {
         let sender_auth = self
             .sender_auth
@@ -512,6 +551,10 @@ pub trait Sponsor: Account + Sized {
     ///     ChainId::testnet(),
     /// )?;
     /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if building the transaction fails or if any signer fails to sign.
     fn sponsor<S: Account>(
         &self,
         sender: &S,
@@ -529,6 +572,10 @@ pub trait Sponsor: Account + Sized {
     }
 
     /// Sponsors a transaction with custom gas settings.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if building the transaction fails or if any signer fails to sign.
     fn sponsor_with_gas<S: Account>(
         &self,
         sender: &S,
@@ -571,6 +618,10 @@ impl<A: Account + Sized> Sponsor for A {}
 ///     ChainId::testnet(),
 /// )?;
 /// ```
+///
+/// # Errors
+///
+/// Returns an error if building the transaction fails or if any signer fails to sign.
 pub fn sponsor_transaction<S, F>(
     sender: &S,
     sender_sequence_number: u64,

@@ -29,6 +29,11 @@ impl Mnemonic {
     /// # Arguments
     ///
     /// * `word_count` - Number of words (12, 15, 18, 21, or 24)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the word count is not one of 12, 15, 18, 21, or 24,
+    /// or if entropy generation fails.
     pub fn generate(word_count: usize) -> AptosResult<Self> {
         let entropy_bytes = match word_count {
             12 => 16, // 128 bits
@@ -55,6 +60,10 @@ impl Mnemonic {
     }
 
     /// Creates a mnemonic from an existing phrase.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the phrase is not a valid BIP-39 mnemonic.
     pub fn from_phrase(phrase: &str) -> AptosResult<Self> {
         // Validate the mnemonic
         let _mnemonic = bip39::Mnemonic::parse_normalized(phrase)
@@ -96,6 +105,10 @@ impl Mnemonic {
     /// Derives an Ed25519 private key using the Aptos derivation path.
     ///
     /// Path: `m/44'/637'/0'/0'/index'`
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if key derivation fails or the derived key is invalid.
     #[cfg(feature = "ed25519")]
     pub fn derive_ed25519_key(&self, index: u32) -> AptosResult<crate::crypto::Ed25519PrivateKey> {
         let seed = self.to_seed();

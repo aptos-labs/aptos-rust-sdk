@@ -153,6 +153,10 @@ impl EntryFunction {
     /// * `function_id` - Full function ID (e.g., "`0x1::coin::transfer`")
     /// * `type_args` - Type arguments
     /// * `args` - BCS-encoded arguments
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the function ID string is invalid.
     pub fn from_function_id(
         function_id: &str,
         type_args: Vec<TypeTag>,
@@ -173,6 +177,10 @@ impl EntryFunction {
     ///
     /// * `recipient` - The recipient's address
     /// * `amount` - Amount in octas (1 APT = 10^8 octas)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the module ID is invalid or if BCS encoding of arguments fails.
     pub fn apt_transfer(
         recipient: crate::types::AccountAddress,
         amount: u64,
@@ -196,6 +204,10 @@ impl EntryFunction {
     /// * `coin_type` - The coin type tag
     /// * `recipient` - The recipient's address
     /// * `amount` - Amount in the coin's smallest unit
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the module ID is invalid or if BCS encoding of arguments fails.
     pub fn coin_transfer(
         coin_type: TypeTag,
         recipient: crate::types::AccountAddress,

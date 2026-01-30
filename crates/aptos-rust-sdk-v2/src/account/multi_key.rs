@@ -153,6 +153,13 @@ impl MultiKeyAccount {
     ///
     /// * `private_keys` - The private keys (can be mixed types)
     /// * `threshold` - The required number of signatures (M in M-of-N)
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if:
+    /// - No private keys are provided
+    /// - The threshold exceeds the number of keys
+    /// - The multi-key public key creation fails (e.g., too many keys, invalid threshold)
     pub fn new(private_keys: Vec<AnyPrivateKey>, threshold: u8) -> AptosResult<Self> {
         if private_keys.is_empty() {
             return Err(AptosError::InvalidPrivateKey(
@@ -195,6 +202,13 @@ impl MultiKeyAccount {
     /// * `public_keys` - All the public keys in the account
     /// * `private_keys` - The private keys you own, with their indices
     /// * `threshold` - The required number of signatures
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if:
+    /// - The multi-key public key creation fails
+    /// - A private key index is out of bounds
+    /// - A private key doesn't match the public key at its index (wrong type or bytes)
     pub fn from_keys(
         public_keys: Vec<AnyPublicKey>,
         private_keys: Vec<(u8, AnyPrivateKey)>,
@@ -235,6 +249,10 @@ impl MultiKeyAccount {
     }
 
     /// Creates a view-only multi-key account (no signing capability).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the multi-key public key creation fails (e.g., no keys provided, too many keys, invalid threshold).
     pub fn view_only(public_keys: Vec<AnyPublicKey>, threshold: u8) -> AptosResult<Self> {
         let multi_public_key = MultiKeyPublicKey::new(public_keys, threshold)?;
         let address = multi_public_key.to_address();
@@ -293,6 +311,10 @@ impl MultiKeyAccount {
     /// Signs a message using the owned private keys.
     ///
     /// Will use up to `threshold` keys for signing.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if we don't have enough private keys to meet the threshold.
     pub fn sign_message(&self, message: &[u8]) -> AptosResult<MultiKeySignature> {
         let threshold = self.threshold() as usize;
         if self.private_keys.len() < threshold {
@@ -312,6 +334,12 @@ impl MultiKeyAccount {
     }
 
     /// Signs a message using specific key indices.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if:
+    /// - Not enough indices are provided to meet the threshold
+    /// - We don't own a private key at one of the specified indices
     pub fn sign_with_indices(
         &self,
         message: &[u8],
@@ -344,6 +372,10 @@ impl MultiKeyAccount {
     }
 
     /// Verifies a signature against a message.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if signature verification fails (e.g., invalid signature, insufficient signatures, signature mismatch).
     pub fn verify(&self, message: &[u8], signature: &MultiKeySignature) -> AptosResult<()> {
         self.public_key.verify(message, signature)
     }
@@ -354,6 +386,13 @@ impl MultiKeyAccount {
     }
 
     /// Collects individual signatures into a multi-key signature.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if:
+    /// - No signatures are provided
+    /// - Too many signatures are provided (more than 32)
+    /// - Signer indices are out of bounds or duplicated
     pub fn aggregate_signatures(
         signatures: Vec<(u8, AnySignature)>,
     ) -> AptosResult<MultiKeySignature> {
@@ -361,6 +400,10 @@ impl MultiKeyAccount {
     }
 
     /// Creates an individual signature contribution.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if we don't have a private key at the specified index.
     pub fn create_signature_contribution(
         &self,
         message: &[u8],

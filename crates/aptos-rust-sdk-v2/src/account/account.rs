@@ -19,6 +19,10 @@ impl AuthenticationKey {
     }
 
     /// Creates an authentication key from a byte slice.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the byte slice length is not exactly 32 bytes.
     pub fn from_bytes(bytes: &[u8]) -> AptosResult<Self> {
         if bytes.len() != 32 {
             return Err(crate::error::AptosError::InvalidAddress(format!(
@@ -32,6 +36,12 @@ impl AuthenticationKey {
     }
 
     /// Creates an authentication key from a hex string.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if:
+    /// - The hex string is invalid or cannot be decoded
+    /// - The decoded bytes are not exactly 32 bytes long
     pub fn from_hex(hex_str: &str) -> AptosResult<Self> {
         let hex_str = hex_str.strip_prefix("0x").unwrap_or(hex_str);
         let bytes = hex::decode(hex_str)?;

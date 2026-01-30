@@ -72,6 +72,11 @@ impl HashValue {
     }
 
     /// Creates a hash from a hex string (with or without `0x` prefix).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the hex string contains invalid UTF-8, is not exactly 64 hex
+    /// characters (excluding the optional `0x` prefix), or contains invalid hex characters.
     pub fn from_hex<T: AsRef<[u8]>>(hex_str: T) -> AptosResult<Self> {
         let hex_str = hex_str.as_ref();
         let hex_str = if hex_str.starts_with(b"0x") || hex_str.starts_with(b"0X") {
@@ -98,6 +103,10 @@ impl HashValue {
     }
 
     /// Creates a hash from a byte slice.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the byte slice is not exactly 32 bytes long.
     pub fn from_bytes<T: AsRef<[u8]>>(bytes: T) -> AptosResult<Self> {
         let bytes = bytes.as_ref();
         if bytes.len() != HASH_LENGTH {

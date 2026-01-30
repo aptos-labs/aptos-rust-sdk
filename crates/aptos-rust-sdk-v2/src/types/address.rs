@@ -74,6 +74,12 @@ impl AccountAddress {
     ///
     /// The hex string must contain at least one hex digit. Empty strings and
     /// bare "0x" prefixes are rejected as invalid addresses.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the input is empty, contains invalid UTF-8, has no hex digits
+    /// after the prefix, exceeds the maximum length (64 hex characters), or contains
+    /// invalid hex characters.
     pub fn from_hex<T: AsRef<[u8]>>(hex_str: T) -> AptosResult<Self> {
         let hex_str = hex_str.as_ref();
 
@@ -119,6 +125,10 @@ impl AccountAddress {
     }
 
     /// Creates an address from a byte slice.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the byte slice is not exactly 32 bytes long.
     pub fn from_bytes<T: AsRef<[u8]>>(bytes: T) -> AptosResult<Self> {
         let bytes = bytes.as_ref();
         if bytes.len() != ADDRESS_LENGTH {

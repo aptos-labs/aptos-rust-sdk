@@ -52,6 +52,10 @@ impl Ed25519PublicKey {
     /// Attempts to create an `Ed25519PublicKey` from a byte slice.
     ///
     /// Returns an error if the input is not exactly 32 bytes.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the input slice is not exactly 32 bytes.
     pub fn try_from_bytes(bytes: &[u8]) -> crate::error::AptosResult<Self> {
         if bytes.len() != 32 {
             return Err(crate::error::AptosError::InvalidPublicKey(format!(
@@ -112,6 +116,8 @@ impl From<Vec<u8>> for Ed25519Signature {
 
 impl Ed25519Signature {
     /// Attempts to create an `Ed25519Signature` from a byte slice.
+    ///
+    /// # Errors
     ///
     /// Returns an error if the input is not exactly 64 bytes.
     pub fn try_from_bytes(bytes: &[u8]) -> crate::error::AptosResult<Self> {
@@ -201,6 +207,13 @@ pub enum AccountAuthenticator {
         /// The signature.
         signature: Vec<u8>,
     },
+    /// Single-key authentication (ed25519, secp256k1 and secp256r1).
+    SingleKey {
+        /// The public key.
+        public_key: Vec<u8>,
+        /// The signature.
+        signature: Vec<u8>,
+    },
     /// Multi-key authentication (mixed signature types).
     MultiKey {
         /// The public key.
@@ -208,6 +221,8 @@ pub enum AccountAuthenticator {
         /// The signature.
         signature: Vec<u8>,
     },
+    /// No account authenticator used for simulation only.
+    NoAccountAuthenticator,
 }
 
 /// Ed25519 authenticator helper.
@@ -309,6 +324,13 @@ impl AccountAuthenticator {
             signature: signature.into(),
         }
     }
+    /// Creates a single-key account authenticator.
+    pub fn single_key(public_key: Vec<u8>, signature: Vec<u8>) -> Self {
+        Self::SingleKey {
+            public_key,
+            signature,
+        }
+    }
 
     /// Creates a multi-key account authenticator.
     pub fn multi_key(public_key: Vec<u8>, signature: Vec<u8>) -> Self {
@@ -316,6 +338,11 @@ impl AccountAuthenticator {
             public_key,
             signature,
         }
+    }
+
+    /// Creates a no account authenticator.
+    pub fn no_account_authenticator() -> Self {
+        Self::NoAccountAuthenticator
     }
 }
 
@@ -566,5 +593,114 @@ mod tests {
         let deserialized: AccountAuthenticator = aptos_bcs::from_bytes(&serialized).unwrap();
 
         assert_eq!(auth, deserialized);
+    }
+
+    #[test]
+    fn test_account_authenticator_single_key() {
+        let auth = AccountAuthenticator::single_key(vec![0x55; 33], vec![0x66; 65]);
+        match auth {
+            AccountAuthenticator::SingleKey {
+                public_key,
+                signature,
+            } => {
+                assert_eq!(public_key.len(), 33);
+                assert_eq!(signature.len(), 65);
+            }
+            _ => panic!("Expected SingleKey variant"),
+        }
+    }
+
+    #[test]
+    fn test_account_authenticator_single_key_bcs_roundtrip() {
+        let auth = AccountAuthenticator::SingleKey {
+            public_key: vec![0x77; 33],
+            signature: vec![0x88; 65],
+        };
+
+        let serialized = aptos_bcs::to_bytes(&auth).unwrap();
+        // SingleKey should be variant index 2
+        assert_eq!(serialized[0], 2, "SingleKey variant index should be 2");
+        let deserialized: AccountAuthenticator = aptos_bcs::from_bytes(&serialized).unwrap();
+        assert_eq!(auth, deserialized);
+    }
+
+    #[test]
+    fn test_no_account_authenticator() {
+        let auth = AccountAuthenticator::no_account_authenticator();
+        match auth {
+            AccountAuthenticator::NoAccountAuthenticator => {}
+            _ => panic!("Expected NoAccountAuthenticator variant"),
+        }
+    }
+
+    #[test]
+    fn test_no_account_authenticator_bcs_roundtrip() {
+        let auth = AccountAuthenticator::NoAccountAuthenticator;
+
+        let serialized = aptos_bcs::to_bytes(&auth).unwrap();
+        // NoAccountAuthenticator should be variant index 4
+        assert_eq!(
+            serialized[0], 4,
+            "NoAccountAuthenticator variant index should be 4"
+        );
+        // It should be just the variant index, no payload
+        assert_eq!(
+            serialized.len(),
+            1,
+            "NoAccountAuthenticator should be 1 byte"
+        );
+        let deserialized: AccountAuthenticator = aptos_bcs::from_bytes(&serialized).unwrap();
+        assert_eq!(auth, deserialized);
+    }
+
+    #[test]
+    fn test_single_sender_with_single_key() {
+        let sender = AccountAuthenticator::single_key(vec![0x99; 33], vec![0xaa; 65]);
+        let auth = TransactionAuthenticator::single_sender(sender);
+
+        match auth {
+            TransactionAuthenticator::SingleSender { sender } => match sender {
+                AccountAuthenticator::SingleKey { public_key, .. } => {
+                    assert_eq!(public_key.len(), 33);
+                }
+                _ => panic!("Expected SingleKey sender"),
+            },
+            _ => panic!("Expected SingleSender variant"),
+        }
+    }
+
+    #[test]
+    fn test_account_authenticator_variant_indices() {
+        // Verify all variant indices match Aptos core
+        let ed25519 = AccountAuthenticator::ed25519(vec![0; 32], vec![0; 64]);
+        let multi_ed25519 = AccountAuthenticator::MultiEd25519 {
+            public_key: vec![0; 64],
+            signature: vec![0; 128],
+        };
+        let single_key = AccountAuthenticator::single_key(vec![0; 33], vec![0; 65]);
+        let multi_key = AccountAuthenticator::multi_key(vec![0; 100], vec![0; 200]);
+        let no_account = AccountAuthenticator::no_account_authenticator();
+
+        assert_eq!(aptos_bcs::to_bytes(&ed25519).unwrap()[0], 0, "Ed25519 = 0");
+        assert_eq!(
+            aptos_bcs::to_bytes(&multi_ed25519).unwrap()[0],
+            1,
+            "MultiEd25519 = 1"
+        );
+        assert_eq!(
+            aptos_bcs::to_bytes(&single_key).unwrap()[0],
+            2,
+            "SingleKey = 2"
+        );
+        assert_eq!(
+            aptos_bcs::to_bytes(&multi_key).unwrap()[0],
+            3,
+            "MultiKey = 3"
+        );
+        assert_eq!(
+            aptos_bcs::to_bytes(&no_account).unwrap()[0],
+            4,
+            "NoAccountAuthenticator = 4"
+        );
     }
 }

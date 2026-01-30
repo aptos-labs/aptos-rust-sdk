@@ -60,6 +60,10 @@ pub struct Aptos {
 
 impl Aptos {
     /// Creates a new Aptos client with the given configuration.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the HTTP client fails to build (e.g., invalid TLS configuration).
     pub fn new(config: AptosConfig) -> AptosResult<Self> {
         let fullnode = Arc::new(FullnodeClient::new(config.clone())?);
 
@@ -80,21 +84,37 @@ impl Aptos {
     }
 
     /// Creates a client for testnet with default settings.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the HTTP client fails to build (e.g., invalid TLS configuration).
     pub fn testnet() -> AptosResult<Self> {
         Self::new(AptosConfig::testnet())
     }
 
     /// Creates a client for devnet with default settings.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the HTTP client fails to build (e.g., invalid TLS configuration).
     pub fn devnet() -> AptosResult<Self> {
         Self::new(AptosConfig::devnet())
     }
 
     /// Creates a client for mainnet with default settings.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the HTTP client fails to build (e.g., invalid TLS configuration).
     pub fn mainnet() -> AptosResult<Self> {
         Self::new(AptosConfig::mainnet())
     }
 
     /// Creates a client for local development network.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the HTTP client fails to build (e.g., invalid TLS configuration).
     pub fn local() -> AptosResult<Self> {
         Self::new(AptosConfig::local())
     }
@@ -124,6 +144,11 @@ impl Aptos {
     // === Ledger Info ===
 
     /// Gets the current ledger information.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the HTTP request fails, the API returns an error status code,
+    /// or the response cannot be parsed.
     pub async fn ledger_info(&self) -> AptosResult<crate::api::response::LedgerInfo> {
         let response = self.fullnode.get_ledger_info().await?;
         Ok(response.into_inner())
@@ -137,16 +162,31 @@ impl Aptos {
     // === Account ===
 
     /// Gets the sequence number for an account.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the HTTP request fails, the API returns an error status code
+    /// (e.g., account not found 404), or the response cannot be parsed.
     pub async fn get_sequence_number(&self, address: AccountAddress) -> AptosResult<u64> {
         self.fullnode.get_sequence_number(address).await
     }
 
     /// Gets the APT balance for an account.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the HTTP request fails, the API returns an error status code,
+    /// or the response cannot be parsed.
     pub async fn get_balance(&self, address: AccountAddress) -> AptosResult<u64> {
         self.fullnode.get_account_balance(address).await
     }
 
     /// Checks if an account exists.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the HTTP request fails or the API returns an error status code
+    /// other than 404 (not found). A 404 error is handled gracefully and returns `Ok(false)`.
     pub async fn account_exists(&self, address: AccountAddress) -> AptosResult<bool> {
         match self.fullnode.get_account(address).await {
             Ok(_) => Ok(true),
@@ -162,6 +202,12 @@ impl Aptos {
     /// Builds a transaction for the given account.
     ///
     /// This automatically fetches the sequence number and gas price.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if fetching the sequence number fails, fetching the gas price fails,
+    /// or if the transaction builder fails to construct a valid transaction (e.g., missing
+    /// required fields).
     pub async fn build_transaction<A: Account>(
         &self,
         sender: &A,
@@ -181,6 +227,12 @@ impl Aptos {
     }
 
     /// Signs and submits a transaction.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if building the transaction fails, signing fails (e.g., invalid key),
+    /// the transaction cannot be serialized to BCS, the HTTP request fails, or the API returns
+    /// an error status code.
     #[cfg(feature = "ed25519")]
     pub async fn sign_and_submit<A: Account>(
         &self,
@@ -193,6 +245,12 @@ impl Aptos {
     }
 
     /// Signs, submits, and waits for a transaction to complete.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if building the transaction fails, signing fails, submission fails,
+    /// the transaction times out waiting for commitment, the transaction execution fails,
+    /// or any HTTP/API errors occur.
     #[cfg(feature = "ed25519")]
     pub async fn sign_submit_and_wait<A: Account>(
         &self,
@@ -206,6 +264,11 @@ impl Aptos {
     }
 
     /// Submits a pre-signed transaction.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the transaction cannot be serialized to BCS, the HTTP request fails,
+    /// or the API returns an error status code.
     pub async fn submit_transaction(
         &self,
         signed_txn: &SignedTransaction,
@@ -214,6 +277,12 @@ impl Aptos {
     }
 
     /// Submits and waits for a pre-signed transaction.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if transaction submission fails, the transaction times out waiting
+    /// for commitment, the transaction execution fails (`vm_status` indicates failure),
+    /// or any HTTP/API errors occur.
     pub async fn submit_and_wait(
         &self,
         signed_txn: &SignedTransaction,
@@ -223,6 +292,11 @@ impl Aptos {
     }
 
     /// Simulates a transaction.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the transaction cannot be serialized to BCS, the HTTP request fails,
+    /// the API returns an error status code, or the response cannot be parsed as JSON.
     pub async fn simulate_transaction(
         &self,
         signed_txn: &SignedTransaction,
@@ -245,6 +319,11 @@ impl Aptos {
     ///     println!("Would fail: {}", result.error_message().unwrap_or_default());
     /// }
     /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if building the transaction fails, signing fails, simulation fails,
+    /// or the simulation response cannot be parsed.
     #[cfg(feature = "ed25519")]
     pub async fn simulate<A: Account>(
         &self,
@@ -258,6 +337,10 @@ impl Aptos {
     }
 
     /// Simulates a transaction with a pre-built signed transaction.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if simulation fails or the simulation response cannot be parsed.
     pub async fn simulate_signed(
         &self,
         signed_txn: &SignedTransaction,
@@ -276,6 +359,11 @@ impl Aptos {
     /// let gas = aptos.estimate_gas(&account, payload).await?;
     /// println!("Estimated gas: {}", gas);
     /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if simulation fails or if the simulation indicates the transaction
+    /// would fail (returns [`AptosError::SimulationFailed`]).
     #[cfg(feature = "ed25519")]
     pub async fn estimate_gas<A: Account>(
         &self,
@@ -305,6 +393,12 @@ impl Aptos {
     /// let result = aptos.simulate_and_submit(&account, payload).await?;
     /// println!("Transaction submitted: {}", result.hash);
     /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if building the transaction fails, signing fails, simulation fails,
+    /// the simulation indicates the transaction would fail (returns [`AptosError::SimulationFailed`]),
+    /// or transaction submission fails.
     #[cfg(feature = "ed25519")]
     pub async fn simulate_and_submit<A: Account>(
         &self,
@@ -333,6 +427,13 @@ impl Aptos {
     /// Simulates, submits, and waits for a transaction.
     ///
     /// Like `simulate_and_submit` but also waits for the transaction to complete.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if building the transaction fails, signing fails, simulation fails,
+    /// the simulation indicates the transaction would fail (returns [`AptosError::SimulationFailed`]),
+    /// submission fails, the transaction times out waiting for commitment, or the transaction
+    /// execution fails.
     #[cfg(feature = "ed25519")]
     pub async fn simulate_submit_and_wait<A: Account>(
         &self,
@@ -362,6 +463,12 @@ impl Aptos {
     // === Transfers ===
 
     /// Transfers APT from one account to another.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if building the transfer payload fails (e.g., invalid address),
+    /// signing fails, submission fails, the transaction times out, or the transaction
+    /// execution fails.
     #[cfg(feature = "ed25519")]
     pub async fn transfer_apt<A: Account>(
         &self,
@@ -375,6 +482,12 @@ impl Aptos {
     }
 
     /// Transfers a coin from one account to another.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if building the transfer payload fails (e.g., invalid type tag or address),
+    /// signing fails, submission fails, the transaction times out, or the transaction
+    /// execution fails.
     #[cfg(feature = "ed25519")]
     pub async fn transfer_coin<A: Account>(
         &self,
@@ -391,6 +504,11 @@ impl Aptos {
     // === View Functions ===
 
     /// Calls a view function.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the HTTP request fails, the API returns an error status code,
+    /// or the response cannot be parsed as JSON.
     pub async fn view(
         &self,
         function: &str,
@@ -406,6 +524,12 @@ impl Aptos {
     /// Funds an account using the faucet.
     ///
     /// This method waits for the faucet transactions to be confirmed before returning.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the faucet feature is not enabled, the faucet request fails
+    /// (e.g., rate limiting 429, server error 500), waiting for transaction confirmation
+    /// times out, or any HTTP/API errors occur.
     #[cfg(feature = "faucet")]
     pub async fn fund_account(
         &self,
@@ -434,6 +558,10 @@ impl Aptos {
     }
 
     /// Creates a funded account.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if funding the account fails (see [`fund_account`] for details).
     #[cfg(all(feature = "faucet", feature = "ed25519"))]
     pub async fn create_funded_account(
         &self,
@@ -479,6 +607,11 @@ impl Aptos {
     /// # Returns
     ///
     /// Results for each transaction in the batch.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if building any transaction fails, signing fails, or submission fails
+    /// for any transaction in the batch.
     #[cfg(feature = "ed25519")]
     pub async fn submit_batch<A: Account>(
         &self,
@@ -499,6 +632,11 @@ impl Aptos {
     /// # Returns
     ///
     /// Results for each transaction in the batch.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if building any transaction fails, signing fails, submission fails,
+    /// any transaction times out waiting for commitment, or any transaction execution fails.
     #[cfg(feature = "ed25519")]
     pub async fn submit_batch_and_wait<A: Account>(
         &self,
@@ -527,6 +665,11 @@ impl Aptos {
     ///     (addr3, 3_000_000),  // 0.03 APT
     /// ]).await?;
     /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if building any transfer payload fails, signing fails, submission fails,
+    /// any transaction times out, or any transaction execution fails.
     #[cfg(feature = "ed25519")]
     pub async fn batch_transfer_apt<A: Account>(
         &self,

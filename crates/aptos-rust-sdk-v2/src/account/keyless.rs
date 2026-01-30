@@ -26,6 +26,10 @@ pub struct KeylessSignature {
 
 impl KeylessSignature {
     /// Serializes the signature using BCS.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if BCS serialization fails.
     pub fn to_bcs(&self) -> AptosResult<Vec<u8>> {
         aptos_bcs::to_bytes(self).map_err(AptosError::bcs)
     }
@@ -155,6 +159,10 @@ impl Pepper {
     }
 
     /// Creates a pepper from hex.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the hex string is invalid or cannot be decoded.
     pub fn from_hex(hex_str: &str) -> AptosResult<Self> {
         let hex_str = hex_str.strip_prefix("0x").unwrap_or(hex_str);
         Ok(Self(hex::decode(hex_str)?))
@@ -182,6 +190,10 @@ impl ZkProof {
     }
 
     /// Creates a proof from hex.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the hex string is invalid or cannot be decoded.
     pub fn from_hex(hex_str: &str) -> AptosResult<Self> {
         let hex_str = hex_str.strip_prefix("0x").unwrap_or(hex_str);
         Ok(Self(hex::decode(hex_str)?))
@@ -332,6 +344,15 @@ impl KeylessAccount {
     ///
     /// Note: JWT signature validation is not performed. Validate the JWT
     /// using the OIDC provider before calling this method.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if:
+    /// - The JWT cannot be decoded or is missing required claims (iss, aud, sub, nonce)
+    /// - The JWT nonce doesn't match the ephemeral key's nonce
+    /// - The JWT is expired
+    /// - The pepper service fails to return a pepper
+    /// - The prover service fails to generate a proof
     pub async fn from_jwt(
         jwt: &str,
         ephemeral_key: EphemeralKeyPair,
@@ -405,6 +426,14 @@ impl KeylessAccount {
     }
 
     /// Refreshes the proof using a new JWT.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The JWT cannot be decoded
+    /// - The JWT nonce does not match the ephemeral key
+    /// - The JWT identity does not match the account
+    /// - The prover service fails to generate a new proof
     pub async fn refresh_proof(
         &mut self,
         jwt: &str,
@@ -499,7 +528,7 @@ impl AudClaim {
     fn first(&self) -> Option<&str> {
         match self {
             AudClaim::Single(value) => Some(value.as_str()),
-            AudClaim::Multiple(values) => values.first().map(|value| value.as_str()),
+            AudClaim::Multiple(values) => values.first().map(std::string::String::as_str),
         }
     }
 }
@@ -564,7 +593,7 @@ fn extract_claims(
         .aud
         .as_ref()
         .and_then(|aud| aud.first())
-        .map(|value| value.to_string())
+        .map(std::string::ToString::to_string)
         .ok_or_else(|| AptosError::InvalidJwt("missing aud claim".into()))?;
     let user_id = claims
         .sub
@@ -581,8 +610,7 @@ fn extract_claims(
     {
         let exp_secs = claims.exp.unwrap_or(0);
         return Err(AptosError::InvalidJwt(format!(
-            "JWT is expired (exp: {} seconds since UNIX_EPOCH)",
-            exp_secs
+            "JWT is expired (exp: {exp_secs} seconds since UNIX_EPOCH)"
         )));
     }
 

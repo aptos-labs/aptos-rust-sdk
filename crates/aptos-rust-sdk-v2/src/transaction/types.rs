@@ -55,6 +55,10 @@ impl RawTransaction {
     ///
     /// This is the message that should be signed to create a valid
     /// transaction authenticator.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if BCS serialization of the transaction fails.
     pub fn signing_message(&self) -> AptosResult<Vec<u8>> {
         let prefix = crate::crypto::sha3_256(b"APTOS::RawTransaction");
         let bcs_bytes = aptos_bcs::to_bytes(self).map_err(crate::error::AptosError::bcs)?;
@@ -66,6 +70,10 @@ impl RawTransaction {
     }
 
     /// Serializes this transaction to BCS bytes.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if BCS serialization fails.
     pub fn to_bcs(&self) -> AptosResult<Vec<u8>> {
         aptos_bcs::to_bytes(self).map_err(crate::error::AptosError::bcs)
     }
@@ -90,6 +98,10 @@ impl SignedTransaction {
     }
 
     /// Serializes this signed transaction to BCS bytes.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if BCS serialization fails.
     pub fn to_bcs(&self) -> AptosResult<Vec<u8>> {
         aptos_bcs::to_bytes(self).map_err(crate::error::AptosError::bcs)
     }
@@ -105,6 +117,10 @@ impl SignedTransaction {
     }
 
     /// Computes the transaction hash.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if BCS serialization of the transaction fails.
     pub fn hash(&self) -> AptosResult<HashValue> {
         let bcs_bytes = self.to_bcs()?;
         let prefix = crate::crypto::sha3_256(b"APTOS::Transaction");
@@ -163,6 +179,10 @@ impl MultiAgentRawTransaction {
     }
 
     /// Generates the signing message for multi-agent transactions.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if BCS serialization fails.
     pub fn signing_message(&self) -> AptosResult<Vec<u8>> {
         // Serialize as RawTransactionWithData::MultiAgent variant
         #[derive(Serialize)]
@@ -224,6 +244,10 @@ impl FeePayerRawTransaction {
     }
 
     /// Generates the signing message for fee payer transactions.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if BCS serialization fails.
     pub fn signing_message(&self) -> AptosResult<Vec<u8>> {
         #[derive(Serialize)]
         enum RawTransactionWithData<'a> {

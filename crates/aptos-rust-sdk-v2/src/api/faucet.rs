@@ -23,7 +23,8 @@ use url::Url;
 ///
 /// #[tokio::main]
 /// async fn main() -> anyhow::Result<()> {
-///     let client = FaucetClient::new(AptosConfig::testnet())?;
+///     let config = AptosConfig::testnet();
+///     let client = FaucetClient::new(&config)?;
 ///     let address = AccountAddress::from_hex("0x123")?;
 ///     client.fund(address, 100_000_000).await?;
 ///     Ok(())
@@ -61,6 +62,11 @@ impl FaucetResponse {
 
 impl FaucetClient {
     /// Creates a new faucet client.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the faucet URL is not configured in the config, or if the HTTP client
+    /// fails to build (e.g., invalid TLS configuration).
     pub fn new(config: &AptosConfig) -> AptosResult<Self> {
         let faucet_url = config
             .faucet_url()
@@ -91,6 +97,10 @@ impl FaucetClient {
     }
 
     /// Creates a faucet client with a custom URL.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the URL cannot be parsed.
     pub fn with_url(url: &str) -> AptosResult<Self> {
         let faucet_url = Url::parse(url)?;
         let client = Client::new();
@@ -111,6 +121,12 @@ impl FaucetClient {
     /// # Returns
     ///
     /// The transaction hashes of the funding transactions.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the URL cannot be built, the HTTP request fails, the API returns
+    /// an error status code (e.g., rate limiting 429, server error 500), or the response
+    /// cannot be parsed as JSON.
     pub async fn fund(&self, address: AccountAddress, amount: u64) -> AptosResult<Vec<String>> {
         let url = self.build_url(&format!("mint?address={address}&amount={amount}"))?;
         let client = self.client.clone();
@@ -138,6 +154,10 @@ impl FaucetClient {
     }
 
     /// Funds an account with a default amount (usually 1 APT).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the funding request fails (see [`fund`](Self::fund) for details).
     pub async fn fund_default(&self, address: AccountAddress) -> AptosResult<Vec<String>> {
         self.fund(address, 100_000_000).await // 1 APT
     }
@@ -145,6 +165,10 @@ impl FaucetClient {
     /// Creates an account and funds it.
     ///
     /// This is useful for quickly creating test accounts.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the funding request fails (see [`fund`](Self::fund) for details).
     #[cfg(feature = "ed25519")]
     pub async fn create_and_fund(
         &self,
@@ -290,7 +314,7 @@ mod tests {
             .with_faucet_url(&server.uri())
             .unwrap()
             .without_retry();
-        let client = FaucetClient::new(config).unwrap();
+        let client = FaucetClient::new(&config).unwrap();
         let result = client.fund(AccountAddress::ONE, 100_000_000).await;
 
         assert!(result.is_err());
@@ -320,7 +344,7 @@ mod tests {
     #[test]
     fn test_build_url() {
         let config = AptosConfig::testnet();
-        let client = FaucetClient::new(config).unwrap();
+        let client = FaucetClient::new(&config).unwrap();
         let url = client.build_url("mint?address=0x1&amount=1000").unwrap();
         assert!(url.as_str().contains("mint"));
         assert!(url.as_str().contains("address=0x1"));

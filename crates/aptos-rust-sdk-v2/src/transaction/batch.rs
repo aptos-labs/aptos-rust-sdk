@@ -227,6 +227,10 @@ impl TransactionBatchBuilder {
     }
 
     /// Builds raw transactions without signing.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if `sender`, `starting_sequence_number`, or `chain_id` is not set, or if building any transaction fails.
     pub fn build(self) -> AptosResult<Vec<RawTransaction>> {
         let sender = self
             .sender
@@ -257,6 +261,10 @@ impl TransactionBatchBuilder {
     }
 
     /// Builds and signs all transactions in the batch.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if building the transactions fails or if signing any transaction fails.
     pub fn build_and_sign<A: Account>(self, account: &A) -> AptosResult<SignedTransactionBatch> {
         let raw_transactions = self.build()?;
         let mut signed = Vec::with_capacity(raw_transactions.len());
@@ -528,6 +536,10 @@ impl<'a> BatchOperations<'a> {
     /// Builds a batch of transactions for an account.
     ///
     /// This automatically fetches the current sequence number and gas price.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if fetching the sequence number fails, fetching gas price fails, or building/signing the batch fails.
     pub async fn build<A: Account>(
         &self,
         account: &A,
@@ -548,6 +560,10 @@ impl<'a> BatchOperations<'a> {
     }
 
     /// Builds and submits a batch of transactions in parallel.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if building the batch fails.
     pub async fn submit<A: Account>(
         &self,
         account: &A,
@@ -558,6 +574,11 @@ impl<'a> BatchOperations<'a> {
     }
 
     /// Builds, submits, and waits for a batch of transactions.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if building the batch fails (e.g., fetching sequence number or gas price),
+    /// signing the batch fails, or any transaction submission/waiting fails.
     pub async fn submit_and_wait<A: Account>(
         &self,
         account: &A,
@@ -569,6 +590,11 @@ impl<'a> BatchOperations<'a> {
     }
 
     /// Creates multiple APT transfers as a batch.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any transfer payload creation fails (e.g., invalid recipient address),
+    /// building the batch fails, or submitting/waiting for transactions fails.
     pub async fn transfer_apt<A: Account>(
         &self,
         sender: &A,

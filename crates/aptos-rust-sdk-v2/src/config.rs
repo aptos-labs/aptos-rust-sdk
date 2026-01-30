@@ -95,11 +95,13 @@ impl PoolConfig {
 
 /// Builder for `PoolConfig`.
 #[derive(Debug, Clone, Default)]
+#[allow(clippy::option_option)] // Intentional: distinguishes "not set" from "explicitly set to None"
 pub struct PoolConfigBuilder {
     max_idle_per_host: Option<usize>,
     max_idle_total: Option<usize>,
     idle_timeout: Option<Duration>,
-    tcp_keepalive: Option<Duration>,
+    /// None = not set (use default), Some(None) = explicitly disabled, Some(Some(d)) = explicitly set
+    tcp_keepalive: Option<Option<Duration>>,
     tcp_nodelay: Option<bool>,
 }
 
@@ -135,14 +137,14 @@ impl PoolConfigBuilder {
     /// Sets the TCP keepalive interval.
     #[must_use]
     pub fn tcp_keepalive(mut self, interval: Duration) -> Self {
-        self.tcp_keepalive = Some(interval);
+        self.tcp_keepalive = Some(Some(interval));
         self
     }
 
     /// Disables TCP keepalive.
     #[must_use]
     pub fn no_tcp_keepalive(mut self) -> Self {
-        self.tcp_keepalive = None;
+        self.tcp_keepalive = Some(None);
         self
     }
 
@@ -160,7 +162,7 @@ impl PoolConfigBuilder {
             max_idle_per_host: self.max_idle_per_host.or(default.max_idle_per_host),
             max_idle_total: self.max_idle_total.unwrap_or(default.max_idle_total),
             idle_timeout: self.idle_timeout.unwrap_or(default.idle_timeout),
-            tcp_keepalive: self.tcp_keepalive.or(default.tcp_keepalive),
+            tcp_keepalive: self.tcp_keepalive.unwrap_or(default.tcp_keepalive),
             tcp_nodelay: self.tcp_nodelay.unwrap_or(default.tcp_nodelay),
         }
     }
@@ -371,6 +373,10 @@ impl AptosConfig {
 
     /// Creates a custom configuration with the specified fullnode URL.
     ///
+    /// # Errors
+    ///
+    /// Returns an error if the `fullnode_url` cannot be parsed as a valid URL.
+    ///
     /// # Example
     ///
     /// ```rust
@@ -467,12 +473,20 @@ impl AptosConfig {
     }
 
     /// Sets a custom indexer URL.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the `url` cannot be parsed as a valid URL.
     pub fn with_indexer_url(mut self, url: &str) -> Result<Self, url::ParseError> {
         self.indexer_url = Some(Url::parse(url)?);
         Ok(self)
     }
 
     /// Sets a custom faucet URL.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the `url` cannot be parsed as a valid URL.
     pub fn with_faucet_url(mut self, url: &str) -> Result<Self, url::ParseError> {
         self.faucet_url = Some(Url::parse(url)?);
         Ok(self)

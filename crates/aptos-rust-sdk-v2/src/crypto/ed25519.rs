@@ -52,6 +52,11 @@ impl Ed25519PrivateKey {
     }
 
     /// Creates a private key from raw bytes.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AptosError::InvalidPrivateKey`] if:
+    /// - The byte slice length is not exactly 32 bytes
     pub fn from_bytes(bytes: &[u8]) -> AptosResult<Self> {
         if bytes.len() != ED25519_PRIVATE_KEY_LENGTH {
             return Err(AptosError::InvalidPrivateKey(format!(
@@ -67,6 +72,11 @@ impl Ed25519PrivateKey {
     }
 
     /// Creates a private key from a hex string.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AptosError::Hex`] if the hex string is invalid.
+    /// Returns [`AptosError::InvalidPrivateKey`] if the decoded bytes are not exactly 32 bytes.
     pub fn from_hex(hex_str: &str) -> AptosResult<Self> {
         let hex_str = hex_str.strip_prefix("0x").unwrap_or(hex_str);
         let bytes = hex::decode(hex_str)?;
@@ -140,6 +150,12 @@ pub struct Ed25519PublicKey {
 
 impl Ed25519PublicKey {
     /// Creates a public key from raw bytes.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AptosError::InvalidPublicKey`] if:
+    /// - The byte slice length is not exactly 32 bytes
+    /// - The bytes do not represent a valid Ed25519 public key
     pub fn from_bytes(bytes: &[u8]) -> AptosResult<Self> {
         if bytes.len() != ED25519_PUBLIC_KEY_LENGTH {
             return Err(AptosError::InvalidPublicKey(format!(
@@ -158,6 +174,11 @@ impl Ed25519PublicKey {
     }
 
     /// Creates a public key from a hex string.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AptosError::Hex`] if the hex string is invalid.
+    /// Returns [`AptosError::InvalidPublicKey`] if the decoded bytes are not exactly 32 bytes or do not represent a valid Ed25519 public key.
     pub fn from_hex(hex_str: &str) -> AptosResult<Self> {
         let hex_str = hex_str.strip_prefix("0x").unwrap_or(hex_str);
         let bytes = hex::decode(hex_str)?;
@@ -175,6 +196,10 @@ impl Ed25519PublicKey {
     }
 
     /// Verifies a signature against a message.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AptosError::SignatureVerificationFailed`] if the signature is invalid or does not match the message.
     pub fn verify(&self, message: &[u8], signature: &Ed25519Signature) -> AptosResult<()> {
         self.inner
             .verify(message, &signature.inner)
@@ -262,6 +287,12 @@ pub struct Ed25519Signature {
 
 impl Ed25519Signature {
     /// Creates a signature from raw bytes.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AptosError::InvalidSignature`] if:
+    /// - The byte slice length is not exactly 64 bytes
+    /// - The bytes do not represent a valid Ed25519 signature
     pub fn from_bytes(bytes: &[u8]) -> AptosResult<Self> {
         if bytes.len() != ED25519_SIGNATURE_LENGTH {
             return Err(AptosError::InvalidSignature(format!(
@@ -276,6 +307,11 @@ impl Ed25519Signature {
     }
 
     /// Creates a signature from a hex string.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AptosError::Hex`] if the hex string is invalid.
+    /// Returns [`AptosError::InvalidSignature`] if the decoded bytes are not exactly 64 bytes or do not represent a valid Ed25519 signature.
     pub fn from_hex(hex_str: &str) -> AptosResult<Self> {
         let hex_str = hex_str.strip_prefix("0x").unwrap_or(hex_str);
         let bytes = hex::decode(hex_str)?;

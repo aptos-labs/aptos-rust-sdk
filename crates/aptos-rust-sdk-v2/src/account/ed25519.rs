@@ -47,12 +47,22 @@ impl Ed25519Account {
     }
 
     /// Creates an account from private key bytes.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the bytes are not a valid Ed25519 private key (must be exactly 32 bytes).
     pub fn from_private_key_bytes(bytes: &[u8]) -> AptosResult<Self> {
         let private_key = Ed25519PrivateKey::from_bytes(bytes)?;
         Ok(Self::from_private_key(private_key))
     }
 
     /// Creates an account from a private key hex string.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if:
+    /// - The hex string is invalid or cannot be decoded
+    /// - The decoded bytes are not a valid Ed25519 private key
     pub fn from_private_key_hex(hex_str: &str) -> AptosResult<Self> {
         let private_key = Ed25519PrivateKey::from_hex(hex_str)?;
         Ok(Self::from_private_key(private_key))
@@ -75,6 +85,10 @@ impl Ed25519Account {
     /// let mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
     /// let account = Ed25519Account::from_mnemonic(mnemonic, 0).unwrap();
     /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the mnemonic phrase is invalid or if key derivation fails.
     #[cfg(feature = "mnemonic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "mnemonic")))]
     pub fn from_mnemonic(mnemonic: &str, index: u32) -> AptosResult<Self> {
@@ -86,6 +100,10 @@ impl Ed25519Account {
     /// Generates a new account with a random mnemonic.
     ///
     /// Returns both the account and the mnemonic phrase (for backup).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if mnemonic generation or key derivation fails.
     #[cfg(feature = "mnemonic")]
     #[cfg_attr(docsrs, doc(cfg(feature = "mnemonic")))]
     pub fn generate_with_mnemonic() -> AptosResult<(Self, String)> {

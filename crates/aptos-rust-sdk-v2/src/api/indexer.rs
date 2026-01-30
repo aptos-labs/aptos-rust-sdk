@@ -13,7 +13,8 @@
 //!
 //! #[tokio::main]
 //! async fn main() -> anyhow::Result<()> {
-//!     let client = IndexerClient::new(AptosConfig::testnet())?;
+//!     let config = AptosConfig::testnet();
+//!     let client = IndexerClient::new(&config)?;
 //!     
 //!     // Get fungible asset balances
 //!     let balances = client.get_fungible_asset_balances(AccountAddress::ONE).await?;
@@ -51,7 +52,8 @@ use url::Url;
 ///
 /// #[tokio::main]
 /// async fn main() -> anyhow::Result<()> {
-///     let client = IndexerClient::new(AptosConfig::testnet())?;
+///     let config = AptosConfig::testnet();
+///     let client = IndexerClient::new(&config)?;
 ///     // Use the client for GraphQL queries
 ///     Ok(())
 /// }
@@ -92,6 +94,11 @@ impl IndexerClient {
     /// This client uses `reqwest` with its default TLS configuration, which
     /// validates server certificates against the system's certificate store.
     /// All Aptos indexer endpoints use HTTPS with valid certificates.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the indexer URL is not configured in the config, or if the HTTP client
+    /// fails to build (e.g., invalid TLS configuration).
     pub fn new(config: &AptosConfig) -> AptosResult<Self> {
         let indexer_url = config
             .indexer_url()
@@ -123,6 +130,10 @@ impl IndexerClient {
     }
 
     /// Creates an indexer client with a custom URL.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the URL cannot be parsed.
     pub fn with_url(url: &str) -> AptosResult<Self> {
         let indexer_url = Url::parse(url)?;
         let client = Client::new();
@@ -134,6 +145,12 @@ impl IndexerClient {
     }
 
     /// Executes a GraphQL query.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the HTTP request fails, the API returns an error status code,
+    /// the response cannot be parsed as JSON, the GraphQL query contains errors, or the
+    /// response data is missing.
     pub async fn query<T: for<'de> Deserialize<'de> + Send + 'static>(
         &self,
         query: &str,
@@ -188,6 +205,10 @@ impl IndexerClient {
     }
 
     /// Gets the account's fungible asset balances.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the GraphQL query fails (see [`query`](Self::query) for details).
     pub async fn get_fungible_asset_balances(
         &self,
         address: AccountAddress,
@@ -222,6 +243,10 @@ impl IndexerClient {
     }
 
     /// Gets the account's token (NFT) holdings.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the GraphQL query fails (see [`query`](Self::query) for details).
     pub async fn get_account_tokens(
         &self,
         address: AccountAddress,
@@ -259,6 +284,10 @@ impl IndexerClient {
     }
 
     /// Gets recent transactions for an account.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the GraphQL query fails (see [`query`](Self::query) for details).
     pub async fn get_account_transactions(
         &self,
         address: AccountAddress,
@@ -462,6 +491,10 @@ impl IndexerClient {
     // ... existing methods ...
 
     /// Gets the account's token (NFT) holdings with pagination.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the GraphQL query fails (see [`query`](Self::query) for details).
     pub async fn get_account_tokens_paginated(
         &self,
         address: AccountAddress,
@@ -540,6 +573,10 @@ impl IndexerClient {
     }
 
     /// Gets the account's transaction history with pagination.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the GraphQL query fails (see [`query`](Self::query) for details).
     pub async fn get_account_transactions_paginated(
         &self,
         address: AccountAddress,
@@ -614,6 +651,10 @@ impl IndexerClient {
     }
 
     /// Gets events by type.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the GraphQL query fails (see [`query`](Self::query) for details).
     pub async fn get_events_by_type(
         &self,
         event_type: &str,
@@ -651,6 +692,10 @@ impl IndexerClient {
     }
 
     /// Gets events involving an account.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the GraphQL query fails (see [`query`](Self::query) for details).
     pub async fn get_events_by_account(
         &self,
         address: AccountAddress,
@@ -688,6 +733,11 @@ impl IndexerClient {
     }
 
     /// Gets a collection by its address.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the GraphQL query fails (see [`query`](Self::query) for details),
+    /// or if the collection is not found.
     pub async fn get_collection(
         &self,
         collection_address: AccountAddress,
@@ -729,6 +779,10 @@ impl IndexerClient {
     }
 
     /// Gets tokens in a collection.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the GraphQL query fails (see [`query`](Self::query) for details).
     pub async fn get_collection_tokens(
         &self,
         collection_address: AccountAddress,
@@ -789,6 +843,10 @@ impl IndexerClient {
     }
 
     /// Gets coin balances for an account (legacy coin module).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the GraphQL query fails (see [`query`](Self::query) for details).
     pub async fn get_coin_balances(
         &self,
         address: AccountAddress,
@@ -818,6 +876,10 @@ impl IndexerClient {
     }
 
     /// Gets coin activities for an account.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the GraphQL query fails (see [`query`](Self::query) for details).
     pub async fn get_coin_activities(
         &self,
         address: AccountAddress,
@@ -852,6 +914,10 @@ impl IndexerClient {
     }
 
     /// Gets the processor status to check indexer health.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the GraphQL query fails (see [`query`](Self::query) for details).
     pub async fn get_processor_status(&self) -> AptosResult<Vec<ProcessorStatus>> {
         #[derive(Deserialize)]
         struct Response {
@@ -873,6 +939,11 @@ impl IndexerClient {
     }
 
     /// Gets the current indexer version (last processed transaction).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the processor status cannot be fetched, or if no processor status
+    /// is available.
     pub async fn get_indexer_version(&self) -> AptosResult<u64> {
         let statuses = self.get_processor_status().await?;
         statuses
@@ -883,6 +954,10 @@ impl IndexerClient {
     }
 
     /// Checks if the indexer is healthy by comparing with a reference version.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the indexer version cannot be fetched (see [`get_indexer_version`](Self::get_indexer_version) for details).
     pub async fn check_indexer_lag(
         &self,
         reference_version: u64,

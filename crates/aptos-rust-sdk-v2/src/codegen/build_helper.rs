@@ -105,6 +105,15 @@ impl BuildConfig {
 /// * `abi_path` - Path to the ABI JSON file
 /// * `output_dir` - Directory where generated code will be written
 ///
+/// # Errors
+///
+/// Returns an error if:
+/// * The ABI file cannot be read
+/// * The ABI JSON cannot be parsed
+/// * Code generation fails
+/// * The output directory cannot be created
+/// * The output file cannot be written
+///
 /// # Example
 ///
 /// ```rust,ignore
@@ -118,6 +127,15 @@ pub fn generate_from_abi(
 }
 
 /// Generates Rust code from a single ABI file with custom configuration.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// * The ABI file cannot be read
+/// * The ABI JSON cannot be parsed
+/// * Code generation fails
+/// * The output directory cannot be created
+/// * The output file cannot be written
 pub fn generate_from_abi_with_config(
     abi_path: impl AsRef<Path>,
     output_dir: impl AsRef<Path>,
@@ -169,6 +187,16 @@ pub fn generate_from_abi_with_config(
 /// * `abi_paths` - Paths to ABI JSON files
 /// * `output_dir` - Directory where generated code will be written
 ///
+/// # Errors
+///
+/// Returns an error if:
+/// * Any ABI file cannot be read
+/// * Any ABI JSON cannot be parsed
+/// * Code generation fails for any module
+/// * The output directory cannot be created
+/// * Any output file cannot be written
+/// * The `mod.rs` file cannot be written
+///
 /// # Example
 ///
 /// ```rust,ignore
@@ -185,6 +213,16 @@ pub fn generate_from_abis(
 }
 
 /// Generates Rust code from multiple ABI files with custom configuration.
+///
+/// # Errors
+///
+/// Returns an error if:
+/// * Any ABI file cannot be read
+/// * Any ABI JSON cannot be parsed
+/// * Code generation fails for any module
+/// * The output directory cannot be created
+/// * Any output file cannot be written
+/// * The `mod.rs` file cannot be written (if enabled)
 pub fn generate_from_abis_with_config(
     abi_paths: &[impl AsRef<Path>],
     output_dir: impl AsRef<Path>,
@@ -253,6 +291,16 @@ pub fn generate_from_abis_with_config(
 /// * `abi_path` - Path to the ABI JSON file
 /// * `source_path` - Path to the Move source file
 /// * `output_dir` - Directory where generated code will be written
+///
+/// # Errors
+///
+/// Returns an error if:
+/// * The ABI file cannot be read
+/// * The ABI JSON cannot be parsed
+/// * The Move source file cannot be read
+/// * Code generation fails
+/// * The output directory cannot be created
+/// * The output file cannot be written
 pub fn generate_from_abi_with_source(
     abi_path: impl AsRef<Path>,
     source_path: impl AsRef<Path>,
@@ -330,6 +378,16 @@ fn generate_mod_file(module_names: &[String]) -> String {
 ///
 /// * `abi_dir` - Directory containing ABI JSON files
 /// * `output_dir` - Directory where generated code will be written
+///
+/// # Errors
+///
+/// Returns an error if:
+/// * The directory cannot be read
+/// * No JSON files are found in the directory
+/// * Any ABI file cannot be read or parsed
+/// * Code generation fails for any module
+/// * The output directory cannot be created
+/// * Any output file cannot be written
 ///
 /// # Example
 ///

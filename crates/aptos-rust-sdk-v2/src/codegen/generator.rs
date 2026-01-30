@@ -145,6 +145,10 @@ impl<'a> ModuleGenerator<'a> {
     }
 
     /// Generates the complete Rust module code.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if code generation fails (e.g., formatting errors).
     pub fn generate(&self) -> AptosResult<String> {
         let mut output = String::new();
 

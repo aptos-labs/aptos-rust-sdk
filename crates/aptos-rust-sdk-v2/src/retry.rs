@@ -268,6 +268,12 @@ impl RetryExecutor {
     ///
     /// The operation will be retried if it returns a retryable error,
     /// up to the configured maximum number of retries.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the operation fails and either the maximum number of
+    /// retries has been exhausted or the error is not retryable according to
+    /// the retry configuration.
     pub async fn execute<F, Fut, T>(&self, operation: F) -> AptosResult<T>
     where
         F: Fn() -> Fut,
@@ -298,6 +304,11 @@ impl RetryExecutor {
     }
 
     /// Executes an async operation with retry logic and a custom retry predicate.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the operation fails and either the maximum number of
+    /// retries has been exhausted or the custom retry predicate returns `false`.
     pub async fn execute_with_predicate<F, Fut, T, P>(
         &self,
         operation: F,
@@ -336,6 +347,12 @@ pub trait RetryExt<T> {
 }
 
 /// Convenience function to retry an operation with default config.
+///
+/// # Errors
+///
+/// Returns an error if the operation fails and either the maximum number of
+/// retries has been exhausted or the error is not retryable according to
+/// the default retry configuration.
 pub async fn retry<F, Fut, T>(operation: F) -> AptosResult<T>
 where
     F: Fn() -> Fut,
@@ -345,6 +362,12 @@ where
 }
 
 /// Convenience function to retry an operation with custom config.
+///
+/// # Errors
+///
+/// Returns an error if the operation fails and either the maximum number of
+/// retries has been exhausted or the error is not retryable according to
+/// the provided retry configuration.
 pub async fn retry_with_config<F, Fut, T>(config: &RetryConfig, operation: F) -> AptosResult<T>
 where
     F: Fn() -> Fut,

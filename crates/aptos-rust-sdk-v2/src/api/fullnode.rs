@@ -74,6 +74,10 @@ impl FullnodeClient {
     /// For custom deployments requiring custom CA certificates, use the
     /// `REQUESTS_CA_BUNDLE` or `SSL_CERT_FILE` environment variables, or
     /// configure a custom `reqwest::Client` and use `from_client()`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the HTTP client fails to build (e.g., invalid TLS configuration).
     pub fn new(config: AptosConfig) -> AptosResult<Self> {
         let pool = config.pool_config();
 
@@ -114,6 +118,11 @@ impl FullnodeClient {
     // === Ledger Info ===
 
     /// Gets the current ledger information.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the HTTP request fails, the API returns an error status code,
+    /// or the response cannot be parsed as JSON.
     pub async fn get_ledger_info(&self) -> AptosResult<AptosResponse<LedgerInfo>> {
         let url = self.build_url("");
         self.get_json(url).await
@@ -122,6 +131,11 @@ impl FullnodeClient {
     // === Account ===
 
     /// Gets account information.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the HTTP request fails, the API returns an error status code,
+    /// the response cannot be parsed as JSON, or the account is not found (404).
     pub async fn get_account(
         &self,
         address: AccountAddress,
@@ -131,6 +145,11 @@ impl FullnodeClient {
     }
 
     /// Gets the sequence number for an account.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if fetching the account fails, the account is not found (404),
+    /// or the sequence number cannot be parsed from the account data.
     pub async fn get_sequence_number(&self, address: AccountAddress) -> AptosResult<u64> {
         let account = self.get_account(address).await?;
         account
@@ -140,6 +159,11 @@ impl FullnodeClient {
     }
 
     /// Gets all resources for an account.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the HTTP request fails, the API returns an error status code,
+    /// or the response cannot be parsed as JSON.
     pub async fn get_account_resources(
         &self,
         address: AccountAddress,
@@ -149,6 +173,11 @@ impl FullnodeClient {
     }
 
     /// Gets a specific resource for an account.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the HTTP request fails, the API returns an error status code,
+    /// the response cannot be parsed as JSON, or the resource is not found (404).
     pub async fn get_account_resource(
         &self,
         address: AccountAddress,
@@ -163,6 +192,11 @@ impl FullnodeClient {
     }
 
     /// Gets all modules for an account.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the HTTP request fails, the API returns an error status code,
+    /// or the response cannot be parsed as JSON.
     pub async fn get_account_modules(
         &self,
         address: AccountAddress,
@@ -172,6 +206,11 @@ impl FullnodeClient {
     }
 
     /// Gets a specific module for an account.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the HTTP request fails, the API returns an error status code,
+    /// the response cannot be parsed as JSON, or the module is not found (404).
     pub async fn get_account_module(
         &self,
         address: AccountAddress,
@@ -184,6 +223,11 @@ impl FullnodeClient {
     // === Balance ===
 
     /// Gets the APT balance for an account in octas.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the view function call fails, the response cannot be parsed,
+    /// or the balance value cannot be converted to u64.
     pub async fn get_account_balance(&self, address: AccountAddress) -> AptosResult<u64> {
         // Use the coin::balance view function which works with both legacy CoinStore
         // and the newer Fungible Asset standard
@@ -213,6 +257,11 @@ impl FullnodeClient {
     ///
     /// Note: Transaction submission is automatically retried for transient errors.
     /// Duplicate transaction submissions (same hash) are safe and idempotent.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the transaction cannot be serialized to BCS, the HTTP request fails,
+    /// the API returns an error status code, or the response cannot be parsed as JSON.
     pub async fn submit_transaction(
         &self,
         signed_txn: &SignedTransaction,
@@ -244,6 +293,11 @@ impl FullnodeClient {
     }
 
     /// Submits a transaction and waits for it to be committed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if transaction submission fails, the transaction times out waiting
+    /// for commitment, the transaction execution fails, or any HTTP/API errors occur.
     pub async fn submit_and_wait(
         &self,
         signed_txn: &SignedTransaction,
@@ -254,6 +308,11 @@ impl FullnodeClient {
     }
 
     /// Gets a transaction by hash.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the HTTP request fails, the API returns an error status code,
+    /// the response cannot be parsed as JSON, or the transaction is not found (404).
     pub async fn get_transaction_by_hash(
         &self,
         hash: &HashValue,
@@ -265,6 +324,11 @@ impl FullnodeClient {
     /// Waits for a transaction to be committed.
     ///
     /// Uses exponential backoff for polling, starting at 200ms and doubling up to 2s.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the transaction times out waiting for commitment, the transaction
+    /// execution fails (`vm_status` indicates failure), or HTTP/API errors occur while polling.
     pub async fn wait_for_transaction(
         &self,
         hash: &HashValue,
@@ -323,6 +387,11 @@ impl FullnodeClient {
     }
 
     /// Simulates a transaction.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the transaction cannot be serialized to BCS, the HTTP request fails,
+    /// the API returns an error status code, or the response cannot be parsed as JSON.
     pub async fn simulate_transaction(
         &self,
         signed_txn: &SignedTransaction,
@@ -356,6 +425,11 @@ impl FullnodeClient {
     // === Gas ===
 
     /// Gets the current gas estimation.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the HTTP request fails, the API returns an error status code,
+    /// or the response cannot be parsed as JSON.
     pub async fn estimate_gas_price(&self) -> AptosResult<AptosResponse<GasEstimation>> {
         let url = self.build_url("estimate_gas_price");
         self.get_json(url).await
@@ -364,6 +438,11 @@ impl FullnodeClient {
     // === View Functions ===
 
     /// Calls a view function.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the HTTP request fails, the API returns an error status code,
+    /// or the response cannot be parsed as JSON.
     pub async fn view(
         &self,
         function: &str,
@@ -405,6 +484,11 @@ impl FullnodeClient {
     // === Events ===
 
     /// Gets events by event handle.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the HTTP request fails, the API returns an error status code,
+    /// or the response cannot be parsed as JSON.
     pub async fn get_events_by_event_handle(
         &self,
         address: AccountAddress,
@@ -436,6 +520,11 @@ impl FullnodeClient {
     // === Blocks ===
 
     /// Gets block by height.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the HTTP request fails, the API returns an error status code,
+    /// the response cannot be parsed as JSON, or the block is not found (404).
     pub async fn get_block_by_height(
         &self,
         height: u64,
@@ -448,6 +537,11 @@ impl FullnodeClient {
     }
 
     /// Gets block by version.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the HTTP request fails, the API returns an error status code,
+    /// the response cannot be parsed as JSON, or the block is not found (404).
     pub async fn get_block_by_version(
         &self,
         version: u64,

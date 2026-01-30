@@ -133,6 +133,14 @@ impl TransactionBuilder {
     }
 
     /// Builds the raw transaction.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if any required field is missing:
+    /// - `sender` is required
+    /// - `sequence_number` is required
+    /// - `payload` is required
+    /// - `chain_id` is required
     pub fn build(self) -> AptosResult<RawTransaction> {
         let sender = self
             .sender
@@ -167,6 +175,10 @@ impl TransactionBuilder {
     }
 
     /// Builds and signs the transaction with the given account.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the transaction cannot be built or signed.
     #[cfg(feature = "ed25519")]
     pub fn build_and_sign<A: Account>(self, account: &A) -> AptosResult<SignedTransaction> {
         let sender = self.sender.unwrap_or_else(|| account.address());
@@ -181,6 +193,10 @@ impl TransactionBuilder {
 }
 
 /// Signs a raw transaction with the given account.
+///
+/// # Errors
+///
+/// Returns an error if generating the signing message fails or if the account fails to sign.
 pub fn sign_transaction<A: Account>(
     raw_txn: &RawTransaction,
     account: &A,
@@ -190,65 +206,80 @@ pub fn sign_transaction<A: Account>(
     let public_key = account.public_key_bytes();
 
     let authenticator =
-        make_transaction_authenticator(account.signature_scheme(), public_key, signature);
+        make_transaction_authenticator(account.signature_scheme(), public_key, signature)?;
 
     Ok(SignedTransaction::new(raw_txn.clone(), authenticator))
 }
 
 /// Creates a transaction authenticator based on the signature scheme.
+///
+/// # Errors
+///
+/// Returns an error if the signature scheme is not recognized.
 fn make_transaction_authenticator(
     scheme: u8,
     public_key: Vec<u8>,
     signature: Vec<u8>,
-) -> TransactionAuthenticator {
+) -> AptosResult<TransactionAuthenticator> {
     match scheme {
-        crate::crypto::ED25519_SCHEME => TransactionAuthenticator::ed25519(public_key, signature),
-        crate::crypto::MULTI_ED25519_SCHEME => {
-            TransactionAuthenticator::multi_ed25519(public_key, signature)
+        crate::crypto::ED25519_SCHEME => {
+            Ok(TransactionAuthenticator::ed25519(public_key, signature))
         }
+        crate::crypto::MULTI_ED25519_SCHEME => Ok(TransactionAuthenticator::multi_ed25519(
+            public_key, signature,
+        )),
         crate::crypto::MULTI_KEY_SCHEME => {
             // Multi-key uses SingleSender variant with AccountAuthenticator::MultiKey
-            TransactionAuthenticator::single_sender(AccountAuthenticator::multi_key(
-                public_key, signature,
+            Ok(TransactionAuthenticator::single_sender(
+                AccountAuthenticator::multi_key(public_key, signature),
             ))
         }
         crate::crypto::SINGLE_KEY_SCHEME => {
             // Single-key scheme is used by Secp256k1 and Secp256r1 accounts
-            // Uses SingleSender variant with AccountAuthenticator::MultiKey
-            // (MultiKey can handle variable-length keys and signatures)
-            TransactionAuthenticator::single_sender(AccountAuthenticator::multi_key(
-                public_key, signature,
+            // Uses SingleSender variant with AccountAuthenticator::SingleKey
+            Ok(TransactionAuthenticator::single_sender(
+                AccountAuthenticator::single_key(public_key, signature),
             ))
         }
-        // For other/unknown schemes, default to Ed25519 format
-        // (signature scheme detection happens at the account level)
-        // TODO: throw error if it doesn't match a scheme
-        //TODO: Where's Single Key scheme?
-        _ => TransactionAuthenticator::ed25519(public_key, signature),
+        _ => Err(AptosError::InvalidSignature(format!(
+            "unknown signature scheme: {scheme}"
+        ))),
     }
 }
 
 /// Creates an account authenticator based on the signature scheme.
+///
+/// # Errors
+///
+/// Returns an error if the signature scheme is not recognized.
 fn make_account_authenticator(
     scheme: u8,
     public_key: Vec<u8>,
     signature: Vec<u8>,
-) -> AccountAuthenticator {
+) -> AptosResult<AccountAuthenticator> {
     match scheme {
-        crate::crypto::ED25519_SCHEME => AccountAuthenticator::ed25519(public_key, signature),
-        crate::crypto::MULTI_ED25519_SCHEME => AccountAuthenticator::MultiEd25519 {
+        crate::crypto::ED25519_SCHEME => Ok(AccountAuthenticator::ed25519(public_key, signature)),
+        crate::crypto::MULTI_ED25519_SCHEME => Ok(AccountAuthenticator::MultiEd25519 {
             public_key,
             signature,
-        },
-        crate::crypto::MULTI_KEY_SCHEME => AccountAuthenticator::multi_key(public_key, signature),
-        // For other/unknown schemes, default to Ed25519 format
-        // TODO: throw error if it doesn't match a scheme
-        //TODO: Where's Single Key scheme?
-        _ => AccountAuthenticator::ed25519(public_key, signature),
+        }),
+        crate::crypto::SINGLE_KEY_SCHEME => {
+            Ok(AccountAuthenticator::single_key(public_key, signature))
+        }
+        crate::crypto::MULTI_KEY_SCHEME => {
+            Ok(AccountAuthenticator::multi_key(public_key, signature))
+        }
+        _ => Err(AptosError::InvalidSignature(format!(
+            "unknown signature scheme: {scheme}"
+        ))),
     }
 }
 
 /// Signs a multi-agent transaction.
+///
+/// # Errors
+///
+/// Returns an error if generating the signing message fails or if any signer fails to sign.
 pub fn sign_multi_agent_transaction<A: Account>(
     multi_agent: &MultiAgentRawTransaction,
     sender: &A,
@@ -263,7 +294,7 @@ pub fn sign_multi_agent_transaction<A: Account>(
         sender.signature_scheme(),
         sender_public_key,
         sender_signature,
-    );
+    )?;
 
     // Sign with secondary signers
     let mut secondary_auths = Vec::with_capacity(secondary_signers.len());
@@ -274,7 +305,7 @@ pub fn sign_multi_agent_transaction<A: Account>(
             signer.signature_scheme(),
             public_key,
             signature,
-        ));
+        )?);
     }
 
     let authenticator = TransactionAuthenticator::multi_agent(
@@ -290,6 +321,10 @@ pub fn sign_multi_agent_transaction<A: Account>(
 }
 
 /// Signs a fee payer transaction.
+///
+/// # Errors
+///
+/// Returns an error if generating the signing message fails or if any signer fails to sign.
 pub fn sign_fee_payer_transaction<A: Account>(
     fee_payer_txn: &FeePayerRawTransaction,
     sender: &A,
@@ -305,7 +340,7 @@ pub fn sign_fee_payer_transaction<A: Account>(
         sender.signature_scheme(),
         sender_public_key,
         sender_signature,
-    );
+    )?;
 
     // Sign with secondary signers
     let mut secondary_auths = Vec::with_capacity(secondary_signers.len());
@@ -316,7 +351,7 @@ pub fn sign_fee_payer_transaction<A: Account>(
             signer.signature_scheme(),
             public_key,
             signature,
-        ));
+        )?);
     }
 
     // Sign with fee payer
@@ -326,7 +361,7 @@ pub fn sign_fee_payer_transaction<A: Account>(
         fee_payer.signature_scheme(),
         fee_payer_public_key,
         fee_payer_signature,
-    );
+    )?;
 
     let authenticator = TransactionAuthenticator::fee_payer(
         sender_auth,

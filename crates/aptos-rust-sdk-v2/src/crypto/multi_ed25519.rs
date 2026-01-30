@@ -115,6 +115,15 @@ impl MultiEd25519PublicKey {
     }
 
     /// Creates a public key from bytes.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AptosError::InvalidPublicKey`] if:
+    /// - The bytes are empty
+    /// - The bytes are too short (less than 33 bytes for one key + threshold)
+    /// - The key bytes length is not a multiple of 32 bytes
+    /// - Any individual public key fails to parse
+    /// - The threshold is invalid (0, exceeds number of keys, etc.)
     pub fn from_bytes(bytes: &[u8]) -> AptosResult<Self> {
         if bytes.is_empty() {
             return Err(AptosError::InvalidPublicKey("empty bytes".into()));
@@ -164,6 +173,13 @@ impl MultiEd25519PublicKey {
     }
 
     /// Verifies a multi-Ed25519 signature against a message.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if:
+    /// - The number of signatures is less than the threshold
+    /// - Any individual signature verification fails
+    /// - A signer index is out of bounds
     pub fn verify(&self, message: &[u8], signature: &MultiEd25519Signature) -> AptosResult<()> {
         // Check that we have enough signatures
         if signature.num_signatures() < self.threshold as usize {
@@ -274,6 +290,14 @@ impl MultiEd25519Signature {
     /// * `signatures` - Vec of (`signer_index`, signature) pairs
     ///
     /// The signer indices must be in ascending order and within bounds.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AptosError::InvalidSignature`] if:
+    /// - No signatures are provided
+    /// - More than 32 signatures are provided
+    /// - A signer index is out of bounds (>= 32)
+    /// - Duplicate signer indices are present
     pub fn new(mut signatures: Vec<(u8, Ed25519Signature)>) -> AptosResult<Self> {
         if signatures.is_empty() {
             return Err(AptosError::InvalidSignature(
@@ -322,6 +346,13 @@ impl MultiEd25519Signature {
     /// Creates a signature from bytes.
     ///
     /// Format: `signature_1` || `signature_2` || ... || `signature_m` || bitmap (4 bytes)
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AptosError::InvalidSignature`] if:
+    /// - The bytes are too short (less than 4 bytes for bitmap)
+    /// - The signature bytes length doesn't match the expected number of signatures from the bitmap
+    /// - Any individual signature fails to parse
     pub fn from_bytes(bytes: &[u8]) -> AptosResult<Self> {
         if bytes.len() < 4 {
             return Err(AptosError::InvalidSignature("bytes too short".into()));

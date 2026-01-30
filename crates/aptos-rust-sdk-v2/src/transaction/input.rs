@@ -107,6 +107,10 @@ impl InputEntryFunctionData {
     /// ```rust,ignore
     /// let payload = InputEntryFunctionData::transfer_apt(recipient, 1_000_000)?;
     /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the function ID is invalid or if BCS encoding of arguments fails.
     pub fn transfer_apt(recipient: AccountAddress, amount: u64) -> AptosResult<TransactionPayload> {
         InputEntryFunctionData::new("0x1::aptos_account::transfer")
             .arg(recipient)
@@ -121,6 +125,10 @@ impl InputEntryFunctionData {
     /// * `coin_type` - The coin type (e.g., "`0x1::aptos_coin::AptosCoin`")
     /// * `recipient` - The recipient address
     /// * `amount` - Amount in the coin's smallest unit
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the function ID is invalid, the coin type is invalid, or if BCS encoding of arguments fails.
     pub fn transfer_coin(
         coin_type: &str,
         recipient: AccountAddress,
@@ -138,6 +146,10 @@ impl InputEntryFunctionData {
     /// # Arguments
     ///
     /// * `auth_key` - The authentication key (32 bytes)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the function ID is invalid or if BCS encoding of arguments fails.
     pub fn create_account(auth_key: AccountAddress) -> AptosResult<TransactionPayload> {
         InputEntryFunctionData::new("0x1::aptos_account::create_account")
             .arg(auth_key)
@@ -149,6 +161,10 @@ impl InputEntryFunctionData {
     /// # Arguments
     ///
     /// * Various rotation parameters
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the function ID is invalid or if BCS encoding of arguments fails.
     pub fn rotate_authentication_key(
         from_scheme: u8,
         from_public_key_bytes: Vec<u8>,
@@ -172,6 +188,10 @@ impl InputEntryFunctionData {
     /// # Arguments
     ///
     /// * `coin_type` - The coin type to register
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the function ID is invalid, the coin type is invalid, or if building the payload fails.
     pub fn register_coin(coin_type: &str) -> AptosResult<TransactionPayload> {
         InputEntryFunctionData::new("0x1::managed_coin::register")
             .type_arg(coin_type)
@@ -184,6 +204,10 @@ impl InputEntryFunctionData {
     ///
     /// * `metadata_serialized` - Serialized module metadata
     /// * `code` - Vector of module bytecode
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the function ID is invalid or if BCS encoding of arguments fails.
     pub fn publish_package(
         metadata_serialized: Vec<u8>,
         code: Vec<Vec<u8>>,
@@ -330,6 +354,10 @@ impl InputEntryFunctionDataBuilder {
     ///
     /// The constructed `TransactionPayload`, or an error if any
     /// validation or serialization failed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the function ID is invalid, any type argument is invalid, or if any argument serialization failed.
     pub fn build(self) -> AptosResult<TransactionPayload> {
         // Check for module parsing error
         let module = self.module.map_err(AptosError::Transaction)?;
@@ -348,6 +376,10 @@ impl InputEntryFunctionDataBuilder {
     }
 
     /// Builds just the entry function (without wrapping in `TransactionPayload`).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the function ID is invalid, any type argument is invalid, or if any argument serialization failed.
     pub fn build_entry_function(self) -> AptosResult<EntryFunction> {
         let module = self.module.map_err(AptosError::Transaction)?;
 
@@ -369,6 +401,10 @@ impl InputEntryFunctionDataBuilder {
 /// This trait is automatically implemented for types that implement `Serialize`.
 pub trait IntoMoveArg {
     /// Converts this value into BCS-encoded bytes.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if BCS serialization fails.
     fn into_move_arg(self) -> AptosResult<Vec<u8>>;
 }
 
@@ -441,6 +477,10 @@ pub struct MoveU256(pub [u8; 32]);
 
 impl MoveU256 {
     /// Creates a `MoveU256` from a decimal string.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the string cannot be parsed as a u256 value.
     pub fn parse(s: &str) -> AptosResult<Self> {
         // Parse as big integer and convert to little-endian bytes
         let mut bytes = [0u8; 32];

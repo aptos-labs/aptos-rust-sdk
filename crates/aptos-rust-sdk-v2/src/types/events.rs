@@ -74,6 +74,10 @@ impl Event {
     }
 
     /// Tries to deserialize the event data into a specific type.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the event data cannot be deserialized into the requested type.
     pub fn data_as<T: for<'de> Deserialize<'de>>(&self) -> Result<T, serde_json::Error> {
         serde_json::from_value(self.data.clone())
     }

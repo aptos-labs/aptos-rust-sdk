@@ -39,6 +39,11 @@ impl Identifier {
     ///
     /// This function enforces a length limit of 128 characters to prevent
     /// denial-of-service attacks via excessive memory allocation.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the identifier is empty, exceeds 128 characters, does not start
+    /// with a letter or underscore, or contains characters that are not alphanumeric or underscore.
     pub fn new(s: impl Into<String>) -> AptosResult<Self> {
         let s = s.into();
         // Security: enforce length limit to prevent DoS
@@ -110,6 +115,11 @@ impl MoveModuleId {
     }
 
     /// Parses a module ID from a string (e.g., "`0x1::coin`").
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the string is not in the format `address::module_name`, the address
+    /// is invalid, or the module name is not a valid identifier.
     pub fn from_str_strict(s: &str) -> AptosResult<Self> {
         let parts: Vec<&str> = s.split("::").collect();
         if parts.len() != 2 {
@@ -170,6 +180,10 @@ impl StructTag {
     }
 
     /// Creates a struct tag with no type arguments.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the module or name is not a valid identifier.
     pub fn simple(
         address: AccountAddress,
         module: impl Into<String>,
@@ -292,6 +306,12 @@ impl TypeTag {
     ///
     /// This function enforces length and depth limits to prevent denial-of-service
     /// attacks via excessive parsing or memory allocation.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the type tag string exceeds 1024 characters, has excessive nesting
+    /// depth (more than 8 levels), contains invalid syntax, or any component (address, module,
+    /// struct name, or type arguments) is invalid.
     ///
     /// # Example
     ///
@@ -463,6 +483,11 @@ impl EntryFunctionId {
     }
 
     /// Parses an entry function ID from a string (e.g., "`0x1::coin::transfer`").
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the string is not in the format `address::module::function`, the address
+    /// is invalid, or the module or function name is not a valid identifier.
     pub fn from_str_strict(s: &str) -> AptosResult<Self> {
         let parts: Vec<&str> = s.split("::").collect();
         if parts.len() != 3 {

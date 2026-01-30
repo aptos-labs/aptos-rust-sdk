@@ -61,6 +61,13 @@ impl MultiEd25519Account {
     /// let keys: Vec<_> = (0..3).map(|_| Ed25519PrivateKey::generate()).collect();
     /// let account = MultiEd25519Account::new(keys, 2).unwrap();
     /// ```
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if:
+    /// - No private keys are provided
+    /// - The threshold exceeds the number of keys
+    /// - The multi-Ed25519 public key creation fails (e.g., too many keys, invalid threshold)
     pub fn new(private_keys: Vec<Ed25519PrivateKey>, threshold: u8) -> AptosResult<Self> {
         if private_keys.is_empty() {
             return Err(AptosError::InvalidPrivateKey(
@@ -116,6 +123,13 @@ impl MultiEd25519Account {
     /// let my_keys = vec![(0, sk0), (2, sk2)];
     /// let account = MultiEd25519Account::from_keys(all_public_keys, my_keys, 2).unwrap();
     /// ```
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if:
+    /// - The multi-Ed25519 public key creation fails
+    /// - A private key index is out of bounds
+    /// - A private key doesn't match the public key at its index
     pub fn from_keys(
         public_keys: Vec<Ed25519PublicKey>,
         private_keys: Vec<(u8, Ed25519PrivateKey)>,
@@ -152,6 +166,10 @@ impl MultiEd25519Account {
     ///
     /// This is useful for verifying signatures or looking up account information
     /// when you don't have any private keys.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the multi-Ed25519 public key creation fails (e.g., no keys provided, too many keys, invalid threshold).
     pub fn view_only(public_keys: Vec<Ed25519PublicKey>, threshold: u8) -> AptosResult<Self> {
         let multi_public_key = MultiEd25519PublicKey::new(public_keys, threshold)?;
         let address = multi_public_key.to_address();
@@ -267,6 +285,10 @@ impl MultiEd25519Account {
     }
 
     /// Verifies a signature against a message.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if signature verification fails (e.g., invalid signature, insufficient signatures, signature mismatch).
     pub fn verify(&self, message: &[u8], signature: &MultiEd25519Signature) -> AptosResult<()> {
         self.public_key.verify(message, signature)
     }
@@ -290,6 +312,13 @@ impl MultiEd25519Account {
     /// Collects individual signatures into a multi-signature.
     ///
     /// Use this when collecting signatures from multiple parties.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if:
+    /// - No signatures are provided
+    /// - Too many signatures are provided (more than 32)
+    /// - Signer indices are out of bounds or duplicated
     pub fn aggregate_signatures(
         signatures: Vec<(u8, Ed25519Signature)>,
     ) -> AptosResult<MultiEd25519Signature> {
@@ -300,6 +329,10 @@ impl MultiEd25519Account {
     ///
     /// Returns the signature with the signer index. Use this when contributing
     /// your signature to a multi-party signing flow.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if we don't have a private key at the specified index.
     pub fn create_signature_contribution(
         &self,
         message: &[u8],

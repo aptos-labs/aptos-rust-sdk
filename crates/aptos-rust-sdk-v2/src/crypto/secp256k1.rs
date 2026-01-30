@@ -41,6 +41,12 @@ impl Secp256k1PrivateKey {
     }
 
     /// Creates a private key from raw bytes.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AptosError::InvalidPrivateKey`] if:
+    /// - The byte slice length is not exactly 32 bytes
+    /// - The bytes do not represent a valid Secp256k1 private key
     pub fn from_bytes(bytes: &[u8]) -> AptosResult<Self> {
         if bytes.len() != SECP256K1_PRIVATE_KEY_LENGTH {
             return Err(AptosError::InvalidPrivateKey(format!(
@@ -55,6 +61,11 @@ impl Secp256k1PrivateKey {
     }
 
     /// Creates a private key from a hex string.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AptosError::Hex`] if the hex string is invalid.
+    /// Returns [`AptosError::InvalidPrivateKey`] if the decoded bytes are not exactly 32 bytes or do not represent a valid Secp256k1 private key.
     pub fn from_hex(hex_str: &str) -> AptosResult<Self> {
         let hex_str = hex_str.strip_prefix("0x").unwrap_or(hex_str);
         let bytes = hex::decode(hex_str)?;
@@ -119,6 +130,10 @@ pub struct Secp256k1PublicKey {
 
 impl Secp256k1PublicKey {
     /// Creates a public key from compressed bytes (33 bytes).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AptosError::InvalidPublicKey`] if the bytes do not represent a valid Secp256k1 compressed public key.
     pub fn from_bytes(bytes: &[u8]) -> AptosResult<Self> {
         let verifying_key = VerifyingKey::from_sec1_bytes(bytes)
             .map_err(|e| AptosError::InvalidPublicKey(e.to_string()))?;
@@ -128,6 +143,11 @@ impl Secp256k1PublicKey {
     }
 
     /// Creates a public key from a hex string.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AptosError::Hex`] if the hex string is invalid.
+    /// Returns [`AptosError::InvalidPublicKey`] if the decoded bytes do not represent a valid Secp256k1 compressed public key.
     pub fn from_hex(hex_str: &str) -> AptosResult<Self> {
         let hex_str = hex_str.strip_prefix("0x").unwrap_or(hex_str);
         let bytes = hex::decode(hex_str)?;
@@ -153,6 +173,10 @@ impl Secp256k1PublicKey {
     }
 
     /// Verifies a signature against a message.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AptosError::SignatureVerificationFailed`] if the signature is invalid or does not match the message.
     pub fn verify(&self, message: &[u8], signature: &Secp256k1Signature) -> AptosResult<()> {
         // Hash the message with SHA256 first
         let hash = crate::crypto::sha2_256(message);
@@ -162,6 +186,10 @@ impl Secp256k1PublicKey {
     }
 
     /// Verifies a signature against a pre-hashed message.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AptosError::SignatureVerificationFailed`] if the signature is invalid or does not match the hash.
     pub fn verify_prehashed(
         &self,
         hash: &[u8; 32],
@@ -246,6 +274,12 @@ pub struct Secp256k1Signature {
 
 impl Secp256k1Signature {
     /// Creates a signature from raw bytes (64 bytes, r || s).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AptosError::InvalidSignature`] if:
+    /// - The byte slice length is not exactly 64 bytes
+    /// - The bytes do not represent a valid Secp256k1 signature
     pub fn from_bytes(bytes: &[u8]) -> AptosResult<Self> {
         if bytes.len() != SECP256K1_SIGNATURE_LENGTH {
             return Err(AptosError::InvalidSignature(format!(
@@ -260,6 +294,11 @@ impl Secp256k1Signature {
     }
 
     /// Creates a signature from a hex string.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AptosError::Hex`] if the hex string is invalid.
+    /// Returns [`AptosError::InvalidSignature`] if the decoded bytes are not exactly 64 bytes or do not represent a valid Secp256k1 signature.
     pub fn from_hex(hex_str: &str) -> AptosResult<Self> {
         let hex_str = hex_str.strip_prefix("0x").unwrap_or(hex_str);
         let bytes = hex::decode(hex_str)?;

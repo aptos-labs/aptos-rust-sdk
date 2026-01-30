@@ -33,6 +33,10 @@ pub enum AnyPublicKeyVariant {
 
 impl AnyPublicKeyVariant {
     /// Get the variant from a byte.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AptosError::InvalidPublicKey`] if the byte value is not a valid variant (0-3).
     pub fn from_byte(byte: u8) -> AptosResult<Self> {
         match byte {
             0 => Ok(Self::Ed25519),
@@ -106,6 +110,15 @@ impl AnyPublicKey {
     }
 
     /// Verifies a signature against a message.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if:
+    /// - The signature variant doesn't match the public key variant
+    /// - The public key bytes are invalid for the variant
+    /// - The signature bytes are invalid for the variant
+    /// - Signature verification fails
+    /// - Verification is not supported for the variant
     #[allow(unused_variables)]
     pub fn verify(&self, message: &[u8], signature: &AnySignature) -> AptosResult<()> {
         if signature.variant != self.variant {
@@ -243,6 +256,14 @@ impl MultiKeyPublicKey {
     ///
     /// * `public_keys` - The individual public keys (can be mixed types)
     /// * `threshold` - The number of signatures required (M in M-of-N)
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AptosError::InvalidPublicKey`] if:
+    /// - No public keys are provided
+    /// - More than 32 public keys are provided
+    /// - Threshold is 0
+    /// - Threshold exceeds the number of keys
     pub fn new(public_keys: Vec<AnyPublicKey>, threshold: u8) -> AptosResult<Self> {
         if public_keys.is_empty() {
             return Err(AptosError::InvalidPublicKey(
@@ -316,6 +337,16 @@ impl MultiKeyPublicKey {
     }
 
     /// Creates from bytes.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AptosError::InvalidPublicKey`] if:
+    /// - The bytes are empty
+    /// - The number of keys is invalid (0 or > 32)
+    /// - The bytes are too short for the expected structure
+    /// - Any public key variant byte is invalid
+    /// - Any public key length or data is invalid
+    /// - The threshold is invalid
     pub fn from_bytes(bytes: &[u8]) -> AptosResult<Self> {
         if bytes.is_empty() {
             return Err(AptosError::InvalidPublicKey("empty bytes".into()));
@@ -387,6 +418,13 @@ impl MultiKeyPublicKey {
     }
 
     /// Verifies a multi-key signature against a message.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if:
+    /// - The number of signatures is less than the threshold
+    /// - Any individual signature verification fails
+    /// - A signer index is out of bounds
     pub fn verify(&self, message: &[u8], signature: &MultiKeySignature) -> AptosResult<()> {
         // Check that we have enough signatures
         if signature.num_signatures() < self.threshold as usize {
@@ -442,6 +480,14 @@ impl MultiKeySignature {
     /// # Arguments
     ///
     /// * `signatures` - Vec of (`signer_index`, signature) pairs
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AptosError::InvalidSignature`] if:
+    /// - No signatures are provided
+    /// - More than 32 signatures are provided
+    /// - A signer index is out of bounds (>= 32)
+    /// - Duplicate signer indices are present
     pub fn new(mut signatures: Vec<(u8, AnySignature)>) -> AptosResult<Self> {
         if signatures.is_empty() {
             return Err(AptosError::InvalidSignature(
@@ -534,6 +580,16 @@ impl MultiKeySignature {
     }
 
     /// Creates from bytes.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AptosError::InvalidSignature`] if:
+    /// - The bytes are too short (less than 5 bytes for `num_sigs` + bitmap)
+    /// - The number of signatures is invalid (0 or > 32)
+    /// - The bitmap doesn't match the number of signatures
+    /// - The bytes are too short for the expected structure
+    /// - Any signature variant byte is invalid
+    /// - Any signature length or data is invalid
     pub fn from_bytes(bytes: &[u8]) -> AptosResult<Self> {
         if bytes.len() < 5 {
             return Err(AptosError::InvalidSignature("bytes too short".into()));
