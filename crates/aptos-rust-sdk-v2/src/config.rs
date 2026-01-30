@@ -263,6 +263,7 @@ impl AptosConfig {
     ///
     /// let config = AptosConfig::mainnet();
     /// ```
+    #[allow(clippy::missing_panics_doc)]
     #[must_use]
     pub fn mainnet() -> Self {
         Self {
@@ -290,6 +291,7 @@ impl AptosConfig {
     ///
     /// let config = AptosConfig::testnet();
     /// ```
+    #[allow(clippy::missing_panics_doc)]
     #[must_use]
     pub fn testnet() -> Self {
         Self {
@@ -319,6 +321,7 @@ impl AptosConfig {
     ///
     /// let config = AptosConfig::devnet();
     /// ```
+    #[allow(clippy::missing_panics_doc)]
     #[must_use]
     pub fn devnet() -> Self {
         Self {
@@ -351,6 +354,7 @@ impl AptosConfig {
     ///
     /// let config = AptosConfig::local();
     /// ```
+    #[allow(clippy::missing_panics_doc)]
     #[must_use]
     pub fn local() -> Self {
         Self {

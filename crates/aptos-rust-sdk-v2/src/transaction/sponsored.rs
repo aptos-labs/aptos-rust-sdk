@@ -175,7 +175,7 @@ impl SponsoredTransactionBuilder {
     pub fn expiration_from_now(mut self, seconds: u64) -> Self {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .expect("time went backwards")
+            .unwrap_or_default()
             .as_secs();
         self.expiration_timestamp_secs = Some(now + seconds);
         self
@@ -212,8 +212,9 @@ impl SponsoredTransactionBuilder {
         let expiration_timestamp_secs = self.expiration_timestamp_secs.unwrap_or_else(|| {
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
-                .expect("time went backwards")
+                .unwrap_or_default()
                 .as_secs()
+                .saturating_add(DEFAULT_EXPIRATION_SECONDS)
                 + DEFAULT_EXPIRATION_SECONDS
         });
 

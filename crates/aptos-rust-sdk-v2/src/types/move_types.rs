@@ -41,11 +41,6 @@ impl Identifier {
     /// denial-of-service attacks via excessive memory allocation.
     pub fn new(s: impl Into<String>) -> AptosResult<Self> {
         let s = s.into();
-        if s.is_empty() {
-            return Err(AptosError::InvalidTypeTag(
-                "identifier cannot be empty".into(),
-            ));
-        }
         // Security: enforce length limit to prevent DoS
         if s.len() > MAX_IDENTIFIER_LENGTH {
             return Err(AptosError::InvalidTypeTag(format!(
@@ -54,8 +49,13 @@ impl Identifier {
                 MAX_IDENTIFIER_LENGTH
             )));
         }
-        // Safe to unwrap: we already checked s is not empty
-        let first = s.chars().next().expect("string is not empty");
+        let maybe_first = s.chars().next();
+        let Some(first) = maybe_first else {
+            return Err(AptosError::InvalidTypeTag(
+                "identifier cannot be empty".into(),
+            ));
+        };
+
         if !first.is_ascii_alphabetic() && first != '_' {
             return Err(AptosError::InvalidTypeTag(format!(
                 "identifier must start with letter or underscore: {s}"

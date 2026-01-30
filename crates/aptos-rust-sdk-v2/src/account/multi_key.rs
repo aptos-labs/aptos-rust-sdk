@@ -209,8 +209,14 @@ impl MultiKeyAccount {
                     "private key index {index} out of bounds"
                 )));
             }
+
             // Verify the private key matches the public key at that index
-            let expected_pk = multi_public_key.get(*index as usize).unwrap();
+            let Some(expected_pk) = multi_public_key.get(*index as usize) else {
+                return Err(AptosError::InvalidPrivateKey(format!(
+                    "private key index {index} out of bounds"
+                )));
+            };
+
             let actual_pk = key.public_key();
             if expected_pk.variant != actual_pk.variant || expected_pk.bytes != actual_pk.bytes {
                 return Err(AptosError::InvalidPrivateKey(format!(
