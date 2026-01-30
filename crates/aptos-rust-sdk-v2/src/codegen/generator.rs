@@ -47,47 +47,55 @@ impl Default for GeneratorConfig {
 
 impl GeneratorConfig {
     /// Creates a new configuration.
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
     /// Sets the module name.
+    #[must_use]
     pub fn with_module_name(mut self, name: impl Into<String>) -> Self {
         self.module_name = Some(name.into());
         self
     }
 
     /// Enables or disables entry function generation.
+    #[must_use]
     pub fn with_entry_functions(mut self, enabled: bool) -> Self {
         self.generate_entry_functions = enabled;
         self
     }
 
     /// Enables or disables view function generation.
+    #[must_use]
     pub fn with_view_functions(mut self, enabled: bool) -> Self {
         self.generate_view_functions = enabled;
         self
     }
 
     /// Enables or disables struct generation.
+    #[must_use]
     pub fn with_structs(mut self, enabled: bool) -> Self {
         self.generate_structs = enabled;
         self
     }
 
     /// Enables or disables event type generation.
+    #[must_use]
     pub fn with_events(mut self, enabled: bool) -> Self {
         self.generate_events = enabled;
         self
     }
 
     /// Enables or disables async functions.
+    #[must_use]
     pub fn with_async(mut self, enabled: bool) -> Self {
         self.async_functions = enabled;
         self
     }
 
     /// Enables builder pattern for entry functions.
+    #[must_use]
     pub fn with_builder_pattern(mut self, enabled: bool) -> Self {
         self.use_builder_pattern = enabled;
         self
@@ -104,6 +112,7 @@ pub struct ModuleGenerator<'a> {
 
 impl<'a> ModuleGenerator<'a> {
     /// Creates a new generator for the given ABI.
+    #[must_use]
     pub fn new(abi: &'a MoveModuleABI, config: GeneratorConfig) -> Self {
         Self {
             abi,
@@ -113,6 +122,7 @@ impl<'a> ModuleGenerator<'a> {
     }
 
     /// Adds Move source information for better parameter names and documentation.
+    #[must_use]
     pub fn with_source_info(mut self, source_info: MoveModuleInfo) -> Self {
         self.source_info = Some(source_info);
         self

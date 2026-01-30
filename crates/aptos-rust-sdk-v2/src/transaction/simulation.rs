@@ -500,29 +500,34 @@ pub struct SimulationOptions {
 
 impl SimulationOptions {
     /// Creates new simulation options.
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
     /// Sets gas-only estimation mode.
+    #[must_use]
     pub fn estimate_gas_only(mut self) -> Self {
         self.estimate_gas_only = true;
         self
     }
 
     /// Overrides the sequence number.
+    #[must_use]
     pub fn with_sequence_number(mut self, seq: u64) -> Self {
         self.sequence_number_override = Some(seq);
         self
     }
 
     /// Overrides the gas unit price.
+    #[must_use]
     pub fn with_gas_unit_price(mut self, price: u64) -> Self {
         self.gas_unit_price_override = Some(price);
         self
     }
 
     /// Overrides the max gas amount.
+    #[must_use]
     pub fn with_max_gas_amount(mut self, amount: u64) -> Self {
         self.max_gas_amount_override = Some(amount);
         self

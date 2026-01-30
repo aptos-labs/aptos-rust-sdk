@@ -89,6 +89,7 @@ pub struct SponsoredTransactionBuilder {
 
 impl SponsoredTransactionBuilder {
     /// Creates a new sponsored transaction builder with default values.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             sender_address: None,
@@ -104,12 +105,14 @@ impl SponsoredTransactionBuilder {
     }
 
     /// Sets the sender address.
+    #[must_use]
     pub fn sender(mut self, address: AccountAddress) -> Self {
         self.sender_address = Some(address);
         self
     }
 
     /// Sets the sender's sequence number.
+    #[must_use]
     pub fn sequence_number(mut self, sequence_number: u64) -> Self {
         self.sequence_number = Some(sequence_number);
         self
@@ -119,48 +122,56 @@ impl SponsoredTransactionBuilder {
     ///
     /// Secondary signers are additional accounts that must sign the transaction.
     /// This is useful for multi-party transactions.
+    #[must_use]
     pub fn secondary_signer(mut self, address: AccountAddress) -> Self {
         self.secondary_addresses.push(address);
         self
     }
 
     /// Adds multiple secondary signer addresses to the transaction.
+    #[must_use]
     pub fn secondary_signers(mut self, addresses: &[AccountAddress]) -> Self {
         self.secondary_addresses.extend(addresses);
         self
     }
 
     /// Sets the fee payer address.
+    #[must_use]
     pub fn fee_payer(mut self, address: AccountAddress) -> Self {
         self.fee_payer_address = Some(address);
         self
     }
 
     /// Sets the transaction payload.
+    #[must_use]
     pub fn payload(mut self, payload: TransactionPayload) -> Self {
         self.payload = Some(payload);
         self
     }
 
     /// Sets the maximum gas amount.
+    #[must_use]
     pub fn max_gas_amount(mut self, max_gas_amount: u64) -> Self {
         self.max_gas_amount = max_gas_amount;
         self
     }
 
     /// Sets the gas unit price in octas.
+    #[must_use]
     pub fn gas_unit_price(mut self, gas_unit_price: u64) -> Self {
         self.gas_unit_price = gas_unit_price;
         self
     }
 
     /// Sets the expiration timestamp in seconds since Unix epoch.
+    #[must_use]
     pub fn expiration_timestamp_secs(mut self, expiration_timestamp_secs: u64) -> Self {
         self.expiration_timestamp_secs = Some(expiration_timestamp_secs);
         self
     }
 
     /// Sets the expiration time relative to now.
+    #[must_use]
     pub fn expiration_from_now(mut self, seconds: u64) -> Self {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -171,6 +182,7 @@ impl SponsoredTransactionBuilder {
     }
 
     /// Sets the chain ID.
+    #[must_use]
     pub fn chain_id(mut self, chain_id: ChainId) -> Self {
         self.chain_id = Some(chain_id);
         self

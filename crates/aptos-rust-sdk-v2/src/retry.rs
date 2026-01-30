@@ -168,48 +168,56 @@ pub struct RetryConfigBuilder {
 
 impl RetryConfigBuilder {
     /// Sets the maximum number of retry attempts.
+    #[must_use]
     pub fn max_retries(mut self, max_retries: u32) -> Self {
         self.max_retries = Some(max_retries);
         self
     }
 
     /// Sets the initial delay before the first retry (in milliseconds).
+    #[must_use]
     pub fn initial_delay_ms(mut self, initial_delay_ms: u64) -> Self {
         self.initial_delay_ms = Some(initial_delay_ms);
         self
     }
 
     /// Sets the maximum delay between retries (in milliseconds).
+    #[must_use]
     pub fn max_delay_ms(mut self, max_delay_ms: u64) -> Self {
         self.max_delay_ms = Some(max_delay_ms);
         self
     }
 
     /// Sets the base for exponential backoff.
+    #[must_use]
     pub fn exponential_base(mut self, base: f64) -> Self {
         self.exponential_base = Some(base);
         self
     }
 
     /// Enables or disables jitter.
+    #[must_use]
     pub fn jitter(mut self, jitter: bool) -> Self {
         self.jitter = Some(jitter);
         self
     }
 
     /// Sets the jitter factor (0.0 to 1.0).
+    #[must_use]
     pub fn jitter_factor(mut self, factor: f64) -> Self {
         self.jitter_factor = Some(factor.clamp(0.0, 1.0));
         self
     }
 
     /// Sets the HTTP status codes that should trigger a retry.
+    #[must_use]
     pub fn retryable_status_codes(mut self, codes: Vec<u16>) -> Self {
         self.retryable_status_codes = Some(codes);
         self
     }
 
     /// Adds a status code to the list of retryable codes.
+    #[must_use]
     pub fn add_retryable_status_code(mut self, code: u16) -> Self {
         let mut codes = self.retryable_status_codes.unwrap_or_default();
         if !codes.contains(&code) {
@@ -220,6 +228,7 @@ impl RetryConfigBuilder {
     }
 
     /// Builds the `RetryConfig`.
+    #[must_use]
     pub fn build(self) -> RetryConfig {
         let default = RetryConfig::default();
         RetryConfig {

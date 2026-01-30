@@ -207,6 +207,7 @@ pub struct InputEntryFunctionDataBuilder {
 
 impl InputEntryFunctionDataBuilder {
     /// Creates a new builder from a function ID string.
+    #[must_use]
     fn new(function_id: &str) -> Self {
         match EntryFunctionId::from_str_strict(function_id) {
             Ok(func_id) => Self {
@@ -238,6 +239,7 @@ impl InputEntryFunctionDataBuilder {
     /// let builder = InputEntryFunctionData::new("0x1::coin::transfer")
     ///     .type_arg("0x1::aptos_coin::AptosCoin");
     /// ```
+    #[must_use]
     pub fn type_arg(mut self, type_arg: &str) -> Self {
         match TypeTag::from_str_strict(type_arg) {
             Ok(tag) => self.type_args.push(tag),
@@ -249,12 +251,14 @@ impl InputEntryFunctionDataBuilder {
     }
 
     /// Adds a type argument from a `TypeTag`.
+    #[must_use]
     pub fn type_arg_typed(mut self, type_arg: TypeTag) -> Self {
         self.type_args.push(type_arg);
         self
     }
 
     /// Adds multiple type arguments.
+    #[must_use]
     pub fn type_args(mut self, type_args: impl IntoIterator<Item = &'static str>) -> Self {
         for type_arg in type_args {
             self = self.type_arg(type_arg);
@@ -263,6 +267,7 @@ impl InputEntryFunctionDataBuilder {
     }
 
     /// Adds multiple typed type arguments.
+    #[must_use]
     pub fn type_args_typed(mut self, type_args: impl IntoIterator<Item = TypeTag>) -> Self {
         self.type_args.extend(type_args);
         self
@@ -290,6 +295,7 @@ impl InputEntryFunctionDataBuilder {
     ///     .arg(AccountAddress::ONE)
     ///     .arg("hello".to_string());
     /// ```
+    #[must_use]
     pub fn arg<T: Serialize>(mut self, value: T) -> Self {
         match aptos_bcs::to_bytes(&value) {
             Ok(bytes) => self.args.push(bytes),
@@ -303,12 +309,14 @@ impl InputEntryFunctionDataBuilder {
     /// Adds a raw BCS-encoded argument.
     ///
     /// Use this when you have pre-encoded bytes.
+    #[must_use]
     pub fn arg_raw(mut self, bytes: Vec<u8>) -> Self {
         self.args.push(bytes);
         self
     }
 
     /// Adds multiple BCS-encodable arguments.
+    #[must_use]
     pub fn args<T: Serialize>(mut self, values: impl IntoIterator<Item = T>) -> Self {
         for value in values {
             self = self.arg(value);

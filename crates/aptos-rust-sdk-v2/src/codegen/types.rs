@@ -17,6 +17,7 @@ pub struct RustType {
 
 impl RustType {
     /// Creates a new Rust type.
+    #[must_use]
     pub fn new(path: impl Into<String>) -> Self {
         Self {
             path: path.into(),
@@ -27,6 +28,7 @@ impl RustType {
     }
 
     /// Creates a type that doesn't need BCS serialization.
+    #[must_use]
     pub fn primitive(path: impl Into<String>) -> Self {
         Self {
             path: path.into(),
@@ -37,12 +39,14 @@ impl RustType {
     }
 
     /// Creates a reference type.
+    #[must_use]
     pub fn reference(mut self) -> Self {
         self.is_ref = true;
         self
     }
 
     /// Adds documentation.
+    #[must_use]
     pub fn with_doc(mut self, doc: impl Into<String>) -> Self {
         self.doc = Some(doc.into());
         self

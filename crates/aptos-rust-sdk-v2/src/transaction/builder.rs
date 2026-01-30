@@ -57,6 +57,7 @@ impl Default for TransactionBuilder {
 
 impl TransactionBuilder {
     /// Creates a new transaction builder with default values.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             sender: None,
@@ -70,36 +71,42 @@ impl TransactionBuilder {
     }
 
     /// Sets the sender address.
+    #[must_use]
     pub fn sender(mut self, sender: AccountAddress) -> Self {
         self.sender = Some(sender);
         self
     }
 
     /// Sets the sequence number.
+    #[must_use]
     pub fn sequence_number(mut self, sequence_number: u64) -> Self {
         self.sequence_number = Some(sequence_number);
         self
     }
 
     /// Sets the transaction payload.
+    #[must_use]
     pub fn payload(mut self, payload: TransactionPayload) -> Self {
         self.payload = Some(payload);
         self
     }
 
     /// Sets the maximum gas amount.
+    #[must_use]
     pub fn max_gas_amount(mut self, max_gas_amount: u64) -> Self {
         self.max_gas_amount = max_gas_amount;
         self
     }
 
     /// Sets the gas unit price in octas.
+    #[must_use]
     pub fn gas_unit_price(mut self, gas_unit_price: u64) -> Self {
         self.gas_unit_price = gas_unit_price;
         self
     }
 
     /// Sets the expiration timestamp in seconds since Unix epoch.
+    #[must_use]
     pub fn expiration_timestamp_secs(mut self, expiration_timestamp_secs: u64) -> Self {
         self.expiration_timestamp_secs = Some(expiration_timestamp_secs);
         self
@@ -108,6 +115,7 @@ impl TransactionBuilder {
     /// Sets the expiration time relative to now.
     ///
     /// Uses saturating arithmetic to handle edge cases like system time going backwards.
+    #[must_use]
     pub fn expiration_from_now(mut self, seconds: u64) -> Self {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -118,6 +126,7 @@ impl TransactionBuilder {
     }
 
     /// Sets the chain ID.
+    #[must_use]
     pub fn chain_id(mut self, chain_id: ChainId) -> Self {
         self.chain_id = Some(chain_id);
         self

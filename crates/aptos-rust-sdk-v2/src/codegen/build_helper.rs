@@ -71,23 +71,27 @@ impl Default for BuildConfig {
 
 impl BuildConfig {
     /// Creates a new build configuration.
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }
 
     /// Sets whether to generate a mod.rs file.
+    #[must_use]
     pub fn with_mod_file(mut self, enabled: bool) -> Self {
         self.generate_mod_file = enabled;
         self
     }
 
     /// Sets the generator configuration.
+    #[must_use]
     pub fn with_generator_config(mut self, config: GeneratorConfig) -> Self {
         self.generator_config = config;
         self
     }
 
     /// Sets whether to print cargo instructions.
+    #[must_use]
     pub fn with_cargo_instructions(mut self, enabled: bool) -> Self {
         self.print_cargo_instructions = enabled;
         self

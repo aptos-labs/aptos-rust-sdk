@@ -144,6 +144,7 @@ impl Default for TransactionBatchBuilder {
 
 impl TransactionBatchBuilder {
     /// Creates a new batch builder.
+    #[must_use]
     pub fn new() -> Self {
         Self {
             sender: None,
@@ -157,6 +158,7 @@ impl TransactionBatchBuilder {
     }
 
     /// Sets the sender address.
+    #[must_use]
     pub fn sender(mut self, sender: AccountAddress) -> Self {
         self.sender = Some(sender);
         self
@@ -166,42 +168,49 @@ impl TransactionBatchBuilder {
     ///
     /// Each transaction in the batch will use an incrementing sequence number
     /// starting from this value.
+    #[must_use]
     pub fn starting_sequence_number(mut self, seq: u64) -> Self {
         self.starting_sequence_number = Some(seq);
         self
     }
 
     /// Sets the chain ID.
+    #[must_use]
     pub fn chain_id(mut self, chain_id: ChainId) -> Self {
         self.chain_id = Some(chain_id);
         self
     }
 
     /// Sets the gas unit price for all transactions.
+    #[must_use]
     pub fn gas_unit_price(mut self, price: u64) -> Self {
         self.gas_unit_price = price;
         self
     }
 
     /// Sets the maximum gas amount for all transactions.
+    #[must_use]
     pub fn max_gas_amount(mut self, amount: u64) -> Self {
         self.max_gas_amount = amount;
         self
     }
 
     /// Sets the expiration time in seconds from now.
+    #[must_use]
     pub fn expiration_secs(mut self, secs: u64) -> Self {
         self.expiration_secs = secs;
         self
     }
 
     /// Adds a transaction payload to the batch.
+    #[must_use]
     pub fn add_payload(mut self, payload: TransactionPayload) -> Self {
         self.payloads.push(payload);
         self
     }
 
     /// Adds multiple transaction payloads to the batch.
+    #[must_use]
     pub fn add_payloads(mut self, payloads: impl IntoIterator<Item = TransactionPayload>) -> Self {
         self.payloads.extend(payloads);
         self

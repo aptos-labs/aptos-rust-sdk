@@ -105,42 +105,49 @@ pub struct PoolConfigBuilder {
 
 impl PoolConfigBuilder {
     /// Sets the maximum idle connections per host.
+    #[must_use]
     pub fn max_idle_per_host(mut self, max: usize) -> Self {
         self.max_idle_per_host = Some(max);
         self
     }
 
     /// Removes the limit on idle connections per host.
+    #[must_use]
     pub fn unlimited_idle_per_host(mut self) -> Self {
         self.max_idle_per_host = None;
         self
     }
 
     /// Sets the maximum total idle connections.
+    #[must_use]
     pub fn max_idle_total(mut self, max: usize) -> Self {
         self.max_idle_total = Some(max);
         self
     }
 
     /// Sets the idle connection timeout.
+    #[must_use]
     pub fn idle_timeout(mut self, timeout: Duration) -> Self {
         self.idle_timeout = Some(timeout);
         self
     }
 
     /// Sets the TCP keepalive interval.
+    #[must_use]
     pub fn tcp_keepalive(mut self, interval: Duration) -> Self {
         self.tcp_keepalive = Some(interval);
         self
     }
 
     /// Disables TCP keepalive.
+    #[must_use]
     pub fn no_tcp_keepalive(mut self) -> Self {
         self.tcp_keepalive = None;
         self
     }
 
     /// Sets whether to enable TCP nodelay.
+    #[must_use]
     pub fn tcp_nodelay(mut self, enabled: bool) -> Self {
         self.tcp_nodelay = Some(enabled);
         self
@@ -256,6 +263,7 @@ impl AptosConfig {
     ///
     /// let config = AptosConfig::mainnet();
     /// ```
+    #[must_use]
     pub fn mainnet() -> Self {
         Self {
             network: Network::Mainnet,
@@ -282,6 +290,7 @@ impl AptosConfig {
     ///
     /// let config = AptosConfig::testnet();
     /// ```
+    #[must_use]
     pub fn testnet() -> Self {
         Self {
             network: Network::Testnet,
@@ -310,6 +319,7 @@ impl AptosConfig {
     ///
     /// let config = AptosConfig::devnet();
     /// ```
+    #[must_use]
     pub fn devnet() -> Self {
         Self {
             network: Network::Devnet,
@@ -341,6 +351,7 @@ impl AptosConfig {
     ///
     /// let config = AptosConfig::local();
     /// ```
+    #[must_use]
     pub fn local() -> Self {
         Self {
             network: Network::Local,
@@ -377,6 +388,7 @@ impl AptosConfig {
     }
 
     /// Sets the request timeout.
+    #[must_use]
     pub fn with_timeout(mut self, timeout: Duration) -> Self {
         self.timeout = timeout;
         self
@@ -393,6 +405,7 @@ impl AptosConfig {
     /// let config = AptosConfig::testnet()
     ///     .with_retry(RetryConfig::aggressive());
     /// ```
+    #[must_use]
     pub fn with_retry(mut self, retry_config: RetryConfig) -> Self {
         self.retry_config = retry_config;
         self
@@ -401,6 +414,7 @@ impl AptosConfig {
     /// Disables automatic retry for API calls.
     ///
     /// This is equivalent to `with_retry(RetryConfig::no_retry())`.
+    #[must_use]
     pub fn without_retry(mut self) -> Self {
         self.retry_config = RetryConfig::no_retry();
         self
@@ -409,6 +423,7 @@ impl AptosConfig {
     /// Sets the maximum number of retries for transient failures.
     ///
     /// This is a convenience method that modifies the retry config.
+    #[must_use]
     pub fn with_max_retries(mut self, max_retries: u32) -> Self {
         self.retry_config = RetryConfig::builder()
             .max_retries(max_retries)
@@ -431,6 +446,7 @@ impl AptosConfig {
     /// let config = AptosConfig::testnet()
     ///     .with_pool(PoolConfig::high_throughput());
     /// ```
+    #[must_use]
     pub fn with_pool(mut self, pool_config: PoolConfig) -> Self {
         self.pool_config = pool_config;
         self
@@ -440,6 +456,7 @@ impl AptosConfig {
     ///
     /// This is useful when using Aptos Build or other services that
     /// provide higher rate limits with API keys.
+    #[must_use]
     pub fn with_api_key(mut self, api_key: impl Into<String>) -> Self {
         self.api_key = Some(api_key.into());
         self
