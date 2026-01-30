@@ -133,10 +133,10 @@ impl SimulationResult {
             .unwrap_or_default();
 
         // Parse VM error if present
-        let vm_error = if !success {
-            VmError::from_status(&vm_status)
-        } else {
+        let vm_error = if success {
             None
+        } else {
+            VmError::from_status(&vm_status)
         };
 
         Ok(Self {

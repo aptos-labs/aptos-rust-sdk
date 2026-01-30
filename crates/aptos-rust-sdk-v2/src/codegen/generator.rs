@@ -384,7 +384,9 @@ impl<'a> ModuleGenerator<'a> {
         )?;
 
         // Generic type parameters
-        if !struct_def.generic_type_params.is_empty() {
+        if struct_def.generic_type_params.is_empty() {
+            writeln!(output, "pub struct {rust_name} {{")?;
+        } else {
             let type_params: Vec<String> = struct_def
                 .generic_type_params
                 .iter()
@@ -398,8 +400,6 @@ impl<'a> ModuleGenerator<'a> {
                 rust_name,
                 type_params.join(", ")
             )?;
-        } else {
-            writeln!(output, "pub struct {rust_name} {{")?;
         }
 
         // Fields

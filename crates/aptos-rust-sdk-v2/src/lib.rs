@@ -73,7 +73,6 @@
     clippy::cast_precision_loss,      // Acceptable for display/logging purposes
     clippy::unnecessary_wraps,        // Some wraps are for API consistency
     clippy::unused_self,              // Some methods take &self for future extensibility
-    clippy::if_not_else,              // if !x {} is often clearer than if x {} else {}
     clippy::missing_fields_in_debug,  // Debug impls may intentionally omit sensitive fields
     clippy::format_push_string        // format!() for complex strings is more readable
 )]
