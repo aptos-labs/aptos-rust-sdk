@@ -536,4 +536,145 @@ mod tests {
         // Same public keys should produce same address
         assert_eq!(account1.address(), account2.address());
     }
+
+    #[test]
+    fn test_empty_keys_error() {
+        let result = MultiEd25519Account::new(vec![], 1);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_threshold_exceeds_keys_error() {
+        let keys: Vec<_> = (0..2).map(|_| Ed25519PrivateKey::generate()).collect();
+        let result = MultiEd25519Account::new(keys, 5);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_from_keys_index_out_of_bounds() {
+        let keys: Vec<_> = (0..3).map(|_| Ed25519PrivateKey::generate()).collect();
+        let public_keys: Vec<_> = keys.iter().map(|k| k.public_key()).collect();
+
+        // Index 10 is out of bounds
+        let my_keys = vec![(10u8, keys[0].clone())];
+        let result = MultiEd25519Account::from_keys(public_keys, my_keys, 1);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_from_keys_mismatched_key() {
+        let keys: Vec<_> = (0..3).map(|_| Ed25519PrivateKey::generate()).collect();
+        let public_keys: Vec<_> = keys.iter().map(|k| k.public_key()).collect();
+
+        // Provide wrong private key for index 0
+        let different_key = Ed25519PrivateKey::generate();
+        let my_keys = vec![(0u8, different_key)];
+        let result = MultiEd25519Account::from_keys(public_keys, my_keys, 1);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_owned_key_indices() {
+        let all_keys: Vec<_> = (0..3).map(|_| Ed25519PrivateKey::generate()).collect();
+        let public_keys: Vec<_> = all_keys.iter().map(|k| k.public_key()).collect();
+
+        let my_keys = vec![(0u8, all_keys[0].clone()), (2u8, all_keys[2].clone())];
+
+        let account = MultiEd25519Account::from_keys(public_keys, my_keys, 2).unwrap();
+        let indices = account.owned_key_indices();
+        assert_eq!(indices, vec![0, 2]);
+    }
+
+    #[test]
+    fn test_sign_with_indices_insufficient() {
+        let keys: Vec<_> = (0..3).map(|_| Ed25519PrivateKey::generate()).collect();
+        let account = MultiEd25519Account::new(keys, 2).unwrap();
+
+        // Only 1 index but threshold is 2
+        let result = account.sign_with_indices(b"test", &[0]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_sign_with_indices_missing_key() {
+        let all_keys: Vec<_> = (0..3).map(|_| Ed25519PrivateKey::generate()).collect();
+        let public_keys: Vec<_> = all_keys.iter().map(|k| k.public_key()).collect();
+
+        // Only own key 0
+        let my_keys = vec![(0u8, all_keys[0].clone())];
+        let account = MultiEd25519Account::from_keys(public_keys, my_keys, 1).unwrap();
+
+        // Try to sign with key 1 which we don't have
+        let result = account.sign_with_indices(b"test", &[1]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_create_signature_contribution_missing_key() {
+        let all_keys: Vec<_> = (0..3).map(|_| Ed25519PrivateKey::generate()).collect();
+        let public_keys: Vec<_> = all_keys.iter().map(|k| k.public_key()).collect();
+
+        // Only own key 0
+        let my_keys = vec![(0u8, all_keys[0].clone())];
+        let account = MultiEd25519Account::from_keys(public_keys, my_keys, 1).unwrap();
+
+        // Try to contribute with key 1 which we don't have
+        let result = account.create_signature_contribution(b"test", 1);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_account_trait_implementation() {
+        use crate::account::Account;
+
+        let keys: Vec<_> = (0..3).map(|_| Ed25519PrivateKey::generate()).collect();
+        let account = MultiEd25519Account::new(keys, 2).unwrap();
+
+        // Test Account trait methods
+        assert!(!account.address().is_zero());
+        assert!(!account.public_key_bytes().is_empty());
+        assert_eq!(
+            account.signature_scheme(),
+            crate::crypto::MULTI_ED25519_SCHEME
+        );
+
+        // Test signing via trait (returns Vec<u8>)
+        let sig_bytes: Vec<u8> = Account::sign(&account, b"test").unwrap();
+        assert!(!sig_bytes.is_empty());
+    }
+
+    #[test]
+    fn test_auth_key() {
+        let keys: Vec<_> = (0..3).map(|_| Ed25519PrivateKey::generate()).collect();
+        let account = MultiEd25519Account::new(keys, 2).unwrap();
+        let auth_key = account.auth_key();
+        assert_eq!(auth_key.as_bytes().len(), 32);
+    }
+
+    #[test]
+    fn test_display_format() {
+        let keys: Vec<_> = (0..3).map(|_| Ed25519PrivateKey::generate()).collect();
+        let account = MultiEd25519Account::new(keys, 2).unwrap();
+        let display = format!("{}", account);
+        assert!(display.contains("MultiEd25519Account"));
+        assert!(display.contains("2-of-3"));
+    }
+
+    #[test]
+    fn test_debug_format() {
+        let keys: Vec<_> = (0..3).map(|_| Ed25519PrivateKey::generate()).collect();
+        let account = MultiEd25519Account::new(keys, 2).unwrap();
+        let debug = format!("{:?}", account);
+        assert!(debug.contains("MultiEd25519Account"));
+        assert!(debug.contains("address"));
+    }
+
+    #[test]
+    fn test_public_key_accessor() {
+        let keys: Vec<_> = (0..3).map(|_| Ed25519PrivateKey::generate()).collect();
+        let account = MultiEd25519Account::new(keys, 2).unwrap();
+        let pk = account.public_key();
+        assert_eq!(pk.num_keys(), 3);
+        assert_eq!(pk.threshold(), 2);
+    }
 }

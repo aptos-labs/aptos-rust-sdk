@@ -849,4 +849,294 @@ mod tests {
         let signed_txn = partially_signed.finalize().unwrap();
         assert_eq!(signed_txn.raw_txn.sender, sender.address());
     }
+
+    #[test]
+    fn test_builder_missing_sequence_number() {
+        let recipient = AccountAddress::from_hex("0x123").unwrap();
+        let result = SponsoredTransactionBuilder::new()
+            .sender(AccountAddress::ONE)
+            .fee_payer(AccountAddress::from_hex("0x3").unwrap())
+            .payload(TransactionPayload::EntryFunction(
+                EntryFunction::apt_transfer(recipient, 1000).unwrap(),
+            ))
+            .chain_id(ChainId::testnet())
+            .build();
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("sequence_number"));
+    }
+
+    #[test]
+    fn test_builder_missing_payload() {
+        let result = SponsoredTransactionBuilder::new()
+            .sender(AccountAddress::ONE)
+            .sequence_number(0)
+            .fee_payer(AccountAddress::from_hex("0x3").unwrap())
+            .chain_id(ChainId::testnet())
+            .build();
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("payload"));
+    }
+
+    #[test]
+    fn test_builder_missing_chain_id() {
+        let recipient = AccountAddress::from_hex("0x123").unwrap();
+        let result = SponsoredTransactionBuilder::new()
+            .sender(AccountAddress::ONE)
+            .sequence_number(0)
+            .fee_payer(AccountAddress::from_hex("0x3").unwrap())
+            .payload(TransactionPayload::EntryFunction(
+                EntryFunction::apt_transfer(recipient, 1000).unwrap(),
+            ))
+            .build();
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("chain_id"));
+    }
+
+    #[test]
+    fn test_builder_secondary_signers() {
+        let recipient = AccountAddress::from_hex("0x123").unwrap();
+        let secondary1 = AccountAddress::from_hex("0x4").unwrap();
+        let secondary2 = AccountAddress::from_hex("0x5").unwrap();
+
+        let fee_payer_txn = SponsoredTransactionBuilder::new()
+            .sender(AccountAddress::ONE)
+            .sequence_number(0)
+            .fee_payer(AccountAddress::from_hex("0x3").unwrap())
+            .secondary_signer(secondary1)
+            .secondary_signers(&[secondary2])
+            .payload(TransactionPayload::EntryFunction(
+                EntryFunction::apt_transfer(recipient, 1000).unwrap(),
+            ))
+            .chain_id(ChainId::testnet())
+            .build()
+            .unwrap();
+
+        assert_eq!(fee_payer_txn.secondary_signer_addresses.len(), 2);
+        assert_eq!(fee_payer_txn.secondary_signer_addresses[0], secondary1);
+        assert_eq!(fee_payer_txn.secondary_signer_addresses[1], secondary2);
+    }
+
+    #[test]
+    fn test_builder_expiration_timestamp() {
+        let recipient = AccountAddress::from_hex("0x123").unwrap();
+        let expiration = 1234567890u64;
+
+        let fee_payer_txn = SponsoredTransactionBuilder::new()
+            .sender(AccountAddress::ONE)
+            .sequence_number(0)
+            .fee_payer(AccountAddress::from_hex("0x3").unwrap())
+            .payload(TransactionPayload::EntryFunction(
+                EntryFunction::apt_transfer(recipient, 1000).unwrap(),
+            ))
+            .chain_id(ChainId::testnet())
+            .expiration_timestamp_secs(expiration)
+            .build()
+            .unwrap();
+
+        assert_eq!(fee_payer_txn.raw_txn.expiration_timestamp_secs, expiration);
+    }
+
+    #[test]
+    fn test_builder_expiration_from_now() {
+        let recipient = AccountAddress::from_hex("0x123").unwrap();
+
+        let fee_payer_txn = SponsoredTransactionBuilder::new()
+            .sender(AccountAddress::ONE)
+            .sequence_number(0)
+            .fee_payer(AccountAddress::from_hex("0x3").unwrap())
+            .payload(TransactionPayload::EntryFunction(
+                EntryFunction::apt_transfer(recipient, 1000).unwrap(),
+            ))
+            .chain_id(ChainId::testnet())
+            .expiration_from_now(60)
+            .build()
+            .unwrap();
+
+        // Expiration should be roughly now + 60 seconds
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        assert!(fee_payer_txn.raw_txn.expiration_timestamp_secs >= now);
+        assert!(fee_payer_txn.raw_txn.expiration_timestamp_secs <= now + 65);
+    }
+
+    #[test]
+    fn test_builder_default() {
+        let builder = SponsoredTransactionBuilder::default();
+        assert!(builder.sender_address.is_none());
+        assert!(builder.sequence_number.is_none());
+        assert!(builder.fee_payer_address.is_none());
+        assert!(builder.payload.is_none());
+        assert!(builder.chain_id.is_none());
+        // Default values are set via SponsoredTransactionBuilder::new()
+        // not via Default::default() which initializes to Rust defaults (0)
+        // Let's just check the builder is properly created
+    }
+
+    #[test]
+    fn test_builder_new_defaults() {
+        let builder = SponsoredTransactionBuilder::new();
+        assert!(builder.sender_address.is_none());
+        assert!(builder.sequence_number.is_none());
+        assert!(builder.fee_payer_address.is_none());
+        assert!(builder.payload.is_none());
+        assert!(builder.chain_id.is_none());
+        assert_eq!(builder.max_gas_amount, DEFAULT_MAX_GAS_AMOUNT);
+        assert_eq!(builder.gas_unit_price, DEFAULT_GAS_UNIT_PRICE);
+    }
+
+    #[test]
+    fn test_builder_debug() {
+        let builder = SponsoredTransactionBuilder::new().sender(AccountAddress::ONE);
+        let debug = format!("{:?}", builder);
+        assert!(debug.contains("SponsoredTransactionBuilder"));
+    }
+
+    #[cfg(feature = "ed25519")]
+    #[test]
+    fn test_partially_signed_with_secondary_signers() {
+        use crate::account::Ed25519Account;
+
+        let sender = Ed25519Account::generate();
+        let secondary = Ed25519Account::generate();
+        let fee_payer = Ed25519Account::generate();
+        let recipient = AccountAddress::from_hex("0x123").unwrap();
+
+        let payload = EntryFunction::apt_transfer(recipient, 1000).unwrap();
+
+        // Build with secondary signer
+        let fee_payer_txn = SponsoredTransactionBuilder::new()
+            .sender(sender.address())
+            .sequence_number(0)
+            .secondary_signer(secondary.address())
+            .fee_payer(fee_payer.address())
+            .payload(payload.into())
+            .chain_id(ChainId::testnet())
+            .build()
+            .unwrap();
+
+        let mut partially_signed = PartiallySigned::new(fee_payer_txn);
+
+        // Need all three signatures
+        assert!(!partially_signed.is_complete());
+
+        partially_signed.sign_as_sender(&sender).unwrap();
+        assert!(!partially_signed.is_complete());
+
+        partially_signed.sign_as_secondary(0, &secondary).unwrap();
+        assert!(!partially_signed.is_complete());
+
+        partially_signed.sign_as_fee_payer(&fee_payer).unwrap();
+        assert!(partially_signed.is_complete());
+
+        let signed = partially_signed.finalize().unwrap();
+        assert_eq!(signed.raw_txn.sender, sender.address());
+    }
+
+    #[cfg(feature = "ed25519")]
+    #[test]
+    fn test_partially_signed_secondary_index_out_of_bounds() {
+        use crate::account::Ed25519Account;
+
+        let sender = Ed25519Account::generate();
+        let fee_payer = Ed25519Account::generate();
+        let secondary = Ed25519Account::generate();
+        let recipient = AccountAddress::from_hex("0x123").unwrap();
+
+        let payload = EntryFunction::apt_transfer(recipient, 1000).unwrap();
+
+        // No secondary signers in the transaction
+        let fee_payer_txn = SponsoredTransactionBuilder::new()
+            .sender(sender.address())
+            .sequence_number(0)
+            .fee_payer(fee_payer.address())
+            .payload(payload.into())
+            .chain_id(ChainId::testnet())
+            .build()
+            .unwrap();
+
+        let mut partially_signed = PartiallySigned::new(fee_payer_txn);
+
+        // Try to sign as secondary at index 0 (out of bounds because no secondary signers)
+        let result = partially_signed.sign_as_secondary(0, &secondary);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("out of bounds"));
+    }
+
+    #[cfg(feature = "ed25519")]
+    #[test]
+    fn test_partially_signed_finalize_missing_secondary() {
+        use crate::account::Ed25519Account;
+
+        let sender = Ed25519Account::generate();
+        let fee_payer = Ed25519Account::generate();
+        let recipient = AccountAddress::from_hex("0x123").unwrap();
+
+        let payload = EntryFunction::apt_transfer(recipient, 1000).unwrap();
+
+        // Build with secondary signer but don't sign it
+        let fee_payer_txn = SponsoredTransactionBuilder::new()
+            .sender(sender.address())
+            .sequence_number(0)
+            .secondary_signer(AccountAddress::from_hex("0x5").unwrap())
+            .fee_payer(fee_payer.address())
+            .payload(payload.into())
+            .chain_id(ChainId::testnet())
+            .build()
+            .unwrap();
+
+        let mut partially_signed = PartiallySigned::new(fee_payer_txn);
+
+        // Sign sender and fee payer but not secondary
+        partially_signed.sign_as_sender(&sender).unwrap();
+        partially_signed.sign_as_fee_payer(&fee_payer).unwrap();
+
+        // Should fail because secondary is missing
+        let result = partially_signed.finalize();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("secondary signer"));
+    }
+
+    #[cfg(feature = "ed25519")]
+    #[test]
+    fn test_sponsor_with_gas() {
+        use crate::account::Ed25519Account;
+
+        let sender = Ed25519Account::generate();
+        let sponsor = Ed25519Account::generate();
+        let recipient = AccountAddress::from_hex("0x123").unwrap();
+
+        let payload = EntryFunction::apt_transfer(recipient, 1000).unwrap();
+
+        let signed_txn = sponsor
+            .sponsor_with_gas(&sender, 0, payload.into(), ChainId::testnet(), 50000, 200)
+            .unwrap();
+
+        assert_eq!(signed_txn.raw_txn.sender, sender.address());
+        assert_eq!(signed_txn.raw_txn.max_gas_amount, 50000);
+        assert_eq!(signed_txn.raw_txn.gas_unit_price, 200);
+    }
+
+    #[test]
+    fn test_partially_signed_debug() {
+        let recipient = AccountAddress::from_hex("0x123").unwrap();
+        let payload = EntryFunction::apt_transfer(recipient, 1000).unwrap();
+
+        let fee_payer_txn = SponsoredTransactionBuilder::new()
+            .sender(AccountAddress::ONE)
+            .sequence_number(0)
+            .fee_payer(AccountAddress::from_hex("0x3").unwrap())
+            .payload(payload.into())
+            .chain_id(ChainId::testnet())
+            .build()
+            .unwrap();
+
+        let partially_signed = PartiallySigned::new(fee_payer_txn);
+        let debug = format!("{:?}", partially_signed);
+        assert!(debug.contains("PartiallySigned"));
+    }
 }

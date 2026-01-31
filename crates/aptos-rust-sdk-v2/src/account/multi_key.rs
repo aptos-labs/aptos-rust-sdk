@@ -648,4 +648,191 @@ mod tests {
         // Same public keys should produce same address
         assert_eq!(account1.address(), account2.address());
     }
+
+    #[test]
+    #[cfg(feature = "ed25519")]
+    fn test_any_private_key_variant() {
+        use crate::crypto::Ed25519PrivateKey;
+
+        let key = AnyPrivateKey::ed25519(Ed25519PrivateKey::generate());
+        assert_eq!(key.variant(), AnyPublicKeyVariant::Ed25519);
+    }
+
+    #[test]
+    #[cfg(feature = "secp256k1")]
+    fn test_any_private_key_secp256k1() {
+        use crate::crypto::Secp256k1PrivateKey;
+
+        let key = AnyPrivateKey::secp256k1(Secp256k1PrivateKey::generate());
+        assert_eq!(key.variant(), AnyPublicKeyVariant::Secp256k1);
+
+        // Test public key extraction
+        let pk = key.public_key();
+        assert_eq!(pk.variant, AnyPublicKeyVariant::Secp256k1);
+
+        // Test signing - just verify it doesn't panic
+        let _sig = key.sign(b"test message");
+    }
+
+    #[test]
+    #[cfg(feature = "secp256r1")]
+    fn test_any_private_key_secp256r1() {
+        use crate::crypto::Secp256r1PrivateKey;
+
+        let key = AnyPrivateKey::secp256r1(Secp256r1PrivateKey::generate());
+        assert_eq!(key.variant(), AnyPublicKeyVariant::Secp256r1);
+
+        // Test public key extraction
+        let pk = key.public_key();
+        assert_eq!(pk.variant, AnyPublicKeyVariant::Secp256r1);
+
+        // Test signing - just verify it doesn't panic
+        let _sig = key.sign(b"test message");
+    }
+
+    #[test]
+    #[cfg(feature = "ed25519")]
+    fn test_any_private_key_clone() {
+        use crate::crypto::Ed25519PrivateKey;
+
+        let key = AnyPrivateKey::ed25519(Ed25519PrivateKey::generate());
+        let cloned = key.clone();
+        assert_eq!(key.variant(), cloned.variant());
+        // Both should produce same public key
+        assert_eq!(
+            key.public_key().to_bcs_bytes(),
+            cloned.public_key().to_bcs_bytes()
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "ed25519")]
+    fn test_any_private_key_debug() {
+        use crate::crypto::Ed25519PrivateKey;
+
+        let key = AnyPrivateKey::ed25519(Ed25519PrivateKey::generate());
+        let debug = format!("{:?}", key);
+        assert!(debug.contains("AnyPrivateKey"));
+        assert!(debug.contains("Ed25519"));
+    }
+
+    #[test]
+    #[cfg(feature = "ed25519")]
+    fn test_multi_key_account_empty_keys() {
+        let result = MultiKeyAccount::new(vec![], 1);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    #[cfg(feature = "ed25519")]
+    fn test_multi_key_account_threshold_zero() {
+        use crate::crypto::Ed25519PrivateKey;
+
+        let keys: Vec<_> = (0..2)
+            .map(|_| AnyPrivateKey::ed25519(Ed25519PrivateKey::generate()))
+            .collect();
+        let result = MultiKeyAccount::new(keys, 0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    #[cfg(feature = "ed25519")]
+    fn test_multi_key_account_threshold_exceeds_keys() {
+        use crate::crypto::Ed25519PrivateKey;
+
+        let keys: Vec<_> = (0..2)
+            .map(|_| AnyPrivateKey::ed25519(Ed25519PrivateKey::generate()))
+            .collect();
+        let result = MultiKeyAccount::new(keys, 5);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    #[cfg(feature = "ed25519")]
+    fn test_from_keys_invalid_index() {
+        use crate::crypto::Ed25519PrivateKey;
+
+        let keys: Vec<_> = (0..3).map(|_| Ed25519PrivateKey::generate()).collect();
+        let public_keys: Vec<_> = keys
+            .iter()
+            .map(|k| AnyPublicKey::ed25519(&k.public_key()))
+            .collect();
+
+        // Index 10 is out of bounds (only 3 keys)
+        let my_keys = vec![(10u8, AnyPrivateKey::ed25519(keys[0].clone()))];
+
+        let result = MultiKeyAccount::from_keys(public_keys, my_keys, 1);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    #[cfg(feature = "ed25519")]
+    fn test_from_keys_mismatched_public_key() {
+        use crate::crypto::Ed25519PrivateKey;
+
+        let keys: Vec<_> = (0..3).map(|_| Ed25519PrivateKey::generate()).collect();
+        let public_keys: Vec<_> = keys
+            .iter()
+            .map(|k| AnyPublicKey::ed25519(&k.public_key()))
+            .collect();
+
+        // Provide a different private key at index 0
+        let different_key = Ed25519PrivateKey::generate();
+        let my_keys = vec![(0u8, AnyPrivateKey::ed25519(different_key))];
+
+        let result = MultiKeyAccount::from_keys(public_keys, my_keys, 1);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    #[cfg(feature = "ed25519")]
+    fn test_multi_key_account_public_key() {
+        use crate::crypto::Ed25519PrivateKey;
+
+        let keys: Vec<_> = (0..2)
+            .map(|_| AnyPrivateKey::ed25519(Ed25519PrivateKey::generate()))
+            .collect();
+        let account = MultiKeyAccount::new(keys, 2).unwrap();
+        let pk = account.public_key();
+        assert_eq!(pk.num_keys(), 2);
+    }
+
+    #[test]
+    #[cfg(feature = "ed25519")]
+    fn test_multi_key_account_address_not_zero() {
+        use crate::crypto::Ed25519PrivateKey;
+
+        let keys: Vec<_> = (0..2)
+            .map(|_| AnyPrivateKey::ed25519(Ed25519PrivateKey::generate()))
+            .collect();
+        let account = MultiKeyAccount::new(keys, 2).unwrap();
+        assert!(!account.address().is_zero());
+    }
+
+    #[test]
+    #[cfg(feature = "ed25519")]
+    fn test_multi_key_account_display() {
+        use crate::crypto::Ed25519PrivateKey;
+
+        let keys: Vec<_> = (0..2)
+            .map(|_| AnyPrivateKey::ed25519(Ed25519PrivateKey::generate()))
+            .collect();
+        let account = MultiKeyAccount::new(keys, 2).unwrap();
+        let display = format!("{}", account);
+        // Display contains the address which starts with 0x
+        assert!(display.contains("0x") || display.contains("MultiKeyAccount"));
+    }
+
+    #[test]
+    #[cfg(feature = "ed25519")]
+    fn test_multi_key_account_debug() {
+        use crate::crypto::Ed25519PrivateKey;
+
+        let keys: Vec<_> = (0..2)
+            .map(|_| AnyPrivateKey::ed25519(Ed25519PrivateKey::generate()))
+            .collect();
+        let account = MultiKeyAccount::new(keys, 2).unwrap();
+        let debug = format!("{:?}", account);
+        assert!(debug.contains("MultiKeyAccount"));
+    }
 }

@@ -602,4 +602,311 @@ mod tests {
         assert!(result.is_err());
         assert_eq!(counter.load(Ordering::SeqCst), 1); // No retries
     }
+
+    #[test]
+    fn test_aggressive_config() {
+        let config = RetryConfig::aggressive();
+        assert_eq!(config.max_retries, 5);
+        assert_eq!(config.initial_delay_ms, 50);
+        assert_eq!(config.max_delay_ms, 5_000);
+        assert!((config.exponential_base - 1.5).abs() < f64::EPSILON);
+        assert!(config.jitter);
+    }
+
+    #[test]
+    fn test_conservative_config() {
+        let config = RetryConfig::conservative();
+        assert_eq!(config.max_retries, 3);
+        assert_eq!(config.initial_delay_ms, 500);
+        assert_eq!(config.max_delay_ms, 30_000);
+        assert!((config.exponential_base - 2.0).abs() < f64::EPSILON);
+        assert!(config.jitter);
+    }
+
+    #[test]
+    fn test_builder_jitter_factor() {
+        let config = RetryConfig::builder().jitter_factor(0.25).build();
+
+        assert!((config.jitter_factor - 0.25).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_builder_retryable_status_codes() {
+        let config = RetryConfig::builder()
+            .retryable_status_codes(vec![500, 502])
+            .build();
+
+        assert!(config.is_retryable_status(500));
+        assert!(config.is_retryable_status(502));
+        assert!(!config.is_retryable_status(503)); // Not in our custom list
+    }
+
+    #[test]
+    fn test_delay_with_jitter() {
+        let config = RetryConfig::builder()
+            .initial_delay_ms(100)
+            .jitter(true)
+            .jitter_factor(0.5)
+            .build();
+
+        // With jitter, delays should vary
+        let delay1 = config.delay_for_attempt(1);
+        // Delay should be in range [50ms, 150ms] (100ms +/- 50%)
+        assert!(delay1 >= Duration::from_millis(50));
+        assert!(delay1 <= Duration::from_millis(150));
+    }
+
+    #[test]
+    fn test_delay_zero_for_first_attempt() {
+        let config = RetryConfig::default();
+        assert_eq!(config.delay_for_attempt(0), Duration::from_millis(0));
+    }
+
+    #[test]
+    fn test_retryable_error_transaction_error() {
+        let config = RetryConfig::default();
+
+        // Transaction errors are not retryable
+        let txn_error = AptosError::Transaction("failed".to_string());
+        assert!(!config.is_retryable_error(&txn_error));
+    }
+
+    #[test]
+    fn test_retryable_error_invalid_address() {
+        let config = RetryConfig::default();
+
+        // Invalid address errors are not retryable
+        let addr_error = AptosError::InvalidAddress("bad".to_string());
+        assert!(!config.is_retryable_error(&addr_error));
+    }
+
+    #[tokio::test]
+    async fn test_retry_with_no_retry_config() {
+        let config = RetryConfig::no_retry();
+        let executor = RetryExecutor::new(config);
+        let counter = Arc::new(AtomicU32::new(0));
+        let counter_clone = counter.clone();
+
+        let result = executor
+            .execute(|| {
+                let counter = counter_clone.clone();
+                async move {
+                    counter.fetch_add(1, Ordering::SeqCst);
+                    Err::<i32, _>(AptosError::Api {
+                        status_code: 503,
+                        message: "Service Unavailable".to_string(),
+                        error_code: None,
+                        vm_error_code: None,
+                    })
+                }
+            })
+            .await;
+
+        assert!(result.is_err());
+        assert_eq!(counter.load(Ordering::SeqCst), 1); // No retries with no_retry config
+    }
+
+    #[test]
+    fn test_retry_config_clone() {
+        let config = RetryConfig::builder()
+            .max_retries(5)
+            .initial_delay_ms(200)
+            .build();
+
+        let cloned = config.clone();
+        assert_eq!(config.max_retries, cloned.max_retries);
+        assert_eq!(config.initial_delay_ms, cloned.initial_delay_ms);
+    }
+
+    #[test]
+    fn test_retry_config_debug() {
+        let config = RetryConfig::default();
+        let debug = format!("{:?}", config);
+        assert!(debug.contains("RetryConfig"));
+        assert!(debug.contains("max_retries"));
+    }
+
+    #[test]
+    fn test_builder_add_retryable_status_code() {
+        let config = RetryConfig::builder()
+            .add_retryable_status_code(599)
+            .build();
+
+        assert!(config.is_retryable_status(599));
+    }
+
+    #[test]
+    fn test_builder_add_duplicate_status_code() {
+        let config = RetryConfig::builder()
+            .add_retryable_status_code(500)
+            .add_retryable_status_code(500) // Duplicate
+            .build();
+
+        // Should only appear once
+        let count = config
+            .retryable_status_codes
+            .iter()
+            .filter(|&&c| c == 500)
+            .count();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn test_builder_jitter_factor_clamped() {
+        let config = RetryConfig::builder()
+            .jitter_factor(2.0) // Should be clamped to 1.0
+            .build();
+
+        assert!((config.jitter_factor - 1.0).abs() < f64::EPSILON);
+
+        let config2 = RetryConfig::builder()
+            .jitter_factor(-1.0) // Should be clamped to 0.0
+            .build();
+
+        assert!(config2.jitter_factor.abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_retry_executor_new() {
+        let config = RetryConfig::default();
+        let executor = RetryExecutor::new(config.clone());
+
+        let debug = format!("{:?}", executor);
+        assert!(debug.contains("RetryExecutor"));
+    }
+
+    #[tokio::test]
+    async fn test_retry_with_custom_predicate() {
+        let config = RetryConfig::builder()
+            .max_retries(3)
+            .initial_delay_ms(1)
+            .jitter(false)
+            .build();
+        let executor = RetryExecutor::new(config);
+        let counter = Arc::new(AtomicU32::new(0));
+        let counter_clone = counter.clone();
+
+        // Custom predicate that always says "retry"
+        let result = executor
+            .execute_with_predicate(
+                || {
+                    let counter = counter_clone.clone();
+                    async move {
+                        let count = counter.fetch_add(1, Ordering::SeqCst);
+                        if count < 2 {
+                            Err(AptosError::NotFound("test".to_string()))
+                        } else {
+                            Ok(42)
+                        }
+                    }
+                },
+                |_| true, // Always retry
+            )
+            .await;
+
+        assert_eq!(result.unwrap(), 42);
+        assert_eq!(counter.load(Ordering::SeqCst), 3);
+    }
+
+    #[tokio::test]
+    async fn test_retry_with_predicate_no_retry() {
+        let config = RetryConfig::builder()
+            .max_retries(3)
+            .initial_delay_ms(1)
+            .build();
+        let executor = RetryExecutor::new(config);
+        let counter = Arc::new(AtomicU32::new(0));
+        let counter_clone = counter.clone();
+
+        // Custom predicate that never retries
+        let result = executor
+            .execute_with_predicate(
+                || {
+                    let counter = counter_clone.clone();
+                    async move {
+                        counter.fetch_add(1, Ordering::SeqCst);
+                        Err::<i32, _>(AptosError::Api {
+                            status_code: 503,
+                            message: "Fail".to_string(),
+                            error_code: None,
+                            vm_error_code: None,
+                        })
+                    }
+                },
+                |_| false, // Never retry
+            )
+            .await;
+
+        assert!(result.is_err());
+        assert_eq!(counter.load(Ordering::SeqCst), 1); // No retries
+    }
+
+    #[tokio::test]
+    async fn test_retry_convenience_function() {
+        let counter = Arc::new(AtomicU32::new(0));
+        let counter_clone = counter.clone();
+
+        let result = retry(|| {
+            let counter = counter_clone.clone();
+            async move {
+                counter.fetch_add(1, Ordering::SeqCst);
+                Ok::<_, AptosError>(42)
+            }
+        })
+        .await;
+
+        assert_eq!(result.unwrap(), 42);
+        assert_eq!(counter.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn test_retry_with_config_convenience_function() {
+        let config = RetryConfig::builder()
+            .max_retries(1)
+            .initial_delay_ms(1)
+            .jitter(false)
+            .build();
+        let counter = Arc::new(AtomicU32::new(0));
+        let counter_clone = counter.clone();
+
+        let result = retry_with_config(&config, || {
+            let counter = counter_clone.clone();
+            async move {
+                let count = counter.fetch_add(1, Ordering::SeqCst);
+                if count < 1 {
+                    // Use a retryable API error instead of Http
+                    Err(AptosError::Api {
+                        status_code: 503,
+                        message: "Service Unavailable".to_string(),
+                        error_code: None,
+                        vm_error_code: None,
+                    })
+                } else {
+                    Ok(42)
+                }
+            }
+        })
+        .await;
+
+        assert_eq!(result.unwrap(), 42);
+        assert_eq!(counter.load(Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    fn test_retryable_rate_limited_error() {
+        let config = RetryConfig::default();
+
+        // Test RateLimited which is always retryable
+        let rate_limited = AptosError::RateLimited {
+            retry_after_secs: Some(5),
+        };
+        assert!(config.is_retryable_error(&rate_limited));
+    }
+
+    #[test]
+    fn test_builder_default_debug() {
+        let builder = RetryConfigBuilder::default();
+        let debug = format!("{:?}", builder);
+        assert!(debug.contains("RetryConfigBuilder"));
+    }
 }

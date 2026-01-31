@@ -571,4 +571,164 @@ mod tests {
         // Compressed public key should be 33 bytes
         assert_eq!(public_key.to_bytes().len(), 33);
     }
+
+    #[test]
+    fn test_private_key_aip80_roundtrip() {
+        let private_key = Secp256r1PrivateKey::generate();
+        let aip80 = private_key.to_aip80();
+
+        // Should have correct prefix
+        assert!(aip80.starts_with("secp256r1-priv-0x"));
+
+        // Should roundtrip correctly
+        let restored = Secp256r1PrivateKey::from_aip80(&aip80).unwrap();
+        assert_eq!(private_key.to_bytes(), restored.to_bytes());
+    }
+
+    #[test]
+    fn test_private_key_aip80_format() {
+        let bytes = [0x01; 32];
+        let private_key = Secp256r1PrivateKey::from_bytes(&bytes).unwrap();
+        let aip80 = private_key.to_aip80();
+
+        // Expected format: secp256r1-priv-0x0101...01
+        let expected = format!("secp256r1-priv-0x{}", "01".repeat(32));
+        assert_eq!(aip80, expected);
+    }
+
+    #[test]
+    fn test_private_key_aip80_invalid_prefix() {
+        let result = Secp256r1PrivateKey::from_aip80("ed25519-priv-0x01");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_public_key_aip80_roundtrip() {
+        let private_key = Secp256r1PrivateKey::generate();
+        let public_key = private_key.public_key();
+        let aip80 = public_key.to_aip80();
+
+        // Should have correct prefix
+        assert!(aip80.starts_with("secp256r1-pub-0x"));
+
+        // Should roundtrip correctly
+        let restored = Secp256r1PublicKey::from_aip80(&aip80).unwrap();
+        assert_eq!(public_key.to_bytes(), restored.to_bytes());
+    }
+
+    #[test]
+    fn test_public_key_aip80_invalid_prefix() {
+        let result = Secp256r1PublicKey::from_aip80("ed25519-pub-0x01");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_signer_trait() {
+        use crate::crypto::traits::Signer;
+
+        let private_key = Secp256r1PrivateKey::generate();
+        let message = b"trait test";
+
+        let signature = Signer::sign(&private_key, message);
+        let public_key = Signer::public_key(&private_key);
+
+        assert!(public_key.verify(message, &signature).is_ok());
+    }
+
+    #[test]
+    fn test_verifier_trait() {
+        use crate::crypto::traits::Verifier;
+
+        let private_key = Secp256r1PrivateKey::generate();
+        let public_key = private_key.public_key();
+        let message = b"verifier test";
+        let signature = private_key.sign(message);
+
+        assert!(Verifier::verify(&public_key, message, &signature).is_ok());
+    }
+
+    #[test]
+    fn test_public_key_trait() {
+        use crate::crypto::traits::PublicKey;
+
+        let private_key = Secp256r1PrivateKey::generate();
+        let public_key = private_key.public_key();
+        let bytes = PublicKey::to_bytes(&public_key);
+        let restored = Secp256r1PublicKey::from_bytes(&bytes).unwrap();
+        assert_eq!(public_key.to_bytes(), restored.to_bytes());
+    }
+
+    #[test]
+    fn test_signature_trait() {
+        use crate::crypto::traits::Signature;
+
+        let private_key = Secp256r1PrivateKey::generate();
+        let signature = private_key.sign(b"test");
+        let bytes = Signature::to_bytes(&signature);
+        let restored = Secp256r1Signature::from_bytes(&bytes).unwrap();
+        assert_eq!(signature.to_bytes(), restored.to_bytes());
+    }
+
+    #[test]
+    fn test_private_key_debug() {
+        let private_key = Secp256r1PrivateKey::generate();
+        let debug = format!("{:?}", private_key);
+        assert!(debug.contains("REDACTED"));
+        assert!(!debug.contains(&private_key.to_hex()));
+    }
+
+    #[test]
+    fn test_address_derivation() {
+        let private_key = Secp256r1PrivateKey::generate();
+        let public_key = private_key.public_key();
+        let address = public_key.to_address();
+
+        // Address should not be zero
+        assert!(!address.is_zero());
+
+        // Same public key should derive same address
+        let address2 = public_key.to_address();
+        assert_eq!(address, address2);
+    }
+
+    #[test]
+    fn test_uncompressed_bytes() {
+        let private_key = Secp256r1PrivateKey::generate();
+        let public_key = private_key.public_key();
+
+        // Uncompressed should be 65 bytes (0x04 prefix + 64 bytes)
+        let uncompressed = public_key.to_uncompressed_bytes();
+        assert_eq!(uncompressed.len(), 65);
+        assert_eq!(uncompressed[0], 0x04); // Uncompressed point prefix
+    }
+
+    #[test]
+    fn test_private_key_clone() {
+        let private_key = Secp256r1PrivateKey::generate();
+        let cloned = private_key.clone();
+        assert_eq!(private_key.to_bytes(), cloned.to_bytes());
+    }
+
+    #[test]
+    fn test_public_key_equality() {
+        let private_key = Secp256r1PrivateKey::generate();
+        let pk1 = private_key.public_key();
+        let pk2 = private_key.public_key();
+        assert_eq!(pk1, pk2);
+
+        let different = Secp256r1PrivateKey::generate().public_key();
+        assert_ne!(pk1, different);
+    }
+
+    #[test]
+    fn test_signature_verification() {
+        let private_key = Secp256r1PrivateKey::generate();
+        let sig1 = private_key.sign(b"test");
+        let sig2 = private_key.sign(b"test");
+        // Note: ECDSA signatures may have randomness, so they might not be equal
+        // But they should both verify
+        let public_key = private_key.public_key();
+        assert!(public_key.verify(b"test", &sig1).is_ok());
+        assert!(public_key.verify(b"test", &sig2).is_ok());
+    }
 }

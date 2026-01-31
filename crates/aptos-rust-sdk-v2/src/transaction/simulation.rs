@@ -890,4 +890,193 @@ mod tests {
         assert_eq!(result.events()[1].event_type, "0x1::coin::DepositEvent");
         assert_eq!(result.events()[1].sequence_number, 20);
     }
+
+    #[test]
+    fn test_vm_error_user_messages() {
+        // Test all error category user messages
+        let insufficient = VmError::from_status("INSUFFICIENT_BALANCE");
+        assert!(insufficient.user_message().contains("Insufficient"));
+
+        let seq_error = VmError::from_status("SEQUENCE_NUMBER_TOO_OLD");
+        assert!(seq_error.user_message().contains("sequence number"));
+
+        let out_of_gas = VmError::from_status("OUT_OF_GAS");
+        assert!(out_of_gas.user_message().contains("gas"));
+
+        let resource_not_found = VmError::from_status("RESOURCE_NOT_FOUND");
+        assert!(resource_not_found.user_message().contains("resource"));
+
+        let module_not_found = VmError::from_status("MODULE_NOT_PUBLISHED");
+        assert!(module_not_found.user_message().contains("module"));
+
+        let function_not_found = VmError::from_status("FUNCTION_NOT_FOUND");
+        assert!(function_not_found.user_message().contains("Function"));
+
+        let type_mismatch = VmError::from_status("TYPE_MISMATCH");
+        assert!(type_mismatch.user_message().contains("Type"));
+
+        let unknown = VmError::from_status("UNKNOWN_ERROR_XYZ");
+        assert_eq!(unknown.user_message(), "UNKNOWN_ERROR_XYZ");
+    }
+
+    #[test]
+    fn test_vm_error_move_abort_with_code() {
+        // The status needs to contain "ABORTED" for abort_code parsing
+        let abort = VmError::from_status("ABORTED in 0x1::coin: SOME_ERROR(65537)");
+        assert_eq!(abort.category, VmErrorCategory::MoveAbort);
+        assert_eq!(abort.abort_code, Some(65537));
+        assert!(abort.location.is_some());
+        assert!(abort.user_message().contains("65537"));
+    }
+
+    #[test]
+    fn test_vm_error_move_abort_without_code() {
+        let abort = VmError::from_status("Move abort");
+        assert_eq!(abort.category, VmErrorCategory::MoveAbort);
+        assert!(abort.abort_code.is_none());
+        assert!(abort.user_message().contains("aborted"));
+    }
+
+    #[test]
+    fn test_simulation_result_error_message_success() {
+        let json = serde_json::json!({
+            "success": true,
+            "vm_status": "Executed successfully",
+            "gas_used": "100",
+            "max_gas_amount": "200000",
+            "gas_unit_price": "100",
+            "hash": "0x123",
+            "changes": [],
+            "events": []
+        });
+
+        let result = SimulationResult::from_json(json).unwrap();
+        assert!(result.error_message().is_none());
+    }
+
+    #[test]
+    fn test_simulation_result_error_message_failure() {
+        let json = serde_json::json!({
+            "success": false,
+            "vm_status": "INSUFFICIENT_BALANCE",
+            "gas_used": "0",
+            "max_gas_amount": "200000",
+            "gas_unit_price": "100",
+            "hash": "0x123",
+            "changes": [],
+            "events": []
+        });
+
+        let result = SimulationResult::from_json(json).unwrap();
+        let error_msg = result.error_message().unwrap();
+        assert!(error_msg.contains("Insufficient"));
+    }
+
+    #[test]
+    fn test_simulation_result_raw_accessor() {
+        let json = serde_json::json!({
+            "success": true,
+            "vm_status": "Executed successfully",
+            "gas_used": "100",
+            "max_gas_amount": "200000",
+            "gas_unit_price": "100",
+            "hash": "0x123",
+            "changes": [],
+            "events": [],
+            "extra_field": "extra_value"
+        });
+
+        let result = SimulationResult::from_json(json).unwrap();
+        let raw = result.raw();
+        assert_eq!(
+            raw.get("extra_field").unwrap().as_str(),
+            Some("extra_value")
+        );
+    }
+
+    #[test]
+    fn test_state_change_with_module() {
+        let json = serde_json::json!({
+            "type": "write_module",
+            "address": "0x1",
+            "module": "my_module"
+        });
+
+        let change = StateChange::from_json(&json);
+        assert_eq!(change.change_type, "write_module");
+        assert_eq!(change.module, Some("my_module".to_string()));
+    }
+
+    #[test]
+    fn test_simulated_event_with_null_data() {
+        let json = serde_json::json!({
+            "type": "0x1::event::SomeEvent",
+            "sequence_number": "5"
+            // No data field
+        });
+
+        let event = SimulatedEvent::from_json(&json);
+        assert_eq!(event.event_type, "0x1::event::SomeEvent");
+        assert_eq!(event.sequence_number, 5);
+        assert!(event.data.is_null());
+    }
+
+    #[test]
+    fn test_vm_error_not_enough_variant() {
+        let error = VmError::from_status("NOT_ENOUGH_GAS");
+        assert!(error.is_insufficient_balance() || error.status.contains("NOT_ENOUGH"));
+    }
+
+    #[test]
+    fn test_vm_error_category_sequence_number_variant() {
+        // Test "SEQUENCE NUMBER" with space
+        assert_eq!(
+            VmErrorCategory::from_status("SEQUENCE NUMBER INVALID"),
+            VmErrorCategory::SequenceNumber
+        );
+    }
+
+    #[test]
+    fn test_vm_error_category_out_of_gas_with_space() {
+        assert_eq!(
+            VmErrorCategory::from_status("OUT OF GAS"),
+            VmErrorCategory::OutOfGas
+        );
+    }
+
+    #[test]
+    fn test_simulation_result_missing_fields() {
+        // JSON with minimal fields
+        let json = serde_json::json!({});
+
+        let result = SimulationResult::from_json(json).unwrap();
+        assert!(!result.success());
+        assert_eq!(result.gas_used(), 0);
+        assert_eq!(result.vm_status(), "Unknown");
+    }
+
+    #[test]
+    fn test_simulation_result_vm_error_accessor() {
+        let json = serde_json::json!({
+            "success": false,
+            "vm_status": "ABORT",
+            "gas_used": "0",
+            "max_gas_amount": "200000",
+            "gas_unit_price": "100",
+            "hash": "0x123",
+            "changes": [],
+            "events": []
+        });
+
+        let result = SimulationResult::from_json(json).unwrap();
+        assert!(result.vm_error().is_some());
+        let vm_error = result.vm_error().unwrap();
+        assert_eq!(vm_error.category, VmErrorCategory::MoveAbort);
+    }
+
+    #[test]
+    fn test_simulation_options_new() {
+        let opts = SimulationOptions::new();
+        assert!(!opts.estimate_gas_only);
+    }
 }

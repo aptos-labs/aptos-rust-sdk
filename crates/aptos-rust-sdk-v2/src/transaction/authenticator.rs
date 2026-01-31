@@ -728,4 +728,114 @@ mod tests {
             "NoAccountAuthenticator = 4"
         );
     }
+
+    #[test]
+    fn test_ed25519_public_key_try_from_bytes_valid() {
+        let bytes = vec![0x12; 32];
+        let pk = Ed25519PublicKey::try_from_bytes(&bytes).unwrap();
+        assert_eq!(pk.0[0], 0x12);
+    }
+
+    #[test]
+    fn test_ed25519_public_key_try_from_bytes_invalid_length() {
+        let bytes = vec![0x12; 16]; // Wrong length
+        let result = Ed25519PublicKey::try_from_bytes(&bytes);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_ed25519_signature_try_from_bytes_valid() {
+        let bytes = vec![0x34; 64];
+        let sig = Ed25519Signature::try_from_bytes(&bytes).unwrap();
+        assert_eq!(sig.0[0], 0x34);
+    }
+
+    #[test]
+    fn test_ed25519_signature_try_from_bytes_invalid_length() {
+        let bytes = vec![0x34; 32]; // Wrong length
+        let result = Ed25519Signature::try_from_bytes(&bytes);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_transaction_authenticator_variant_indices() {
+        // Verify transaction authenticator variant indices
+        let ed25519 = TransactionAuthenticator::ed25519(vec![0; 32], vec![0; 64]);
+        let multi_ed25519 = TransactionAuthenticator::multi_ed25519(vec![0; 64], vec![0; 128]);
+        let sender = AccountAuthenticator::ed25519(vec![0; 32], vec![0; 64]);
+        let multi_agent = TransactionAuthenticator::multi_agent(sender.clone(), vec![], vec![]);
+        let fee_payer = TransactionAuthenticator::fee_payer(
+            sender.clone(),
+            vec![],
+            vec![],
+            AccountAddress::ONE,
+            sender.clone(),
+        );
+        let single_sender = TransactionAuthenticator::single_sender(sender);
+
+        assert_eq!(aptos_bcs::to_bytes(&ed25519).unwrap()[0], 0, "Ed25519 = 0");
+        assert_eq!(
+            aptos_bcs::to_bytes(&multi_ed25519).unwrap()[0],
+            1,
+            "MultiEd25519 = 1"
+        );
+        assert_eq!(
+            aptos_bcs::to_bytes(&multi_agent).unwrap()[0],
+            2,
+            "MultiAgent = 2"
+        );
+        assert_eq!(
+            aptos_bcs::to_bytes(&fee_payer).unwrap()[0],
+            3,
+            "FeePayer = 3"
+        );
+        assert_eq!(
+            aptos_bcs::to_bytes(&single_sender).unwrap()[0],
+            4,
+            "SingleSender = 4"
+        );
+    }
+
+    #[test]
+    fn test_multi_key_authenticator_bcs_roundtrip() {
+        let auth = AccountAuthenticator::multi_key(vec![0xaa; 100], vec![0xbb; 200]);
+
+        let serialized = aptos_bcs::to_bytes(&auth).unwrap();
+        // MultiKey should be variant index 3
+        assert_eq!(serialized[0], 3, "MultiKey variant index should be 3");
+        let deserialized: AccountAuthenticator = aptos_bcs::from_bytes(&serialized).unwrap();
+        assert_eq!(auth, deserialized);
+    }
+
+    #[test]
+    fn test_multi_ed25519_authenticator_bcs_roundtrip() {
+        let auth = AccountAuthenticator::MultiEd25519 {
+            public_key: vec![0xcc; 64],
+            signature: vec![0xdd; 128],
+        };
+
+        let serialized = aptos_bcs::to_bytes(&auth).unwrap();
+        // MultiEd25519 should be variant index 1
+        assert_eq!(serialized[0], 1, "MultiEd25519 variant index should be 1");
+        let deserialized: AccountAuthenticator = aptos_bcs::from_bytes(&serialized).unwrap();
+        assert_eq!(auth, deserialized);
+    }
+
+    #[test]
+    fn test_ed25519_public_key_deserialize_invalid_length() {
+        // Serialize with wrong length (use 16 bytes instead of 32)
+        let mut bytes = vec![16u8]; // Length prefix
+        bytes.extend_from_slice(&[0xab; 16]); // Only 16 bytes
+        let result: Result<Ed25519PublicKey, _> = aptos_bcs::from_bytes(&bytes);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_ed25519_signature_deserialize_invalid_length() {
+        // Serialize with wrong length (use 32 bytes instead of 64)
+        let mut bytes = vec![32u8]; // Length prefix
+        bytes.extend_from_slice(&[0xab; 32]); // Only 32 bytes
+        let result: Result<Ed25519Signature, _> = aptos_bcs::from_bytes(&bytes);
+        assert!(result.is_err());
+    }
 }

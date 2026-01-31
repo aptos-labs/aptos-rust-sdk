@@ -898,3 +898,156 @@ mod state_tests {
         }
     }
 }
+
+// =============================================================================
+// SingleKey Account Tests
+// =============================================================================
+
+#[cfg(all(feature = "ed25519", feature = "faucet"))]
+mod single_key_tests {
+    use super::*;
+    use aptos_rust_sdk_v2::account::Ed25519SingleKeyAccount;
+
+    #[tokio::test]
+    #[ignore]
+    async fn e2e_single_key_account_address_derivation() {
+        // Test that SingleKey accounts derive addresses correctly
+        let account = Ed25519SingleKeyAccount::generate();
+
+        // Address should not be zero
+        assert!(!account.address().is_zero());
+
+        // Same key should produce same address
+        let address1 = account.address();
+        let address2 = account.address();
+        assert_eq!(address1, address2);
+
+        println!("SingleKey account address: {}", account.address());
+    }
+}
+
+// =============================================================================
+// Secp256k1 Account Tests
+// =============================================================================
+
+#[cfg(all(feature = "secp256k1", feature = "faucet"))]
+mod secp256k1_tests {
+    use super::*;
+    use aptos_rust_sdk_v2::account::Secp256k1Account;
+
+    #[tokio::test]
+    #[ignore]
+    async fn e2e_secp256k1_account_address_derivation() {
+        // Test that Secp256k1 accounts derive addresses correctly
+        let account = Secp256k1Account::generate();
+
+        // Address should not be zero
+        assert!(!account.address().is_zero());
+
+        // Same key should produce same address
+        let address1 = account.address();
+        let address2 = account.address();
+        assert_eq!(address1, address2);
+
+        println!("Secp256k1 account address: {}", account.address());
+    }
+}
+
+// =============================================================================
+// Batch Transaction Tests
+// =============================================================================
+
+#[cfg(all(feature = "ed25519", feature = "faucet"))]
+mod batch_tests {
+    use super::*;
+    use aptos_rust_sdk_v2::account::Ed25519Account;
+    use aptos_rust_sdk_v2::transaction::{InputEntryFunctionData, TransactionBatchBuilder};
+    use aptos_rust_sdk_v2::types::ChainId;
+
+    #[tokio::test]
+    #[ignore]
+    async fn e2e_batch_build() {
+        let config = get_test_config();
+        let aptos = Aptos::new(config).expect("failed to create client");
+
+        // Create sender
+        let sender = aptos
+            .create_funded_account(500_000_000)
+            .await
+            .expect("failed to create sender");
+
+        let recipient1 = Ed25519Account::generate();
+        let recipient2 = Ed25519Account::generate();
+
+        wait_for_finality().await;
+
+        // Get sequence number
+        let seq_num = aptos
+            .fullnode()
+            .get_sequence_number(sender.address())
+            .await
+            .expect("failed to get seq num");
+
+        // Build batch using TransactionBatchBuilder
+        let payload1 = InputEntryFunctionData::transfer_apt(recipient1.address(), 10_000_000)
+            .expect("failed to build payload 1");
+        let payload2 = InputEntryFunctionData::transfer_apt(recipient2.address(), 10_000_000)
+            .expect("failed to build payload 2");
+
+        let batch = TransactionBatchBuilder::new()
+            .sender(sender.address())
+            .starting_sequence_number(seq_num)
+            .chain_id(ChainId::new(4)) // localnet chain id
+            .add_payload(payload1)
+            .add_payload(payload2)
+            .build_and_sign(&sender)
+            .expect("failed to build batch");
+
+        println!("Created batch of {} transactions", batch.len());
+        assert_eq!(batch.len(), 2);
+    }
+}
+
+// =============================================================================
+// Additional Balance Tests
+// =============================================================================
+
+#[cfg(all(feature = "ed25519", feature = "faucet"))]
+mod balance_tests {
+    use super::*;
+    use aptos_rust_sdk_v2::account::Ed25519Account;
+
+    #[tokio::test]
+    #[ignore]
+    async fn e2e_balance_multiple_accounts() {
+        let config = get_test_config();
+        let aptos = Aptos::new(config).expect("failed to create client");
+
+        // Create multiple accounts
+        let accounts: Vec<_> = (0..3).map(|_| Ed25519Account::generate()).collect();
+
+        // Fund all accounts
+        for account in &accounts {
+            aptos
+                .fund_account(account.address(), 50_000_000)
+                .await
+                .expect("failed to fund account");
+        }
+
+        wait_for_finality().await;
+
+        // Check all balances
+        for (i, account) in accounts.iter().enumerate() {
+            let balance = aptos
+                .get_balance(account.address())
+                .await
+                .expect("failed to get balance");
+            assert!(
+                balance >= 50_000_000,
+                "Account {} should have at least 50M octas",
+                i
+            );
+            println!("Account {}: {} octas", i, balance);
+        }
+    }
+}

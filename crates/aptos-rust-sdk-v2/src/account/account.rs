@@ -384,4 +384,136 @@ mod tests {
             panic!("Expected Secp256k1 account");
         }
     }
+
+    #[cfg(feature = "secp256k1")]
+    #[test]
+    fn test_any_account_secp256k1_trait_methods() {
+        let secp = super::super::Secp256k1Account::generate();
+        let address = secp.address();
+        let auth_key = secp.authentication_key();
+        let any_account: AnyAccount = secp.into();
+
+        assert_eq!(any_account.address(), address);
+        assert_eq!(any_account.authentication_key(), auth_key);
+        assert!(!any_account.public_key_bytes().is_empty());
+
+        let sig = any_account.sign(b"test message").unwrap();
+        assert!(!sig.is_empty());
+    }
+
+    #[cfg(feature = "ed25519")]
+    #[test]
+    fn test_any_account_from_multi_ed25519() {
+        use crate::crypto::Ed25519PrivateKey;
+
+        let keys: Vec<_> = (0..2).map(|_| Ed25519PrivateKey::generate()).collect();
+        let account = super::super::MultiEd25519Account::new(keys, 2).unwrap();
+        let any_account: AnyAccount = account.into();
+
+        if let AnyAccount::MultiEd25519(_) = any_account {
+            // Success
+        } else {
+            panic!("Expected MultiEd25519 account");
+        }
+    }
+
+    #[cfg(feature = "ed25519")]
+    #[test]
+    fn test_any_account_multi_ed25519_trait_methods() {
+        use crate::crypto::Ed25519PrivateKey;
+
+        let keys: Vec<_> = (0..2).map(|_| Ed25519PrivateKey::generate()).collect();
+        let account = super::super::MultiEd25519Account::new(keys, 2).unwrap();
+        let address = account.address();
+        let auth_key = account.authentication_key();
+        let any_account: AnyAccount = account.into();
+
+        assert_eq!(any_account.address(), address);
+        assert_eq!(any_account.authentication_key(), auth_key);
+        assert!(!any_account.public_key_bytes().is_empty());
+        assert!(any_account.signature_scheme() > 0);
+
+        let sig = any_account.sign(b"test").unwrap();
+        assert!(!sig.is_empty());
+    }
+
+    #[cfg(feature = "ed25519")]
+    #[test]
+    fn test_any_account_from_multi_key() {
+        use crate::account::AnyPrivateKey;
+        use crate::crypto::Ed25519PrivateKey;
+
+        let keys: Vec<_> = (0..2)
+            .map(|_| AnyPrivateKey::ed25519(Ed25519PrivateKey::generate()))
+            .collect();
+        let account = super::super::MultiKeyAccount::new(keys, 2).unwrap();
+        let any_account: AnyAccount = account.into();
+
+        if let AnyAccount::MultiKey(_) = any_account {
+            // Success
+        } else {
+            panic!("Expected MultiKey account");
+        }
+    }
+
+    #[cfg(feature = "ed25519")]
+    #[test]
+    fn test_any_account_multi_key_trait_methods() {
+        use crate::account::AnyPrivateKey;
+        use crate::crypto::Ed25519PrivateKey;
+
+        let keys: Vec<_> = (0..2)
+            .map(|_| AnyPrivateKey::ed25519(Ed25519PrivateKey::generate()))
+            .collect();
+        let account = super::super::MultiKeyAccount::new(keys, 2).unwrap();
+        let address = account.address();
+        let auth_key = account.authentication_key();
+        let any_account: AnyAccount = account.into();
+
+        assert_eq!(any_account.address(), address);
+        assert_eq!(any_account.authentication_key(), auth_key);
+        assert!(!any_account.public_key_bytes().is_empty());
+
+        let sig = any_account.sign(b"test").unwrap();
+        assert!(!sig.is_empty());
+    }
+
+    #[test]
+    fn test_auth_key_json_serialization() {
+        let key = AuthenticationKey::new([0xab; 32]);
+        let json = serde_json::to_string(&key).unwrap();
+        let restored: AuthenticationKey = serde_json::from_str(&json).unwrap();
+        assert_eq!(key, restored);
+    }
+
+    #[test]
+    fn test_auth_key_hash() {
+        use std::collections::HashSet;
+        let key1 = AuthenticationKey::new([1u8; 32]);
+        let key2 = AuthenticationKey::new([2u8; 32]);
+
+        let mut set = HashSet::new();
+        set.insert(key1);
+        set.insert(key2);
+        assert_eq!(set.len(), 2);
+        assert!(set.contains(&key1));
+    }
+
+    #[test]
+    fn test_auth_key_clone() {
+        let key = AuthenticationKey::new([42u8; 32]);
+        let cloned = key;
+        assert_eq!(key, cloned);
+    }
+
+    #[test]
+    fn test_any_account_debug() {
+        #[cfg(feature = "ed25519")]
+        {
+            let ed25519 = super::super::Ed25519Account::generate();
+            let any_account: AnyAccount = ed25519.into();
+            let debug = format!("{:?}", any_account);
+            assert!(debug.contains("Ed25519"));
+        }
+    }
 }

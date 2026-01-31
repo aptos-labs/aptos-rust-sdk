@@ -288,4 +288,165 @@ mod tests {
         assert_eq!(to_snake_case("Coin"), "coin");
         assert_eq!(to_snake_case("AptosCoin"), "aptos_coin");
     }
+
+    #[test]
+    fn test_rust_type_new() {
+        let rt = RustType::new("MyType");
+        assert_eq!(rt.path, "MyType");
+        assert!(rt.needs_bcs);
+        assert!(!rt.is_ref);
+        assert!(rt.doc.is_none());
+    }
+
+    #[test]
+    fn test_rust_type_primitive() {
+        let rt = RustType::primitive("u64");
+        assert_eq!(rt.path, "u64");
+        assert!(!rt.needs_bcs);
+    }
+
+    #[test]
+    fn test_rust_type_reference() {
+        let rt = RustType::new("MyType").reference();
+        assert!(rt.is_ref);
+        assert_eq!(rt.as_arg_type(), "&MyType");
+    }
+
+    #[test]
+    fn test_rust_type_with_doc() {
+        let rt = RustType::new("MyType").with_doc("My documentation");
+        assert_eq!(rt.doc, Some("My documentation".to_string()));
+    }
+
+    #[test]
+    fn test_rust_type_as_return_type() {
+        let rt = RustType::new("MyType").reference();
+        assert_eq!(rt.as_return_type(), "MyType"); // References don't affect return type
+    }
+
+    #[test]
+    fn test_mapper_default() {
+        let mapper = MoveTypeMapper::default();
+        assert_eq!(mapper.map_type("bool").path, "bool");
+    }
+
+    #[test]
+    fn test_mapper_custom_mapping() {
+        let mut mapper = MoveTypeMapper::new();
+        mapper.add_mapping("MyCustomType", RustType::new("CustomRustType"));
+        assert_eq!(mapper.map_type("MyCustomType").path, "CustomRustType");
+    }
+
+    #[test]
+    fn test_mapper_u256() {
+        let mapper = MoveTypeMapper::new();
+        assert_eq!(mapper.map_type("u256").path, "U256");
+    }
+
+    #[test]
+    fn test_mapper_signer() {
+        let mapper = MoveTypeMapper::new();
+        assert_eq!(mapper.map_type("&signer").path, "AccountAddress");
+        assert_eq!(mapper.map_type("signer").path, "AccountAddress");
+    }
+
+    #[test]
+    fn test_mapper_nested_vector() {
+        let mapper = MoveTypeMapper::new();
+        let result = mapper.map_type("vector<vector<u8>>");
+        assert_eq!(result.path, "Vec<Vec<u8>>");
+    }
+
+    #[test]
+    fn test_mapper_option_type() {
+        let mapper = MoveTypeMapper::new();
+        let result = mapper.map_type("0x1::option::Option<u64>");
+        assert_eq!(result.path, "Option<u64>");
+    }
+
+    #[test]
+    fn test_mapper_object_type() {
+        let mapper = MoveTypeMapper::new();
+        let result = mapper.map_type("0x1::object::Object<Token>");
+        assert_eq!(result.path, "AccountAddress");
+    }
+
+    #[test]
+    fn test_mapper_unknown_struct() {
+        let mapper = MoveTypeMapper::new();
+        let result = mapper.map_type("0x1::module::SomeStruct");
+        assert!(result.doc.is_some());
+    }
+
+    #[test]
+    fn test_mapper_unknown_type() {
+        let mapper = MoveTypeMapper::new();
+        let result = mapper.map_type("some_completely_unknown_thing");
+        assert_eq!(result.path, "serde_json::Value");
+    }
+
+    #[test]
+    fn test_to_bcs_arg_address() {
+        let mapper = MoveTypeMapper::new();
+        let result = mapper.to_bcs_arg("address", "my_addr");
+        assert!(result.contains("aptos_bcs::to_bytes"));
+        assert!(result.contains("my_addr"));
+    }
+
+    #[test]
+    fn test_to_bcs_arg_vector_u8() {
+        let mapper = MoveTypeMapper::new();
+        let result = mapper.to_bcs_arg("vector<u8>", "my_bytes");
+        assert!(result.contains("aptos_bcs::to_bytes"));
+    }
+
+    #[test]
+    fn test_to_bcs_arg_vector_other() {
+        let mapper = MoveTypeMapper::new();
+        let result = mapper.to_bcs_arg("vector<u64>", "my_vec");
+        assert!(result.contains("aptos_bcs::to_bytes"));
+    }
+
+    #[test]
+    fn test_to_bcs_arg_string() {
+        let mapper = MoveTypeMapper::new();
+        let result = mapper.to_bcs_arg("0x1::string::String", "my_string");
+        assert!(result.contains("aptos_bcs::to_bytes"));
+    }
+
+    #[test]
+    fn test_to_bcs_arg_other_string() {
+        let mapper = MoveTypeMapper::new();
+        let result = mapper.to_bcs_arg("0xabc::my_module::string::String", "s");
+        assert!(result.contains("aptos_bcs::to_bytes"));
+    }
+
+    #[test]
+    fn test_is_signer_param() {
+        let mapper = MoveTypeMapper::new();
+        assert!(mapper.is_signer_param("&signer"));
+        assert!(mapper.is_signer_param("signer"));
+        assert!(!mapper.is_signer_param("address"));
+        assert!(!mapper.is_signer_param("u64"));
+    }
+
+    #[test]
+    fn test_to_pascal_case_with_spaces() {
+        assert_eq!(to_pascal_case("hello world"), "HelloWorld");
+    }
+
+    #[test]
+    fn test_to_pascal_case_with_dashes() {
+        assert_eq!(to_pascal_case("hello-world"), "HelloWorld");
+    }
+
+    #[test]
+    fn test_to_snake_case_single_word() {
+        assert_eq!(to_snake_case("hello"), "hello");
+    }
+
+    #[test]
+    fn test_to_snake_case_already_lowercase() {
+        assert_eq!(to_snake_case("helloworld"), "helloworld");
+    }
 }

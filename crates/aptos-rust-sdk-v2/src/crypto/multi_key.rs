@@ -993,4 +993,207 @@ mod tests {
         assert!(multi_sig.has_signature(4));
         assert!(!multi_sig.has_signature(5));
     }
+
+    #[test]
+    fn test_multi_key_public_key_empty_keys() {
+        let result = MultiKeyPublicKey::new(vec![], 1);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("at least one"));
+    }
+
+    #[test]
+    #[cfg(feature = "ed25519")]
+    fn test_multi_key_public_key_threshold_zero() {
+        use crate::crypto::Ed25519PrivateKey;
+
+        let keys: Vec<_> = (0..2)
+            .map(|_| AnyPublicKey::ed25519(&Ed25519PrivateKey::generate().public_key()))
+            .collect();
+        let result = MultiKeyPublicKey::new(keys, 0);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("at least 1"));
+    }
+
+    #[test]
+    #[cfg(feature = "ed25519")]
+    fn test_multi_key_public_key_threshold_exceeds() {
+        use crate::crypto::Ed25519PrivateKey;
+
+        let keys: Vec<_> = (0..2)
+            .map(|_| AnyPublicKey::ed25519(&Ed25519PrivateKey::generate().public_key()))
+            .collect();
+        let result = MultiKeyPublicKey::new(keys, 5);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("exceed"));
+    }
+
+    #[test]
+    #[cfg(feature = "ed25519")]
+    fn test_multi_key_signature_empty() {
+        let result = MultiKeySignature::new(vec![]);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("at least one"));
+    }
+
+    #[test]
+    #[cfg(feature = "ed25519")]
+    fn test_multi_key_signature_duplicate_index() {
+        use crate::crypto::Ed25519PrivateKey;
+
+        let private_key = Ed25519PrivateKey::generate();
+        let sig = AnySignature::ed25519(&private_key.sign(b"test"));
+
+        let result = MultiKeySignature::new(vec![(0, sig.clone()), (0, sig)]);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("duplicate"));
+    }
+
+    #[test]
+    #[cfg(feature = "ed25519")]
+    fn test_multi_key_public_key_accessors() {
+        use crate::crypto::Ed25519PrivateKey;
+
+        let keys: Vec<_> = (0..3)
+            .map(|_| AnyPublicKey::ed25519(&Ed25519PrivateKey::generate().public_key()))
+            .collect();
+        let multi_pk = MultiKeyPublicKey::new(keys, 2).unwrap();
+
+        assert_eq!(multi_pk.threshold(), 2);
+        assert_eq!(multi_pk.num_keys(), 3);
+        assert_eq!(multi_pk.public_keys().len(), 3);
+    }
+
+    #[test]
+    #[cfg(feature = "ed25519")]
+    fn test_multi_key_signature_accessors() {
+        use crate::crypto::Ed25519PrivateKey;
+
+        let private_key = Ed25519PrivateKey::generate();
+        let sig0 = AnySignature::ed25519(&private_key.sign(b"test"));
+        let sig2 = AnySignature::ed25519(&private_key.sign(b"test"));
+
+        let multi_sig = MultiKeySignature::new(vec![(0, sig0), (2, sig2)]).unwrap();
+
+        assert_eq!(multi_sig.num_signatures(), 2);
+        assert_eq!(multi_sig.signatures().len(), 2);
+    }
+
+    #[test]
+    #[cfg(feature = "ed25519")]
+    fn test_multi_key_public_key_debug() {
+        use crate::crypto::Ed25519PrivateKey;
+
+        let keys: Vec<_> = (0..2)
+            .map(|_| AnyPublicKey::ed25519(&Ed25519PrivateKey::generate().public_key()))
+            .collect();
+        let multi_pk = MultiKeyPublicKey::new(keys, 2).unwrap();
+
+        let debug = format!("{:?}", multi_pk);
+        assert!(debug.contains("MultiKeyPublicKey"));
+    }
+
+    #[test]
+    #[cfg(feature = "ed25519")]
+    fn test_multi_key_signature_debug() {
+        use crate::crypto::Ed25519PrivateKey;
+
+        let private_key = Ed25519PrivateKey::generate();
+        let sig = AnySignature::ed25519(&private_key.sign(b"test"));
+        let multi_sig = MultiKeySignature::new(vec![(0, sig)]).unwrap();
+
+        let debug = format!("{:?}", multi_sig);
+        assert!(debug.contains("MultiKeySignature"));
+    }
+
+    #[test]
+    #[cfg(feature = "ed25519")]
+    fn test_multi_key_public_key_display() {
+        use crate::crypto::Ed25519PrivateKey;
+
+        let keys: Vec<_> = (0..2)
+            .map(|_| AnyPublicKey::ed25519(&Ed25519PrivateKey::generate().public_key()))
+            .collect();
+        let multi_pk = MultiKeyPublicKey::new(keys, 2).unwrap();
+
+        let display = format!("{}", multi_pk);
+        assert!(display.starts_with("0x"));
+    }
+
+    #[test]
+    #[cfg(feature = "ed25519")]
+    fn test_multi_key_signature_display() {
+        use crate::crypto::Ed25519PrivateKey;
+
+        let private_key = Ed25519PrivateKey::generate();
+        let sig = AnySignature::ed25519(&private_key.sign(b"test"));
+        let multi_sig = MultiKeySignature::new(vec![(0, sig)]).unwrap();
+
+        let display = format!("{}", multi_sig);
+        assert!(display.starts_with("0x"));
+    }
+
+    #[test]
+    #[cfg(feature = "ed25519")]
+    fn test_multi_key_public_key_to_address() {
+        use crate::crypto::Ed25519PrivateKey;
+
+        let keys: Vec<_> = (0..2)
+            .map(|_| AnyPublicKey::ed25519(&Ed25519PrivateKey::generate().public_key()))
+            .collect();
+        let multi_pk = MultiKeyPublicKey::new(keys, 2).unwrap();
+
+        let address = multi_pk.to_address();
+        assert!(!address.is_zero());
+    }
+
+    #[test]
+    fn test_any_public_key_variant_debug() {
+        let variant = AnyPublicKeyVariant::Ed25519;
+        let debug = format!("{:?}", variant);
+        assert!(debug.contains("Ed25519"));
+    }
+
+    #[test]
+    #[cfg(feature = "ed25519")]
+    fn test_any_public_key_ed25519_debug() {
+        use crate::crypto::Ed25519PrivateKey;
+
+        let pk = AnyPublicKey::ed25519(&Ed25519PrivateKey::generate().public_key());
+        let debug = format!("{:?}", pk);
+        assert!(debug.contains("Ed25519"));
+    }
+
+    #[test]
+    #[cfg(feature = "ed25519")]
+    fn test_any_signature_ed25519_debug() {
+        use crate::crypto::Ed25519PrivateKey;
+
+        let private_key = Ed25519PrivateKey::generate();
+        let sig = AnySignature::ed25519(&private_key.sign(b"test"));
+        let debug = format!("{:?}", sig);
+        assert!(debug.contains("Ed25519"));
+    }
+
+    #[test]
+    #[cfg(feature = "ed25519")]
+    fn test_multi_key_insufficient_signatures() {
+        use crate::crypto::Ed25519PrivateKey;
+
+        let private_keys: Vec<_> = (0..3).map(|_| Ed25519PrivateKey::generate()).collect();
+        let public_keys: Vec<_> = private_keys
+            .iter()
+            .map(|k| AnyPublicKey::ed25519(&k.public_key()))
+            .collect();
+
+        let multi_pk = MultiKeyPublicKey::new(public_keys, 2).unwrap();
+        let message = b"test message";
+
+        // Only provide 1 signature when threshold is 2
+        let sig0 = AnySignature::ed25519(&private_keys[0].sign(message));
+        let multi_sig = MultiKeySignature::new(vec![(0, sig0)]).unwrap();
+
+        // Verify should fail
+        let result = multi_pk.verify(message, &multi_sig);
+        assert!(result.is_err());
+    }
 }

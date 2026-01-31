@@ -332,4 +332,113 @@ mod tests {
         let slice: &[u8] = hash.as_ref();
         assert_eq!(slice.len(), HASH_LENGTH);
     }
+
+    #[test]
+    fn test_from_bytes_valid() {
+        let bytes = [42u8; HASH_LENGTH];
+        let hash = HashValue::from_bytes(&bytes).unwrap();
+        assert_eq!(hash.as_bytes(), &bytes);
+    }
+
+    #[test]
+    fn test_from_bytes_invalid_length() {
+        let bytes = vec![0u8; 16]; // Wrong length
+        let result = HashValue::from_bytes(&bytes);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_to_bytes() {
+        let bytes = [42u8; HASH_LENGTH];
+        let hash = HashValue::new(bytes);
+        assert_eq!(hash.to_bytes(), bytes);
+    }
+
+    #[test]
+    fn test_default() {
+        let hash = HashValue::default();
+        assert!(hash.is_zero());
+        assert_eq!(hash, HashValue::ZERO);
+    }
+
+    #[test]
+    fn test_from_array() {
+        let bytes = [1u8; HASH_LENGTH];
+        let hash: HashValue = bytes.into();
+        assert_eq!(hash.as_bytes(), &bytes);
+    }
+
+    #[test]
+    fn test_into_array() {
+        let bytes = [1u8; HASH_LENGTH];
+        let hash = HashValue::new(bytes);
+        let extracted: [u8; HASH_LENGTH] = hash.into();
+        assert_eq!(extracted, bytes);
+    }
+
+    #[test]
+    fn test_hash_equality() {
+        let hash1 = HashValue::sha3_256(b"test");
+        let hash2 = HashValue::sha3_256(b"test");
+        let hash3 = HashValue::sha3_256(b"different");
+
+        assert_eq!(hash1, hash2);
+        assert_ne!(hash1, hash3);
+    }
+
+    #[test]
+    fn test_hash_clone() {
+        let hash = HashValue::sha3_256(b"test");
+        let cloned = hash;
+        assert_eq!(hash, cloned);
+    }
+
+    #[test]
+    fn test_hash_copy() {
+        let hash = HashValue::sha3_256(b"test");
+        let copied = hash;
+        assert_eq!(hash, copied);
+    }
+
+    #[test]
+    fn test_hash_in_hashmap() {
+        use std::collections::HashMap;
+
+        let hash1 = HashValue::sha3_256(b"key1");
+        let hash2 = HashValue::sha3_256(b"key2");
+
+        let mut map = HashMap::new();
+        map.insert(hash1, "value1");
+        map.insert(hash2, "value2");
+
+        assert_eq!(map.get(&hash1), Some(&"value1"));
+        assert_eq!(map.get(&hash2), Some(&"value2"));
+    }
+
+    #[test]
+    fn test_from_hex_with_bytes() {
+        let hash = HashValue::sha3_256(b"test");
+        let hex_bytes = hash.to_hex().into_bytes();
+        let parsed = HashValue::from_hex(&hex_bytes).unwrap();
+        assert_eq!(hash, parsed);
+    }
+
+    #[test]
+    fn test_sha3_256_empty() {
+        let hash = HashValue::sha3_256(b"");
+        assert!(!hash.is_zero()); // Empty string still has a hash
+    }
+
+    #[test]
+    fn test_sha3_256_of_empty() {
+        let hash = HashValue::sha3_256_of::<[&[u8]; 0], &[u8]>([]);
+        assert!(!hash.is_zero());
+    }
+
+    #[test]
+    fn test_sha3_256_of_single() {
+        let hash1 = HashValue::sha3_256_of([b"test" as &[u8]]);
+        let hash2 = HashValue::sha3_256(b"test");
+        assert_eq!(hash1, hash2);
+    }
 }

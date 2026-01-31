@@ -953,4 +953,301 @@ mod tests {
         assert_eq!(result.index, 0);
         assert_eq!(result.transaction.raw_txn.sender, AccountAddress::ONE);
     }
+
+    #[test]
+    fn test_batch_builder_default() {
+        let builder = TransactionBatchBuilder::default();
+        assert!(builder.is_empty());
+        assert_eq!(builder.len(), 0);
+    }
+
+    #[test]
+    fn test_batch_builder_len_and_is_empty() {
+        let builder = TransactionBatchBuilder::new();
+        assert!(builder.is_empty());
+        assert_eq!(builder.len(), 0);
+
+        let builder = builder.add_payload(TransactionPayload::Script(crate::transaction::Script {
+            code: vec![],
+            type_args: vec![],
+            args: vec![],
+        }));
+        assert!(!builder.is_empty());
+        assert_eq!(builder.len(), 1);
+    }
+
+    #[test]
+    fn test_batch_builder_add_payloads() {
+        let payloads = vec![
+            TransactionPayload::Script(crate::transaction::Script {
+                code: vec![1],
+                type_args: vec![],
+                args: vec![],
+            }),
+            TransactionPayload::Script(crate::transaction::Script {
+                code: vec![2],
+                type_args: vec![],
+                args: vec![],
+            }),
+            TransactionPayload::Script(crate::transaction::Script {
+                code: vec![3],
+                type_args: vec![],
+                args: vec![],
+            }),
+        ];
+
+        let builder = TransactionBatchBuilder::new()
+            .sender(AccountAddress::ONE)
+            .starting_sequence_number(0)
+            .chain_id(ChainId::testnet())
+            .add_payloads(payloads);
+
+        assert_eq!(builder.len(), 3);
+
+        let transactions = builder.build().unwrap();
+        assert_eq!(transactions.len(), 3);
+    }
+
+    #[test]
+    fn test_batch_builder_missing_sequence_number() {
+        let builder = TransactionBatchBuilder::new()
+            .sender(AccountAddress::ONE)
+            .chain_id(ChainId::testnet())
+            .add_payload(TransactionPayload::Script(crate::transaction::Script {
+                code: vec![],
+                type_args: vec![],
+                args: vec![],
+            }));
+
+        let result = builder.build();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("sequence_number"));
+    }
+
+    #[test]
+    fn test_batch_builder_missing_chain_id() {
+        let builder = TransactionBatchBuilder::new()
+            .sender(AccountAddress::ONE)
+            .starting_sequence_number(0)
+            .add_payload(TransactionPayload::Script(crate::transaction::Script {
+                code: vec![],
+                type_args: vec![],
+                args: vec![],
+            }));
+
+        let result = builder.build();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("chain_id"));
+    }
+
+    #[test]
+    fn test_batch_summary_empty() {
+        let results: Vec<BatchTransactionResult> = vec![];
+        let summary = BatchSummary::from_results(&results);
+        assert_eq!(summary.total, 0);
+        assert_eq!(summary.succeeded, 0);
+        assert_eq!(summary.failed, 0);
+        assert_eq!(summary.pending, 0);
+        assert_eq!(summary.total_gas_used, 0);
+        assert!(summary.all_succeeded());
+        assert!(!summary.has_failures());
+    }
+
+    #[test]
+    fn test_batch_status_failed_variant() {
+        let failed = BatchTransactionStatus::Failed {
+            error: "connection timeout".to_string(),
+        };
+        assert!(failed.is_failed());
+        assert!(!failed.is_success());
+        assert!(failed.hash().is_none());
+    }
+
+    #[test]
+    fn test_signed_transaction_batch_len() {
+        let batch = SignedTransactionBatch {
+            transactions: vec![create_dummy_signed_txn(), create_dummy_signed_txn()],
+        };
+        assert_eq!(batch.len(), 2);
+        assert!(!batch.is_empty());
+    }
+
+    #[test]
+    fn test_signed_transaction_batch_iter() {
+        let txn1 = create_dummy_signed_txn();
+        let txn2 = create_dummy_signed_txn();
+        let batch = SignedTransactionBatch {
+            transactions: vec![txn1, txn2],
+        };
+
+        let collected: Vec<_> = batch.transactions.iter().collect();
+        assert_eq!(collected.len(), 2);
+    }
+
+    #[test]
+    fn test_batch_builder_gas_settings() {
+        let builder = TransactionBatchBuilder::new()
+            .max_gas_amount(50000)
+            .gas_unit_price(200)
+            .expiration_secs(120);
+
+        assert_eq!(builder.max_gas_amount, 50000);
+        assert_eq!(builder.gas_unit_price, 200);
+        assert_eq!(builder.expiration_secs, 120);
+    }
+
+    #[test]
+    fn test_batch_builder_missing_sender() {
+        let builder = TransactionBatchBuilder::new()
+            .starting_sequence_number(0)
+            .chain_id(ChainId::testnet())
+            .add_payload(TransactionPayload::Script(crate::transaction::Script {
+                code: vec![],
+                type_args: vec![],
+                args: vec![],
+            }));
+
+        let result = builder.build();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("sender"));
+    }
+
+    #[test]
+    fn test_batch_summary_with_failures() {
+        let txn = create_dummy_signed_txn();
+        let results = vec![
+            BatchTransactionResult {
+                index: 0,
+                transaction: txn.clone(),
+                result: Ok(BatchTransactionStatus::Failed {
+                    error: "error".to_string(),
+                }),
+            },
+            BatchTransactionResult {
+                index: 1,
+                transaction: txn,
+                result: Err(AptosError::Transaction("test".to_string())),
+            },
+        ];
+
+        let summary = BatchSummary::from_results(&results);
+        assert_eq!(summary.total, 2);
+        assert_eq!(summary.failed, 2);
+        assert!(summary.has_failures());
+    }
+
+    #[test]
+    fn test_batch_status_confirmed_variant() {
+        let status = BatchTransactionStatus::Confirmed {
+            hash: "0xabc".to_string(),
+            success: true,
+            version: 1,
+            gas_used: 150,
+        };
+        assert!(status.is_success());
+        assert!(!status.is_failed());
+        assert_eq!(status.hash(), Some("0xabc"));
+    }
+
+    #[test]
+    fn test_batch_status_pending_variant() {
+        let status = BatchTransactionStatus::Pending {
+            hash: "0xdef".to_string(),
+        };
+        assert!(!status.is_success());
+        assert!(!status.is_failed());
+        assert_eq!(status.hash(), Some("0xdef"));
+    }
+
+    #[test]
+    fn test_signed_transaction_batch_new() {
+        let txn1 = create_dummy_signed_txn();
+        let txn2 = create_dummy_signed_txn();
+        let batch = SignedTransactionBatch::new(vec![txn1, txn2]);
+        assert_eq!(batch.len(), 2);
+    }
+
+    #[test]
+    fn test_signed_transaction_batch_transactions() {
+        let txn1 = create_dummy_signed_txn();
+        let txn2 = create_dummy_signed_txn();
+        let batch = SignedTransactionBatch::new(vec![txn1, txn2]);
+
+        let txns = batch.transactions();
+        assert_eq!(txns.len(), 2);
+    }
+
+    #[test]
+    fn test_signed_transaction_batch_into_transactions() {
+        let txn1 = create_dummy_signed_txn();
+        let txn2 = create_dummy_signed_txn();
+        let batch = SignedTransactionBatch::new(vec![txn1, txn2]);
+
+        let txns = batch.into_transactions();
+        assert_eq!(txns.len(), 2);
+    }
+
+    #[test]
+    fn test_signed_transaction_batch_empty() {
+        let batch = SignedTransactionBatch::new(vec![]);
+        assert!(batch.is_empty());
+        assert_eq!(batch.len(), 0);
+    }
+
+    #[test]
+    fn test_batch_transaction_result_accessors() {
+        let txn = create_dummy_signed_txn();
+        let result = BatchTransactionResult {
+            index: 5,
+            transaction: txn.clone(),
+            result: Ok(BatchTransactionStatus::Confirmed {
+                hash: "0x123".to_string(),
+                success: true,
+                version: 1,
+                gas_used: 100,
+            }),
+        };
+
+        assert_eq!(result.index, 5);
+        assert!(result.result.is_ok());
+    }
+
+    #[test]
+    fn test_batch_builder_debug() {
+        let builder = TransactionBatchBuilder::new().sender(AccountAddress::ONE);
+        let debug = format!("{:?}", builder);
+        assert!(debug.contains("TransactionBatchBuilder"));
+    }
+
+    #[test]
+    fn test_signed_transaction_batch_debug() {
+        let batch = SignedTransactionBatch::new(vec![create_dummy_signed_txn()]);
+        let debug = format!("{:?}", batch);
+        assert!(debug.contains("SignedTransactionBatch"));
+    }
+
+    #[test]
+    fn test_batch_summary_debug() {
+        let summary = BatchSummary {
+            total: 5,
+            succeeded: 3,
+            failed: 1,
+            pending: 1,
+            total_gas_used: 500,
+        };
+        let debug = format!("{:?}", summary);
+        assert!(debug.contains("BatchSummary"));
+    }
+
+    #[test]
+    fn test_batch_transaction_status_debug() {
+        let status = BatchTransactionStatus::Confirmed {
+            hash: "0x123".to_string(),
+            success: true,
+            version: 1,
+            gas_used: 100,
+        };
+        let debug = format!("{:?}", status);
+        assert!(debug.contains("Confirmed"));
+    }
 }

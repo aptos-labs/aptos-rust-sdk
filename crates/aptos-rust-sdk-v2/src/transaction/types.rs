@@ -582,4 +582,217 @@ mod tests {
         let message = fee_payer.signing_message().unwrap();
         assert!(!message.is_empty());
     }
+
+    #[test]
+    fn test_signed_transaction_hash() {
+        use crate::transaction::authenticator::{Ed25519PublicKey, Ed25519Signature};
+        let txn = create_test_raw_transaction();
+        let auth = crate::transaction::TransactionAuthenticator::Ed25519 {
+            public_key: Ed25519PublicKey([0u8; 32]),
+            signature: Ed25519Signature([0u8; 64]),
+        };
+        let signed = SignedTransaction::new(txn, auth);
+        let hash = signed.hash().unwrap();
+        // Hash should be 32 bytes
+        assert_eq!(hash.as_bytes().len(), 32);
+        // Hash should be deterministic
+        let hash2 = signed.hash().unwrap();
+        assert_eq!(hash, hash2);
+    }
+
+    #[test]
+    fn test_signed_transaction_sequence_number() {
+        use crate::transaction::authenticator::{Ed25519PublicKey, Ed25519Signature};
+        let txn = create_test_raw_transaction();
+        let auth = crate::transaction::TransactionAuthenticator::Ed25519 {
+            public_key: Ed25519PublicKey([0u8; 32]),
+            signature: Ed25519Signature([0u8; 64]),
+        };
+        let signed = SignedTransaction::new(txn, auth);
+        assert_eq!(signed.sequence_number(), 0);
+    }
+
+    #[test]
+    fn test_transaction_info_is_success() {
+        let info_success = TransactionInfo {
+            hash: HashValue::new([0; 32]),
+            version: Some(1),
+            success: Some(true),
+            vm_status: None,
+            gas_used: Some(100),
+        };
+        assert!(info_success.is_success());
+
+        let info_failed = TransactionInfo {
+            hash: HashValue::new([0; 32]),
+            version: Some(1),
+            success: Some(false),
+            vm_status: Some("Failed".to_string()),
+            gas_used: Some(100),
+        };
+        assert!(!info_failed.is_success());
+
+        let info_unknown = TransactionInfo {
+            hash: HashValue::new([0; 32]),
+            version: None,
+            success: None,
+            vm_status: None,
+            gas_used: None,
+        };
+        assert!(!info_unknown.is_success());
+    }
+
+    fn create_test_orderless_transaction() -> RawTransactionOrderless {
+        RawTransactionOrderless::with_nonce(
+            AccountAddress::ONE,
+            vec![
+                1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+                24, 25, 26, 27, 28, 29, 30, 31, 32,
+            ],
+            TransactionPayload::EntryFunction(EntryFunction {
+                module: MoveModuleId::from_str_strict("0x1::coin").unwrap(),
+                function: "transfer".to_string(),
+                type_args: vec![],
+                args: vec![],
+            }),
+            100_000,
+            100,
+            1000000000,
+            ChainId::testnet(),
+        )
+    }
+
+    #[test]
+    fn test_orderless_transaction_with_nonce() {
+        let nonce = vec![0xab; 32];
+        let txn = RawTransactionOrderless::with_nonce(
+            AccountAddress::ONE,
+            nonce.clone(),
+            TransactionPayload::EntryFunction(EntryFunction {
+                module: MoveModuleId::from_str_strict("0x1::coin").unwrap(),
+                function: "transfer".to_string(),
+                type_args: vec![],
+                args: vec![],
+            }),
+            100_000,
+            100,
+            1000000000,
+            ChainId::testnet(),
+        );
+        assert_eq!(txn.sender, AccountAddress::ONE);
+        assert_eq!(txn.nonce, nonce);
+        assert_eq!(txn.max_gas_amount, 100_000);
+        assert_eq!(txn.gas_unit_price, 100);
+    }
+
+    #[test]
+    fn test_orderless_transaction_new_generates_random_nonce() {
+        let txn1 = RawTransactionOrderless::new(
+            AccountAddress::ONE,
+            TransactionPayload::EntryFunction(EntryFunction {
+                module: MoveModuleId::from_str_strict("0x1::coin").unwrap(),
+                function: "transfer".to_string(),
+                type_args: vec![],
+                args: vec![],
+            }),
+            100_000,
+            100,
+            1000000000,
+            ChainId::testnet(),
+        );
+        let txn2 = RawTransactionOrderless::new(
+            AccountAddress::ONE,
+            TransactionPayload::EntryFunction(EntryFunction {
+                module: MoveModuleId::from_str_strict("0x1::coin").unwrap(),
+                function: "transfer".to_string(),
+                type_args: vec![],
+                args: vec![],
+            }),
+            100_000,
+            100,
+            1000000000,
+            ChainId::testnet(),
+        );
+        // Random nonces should be different
+        assert_ne!(txn1.nonce, txn2.nonce);
+        // Nonce should be 32 bytes
+        assert_eq!(txn1.nonce.len(), 32);
+        assert_eq!(txn2.nonce.len(), 32);
+    }
+
+    #[test]
+    fn test_orderless_transaction_signing_message() {
+        let txn = create_test_orderless_transaction();
+        let message = txn.signing_message().unwrap();
+        assert!(!message.is_empty());
+        // First 32 bytes should be the hash prefix
+        assert_eq!(message.len(), 32 + txn.to_bcs().unwrap().len());
+    }
+
+    #[test]
+    fn test_orderless_transaction_bcs() {
+        let txn = create_test_orderless_transaction();
+        let bcs = txn.to_bcs().unwrap();
+        assert!(!bcs.is_empty());
+    }
+
+    #[test]
+    fn test_signed_orderless_transaction() {
+        use crate::transaction::authenticator::{Ed25519PublicKey, Ed25519Signature};
+        let txn = create_test_orderless_transaction();
+        let auth = crate::transaction::TransactionAuthenticator::Ed25519 {
+            public_key: Ed25519PublicKey([0u8; 32]),
+            signature: Ed25519Signature([0u8; 64]),
+        };
+        let signed = SignedTransactionOrderless::new(txn, auth);
+        assert_eq!(signed.sender(), AccountAddress::ONE);
+        assert_eq!(signed.nonce().len(), 32);
+    }
+
+    #[test]
+    fn test_signed_orderless_transaction_bcs() {
+        use crate::transaction::authenticator::{Ed25519PublicKey, Ed25519Signature};
+        let txn = create_test_orderless_transaction();
+        let auth = crate::transaction::TransactionAuthenticator::Ed25519 {
+            public_key: Ed25519PublicKey([0u8; 32]),
+            signature: Ed25519Signature([0u8; 64]),
+        };
+        let signed = SignedTransactionOrderless::new(txn, auth);
+        let bcs = signed.to_bcs().unwrap();
+        assert!(!bcs.is_empty());
+    }
+
+    #[test]
+    fn test_signed_orderless_transaction_hash() {
+        use crate::transaction::authenticator::{Ed25519PublicKey, Ed25519Signature};
+        let txn = create_test_orderless_transaction();
+        let auth = crate::transaction::TransactionAuthenticator::Ed25519 {
+            public_key: Ed25519PublicKey([0u8; 32]),
+            signature: Ed25519Signature([0u8; 64]),
+        };
+        let signed = SignedTransactionOrderless::new(txn, auth);
+        let hash = signed.hash().unwrap();
+        // Hash should be 32 bytes
+        assert_eq!(hash.as_bytes().len(), 32);
+        // Hash should be deterministic
+        let hash2 = signed.hash().unwrap();
+        assert_eq!(hash, hash2);
+    }
+
+    #[test]
+    fn test_multi_agent_raw_transaction() {
+        let raw_txn = create_test_raw_transaction();
+        let secondary = vec![AccountAddress::from_hex("0x2").unwrap()];
+        let multi_agent = MultiAgentRawTransaction::new(raw_txn, secondary.clone());
+        assert_eq!(multi_agent.secondary_signer_addresses, secondary);
+    }
+
+    #[test]
+    fn test_multi_agent_signing_message() {
+        let raw_txn = create_test_raw_transaction();
+        let secondary = vec![AccountAddress::from_hex("0x2").unwrap()];
+        let multi_agent = MultiAgentRawTransaction::new(raw_txn, secondary);
+        let message = multi_agent.signing_message().unwrap();
+        assert!(!message.is_empty());
+    }
 }

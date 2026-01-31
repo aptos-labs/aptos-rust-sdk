@@ -516,4 +516,234 @@ mod tests {
         let address2 = public_key.to_address();
         assert_eq!(address, address2);
     }
+
+    #[test]
+    fn test_private_key_aip80_roundtrip() {
+        let private_key = Ed25519PrivateKey::generate();
+        let aip80 = private_key.to_aip80();
+
+        // Should have correct prefix
+        assert!(aip80.starts_with("ed25519-priv-0x"));
+
+        // Should roundtrip correctly
+        let restored = Ed25519PrivateKey::from_aip80(&aip80).unwrap();
+        assert_eq!(private_key.to_bytes(), restored.to_bytes());
+    }
+
+    #[test]
+    fn test_private_key_aip80_format() {
+        let bytes = [0x01; 32];
+        let private_key = Ed25519PrivateKey::from_bytes(&bytes).unwrap();
+        let aip80 = private_key.to_aip80();
+
+        // Expected format: ed25519-priv-0x0101...01
+        let expected = format!("ed25519-priv-0x{}", "01".repeat(32));
+        assert_eq!(aip80, expected);
+    }
+
+    #[test]
+    fn test_private_key_aip80_invalid_prefix() {
+        let result = Ed25519PrivateKey::from_aip80("secp256k1-priv-0x01");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_public_key_aip80_roundtrip() {
+        let private_key = Ed25519PrivateKey::generate();
+        let public_key = private_key.public_key();
+        let aip80 = public_key.to_aip80();
+
+        // Should have correct prefix
+        assert!(aip80.starts_with("ed25519-pub-0x"));
+
+        // Should roundtrip correctly
+        let restored = Ed25519PublicKey::from_aip80(&aip80).unwrap();
+        assert_eq!(public_key.to_bytes(), restored.to_bytes());
+    }
+
+    #[test]
+    fn test_public_key_aip80_invalid_prefix() {
+        let result = Ed25519PublicKey::from_aip80("secp256k1-pub-0x01");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_invalid_private_key_bytes_length() {
+        let bytes = vec![0u8; 16]; // Wrong length
+        let result = Ed25519PrivateKey::from_bytes(&bytes);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_invalid_public_key_bytes_length() {
+        let bytes = vec![0u8; 16]; // Wrong length
+        let result = Ed25519PublicKey::from_bytes(&bytes);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_invalid_signature_bytes_length() {
+        let bytes = vec![0u8; 32]; // Wrong length
+        let result = Ed25519Signature::from_bytes(&bytes);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_public_key_from_hex_roundtrip() {
+        let private_key = Ed25519PrivateKey::generate();
+        let public_key = private_key.public_key();
+        let hex = public_key.to_hex();
+        let restored = Ed25519PublicKey::from_hex(&hex).unwrap();
+        assert_eq!(public_key, restored);
+    }
+
+    #[test]
+    fn test_signature_from_hex_roundtrip() {
+        let private_key = Ed25519PrivateKey::generate();
+        let signature = private_key.sign(b"test");
+        let hex = signature.to_hex();
+        let restored = Ed25519Signature::from_hex(&hex).unwrap();
+        assert_eq!(signature.to_bytes(), restored.to_bytes());
+    }
+
+    #[test]
+    fn test_public_key_bytes_roundtrip() {
+        let private_key = Ed25519PrivateKey::generate();
+        let public_key = private_key.public_key();
+        let bytes = public_key.to_bytes();
+        let restored = Ed25519PublicKey::from_bytes(&bytes).unwrap();
+        assert_eq!(public_key, restored);
+    }
+
+    #[test]
+    fn test_signature_bytes_roundtrip() {
+        let private_key = Ed25519PrivateKey::generate();
+        let signature = private_key.sign(b"test");
+        let bytes = signature.to_bytes();
+        let restored = Ed25519Signature::from_bytes(&bytes).unwrap();
+        assert_eq!(signature.to_bytes(), restored.to_bytes());
+    }
+
+    #[test]
+    fn test_private_key_debug() {
+        let private_key = Ed25519PrivateKey::generate();
+        let debug = format!("{:?}", private_key);
+        assert!(debug.contains("REDACTED"));
+        assert!(!debug.contains(&private_key.to_hex()));
+    }
+
+    #[test]
+    fn test_public_key_debug() {
+        let private_key = Ed25519PrivateKey::generate();
+        let public_key = private_key.public_key();
+        let debug = format!("{:?}", public_key);
+        assert!(debug.contains("Ed25519PublicKey"));
+    }
+
+    #[test]
+    fn test_public_key_display() {
+        let private_key = Ed25519PrivateKey::generate();
+        let public_key = private_key.public_key();
+        let display = format!("{}", public_key);
+        assert!(display.starts_with("0x"));
+    }
+
+    #[test]
+    fn test_signature_debug() {
+        let private_key = Ed25519PrivateKey::generate();
+        let signature = private_key.sign(b"test");
+        let debug = format!("{:?}", signature);
+        assert!(debug.contains("Ed25519Signature"));
+    }
+
+    #[test]
+    fn test_signature_display() {
+        let private_key = Ed25519PrivateKey::generate();
+        let signature = private_key.sign(b"test");
+        let display = format!("{}", signature);
+        assert!(display.starts_with("0x"));
+    }
+
+    #[test]
+    fn test_signer_trait() {
+        use crate::crypto::traits::Signer;
+
+        let private_key = Ed25519PrivateKey::generate();
+        let message = b"trait test";
+
+        let signature = Signer::sign(&private_key, message);
+        let public_key = Signer::public_key(&private_key);
+
+        assert!(public_key.verify(message, &signature).is_ok());
+    }
+
+    #[test]
+    fn test_verifier_trait() {
+        use crate::crypto::traits::Verifier;
+
+        let private_key = Ed25519PrivateKey::generate();
+        let public_key = private_key.public_key();
+        let message = b"verifier test";
+        let signature = private_key.sign(message);
+
+        assert!(Verifier::verify(&public_key, message, &signature).is_ok());
+    }
+
+    #[test]
+    fn test_public_key_trait() {
+        use crate::crypto::traits::PublicKey;
+
+        let private_key = Ed25519PrivateKey::generate();
+        let public_key = private_key.public_key();
+        let bytes = PublicKey::to_bytes(&public_key);
+        let restored = Ed25519PublicKey::from_bytes(&bytes).unwrap();
+        assert_eq!(public_key, restored);
+    }
+
+    #[test]
+    fn test_signature_trait() {
+        use crate::crypto::traits::Signature;
+
+        let private_key = Ed25519PrivateKey::generate();
+        let signature = private_key.sign(b"test");
+        let bytes = Signature::to_bytes(&signature);
+        let restored = Ed25519Signature::from_bytes(&bytes).unwrap();
+        assert_eq!(signature.to_bytes(), restored.to_bytes());
+    }
+
+    #[test]
+    fn test_authentication_key() {
+        let private_key = Ed25519PrivateKey::generate();
+        let public_key = private_key.public_key();
+        let auth_key = public_key.to_authentication_key();
+        assert_eq!(auth_key.len(), 32);
+    }
+
+    #[test]
+    fn test_signature_json_serialization() {
+        let private_key = Ed25519PrivateKey::generate();
+        let signature = private_key.sign(b"test");
+
+        let json = serde_json::to_string(&signature).unwrap();
+        let restored: Ed25519Signature = serde_json::from_str(&json).unwrap();
+        assert_eq!(signature.to_bytes(), restored.to_bytes());
+    }
+
+    #[test]
+    fn test_private_key_clone() {
+        let private_key = Ed25519PrivateKey::generate();
+        let cloned = private_key.clone();
+        assert_eq!(private_key.to_bytes(), cloned.to_bytes());
+    }
+
+    #[test]
+    fn test_public_key_equality() {
+        let private_key = Ed25519PrivateKey::generate();
+        let pk1 = private_key.public_key();
+        let pk2 = private_key.public_key();
+        assert_eq!(pk1, pk2);
+
+        let different = Ed25519PrivateKey::generate().public_key();
+        assert_ne!(pk1, different);
+    }
 }

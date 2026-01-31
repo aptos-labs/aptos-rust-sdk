@@ -566,4 +566,123 @@ mod tests {
             "Invalid account address"
         );
     }
+
+    #[test]
+    fn test_user_message_all_variants() {
+        // Test all user_message variants for coverage
+        assert_eq!(
+            AptosError::InvalidPublicKey("bad".to_string()).user_message(),
+            "Invalid public key"
+        );
+        assert_eq!(
+            AptosError::InvalidPrivateKey("bad".to_string()).user_message(),
+            "Invalid private key"
+        );
+        assert_eq!(
+            AptosError::InvalidSignature("bad".to_string()).user_message(),
+            "Invalid signature"
+        );
+        assert_eq!(
+            AptosError::SignatureVerificationFailed.user_message(),
+            "Signature verification failed"
+        );
+        assert_eq!(
+            AptosError::InvalidTypeTag("bad".to_string()).user_message(),
+            "Invalid type format"
+        );
+        assert_eq!(
+            AptosError::Transaction("bad".to_string()).user_message(),
+            "Transaction error"
+        );
+        assert_eq!(
+            AptosError::SimulationFailed("bad".to_string()).user_message(),
+            "Transaction simulation failed"
+        );
+        assert_eq!(
+            AptosError::SubmissionFailed("bad".to_string()).user_message(),
+            "Transaction submission failed"
+        );
+        assert_eq!(
+            AptosError::ExecutionFailed {
+                vm_status: "ABORTED".to_string()
+            }
+            .user_message(),
+            "Transaction execution failed"
+        );
+        assert_eq!(
+            AptosError::TransactionTimeout {
+                hash: "0x1".to_string(),
+                timeout_secs: 30
+            }
+            .user_message(),
+            "Transaction timed out"
+        );
+        assert_eq!(
+            AptosError::NotFound("x".to_string()).user_message(),
+            "Resource not found"
+        );
+        assert_eq!(
+            AptosError::RateLimited {
+                retry_after_secs: Some(30)
+            }
+            .user_message(),
+            "Rate limit exceeded"
+        );
+        assert_eq!(
+            AptosError::api(503, "unavailable").user_message(),
+            "Server error"
+        );
+        assert_eq!(
+            AptosError::api(400, "bad request").user_message(),
+            "API error"
+        );
+        assert_eq!(
+            AptosError::AccountNotFound("0x1".to_string()).user_message(),
+            "Account not found"
+        );
+        assert_eq!(
+            AptosError::InvalidMnemonic("bad".to_string()).user_message(),
+            "Invalid recovery phrase"
+        );
+        assert_eq!(
+            AptosError::InvalidJwt("bad".to_string()).user_message(),
+            "Invalid authentication token"
+        );
+        assert_eq!(
+            AptosError::KeyDerivation("bad".to_string()).user_message(),
+            "Key derivation failed"
+        );
+        assert_eq!(
+            AptosError::InsufficientSignatures {
+                required: 3,
+                provided: 1
+            }
+            .user_message(),
+            "Insufficient signatures"
+        );
+        assert_eq!(
+            AptosError::FeatureNotEnabled("ed25519".to_string()).user_message(),
+            "Feature not enabled"
+        );
+        assert_eq!(
+            AptosError::Config("bad".to_string()).user_message(),
+            "Configuration error"
+        );
+        assert_eq!(
+            AptosError::Internal("bug".to_string()).user_message(),
+            "Internal error"
+        );
+        assert_eq!(
+            AptosError::Other(anyhow::anyhow!("misc")).user_message(),
+            "An error occurred"
+        );
+    }
+
+    #[test]
+    fn test_is_retryable_http_errors() {
+        // We can't easily test reqwest errors, so just ensure non-http errors return false
+        assert!(!AptosError::InvalidAddress("x".to_string()).is_retryable());
+        assert!(!AptosError::Transaction("x".to_string()).is_retryable());
+        assert!(!AptosError::NotFound("x".to_string()).is_retryable());
+    }
 }

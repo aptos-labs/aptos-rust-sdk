@@ -646,4 +646,204 @@ mod tests {
         let restored: Bls12381Signature = serde_json::from_str(&json).unwrap();
         assert_eq!(signature.to_bytes(), restored.to_bytes());
     }
+
+    #[test]
+    fn test_proof_of_possession() {
+        let private_key = Bls12381PrivateKey::generate();
+        let public_key = private_key.public_key();
+        let pop = private_key.create_proof_of_possession();
+
+        // PoP should verify against the public key
+        assert!(pop.verify(&public_key).is_ok());
+
+        // PoP should fail against a different public key
+        let other_key = Bls12381PrivateKey::generate().public_key();
+        assert!(pop.verify(&other_key).is_err());
+    }
+
+    #[test]
+    fn test_pop_bytes_roundtrip() {
+        let private_key = Bls12381PrivateKey::generate();
+        let pop = private_key.create_proof_of_possession();
+
+        let bytes = pop.to_bytes();
+        assert_eq!(bytes.len(), BLS12381_POP_LENGTH);
+
+        let restored = Bls12381ProofOfPossession::from_bytes(&bytes).unwrap();
+        assert_eq!(pop.to_bytes(), restored.to_bytes());
+    }
+
+    #[test]
+    fn test_pop_hex_roundtrip() {
+        let private_key = Bls12381PrivateKey::generate();
+        let pop = private_key.create_proof_of_possession();
+
+        let hex = pop.to_hex();
+        assert!(hex.starts_with("0x"));
+
+        let restored = Bls12381ProofOfPossession::from_hex(&hex).unwrap();
+        assert_eq!(pop.to_bytes(), restored.to_bytes());
+    }
+
+    #[test]
+    fn test_pop_invalid_bytes_length() {
+        let bytes = vec![0u8; 32]; // Wrong length
+        let result = Bls12381ProofOfPossession::from_bytes(&bytes);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_aggregate_public_keys() {
+        let pk1 = Bls12381PrivateKey::generate().public_key();
+        let pk2 = Bls12381PrivateKey::generate().public_key();
+        let pk3 = Bls12381PrivateKey::generate().public_key();
+
+        let agg = Bls12381PublicKey::aggregate(&[&pk1, &pk2, &pk3]).unwrap();
+        assert!(!agg.to_bytes().is_empty());
+    }
+
+    #[test]
+    fn test_aggregate_public_keys_empty() {
+        let result = Bls12381PublicKey::aggregate(&[]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_aggregate_signatures() {
+        let pk1 = Bls12381PrivateKey::generate();
+        let pk2 = Bls12381PrivateKey::generate();
+
+        let message = b"aggregate test";
+        let sig1 = pk1.sign(message);
+        let sig2 = pk2.sign(message);
+
+        let agg_sig = Bls12381Signature::aggregate(&[&sig1, &sig2]).unwrap();
+        assert!(!agg_sig.to_bytes().is_empty());
+    }
+
+    #[test]
+    fn test_aggregate_signatures_empty() {
+        let result = Bls12381Signature::aggregate(&[]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_from_seed() {
+        let seed = [42u8; 32];
+        let pk1 = Bls12381PrivateKey::from_seed(&seed).unwrap();
+        let pk2 = Bls12381PrivateKey::from_seed(&seed).unwrap();
+
+        // Same seed should produce same key
+        assert_eq!(pk1.to_bytes(), pk2.to_bytes());
+    }
+
+    #[test]
+    fn test_from_seed_too_short() {
+        let seed = [42u8; 16]; // Too short
+        let result = Bls12381PrivateKey::from_seed(&seed);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_private_key_debug() {
+        let private_key = Bls12381PrivateKey::generate();
+        let debug = format!("{:?}", private_key);
+        assert!(debug.contains("REDACTED"));
+        assert!(!debug.contains(&private_key.to_hex()));
+    }
+
+    #[test]
+    fn test_public_key_debug() {
+        let private_key = Bls12381PrivateKey::generate();
+        let public_key = private_key.public_key();
+        let debug = format!("{:?}", public_key);
+        assert!(debug.contains("Bls12381PublicKey"));
+    }
+
+    #[test]
+    fn test_public_key_display() {
+        let private_key = Bls12381PrivateKey::generate();
+        let public_key = private_key.public_key();
+        let display = format!("{}", public_key);
+        assert!(display.starts_with("0x"));
+    }
+
+    #[test]
+    fn test_signature_debug() {
+        let private_key = Bls12381PrivateKey::generate();
+        let signature = private_key.sign(b"test");
+        let debug = format!("{:?}", signature);
+        assert!(debug.contains("Bls12381Signature"));
+    }
+
+    #[test]
+    fn test_signature_display() {
+        let private_key = Bls12381PrivateKey::generate();
+        let signature = private_key.sign(b"test");
+        let display = format!("{}", signature);
+        assert!(display.starts_with("0x"));
+    }
+
+    #[test]
+    fn test_pop_debug() {
+        let private_key = Bls12381PrivateKey::generate();
+        let pop = private_key.create_proof_of_possession();
+        let debug = format!("{:?}", pop);
+        assert!(debug.contains("Bls12381ProofOfPossession"));
+    }
+
+    #[test]
+    fn test_pop_display() {
+        let private_key = Bls12381PrivateKey::generate();
+        let pop = private_key.create_proof_of_possession();
+        let display = format!("{}", pop);
+        assert!(display.starts_with("0x"));
+    }
+
+    #[test]
+    fn test_signer_trait() {
+        use crate::crypto::traits::Signer;
+
+        let private_key = Bls12381PrivateKey::generate();
+        let message = b"trait test";
+
+        let signature = Signer::sign(&private_key, message);
+        let public_key = Signer::public_key(&private_key);
+
+        assert!(public_key.verify(message, &signature).is_ok());
+    }
+
+    #[test]
+    fn test_verifier_trait() {
+        use crate::crypto::traits::Verifier;
+
+        let private_key = Bls12381PrivateKey::generate();
+        let public_key = private_key.public_key();
+        let message = b"verifier test";
+        let signature = private_key.sign(message);
+
+        assert!(Verifier::verify(&public_key, message, &signature).is_ok());
+    }
+
+    #[test]
+    fn test_public_key_trait() {
+        use crate::crypto::traits::PublicKey;
+
+        let private_key = Bls12381PrivateKey::generate();
+        let public_key = private_key.public_key();
+        let bytes = PublicKey::to_bytes(&public_key);
+        let restored = Bls12381PublicKey::from_bytes(&bytes).unwrap();
+        assert_eq!(public_key, restored);
+    }
+
+    #[test]
+    fn test_signature_trait() {
+        use crate::crypto::traits::Signature;
+
+        let private_key = Bls12381PrivateKey::generate();
+        let signature = private_key.sign(b"test");
+        let bytes = Signature::to_bytes(&signature);
+        let restored = Bls12381Signature::from_bytes(&bytes).unwrap();
+        assert_eq!(signature, restored);
+    }
 }

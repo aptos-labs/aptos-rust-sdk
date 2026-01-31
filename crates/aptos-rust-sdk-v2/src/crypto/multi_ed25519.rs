@@ -626,4 +626,370 @@ mod tests {
         assert!(multi_sig.has_signature(4));
         assert!(!multi_sig.has_signature(5));
     }
+
+    #[test]
+    fn test_multi_ed25519_public_key_too_many_keys() {
+        let keys: Vec<_> = (0..33) // MAX_NUM_OF_KEYS is 32
+            .map(|_| Ed25519PrivateKey::generate().public_key())
+            .collect();
+
+        let result = MultiEd25519PublicKey::new(keys, 2);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_multi_ed25519_public_keys_accessor() {
+        let keys: Vec<_> = (0..3)
+            .map(|_| Ed25519PrivateKey::generate().public_key())
+            .collect();
+        let multi_pk = MultiEd25519PublicKey::new(keys.clone(), 2).unwrap();
+
+        assert_eq!(multi_pk.public_keys().len(), 3);
+    }
+
+    #[test]
+    fn test_multi_ed25519_signature_num_signatures() {
+        let private_keys: Vec<_> = (0..3).map(|_| Ed25519PrivateKey::generate()).collect();
+        let message = b"test";
+
+        let sig0 = private_keys[0].sign(message);
+        let sig2 = private_keys[2].sign(message);
+
+        let multi_sig = MultiEd25519Signature::new(vec![(0, sig0), (2, sig2)]).unwrap();
+
+        assert_eq!(multi_sig.num_signatures(), 2);
+        // Check bitmap has bits 0 and 2 set (little-endian 4 bytes)
+        let bitmap_bytes = multi_sig.bitmap();
+        // Bit 0 and bit 2 set means first byte should be 0b00000101 = 5
+        assert_eq!(bitmap_bytes[0], 5);
+    }
+
+    #[test]
+    fn test_multi_ed25519_signature_empty() {
+        let result = MultiEd25519Signature::new(vec![]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_multi_ed25519_signature_index_out_of_bounds() {
+        let private_key = Ed25519PrivateKey::generate();
+        let sig = private_key.sign(b"test");
+
+        // Index 33 is out of bounds (MAX_NUM_OF_KEYS is 32)
+        let result = MultiEd25519Signature::new(vec![(33, sig)]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_multi_ed25519_signature_duplicate_index() {
+        let private_key = Ed25519PrivateKey::generate();
+        let sig1 = private_key.sign(b"test1");
+        let sig2 = private_key.sign(b"test2");
+
+        // Duplicate index 0
+        let result = MultiEd25519Signature::new(vec![(0, sig1), (0, sig2)]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_multi_ed25519_public_key_from_bytes_invalid() {
+        // Too short - not even a threshold byte
+        let result = MultiEd25519PublicKey::from_bytes(&[]);
+        assert!(result.is_err());
+
+        // Just a threshold, no keys
+        let result = MultiEd25519PublicKey::from_bytes(&[2]);
+        assert!(result.is_err());
+
+        // Invalid length - not a multiple of 32 + 1
+        let result = MultiEd25519PublicKey::from_bytes(&[1, 2, 3, 4, 5]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_multi_ed25519_signature_from_bytes_invalid() {
+        // Too short
+        let result = MultiEd25519Signature::from_bytes(&[]);
+        assert!(result.is_err());
+
+        // Just bitmap, no signatures
+        let result = MultiEd25519Signature::from_bytes(&[0, 0, 0, 1]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_multi_ed25519_verify_invalid_signature_index() {
+        let private_keys: Vec<_> = (0..3).map(|_| Ed25519PrivateKey::generate()).collect();
+        let public_keys: Vec<_> = private_keys.iter().map(|k| k.public_key()).collect();
+
+        let multi_pk = MultiEd25519PublicKey::new(public_keys, 2).unwrap();
+        let message = b"test message";
+
+        // Sign with indices 0 and 5 (5 is out of bounds for 3 keys)
+        let sig0 = private_keys[0].sign(message);
+        let sig5 = private_keys[0].sign(message); // Use same key, doesn't matter for this test
+
+        // Create bitmap with bit 5 set
+        let bitmap = (1u32 << 0) | (1u32 << 5);
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&sig0.to_bytes());
+        bytes.extend_from_slice(&sig5.to_bytes());
+        bytes.extend_from_slice(&bitmap.to_le_bytes());
+
+        let multi_sig = MultiEd25519Signature::from_bytes(&bytes).unwrap();
+
+        // Verification should fail because index 5 is out of bounds
+        let result = multi_pk.verify(message, &multi_sig);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_multi_ed25519_verify_wrong_signature() {
+        let private_keys: Vec<_> = (0..3).map(|_| Ed25519PrivateKey::generate()).collect();
+        let public_keys: Vec<_> = private_keys.iter().map(|k| k.public_key()).collect();
+
+        let multi_pk = MultiEd25519PublicKey::new(public_keys, 2).unwrap();
+        let message = b"test message";
+
+        // Sign with key 0 but claim it's from key 1
+        let sig0 = private_keys[0].sign(message);
+        let sig1 = private_keys[0].sign(message); // Wrong key for index 1
+
+        let multi_sig = MultiEd25519Signature::new(vec![(0, sig0), (1, sig1)]).unwrap();
+
+        // Verification should fail because sig at index 1 doesn't match key 1
+        let result = multi_pk.verify(message, &multi_sig);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_multi_ed25519_public_key_debug() {
+        let keys: Vec<_> = (0..2)
+            .map(|_| Ed25519PrivateKey::generate().public_key())
+            .collect();
+        let multi_pk = MultiEd25519PublicKey::new(keys, 2).unwrap();
+        let debug = format!("{:?}", multi_pk);
+        assert!(debug.contains("MultiEd25519PublicKey"));
+        assert!(debug.contains("2-of-2"));
+    }
+
+    #[test]
+    fn test_multi_ed25519_signature_debug() {
+        let private_key = Ed25519PrivateKey::generate();
+        let sig = private_key.sign(b"test");
+        let multi_sig = MultiEd25519Signature::new(vec![(0, sig)]).unwrap();
+
+        let debug = format!("{:?}", multi_sig);
+        assert!(debug.contains("MultiEd25519Signature"));
+    }
+
+    #[test]
+    fn test_multi_ed25519_json_serialization() {
+        let keys: Vec<_> = (0..3)
+            .map(|_| Ed25519PrivateKey::generate().public_key())
+            .collect();
+        let multi_pk = MultiEd25519PublicKey::new(keys, 2).unwrap();
+
+        let json = serde_json::to_string(&multi_pk).unwrap();
+        let parsed: MultiEd25519PublicKey = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(multi_pk.threshold(), parsed.threshold());
+        assert_eq!(multi_pk.num_keys(), parsed.num_keys());
+    }
+
+    #[test]
+    fn test_multi_ed25519_signature_json_serialization() {
+        let private_keys: Vec<_> = (0..3).map(|_| Ed25519PrivateKey::generate()).collect();
+        let message = b"test";
+
+        let sig0 = private_keys[0].sign(message);
+        let sig2 = private_keys[2].sign(message);
+
+        let multi_sig = MultiEd25519Signature::new(vec![(0, sig0), (2, sig2)]).unwrap();
+
+        let json = serde_json::to_string(&multi_sig).unwrap();
+        let parsed: MultiEd25519Signature = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(multi_sig.num_signatures(), parsed.num_signatures());
+        assert_eq!(multi_sig.bitmap(), parsed.bitmap());
+    }
+
+    #[test]
+    fn test_multi_ed25519_signature_from_bytes_too_short() {
+        let bytes = vec![0u8; 3]; // Less than 4 bytes (bitmap)
+        let result = MultiEd25519Signature::from_bytes(&bytes);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("too short"));
+    }
+
+    #[test]
+    fn test_multi_ed25519_signature_from_bytes_invalid_length() {
+        // Create bytes with bitmap indicating 1 signature but wrong number of bytes
+        let mut bytes = vec![0u8; 10]; // Not a multiple of signature length
+        // Set bitmap to indicate 1 signature (bit 0 set)
+        bytes.extend_from_slice(&[0x01, 0x00, 0x00, 0x00]);
+
+        let result = MultiEd25519Signature::from_bytes(&bytes);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_multi_ed25519_signature_has_signature() {
+        let private_key = Ed25519PrivateKey::generate();
+        let sig0 = private_key.sign(b"test");
+        let sig2 = private_key.sign(b"test");
+
+        let multi_sig = MultiEd25519Signature::new(vec![(0, sig0), (2, sig2)]).unwrap();
+
+        assert!(multi_sig.has_signature(0));
+        assert!(!multi_sig.has_signature(1));
+        assert!(multi_sig.has_signature(2));
+        assert!(!multi_sig.has_signature(3));
+        assert!(!multi_sig.has_signature(32)); // Out of bounds
+    }
+
+    #[test]
+    fn test_multi_ed25519_signature_signatures_accessor() {
+        let private_key = Ed25519PrivateKey::generate();
+        let sig0 = private_key.sign(b"test");
+        let sig1 = private_key.sign(b"test");
+
+        let multi_sig = MultiEd25519Signature::new(vec![(0, sig0), (1, sig1)]).unwrap();
+
+        let sigs = multi_sig.signatures();
+        assert_eq!(sigs.len(), 2);
+        assert_eq!(sigs[0].0, 0);
+        assert_eq!(sigs[1].0, 1);
+    }
+
+    #[test]
+    fn test_multi_ed25519_public_key_public_keys_accessor() {
+        let keys: Vec<_> = (0..3)
+            .map(|_| Ed25519PrivateKey::generate().public_key())
+            .collect();
+        let multi_pk = MultiEd25519PublicKey::new(keys.clone(), 2).unwrap();
+
+        let pks = multi_pk.public_keys();
+        assert_eq!(pks.len(), 3);
+    }
+
+    #[test]
+    fn test_multi_ed25519_signature_display() {
+        let private_key = Ed25519PrivateKey::generate();
+        let sig = private_key.sign(b"test");
+        let multi_sig = MultiEd25519Signature::new(vec![(0, sig)]).unwrap();
+
+        let display = format!("{}", multi_sig);
+        assert!(display.starts_with("0x"));
+    }
+
+    #[test]
+    fn test_multi_ed25519_public_key_display() {
+        let keys: Vec<_> = (0..2)
+            .map(|_| Ed25519PrivateKey::generate().public_key())
+            .collect();
+        let multi_pk = MultiEd25519PublicKey::new(keys, 2).unwrap();
+
+        let display = format!("{}", multi_pk);
+        assert!(display.starts_with("0x"));
+    }
+
+    #[test]
+    fn test_multi_ed25519_signature_roundtrip() {
+        let private_key = Ed25519PrivateKey::generate();
+        let sig0 = private_key.sign(b"test");
+        let sig1 = private_key.sign(b"test");
+
+        let multi_sig = MultiEd25519Signature::new(vec![(0, sig0), (1, sig1)]).unwrap();
+        let bytes = multi_sig.to_bytes();
+        let restored = MultiEd25519Signature::from_bytes(&bytes).unwrap();
+
+        assert_eq!(multi_sig.num_signatures(), restored.num_signatures());
+        assert_eq!(multi_sig.bitmap(), restored.bitmap());
+    }
+
+    #[test]
+    fn test_multi_ed25519_public_key_roundtrip() {
+        let keys: Vec<_> = (0..3)
+            .map(|_| Ed25519PrivateKey::generate().public_key())
+            .collect();
+        let multi_pk = MultiEd25519PublicKey::new(keys, 2).unwrap();
+        let bytes = multi_pk.to_bytes();
+        let restored = MultiEd25519PublicKey::from_bytes(&bytes).unwrap();
+
+        assert_eq!(multi_pk.threshold(), restored.threshold());
+        assert_eq!(multi_pk.num_keys(), restored.num_keys());
+    }
+
+    #[test]
+    fn test_multi_ed25519_signature_new_empty() {
+        let result = MultiEd25519Signature::new(vec![]);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("at least one"));
+    }
+
+    #[test]
+    fn test_multi_ed25519_signature_new_duplicate_index() {
+        let private_key = Ed25519PrivateKey::generate();
+        let sig0a = private_key.sign(b"test");
+        let sig0b = private_key.sign(b"test");
+
+        let result = MultiEd25519Signature::new(vec![(0, sig0a), (0, sig0b)]);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("duplicate"));
+    }
+
+    #[test]
+    fn test_multi_ed25519_signature_new_index_out_of_bounds() {
+        let private_key = Ed25519PrivateKey::generate();
+        let sig = private_key.sign(b"test");
+
+        let result = MultiEd25519Signature::new(vec![(32, sig)]); // Index 32 is out of bounds
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_multi_ed25519_public_key_to_address() {
+        let keys: Vec<_> = (0..3)
+            .map(|_| Ed25519PrivateKey::generate().public_key())
+            .collect();
+        let multi_pk = MultiEd25519PublicKey::new(keys, 2).unwrap();
+
+        let address = multi_pk.to_address();
+        assert!(!address.is_zero());
+    }
+
+    #[test]
+    fn test_multi_ed25519_public_key_from_bytes_invalid_length() {
+        // Invalid length (not a multiple of ED25519_PUBLIC_KEY_LENGTH + 1 for threshold)
+        let bytes = vec![0u8; 10];
+        let result = MultiEd25519PublicKey::from_bytes(&bytes);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_multi_ed25519_bcs_roundtrip_public_key() {
+        let keys: Vec<_> = (0..3)
+            .map(|_| Ed25519PrivateKey::generate().public_key())
+            .collect();
+        let multi_pk = MultiEd25519PublicKey::new(keys, 2).unwrap();
+
+        let bcs_bytes = aptos_bcs::to_bytes(&multi_pk).unwrap();
+        let restored: MultiEd25519PublicKey = aptos_bcs::from_bytes(&bcs_bytes).unwrap();
+
+        assert_eq!(multi_pk.threshold(), restored.threshold());
+        assert_eq!(multi_pk.num_keys(), restored.num_keys());
+    }
+
+    #[test]
+    fn test_multi_ed25519_bcs_roundtrip_signature() {
+        let private_key = Ed25519PrivateKey::generate();
+        let sig = private_key.sign(b"test");
+        let multi_sig = MultiEd25519Signature::new(vec![(0, sig)]).unwrap();
+
+        let bcs_bytes = aptos_bcs::to_bytes(&multi_sig).unwrap();
+        let restored: MultiEd25519Signature = aptos_bcs::from_bytes(&bcs_bytes).unwrap();
+
+        assert_eq!(multi_sig.num_signatures(), restored.num_signatures());
+    }
 }

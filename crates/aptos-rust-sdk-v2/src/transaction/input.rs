@@ -790,4 +790,296 @@ mod tests {
         assert_eq!(functions::APT_TRANSFER, "0x1::aptos_account::transfer");
         assert_eq!(functions::COIN_TRANSFER, "0x1::coin::transfer");
     }
+
+    #[test]
+    fn test_move_u256_from_u128() {
+        let val = MoveU256::from_u128(123456789);
+        // First 16 bytes should contain the value in little-endian
+        let expected = 123456789u128.to_le_bytes();
+        assert_eq!(&val.0[..16], &expected);
+        // Upper 16 bytes should be zero
+        assert_eq!(&val.0[16..], &[0u8; 16]);
+    }
+
+    #[test]
+    fn test_move_u256_from_le_bytes() {
+        let bytes = [0xab; 32];
+        let val = MoveU256::from_le_bytes(bytes);
+        assert_eq!(val.0, bytes);
+    }
+
+    #[test]
+    fn test_move_u256_parse() {
+        let val = MoveU256::parse("12345678901234567890").unwrap();
+        let expected = 12345678901234567890u128;
+        let mut expected_bytes = [0u8; 32];
+        expected_bytes[..16].copy_from_slice(&expected.to_le_bytes());
+        assert_eq!(val.0, expected_bytes);
+    }
+
+    #[test]
+    fn test_move_u256_parse_invalid() {
+        // Value larger than u128 currently returns error
+        let result = MoveU256::parse("999999999999999999999999999999999999999999999");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_move_u256_serialization() {
+        let val = MoveU256::from_u128(0x0102030405060708);
+        let bcs = aptos_bcs::to_bytes(&val).unwrap();
+        // Should serialize as 32 bytes (tuple, not vector with length prefix)
+        assert_eq!(bcs.len(), 32);
+        // First 8 bytes should be our value in little-endian
+        assert_eq!(&bcs[..8], &[0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01]);
+    }
+
+    #[test]
+    fn test_move_i128_new() {
+        let val = MoveI128::new(42);
+        assert_eq!(val.0, 42);
+    }
+
+    #[test]
+    fn test_move_i128_from_i128() {
+        let val: MoveI128 = (-100i128).into();
+        assert_eq!(val.0, -100);
+    }
+
+    #[test]
+    fn test_move_i128_serialization_positive() {
+        let val = MoveI128::new(0x0102030405060708);
+        let bcs = aptos_bcs::to_bytes(&val).unwrap();
+        // Should serialize as 16 bytes (tuple, not vector)
+        assert_eq!(bcs.len(), 16);
+        // First 8 bytes should be our value in little-endian
+        assert_eq!(&bcs[..8], &[0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01]);
+        // Upper 8 bytes should be zeros for positive value
+        assert_eq!(&bcs[8..], &[0, 0, 0, 0, 0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn test_move_i128_serialization_negative() {
+        let val = MoveI128::new(-1);
+        let bcs = aptos_bcs::to_bytes(&val).unwrap();
+        assert_eq!(bcs.len(), 16);
+        // -1 in two's complement is all 0xFF bytes
+        assert_eq!(bcs, vec![0xFF; 16]);
+    }
+
+    #[test]
+    fn test_move_i256_from_i128_positive() {
+        let val = MoveI256::from_i128(42);
+        // First 16 bytes should contain the value
+        let expected = 42i128.to_le_bytes();
+        assert_eq!(&val.0[..16], &expected);
+        // Upper 16 bytes should be zeros for positive value
+        assert_eq!(&val.0[16..], &[0u8; 16]);
+    }
+
+    #[test]
+    fn test_move_i256_from_i128_negative() {
+        let val = MoveI256::from_i128(-1);
+        // -1 in two's complement should be all 0xFF bytes
+        assert_eq!(val.0, [0xFF; 32]);
+    }
+
+    #[test]
+    fn test_move_i256_from_le_bytes() {
+        let bytes = [0xcd; 32];
+        let val = MoveI256::from_le_bytes(bytes);
+        assert_eq!(val.0, bytes);
+    }
+
+    #[test]
+    fn test_move_i256_from_trait() {
+        let val: MoveI256 = (-100i128).into();
+        let expected = MoveI256::from_i128(-100);
+        assert_eq!(val, expected);
+    }
+
+    #[test]
+    fn test_move_i256_serialization() {
+        let val = MoveI256::from_i128(0x0102030405060708);
+        let bcs = aptos_bcs::to_bytes(&val).unwrap();
+        // Should serialize as 32 bytes (tuple, not vector)
+        assert_eq!(bcs.len(), 32);
+        // First 8 bytes should be our value in little-endian
+        assert_eq!(&bcs[..8], &[0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01]);
+    }
+
+    #[test]
+    fn test_move_i256_serialization_negative() {
+        let val = MoveI256::from_i128(-1);
+        let bcs = aptos_bcs::to_bytes(&val).unwrap();
+        assert_eq!(bcs.len(), 32);
+        // -1 in two's complement is all 0xFF bytes
+        assert_eq!(bcs, vec![0xFF; 32]);
+    }
+
+    #[test]
+    fn test_input_entry_function_data_new() {
+        let builder = InputEntryFunctionData::new("0x1::coin::transfer");
+        let result = builder.build();
+        // Should build successfully (no args required yet)
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_input_entry_function_data_invalid_function_id() {
+        let builder = InputEntryFunctionData::new("invalid");
+        let result = builder.build();
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Invalid function ID")
+        );
+    }
+
+    #[test]
+    fn test_input_entry_function_data_type_arg() {
+        let builder = InputEntryFunctionData::new("0x1::coin::transfer")
+            .type_arg("0x1::aptos_coin::AptosCoin");
+        let result = builder.build();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_input_entry_function_data_invalid_type_arg() {
+        let builder =
+            InputEntryFunctionData::new("0x1::coin::transfer").type_arg("not a valid type");
+        let result = builder.build();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("type argument"));
+    }
+
+    #[test]
+    fn test_input_entry_function_data_type_arg_typed() {
+        use crate::types::TypeTag;
+
+        let builder =
+            InputEntryFunctionData::new("0x1::coin::transfer").type_arg_typed(TypeTag::U64);
+        let result = builder.build();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_input_entry_function_data_type_args() {
+        let builder = InputEntryFunctionData::new("0x1::coin::transfer").type_args(["u64", "u128"]);
+        let result = builder.build();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_input_entry_function_data_type_args_typed() {
+        use crate::types::TypeTag;
+
+        let builder = InputEntryFunctionData::new("0x1::coin::transfer")
+            .type_args_typed([TypeTag::U64, TypeTag::Bool]);
+        let result = builder.build();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_input_entry_function_data_arg() {
+        let builder = InputEntryFunctionData::new("0x1::coin::transfer")
+            .arg(42u64)
+            .arg(true)
+            .arg("hello".to_string());
+        let result = builder.build();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_input_entry_function_data_arg_raw() {
+        let raw_bytes = vec![0x01, 0x02, 0x03];
+        let builder = InputEntryFunctionData::new("0x1::coin::transfer").arg_raw(raw_bytes);
+        let result = builder.build();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_input_entry_function_data_args() {
+        let builder = InputEntryFunctionData::new("0x1::coin::transfer").args([1u64, 2u64, 3u64]);
+        let result = builder.build();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_input_entry_function_data_transfer_apt() {
+        use crate::types::AccountAddress;
+
+        let recipient = AccountAddress::from_hex("0x123").unwrap();
+        let result = InputEntryFunctionData::transfer_apt(recipient, 1000);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_input_entry_function_data_builder_debug() {
+        let builder = InputEntryFunctionData::new("0x1::coin::transfer");
+        let debug = format!("{:?}", builder);
+        assert!(debug.contains("InputEntryFunctionDataBuilder"));
+    }
+
+    #[test]
+    fn test_input_entry_function_data_builder_clone() {
+        let builder = InputEntryFunctionData::new("0x1::coin::transfer").arg(42u64);
+        let cloned = builder.clone();
+        assert!(cloned.build().is_ok());
+    }
+
+    #[test]
+    fn test_move_u256_debug() {
+        let val = MoveU256::from_u128(123456789);
+        let debug = format!("{:?}", val);
+        assert!(debug.contains("MoveU256"));
+    }
+
+    #[test]
+    fn test_move_i128_debug() {
+        let val = MoveI128::new(-42);
+        let debug = format!("{:?}", val);
+        assert!(debug.contains("MoveI128"));
+    }
+
+    #[test]
+    fn test_move_i256_debug() {
+        let val = MoveI256::from_i128(-42);
+        let debug = format!("{:?}", val);
+        assert!(debug.contains("MoveI256"));
+    }
+
+    #[test]
+    fn test_move_u256_equality() {
+        let val1 = MoveU256::from_u128(100);
+        let val2 = MoveU256::from_u128(100);
+        let val3 = MoveU256::from_u128(200);
+        assert_eq!(val1, val2);
+        assert_ne!(val1, val3);
+    }
+
+    #[test]
+    fn test_move_i256_equality() {
+        let val1 = MoveI256::from_i128(-50);
+        let val2 = MoveI256::from_i128(-50);
+        let val3 = MoveI256::from_i128(50);
+        assert_eq!(val1, val2);
+        assert_ne!(val1, val3);
+    }
+
+    #[test]
+    fn test_move_u256_clone() {
+        let val1 = MoveU256::from_u128(999);
+        let val2 = val1.clone();
+        assert_eq!(val1, val2);
+    }
+
+    #[test]
+    fn test_move_i256_clone() {
+        let val1 = MoveI256::from_i128(-999);
+        let val2 = val1.clone();
+        assert_eq!(val1, val2);
+    }
 }
