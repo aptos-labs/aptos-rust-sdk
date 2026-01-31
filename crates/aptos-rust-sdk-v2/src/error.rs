@@ -228,6 +228,7 @@ impl AptosError {
             Self::Api { status_code, .. } => {
                 matches!(status_code, 429 | 500 | 502 | 503 | 504)
             }
+            Self::RateLimited { .. } => true,
             _ => false,
         }
     }

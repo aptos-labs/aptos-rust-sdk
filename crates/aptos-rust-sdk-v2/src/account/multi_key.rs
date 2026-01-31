@@ -448,6 +448,8 @@ impl Account for MultiKeyAccount {
 
 impl fmt::Debug for MultiKeyAccount {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // SECURITY: Intentionally omit private_keys to prevent secret leakage
+        // in logs, panic messages, or debug output
         f.debug_struct("MultiKeyAccount")
             .field("address", &self.address)
             .field(
@@ -461,7 +463,7 @@ impl fmt::Debug for MultiKeyAccount {
             )
             .field("types", &self.key_types())
             .field("public_key", &self.public_key)
-            .field("private_keys", &self.private_keys)
+            .field("private_keys", &"[REDACTED]")
             .finish()
     }
 }

@@ -270,6 +270,7 @@ impl FullnodeClient {
         let bcs_bytes = signed_txn.to_bcs()?;
         let client = self.client.clone();
         let retry_config = self.retry_config.clone();
+        let max_response_size = self.config.pool_config().max_response_size;
 
         let executor = RetryExecutor::new((*retry_config).clone());
         executor
@@ -286,7 +287,7 @@ impl FullnodeClient {
                         .send()
                         .await?;
 
-                    Self::handle_response_static(response).await
+                    Self::handle_response_static(response, max_response_size).await
                 }
             })
             .await
@@ -400,6 +401,7 @@ impl FullnodeClient {
         let bcs_bytes = signed_txn.to_bcs()?;
         let client = self.client.clone();
         let retry_config = self.retry_config.clone();
+        let max_response_size = self.config.pool_config().max_response_size;
 
         let executor = RetryExecutor::new((*retry_config).clone());
         executor
@@ -416,7 +418,7 @@ impl FullnodeClient {
                         .send()
                         .await?;
 
-                    Self::handle_response_static(response).await
+                    Self::handle_response_static(response, max_response_size).await
                 }
             })
             .await
@@ -459,6 +461,7 @@ impl FullnodeClient {
 
         let client = self.client.clone();
         let retry_config = self.retry_config.clone();
+        let max_response_size = self.config.pool_config().max_response_size;
 
         let executor = RetryExecutor::new((*retry_config).clone());
         executor
@@ -475,7 +478,7 @@ impl FullnodeClient {
                         .send()
                         .await?;
 
-                    Self::handle_response_static(response).await
+                    Self::handle_response_static(response, max_response_size).await
                 }
             })
             .await
@@ -558,12 +561,17 @@ impl FullnodeClient {
     fn build_url(&self, path: &str) -> Url {
         let mut url = self.config.fullnode_url().clone();
         if !path.is_empty() {
-            // Ensure base path ends with /
-            if !url.path().ends_with('/') {
-                url.set_path(&format!("{}/", url.path()));
+            // Avoid format! allocations by building the path string manually
+            let base_path = url.path();
+            let needs_slash = !base_path.ends_with('/');
+            let new_len = base_path.len() + path.len() + usize::from(needs_slash);
+            let mut new_path = String::with_capacity(new_len);
+            new_path.push_str(base_path);
+            if needs_slash {
+                new_path.push('/');
             }
-            // Append the path segment
-            url.set_path(&format!("{}{}", url.path(), path));
+            new_path.push_str(path);
+            url.set_path(&new_path);
         }
         url
     }
@@ -575,6 +583,7 @@ impl FullnodeClient {
         let client = self.client.clone();
         let url_clone = url.clone();
         let retry_config = self.retry_config.clone();
+        let max_response_size = self.config.pool_config().max_response_size;
 
         let executor = RetryExecutor::new((*retry_config).clone());
         executor
@@ -588,17 +597,38 @@ impl FullnodeClient {
                         .send()
                         .await?;
 
-                    Self::handle_response_static(response).await
+                    Self::handle_response_static(response, max_response_size).await
                 }
             })
             .await
     }
 
     /// Handles an HTTP response without retry (for internal use).
+    ///
+    /// # Security
+    ///
+    /// This method checks the Content-Length header against `max_response_size`
+    /// to prevent memory exhaustion from extremely large responses.
     async fn handle_response_static<T: for<'de> serde::Deserialize<'de>>(
         response: reqwest::Response,
+        max_response_size: usize,
     ) -> AptosResult<AptosResponse<T>> {
         let status = response.status();
+
+        // SECURITY: Check Content-Length to prevent memory exhaustion
+        // This protects against malicious servers sending extremely large responses
+        if let Some(content_length) = response.content_length()
+            && content_length > max_response_size as u64
+        {
+            return Err(AptosError::Api {
+                status_code: status.as_u16(),
+                message: format!(
+                    "response body too large: {content_length} bytes exceeds limit of {max_response_size} bytes"
+                ),
+                error_code: Some("RESPONSE_TOO_LARGE".to_string()),
+                vm_error_code: None,
+            });
+        }
 
         // Extract headers before consuming response body
         let ledger_version = response
@@ -632,6 +662,13 @@ impl FullnodeClient {
             .and_then(|v| v.to_str().ok())
             .map(ToString::to_string);
 
+        // Extract Retry-After header for rate limiting (before consuming body)
+        let retry_after_secs = response
+            .headers()
+            .get("retry-after")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.parse().ok());
+
         if status.is_success() {
             let data: T = response.json().await?;
             Ok(AptosResponse {
@@ -643,6 +680,10 @@ impl FullnodeClient {
                 oldest_ledger_version,
                 cursor,
             })
+        } else if status.as_u16() == 429 {
+            // SECURITY: Return specific RateLimited error with Retry-After info
+            // This allows callers to respect the server's rate limiting
+            Err(AptosError::RateLimited { retry_after_secs })
         } else {
             let body: serde_json::Value = response.json().await.unwrap_or_default();
             let message = body
@@ -673,7 +714,8 @@ impl FullnodeClient {
         &self,
         response: reqwest::Response,
     ) -> AptosResult<AptosResponse<T>> {
-        Self::handle_response_static(response).await
+        let max_response_size = self.config.pool_config().max_response_size;
+        Self::handle_response_static(response, max_response_size).await
     }
 }
 

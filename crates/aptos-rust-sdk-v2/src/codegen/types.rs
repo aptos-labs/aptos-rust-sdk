@@ -155,16 +155,17 @@ impl MoveTypeMapper {
 
         // Handle generic struct types (e.g., 0x1::coin::Coin<0x1::aptos_coin::AptosCoin>)
         if move_type.contains("::") {
-            // Extract the struct name for the Rust type
-            let parts: Vec<&str> = move_type.split("::").collect();
-            if parts.len() >= 3 {
-                // Get the base struct name (without generics)
-                let struct_name = parts.last().unwrap();
-                let base_name = struct_name.split('<').next().unwrap_or(struct_name);
+            // Use rsplit to avoid collecting into Vec - we only need the last part
+            let part_count = move_type.matches("::").count() + 1;
+            if part_count >= 3 {
+                // Get the base struct name (without generics) using rsplit
+                if let Some(struct_name) = move_type.rsplit("::").next() {
+                    let base_name = struct_name.split('<').next().unwrap_or(struct_name);
 
-                // Create a pascal case name
-                let rust_name = to_pascal_case(base_name);
-                return RustType::new(rust_name).with_doc(format!("Move type: {move_type}"));
+                    // Create a pascal case name
+                    let rust_name = to_pascal_case(base_name);
+                    return RustType::new(rust_name).with_doc(format!("Move type: {move_type}"));
+                }
             }
         }
 

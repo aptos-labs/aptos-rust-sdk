@@ -10,6 +10,28 @@
 //! - `secp256r1`: Secp256r1 (P-256) ECDSA signatures
 //! - `bls`: BLS12-381 signatures
 //!
+//! # Security Considerations
+//!
+//! ## Timing Attacks
+//!
+//! The `PartialEq` implementations for cryptographic types use standard byte
+//! comparisons which may not be constant-time. This is generally acceptable
+//! because:
+//!
+//! - Public keys and signatures are not secret material
+//! - Signature verification in the underlying libraries uses constant-time
+//!   operations for the actual cryptographic comparisons
+//!
+//! If you need constant-time comparisons for specific use cases (e.g., comparing
+//! against expected signatures in tests), consider using the `subtle` crate's
+//! `ConstantTimeEq` trait.
+//!
+//! ## Key Material Protection
+//!
+//! Private key types implement `Zeroize` and `ZeroizeOnDrop` to clear sensitive
+//! key material from memory when dropped. The underlying cryptographic libraries
+//! (ed25519-dalek, k256, p256) also implement secure key handling.
+//!
 //! # Example
 //!
 //! ```rust,ignore

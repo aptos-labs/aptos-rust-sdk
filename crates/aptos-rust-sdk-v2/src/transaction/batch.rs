@@ -245,9 +245,14 @@ impl TransactionBatchBuilder {
         let mut transactions = Vec::with_capacity(self.payloads.len());
 
         for (i, payload) in self.payloads.into_iter().enumerate() {
+            // SECURITY: Use checked arithmetic to prevent sequence number overflow
+            let sequence_number = starting_seq
+                .checked_add(i as u64)
+                .ok_or_else(|| AptosError::Transaction("sequence number overflow".into()))?;
+
             let txn = TransactionBuilder::new()
                 .sender(sender)
-                .sequence_number(starting_seq + i as u64)
+                .sequence_number(sequence_number)
                 .payload(payload)
                 .gas_unit_price(self.gas_unit_price)
                 .max_gas_amount(self.max_gas_amount)
@@ -545,8 +550,13 @@ impl<'a> BatchOperations<'a> {
         account: &A,
         payloads: Vec<TransactionPayload>,
     ) -> AptosResult<SignedTransactionBatch> {
-        let sequence_number = self.client.get_sequence_number(account.address()).await?;
-        let gas_estimation = self.client.estimate_gas_price().await?;
+        // Fetch sequence number and gas price in parallel - they're independent
+        let (sequence_number, gas_estimation) = tokio::join!(
+            self.client.get_sequence_number(account.address()),
+            self.client.estimate_gas_price()
+        );
+        let sequence_number = sequence_number?;
+        let gas_estimation = gas_estimation?;
 
         let batch = TransactionBatchBuilder::new()
             .sender(account.address())

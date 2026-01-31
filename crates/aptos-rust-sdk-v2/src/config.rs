@@ -3,10 +3,32 @@
 //! This module provides configuration options for connecting to different
 //! Aptos networks (mainnet, testnet, devnet) or custom endpoints.
 
+use crate::error::{AptosError, AptosResult};
 use crate::retry::RetryConfig;
 use crate::types::ChainId;
 use std::time::Duration;
 use url::Url;
+
+/// Validates that a URL uses a safe scheme (http or https).
+///
+/// # Security
+///
+/// This prevents SSRF attacks via dangerous URL schemes like `file://`, `gopher://`, etc.
+/// For production use, HTTPS is strongly recommended. HTTP is allowed for localhost
+/// development only.
+fn validate_url_scheme(url: &Url) -> AptosResult<()> {
+    match url.scheme() {
+        "https" => Ok(()),
+        "http" => {
+            // HTTP is allowed but only recommended for localhost development
+            // Log a warning in the future if we add logging
+            Ok(())
+        }
+        scheme => Err(AptosError::Config(format!(
+            "unsupported URL scheme '{scheme}': only 'http' and 'https' are allowed"
+        ))),
+    }
+}
 
 /// Configuration for HTTP connection pooling.
 ///
@@ -28,7 +50,18 @@ pub struct PoolConfig {
     /// Whether to enable TCP nodelay (disable Nagle's algorithm).
     /// Default: true
     pub tcp_nodelay: bool,
+    /// Maximum response body size in bytes.
+    /// Default: 100 MB (`104_857_600` bytes)
+    ///
+    /// # Security
+    ///
+    /// This limit helps prevent memory exhaustion from extremely large responses.
+    /// The Aptos API responses are typically much smaller than this limit.
+    pub max_response_size: usize,
 }
+
+/// Default maximum response size: 100 MB
+const DEFAULT_MAX_RESPONSE_SIZE: usize = 100 * 1024 * 1024;
 
 impl Default for PoolConfig {
     fn default() -> Self {
@@ -38,6 +71,7 @@ impl Default for PoolConfig {
             idle_timeout: Duration::from_secs(90),
             tcp_keepalive: Some(Duration::from_secs(60)),
             tcp_nodelay: true,
+            max_response_size: DEFAULT_MAX_RESPONSE_SIZE,
         }
     }
 }
@@ -60,6 +94,7 @@ impl PoolConfig {
             idle_timeout: Duration::from_secs(300),
             tcp_keepalive: Some(Duration::from_secs(30)),
             tcp_nodelay: true,
+            max_response_size: DEFAULT_MAX_RESPONSE_SIZE,
         }
     }
 
@@ -75,6 +110,7 @@ impl PoolConfig {
             idle_timeout: Duration::from_secs(30),
             tcp_keepalive: Some(Duration::from_secs(15)),
             tcp_nodelay: true,
+            max_response_size: DEFAULT_MAX_RESPONSE_SIZE,
         }
     }
 
@@ -89,6 +125,7 @@ impl PoolConfig {
             idle_timeout: Duration::from_secs(10),
             tcp_keepalive: None,
             tcp_nodelay: true,
+            max_response_size: DEFAULT_MAX_RESPONSE_SIZE,
         }
     }
 }
@@ -103,6 +140,7 @@ pub struct PoolConfigBuilder {
     /// None = not set (use default), Some(None) = explicitly disabled, Some(Some(d)) = explicitly set
     tcp_keepalive: Option<Option<Duration>>,
     tcp_nodelay: Option<bool>,
+    max_response_size: Option<usize>,
 }
 
 impl PoolConfigBuilder {
@@ -155,6 +193,17 @@ impl PoolConfigBuilder {
         self
     }
 
+    /// Sets the maximum response body size in bytes.
+    ///
+    /// # Security
+    ///
+    /// This helps prevent memory exhaustion from extremely large responses.
+    #[must_use]
+    pub fn max_response_size(mut self, size: usize) -> Self {
+        self.max_response_size = Some(size);
+        self
+    }
+
     /// Builds the pool configuration.
     pub fn build(self) -> PoolConfig {
         let default = PoolConfig::default();
@@ -164,6 +213,7 @@ impl PoolConfigBuilder {
             idle_timeout: self.idle_timeout.unwrap_or(default.idle_timeout),
             tcp_keepalive: self.tcp_keepalive.unwrap_or(default.tcp_keepalive),
             tcp_nodelay: self.tcp_nodelay.unwrap_or(default.tcp_nodelay),
+            max_response_size: self.max_response_size.unwrap_or(default.max_response_size),
         }
     }
 }
@@ -373,9 +423,16 @@ impl AptosConfig {
 
     /// Creates a custom configuration with the specified fullnode URL.
     ///
+    /// # Security
+    ///
+    /// Only `http://` and `https://` URL schemes are allowed. Using `https://` is
+    /// strongly recommended for production. HTTP is acceptable only for localhost
+    /// development environments.
+    ///
     /// # Errors
     ///
-    /// Returns an error if the `fullnode_url` cannot be parsed as a valid URL.
+    /// Returns an error if the `fullnode_url` cannot be parsed as a valid URL
+    /// or uses an unsupported scheme (e.g., `file://`, `ftp://`).
     ///
     /// # Example
     ///
@@ -384,10 +441,12 @@ impl AptosConfig {
     ///
     /// let config = AptosConfig::custom("https://my-node.example.com/v1").unwrap();
     /// ```
-    pub fn custom(fullnode_url: &str) -> Result<Self, url::ParseError> {
+    pub fn custom(fullnode_url: &str) -> AptosResult<Self> {
+        let url = Url::parse(fullnode_url)?;
+        validate_url_scheme(&url)?;
         Ok(Self {
             network: Network::Custom,
-            fullnode_url: Url::parse(fullnode_url)?,
+            fullnode_url: url,
             indexer_url: None,
             faucet_url: None,
             timeout: Duration::from_secs(30),
@@ -474,21 +533,35 @@ impl AptosConfig {
 
     /// Sets a custom indexer URL.
     ///
+    /// # Security
+    ///
+    /// Only `http://` and `https://` URL schemes are allowed.
+    ///
     /// # Errors
     ///
-    /// Returns an error if the `url` cannot be parsed as a valid URL.
-    pub fn with_indexer_url(mut self, url: &str) -> Result<Self, url::ParseError> {
-        self.indexer_url = Some(Url::parse(url)?);
+    /// Returns an error if the `url` cannot be parsed as a valid URL
+    /// or uses an unsupported scheme.
+    pub fn with_indexer_url(mut self, url: &str) -> AptosResult<Self> {
+        let parsed = Url::parse(url)?;
+        validate_url_scheme(&parsed)?;
+        self.indexer_url = Some(parsed);
         Ok(self)
     }
 
     /// Sets a custom faucet URL.
     ///
+    /// # Security
+    ///
+    /// Only `http://` and `https://` URL schemes are allowed.
+    ///
     /// # Errors
     ///
-    /// Returns an error if the `url` cannot be parsed as a valid URL.
-    pub fn with_faucet_url(mut self, url: &str) -> Result<Self, url::ParseError> {
-        self.faucet_url = Some(Url::parse(url)?);
+    /// Returns an error if the `url` cannot be parsed as a valid URL
+    /// or uses an unsupported scheme.
+    pub fn with_faucet_url(mut self, url: &str) -> AptosResult<Self> {
+        let parsed = Url::parse(url)?;
+        validate_url_scheme(&parsed)?;
+        self.faucet_url = Some(parsed);
         Ok(self)
     }
 

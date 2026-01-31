@@ -377,6 +377,8 @@ impl Account for MultiEd25519Account {
 
 impl fmt::Debug for MultiEd25519Account {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // SECURITY: Intentionally omit private_keys to prevent secret leakage
+        // in logs, panic messages, or debug output
         f.debug_struct("MultiEd25519Account")
             .field("address", &self.address)
             .field(
@@ -389,7 +391,7 @@ impl fmt::Debug for MultiEd25519Account {
                 ),
             )
             .field("public_key", &self.public_key)
-            .field("private_keys", &self.private_keys)
+            .field("private_keys", &"[REDACTED]")
             .finish()
     }
 }

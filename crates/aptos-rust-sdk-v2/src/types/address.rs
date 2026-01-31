@@ -144,11 +144,13 @@ impl AccountAddress {
     }
 
     /// Returns the address as a byte slice.
+    #[inline]
     pub fn as_bytes(&self) -> &[u8] {
         &self.0
     }
 
     /// Returns the address as a byte array.
+    #[inline]
     pub fn to_bytes(&self) -> [u8; ADDRESS_LENGTH] {
         self.0
     }
@@ -172,6 +174,7 @@ impl AccountAddress {
     }
 
     /// Returns true if this is the zero address.
+    #[inline]
     pub fn is_zero(&self) -> bool {
         self == &Self::ZERO
     }
@@ -180,6 +183,7 @@ impl AccountAddress {
     /// and the last byte is non-zero and less than 16).
     ///
     /// Special addresses include framework addresses like 0x1, 0x3, 0x4.
+    #[inline]
     pub fn is_special(&self) -> bool {
         self.0[..ADDRESS_LENGTH - 1].iter().all(|&b| b == 0)
             && self.0[ADDRESS_LENGTH - 1] > 0

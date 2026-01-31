@@ -23,6 +23,7 @@
 //! ```
 
 use crate::error::{AptosError, AptosResult};
+use std::collections::HashSet;
 use std::future::Future;
 use std::time::Duration;
 use tokio::time::sleep;
@@ -43,7 +44,8 @@ pub struct RetryConfig {
     /// Jitter factor (0.0 to 1.0) - how much randomness to add.
     pub jitter_factor: f64,
     /// HTTP status codes that should trigger a retry.
-    pub retryable_status_codes: Vec<u16>,
+    /// Uses `HashSet` for O(1) lookups instead of O(n) linear search.
+    pub retryable_status_codes: HashSet<u16>,
 }
 
 impl Default for RetryConfig {
@@ -55,14 +57,16 @@ impl Default for RetryConfig {
             exponential_base: 2.0,
             jitter: true,
             jitter_factor: 0.5,
-            retryable_status_codes: vec![
+            retryable_status_codes: [
                 408, // Request Timeout
                 429, // Too Many Requests
                 500, // Internal Server Error
                 502, // Bad Gateway
                 503, // Service Unavailable
                 504, // Gateway Timeout
-            ],
+            ]
+            .into_iter()
+            .collect(),
         }
     }
 }
@@ -139,11 +143,13 @@ impl RetryConfig {
     }
 
     /// Checks if a status code should trigger a retry.
+    #[inline]
     pub fn is_retryable_status(&self, status_code: u16) -> bool {
         self.retryable_status_codes.contains(&status_code)
     }
 
     /// Checks if an error should trigger a retry.
+    #[inline]
     pub fn is_retryable_error(&self, error: &AptosError) -> bool {
         match error {
             // Network errors are typically transient
@@ -165,7 +171,7 @@ pub struct RetryConfigBuilder {
     exponential_base: Option<f64>,
     jitter: Option<bool>,
     jitter_factor: Option<f64>,
-    retryable_status_codes: Option<Vec<u16>>,
+    retryable_status_codes: Option<HashSet<u16>>,
 }
 
 impl RetryConfigBuilder {
@@ -213,18 +219,16 @@ impl RetryConfigBuilder {
 
     /// Sets the HTTP status codes that should trigger a retry.
     #[must_use]
-    pub fn retryable_status_codes(mut self, codes: Vec<u16>) -> Self {
-        self.retryable_status_codes = Some(codes);
+    pub fn retryable_status_codes(mut self, codes: impl IntoIterator<Item = u16>) -> Self {
+        self.retryable_status_codes = Some(codes.into_iter().collect());
         self
     }
 
-    /// Adds a status code to the list of retryable codes.
+    /// Adds a status code to the set of retryable codes.
     #[must_use]
     pub fn add_retryable_status_code(mut self, code: u16) -> Self {
         let mut codes = self.retryable_status_codes.unwrap_or_default();
-        if !codes.contains(&code) {
-            codes.push(code);
-        }
+        codes.insert(code);
         self.retryable_status_codes = Some(codes);
         self
     }
@@ -293,8 +297,19 @@ impl RetryExecutor {
 
                     attempt += 1;
 
-                    // Calculate and apply delay
-                    let delay = self.config.delay_for_attempt(attempt);
+                    // SECURITY: Respect Retry-After header for rate limiting
+                    // This prevents aggressive retries that could worsen rate limiting
+                    let delay = if let AptosError::RateLimited {
+                        retry_after_secs: Some(secs),
+                    } = &error
+                    {
+                        // Use the server's Retry-After value, but cap it to prevent DoS
+                        let capped_secs = (*secs).min(300); // Max 5 minutes
+                        Duration::from_secs(capped_secs)
+                    } else {
+                        self.config.delay_for_attempt(attempt)
+                    };
+
                     if !delay.is_zero() {
                         sleep(delay).await;
                     }
@@ -330,7 +345,18 @@ impl RetryExecutor {
                     }
 
                     attempt += 1;
-                    let delay = self.config.delay_for_attempt(attempt);
+
+                    // SECURITY: Respect Retry-After header for rate limiting
+                    let delay = if let AptosError::RateLimited {
+                        retry_after_secs: Some(secs),
+                    } = &error
+                    {
+                        let capped_secs = (*secs).min(300);
+                        Duration::from_secs(capped_secs)
+                    } else {
+                        self.config.delay_for_attempt(attempt)
+                    };
+
                     if !delay.is_zero() {
                         sleep(delay).await;
                     }
@@ -633,7 +659,7 @@ mod tests {
     #[test]
     fn test_builder_retryable_status_codes() {
         let config = RetryConfig::builder()
-            .retryable_status_codes(vec![500, 502])
+            .retryable_status_codes([500, 502])
             .build();
 
         assert!(config.is_retryable_status(500));
@@ -742,13 +768,10 @@ mod tests {
             .add_retryable_status_code(500) // Duplicate
             .build();
 
-        // Should only appear once
-        let count = config
-            .retryable_status_codes
-            .iter()
-            .filter(|&&c| c == 500)
-            .count();
-        assert_eq!(count, 1);
+        // HashSet automatically handles duplicates - 500 should be present
+        assert!(config.is_retryable_status(500));
+        // With HashSet, count will always be 1 for a present element
+        assert_eq!(config.retryable_status_codes.len(), 1);
     }
 
     #[test]

@@ -2,6 +2,17 @@
 //!
 //! Secp256r1, also known as P-256 or prime256v1, is commonly used in
 //! `WebAuthn` and passkey implementations.
+//!
+//! # Security: Signature Malleability
+//!
+//! This implementation uses the `p256` crate which produces normalized (low-S)
+//! ECDSA signatures by default. This prevents signature malleability attacks
+//! where an attacker could create an alternative valid signature `(r, -s mod n)`
+//! for the same message.
+//!
+//! When parsing external signatures via [`Secp256r1Signature::from_bytes`], the
+//! `p256` crate accepts both low-S and high-S signatures. If strict low-S
+//! enforcement is required, callers should normalize or reject high-S signatures.
 
 use crate::crypto::traits::{PublicKey, Signature, Signer, Verifier};
 use crate::error::{AptosError, AptosResult};

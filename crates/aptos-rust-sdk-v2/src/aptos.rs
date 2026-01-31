@@ -213,8 +213,13 @@ impl Aptos {
         sender: &A,
         payload: TransactionPayload,
     ) -> AptosResult<RawTransaction> {
-        let sequence_number = self.get_sequence_number(sender.address()).await?;
-        let gas_estimation = self.fullnode.estimate_gas_price().await?;
+        // Fetch sequence number and gas price in parallel - they're independent
+        let (sequence_number, gas_estimation) = tokio::join!(
+            self.get_sequence_number(sender.address()),
+            self.fullnode.estimate_gas_price()
+        );
+        let sequence_number = sequence_number?;
+        let gas_estimation = gas_estimation?;
 
         TransactionBuilder::new()
             .sender(sender.address())
@@ -542,16 +547,29 @@ impl Aptos {
             .ok_or_else(|| AptosError::FeatureNotEnabled("faucet".into()))?;
         let txn_hashes = faucet.fund(address, amount).await?;
 
-        // Wait for all faucet transactions to be confirmed
-        for hash_str in &txn_hashes {
-            // Hash might have 0x prefix or not
-            let hash_str_clean = hash_str.strip_prefix("0x").unwrap_or(hash_str);
-            if let Ok(hash) = HashValue::from_hex(hash_str_clean) {
-                // Wait for the transaction to be confirmed
+        // Parse hashes first to own them
+        let hashes: Vec<HashValue> = txn_hashes
+            .iter()
+            .filter_map(|hash_str| {
+                // Hash might have 0x prefix or not
+                let hash_str_clean = hash_str.strip_prefix("0x").unwrap_or(hash_str);
+                HashValue::from_hex(hash_str_clean).ok()
+            })
+            .collect();
+
+        // Wait for all faucet transactions to be confirmed in parallel
+        let wait_futures: Vec<_> = hashes
+            .iter()
+            .map(|hash| {
                 self.fullnode
-                    .wait_for_transaction(&hash, Some(Duration::from_secs(60)))
-                    .await?;
-            }
+                    .wait_for_transaction(hash, Some(Duration::from_secs(60)))
+            })
+            .collect();
+
+        // Wait for all transactions in parallel
+        let results = futures::future::join_all(wait_futures).await;
+        for result in results {
+            result?;
         }
 
         Ok(txn_hashes)

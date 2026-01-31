@@ -233,9 +233,12 @@ impl AnySignature {
 
 /// Encodes a value as `ULEB128` (unsigned `LEB128`).
 /// BCS uses `ULEB128` for encoding vector/sequence lengths.
+/// For typical sizes (< 128), this returns a single byte.
 #[allow(clippy::cast_possible_truncation)] // value & 0x7F is always <= 127
+#[inline]
 fn uleb128_encode(mut value: usize) -> Vec<u8> {
-    let mut result = Vec::new();
+    // Pre-allocate for common case: values < 128 need 1 byte, < 16384 need 2 bytes
+    let mut result = Vec::with_capacity(if value < 128 { 1 } else { 2 });
     loop {
         let byte = (value & 0x7F) as u8;
         value >>= 7;
@@ -358,7 +361,9 @@ impl MultiKeyPublicKey {
     /// Format: `num_keys` || `pk1_bcs` || `pk2_bcs` || ... || threshold
     #[allow(clippy::cast_possible_truncation)] // public_keys.len() <= MAX_NUM_OF_KEYS (32)
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut bytes = Vec::new();
+        // Pre-allocate: 1 byte num_keys + estimated key size (avg ~35 bytes per key) + 1 byte threshold
+        let estimated_size = 2 + self.public_keys.len() * 36;
+        let mut bytes = Vec::with_capacity(estimated_size);
 
         // Number of keys (1 byte, validated in new())
         bytes.push(self.public_keys.len() as u8);
@@ -386,6 +391,10 @@ impl MultiKeyPublicKey {
     /// - Any public key length or data is invalid
     /// - The threshold is invalid
     pub fn from_bytes(bytes: &[u8]) -> AptosResult<Self> {
+        // SECURITY: Limit individual key size to prevent DoS via large allocations
+        // Largest supported key is uncompressed secp256k1/secp256r1 at 65 bytes
+        const MAX_KEY_SIZE: usize = 128;
+
         if bytes.is_empty() {
             return Err(AptosError::InvalidPublicKey("empty bytes".into()));
         }
@@ -413,6 +422,12 @@ impl MultiKeyPublicKey {
                 AptosError::InvalidPublicKey("invalid ULEB128 length encoding".into())
             })?;
             offset += len_bytes;
+
+            if len > MAX_KEY_SIZE {
+                return Err(AptosError::InvalidPublicKey(format!(
+                    "key size {len} exceeds maximum {MAX_KEY_SIZE}"
+                )));
+            }
 
             if offset + len > bytes.len() {
                 return Err(AptosError::InvalidPublicKey(
@@ -593,7 +608,9 @@ impl MultiKeySignature {
     /// Format: `num_signatures` || `sig1_bcs` || `sig2_bcs` || ... || bitmap (4 bytes)
     #[allow(clippy::cast_possible_truncation)] // signatures.len() <= MAX_NUM_OF_KEYS (32)
     pub fn to_bytes(&self) -> Vec<u8> {
-        let mut bytes = Vec::new();
+        // Pre-allocate: 1 byte num_sigs + estimated sig size (avg ~66 bytes per sig) + 4 bytes bitmap
+        let estimated_size = 5 + self.signatures.len() * 68;
+        let mut bytes = Vec::with_capacity(estimated_size);
 
         // Number of signatures (validated in new())
         bytes.push(self.signatures.len() as u8);
@@ -621,6 +638,10 @@ impl MultiKeySignature {
     /// - Any signature variant byte is invalid
     /// - Any signature length or data is invalid
     pub fn from_bytes(bytes: &[u8]) -> AptosResult<Self> {
+        // SECURITY: Limit individual signature size to prevent DoS via large allocations
+        // Largest supported signature is ~72 bytes for ECDSA DER format
+        const MAX_SIGNATURE_SIZE: usize = 128;
+
         if bytes.len() < 5 {
             return Err(AptosError::InvalidSignature("bytes too short".into()));
         }
@@ -672,6 +693,12 @@ impl MultiKeySignature {
                     AptosError::InvalidSignature("invalid ULEB128 length encoding".into())
                 })?;
             offset += len_bytes;
+
+            if len > MAX_SIGNATURE_SIZE {
+                return Err(AptosError::InvalidSignature(format!(
+                    "signature size {len} exceeds maximum {MAX_SIGNATURE_SIZE}"
+                )));
+            }
 
             if offset + len > bitmap_start {
                 return Err(AptosError::InvalidSignature(
