@@ -905,7 +905,6 @@ mod state_tests {
 
 #[cfg(all(feature = "ed25519", feature = "faucet"))]
 mod single_key_tests {
-    use super::*;
     use aptos_rust_sdk_v2::account::Ed25519SingleKeyAccount;
 
     #[tokio::test]
@@ -932,7 +931,6 @@ mod single_key_tests {
 
 #[cfg(all(feature = "secp256k1", feature = "faucet"))]
 mod secp256k1_tests {
-    use super::*;
     use aptos_rust_sdk_v2::account::Secp256k1Account;
 
     #[tokio::test]

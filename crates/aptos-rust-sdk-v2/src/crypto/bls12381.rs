@@ -747,7 +747,7 @@ mod tests {
     #[test]
     fn test_private_key_debug() {
         let private_key = Bls12381PrivateKey::generate();
-        let debug = format!("{:?}", private_key);
+        let debug = format!("{private_key:?}");
         assert!(debug.contains("REDACTED"));
         assert!(!debug.contains(&private_key.to_hex()));
     }
@@ -756,7 +756,7 @@ mod tests {
     fn test_public_key_debug() {
         let private_key = Bls12381PrivateKey::generate();
         let public_key = private_key.public_key();
-        let debug = format!("{:?}", public_key);
+        let debug = format!("{public_key:?}");
         assert!(debug.contains("Bls12381PublicKey"));
     }
 
@@ -764,7 +764,7 @@ mod tests {
     fn test_public_key_display() {
         let private_key = Bls12381PrivateKey::generate();
         let public_key = private_key.public_key();
-        let display = format!("{}", public_key);
+        let display = format!("{public_key}");
         assert!(display.starts_with("0x"));
     }
 
@@ -772,7 +772,7 @@ mod tests {
     fn test_signature_debug() {
         let private_key = Bls12381PrivateKey::generate();
         let signature = private_key.sign(b"test");
-        let debug = format!("{:?}", signature);
+        let debug = format!("{signature:?}");
         assert!(debug.contains("Bls12381Signature"));
     }
 
@@ -780,7 +780,7 @@ mod tests {
     fn test_signature_display() {
         let private_key = Bls12381PrivateKey::generate();
         let signature = private_key.sign(b"test");
-        let display = format!("{}", signature);
+        let display = format!("{signature}");
         assert!(display.starts_with("0x"));
     }
 
@@ -788,7 +788,7 @@ mod tests {
     fn test_pop_debug() {
         let private_key = Bls12381PrivateKey::generate();
         let pop = private_key.create_proof_of_possession();
-        let debug = format!("{:?}", pop);
+        let debug = format!("{pop:?}");
         assert!(debug.contains("Bls12381ProofOfPossession"));
     }
 
@@ -796,7 +796,7 @@ mod tests {
     fn test_pop_display() {
         let private_key = Bls12381PrivateKey::generate();
         let pop = private_key.create_proof_of_possession();
-        let display = format!("{}", pop);
+        let display = format!("{pop}");
         assert!(display.starts_with("0x"));
     }
 
