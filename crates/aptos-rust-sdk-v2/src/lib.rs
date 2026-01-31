@@ -94,5 +94,10 @@ pub use types::{AccountAddress, ChainId, HashValue};
 #[cfg_attr(docsrs, doc(cfg(feature = "macros")))]
 pub use aptos_rust_sdk_v2_macros::{MoveStruct, aptos_contract, aptos_contract_file};
 
+// Re-export aptos_bcs for use by the MoveStruct derive macro
+// This allows downstream users to use the derive macro without adding aptos-bcs as a dependency
+#[doc(hidden)]
+pub use aptos_bcs;
+
 #[cfg(test)]
 mod tests;

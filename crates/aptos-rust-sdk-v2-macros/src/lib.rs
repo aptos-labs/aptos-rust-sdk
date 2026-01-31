@@ -22,8 +22,9 @@
 //! ```
 
 use proc_macro::TokenStream;
+use proc_macro2::Span;
 use quote::quote;
-use syn::{LitStr, parse_macro_input};
+use syn::{LitStr, parse_macro_input, spanned::Spanned};
 
 mod abi;
 mod codegen;
@@ -77,16 +78,13 @@ use codegen::generate_contract_impl;
 pub fn aptos_contract(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as parser::ContractInput);
 
-    // Parse ABI
+    // Parse ABI - use the name's span for error reporting since that's a known token
     let abi: MoveModuleABI = match serde_json::from_str(&input.abi) {
         Ok(abi) => abi,
         Err(e) => {
-            return syn::Error::new_spanned(
-                proc_macro2::TokenStream::new(),
-                format!("Failed to parse ABI JSON: {}", e),
-            )
-            .to_compile_error()
-            .into();
+            return syn::Error::new(input.name.span(), format!("Failed to parse ABI JSON: {e}"))
+                .to_compile_error()
+                .into();
         }
     };
 
@@ -119,9 +117,10 @@ pub fn aptos_contract_file(input: TokenStream) -> TokenStream {
     let abi_content = match std::fs::read_to_string(&file_path) {
         Ok(content) => content,
         Err(e) => {
-            return syn::Error::new_spanned(
-                proc_macro2::TokenStream::new(),
-                format!("Failed to read ABI file '{}': {}", file_path.display(), e),
+            // Use name's span for better error location
+            return syn::Error::new(
+                input.name.span(),
+                format!("Failed to read ABI file '{}': {e}", file_path.display()),
             )
             .to_compile_error()
             .into();
@@ -131,12 +130,11 @@ pub fn aptos_contract_file(input: TokenStream) -> TokenStream {
     let abi: MoveModuleABI = match serde_json::from_str(&abi_content) {
         Ok(abi) => abi,
         Err(e) => {
-            return syn::Error::new_spanned(
-                proc_macro2::TokenStream::new(),
+            return syn::Error::new(
+                input.name.span(),
                 format!(
-                    "Failed to parse ABI JSON from '{}': {}",
+                    "Failed to parse ABI JSON from '{}': {e}",
                     file_path.display(),
-                    e
                 ),
             )
             .to_compile_error()
@@ -144,13 +142,26 @@ pub fn aptos_contract_file(input: TokenStream) -> TokenStream {
         }
     };
 
-    // Read optional source file
-    let source_info = input.source_path.as_ref().and_then(|source_path| {
+    // Read optional source file - emit error if source_path is provided but unreadable
+    let source_info = if let Some(source_path) = input.source_path.as_ref() {
         let source_file = std::path::Path::new(&manifest_dir).join(source_path);
-        std::fs::read_to_string(&source_file)
-            .ok()
-            .map(|content| parser::parse_move_source(&content))
-    });
+        match std::fs::read_to_string(&source_file) {
+            Ok(content) => Some(parser::parse_move_source(&content)),
+            Err(e) => {
+                return syn::Error::new(
+                    input.name.span(),
+                    format!(
+                        "Failed to read Move source file '{}': {e}",
+                        source_file.display(),
+                    ),
+                )
+                .to_compile_error()
+                .into();
+            }
+        }
+    } else {
+        None
+    };
 
     let tokens = generate_contract_impl(&input.name, &abi, source_info.as_ref());
 
@@ -180,14 +191,15 @@ pub fn derive_move_struct(input: TokenStream) -> TokenStream {
 
     let name = &input.ident;
 
-    // Parse attributes
+    // Parse attributes - collect errors to report them properly
     let mut address = None;
     let mut module = None;
     let mut struct_name = None;
+    let mut parse_error: Option<syn::Error> = None;
 
     for attr in &input.attrs {
         if attr.path().is_ident("move_struct") {
-            let _ = attr.parse_nested_meta(|meta| {
+            let result = attr.parse_nested_meta(|meta| {
                 if meta.path.is_ident("address") {
                     let value: LitStr = meta.value()?.parse()?;
                     address = Some(value.value());
@@ -197,35 +209,57 @@ pub fn derive_move_struct(input: TokenStream) -> TokenStream {
                 } else if meta.path.is_ident("name") {
                     let value: LitStr = meta.value()?.parse()?;
                     struct_name = Some(value.value());
+                } else {
+                    return Err(syn::Error::new(
+                        meta.path.span(),
+                        format!(
+                            "Unknown attribute '{}'. Expected 'address', 'module', or 'name'",
+                            meta.path
+                                .get_ident()
+                                .map_or_else(|| "?".to_string(), ToString::to_string)
+                        ),
+                    ));
                 }
                 Ok(())
             });
+
+            if let Err(e) = result {
+                parse_error = Some(e);
+                break;
+            }
         }
+    }
+
+    // Return any parsing errors
+    if let Some(e) = parse_error {
+        return e.to_compile_error().into();
     }
 
     let address = address.unwrap_or_else(|| "0x1".to_string());
     let module = module.unwrap_or_else(|| "unknown".to_string());
     let struct_name = struct_name.unwrap_or_else(|| name.to_string());
 
-    let type_tag = format!("{}::{}::{}", address, module, struct_name);
+    let type_tag = format!("{address}::{module}::{struct_name}");
+    // Convert String to LitStr for quote! interpolation
+    let type_tag_lit = LitStr::new(&type_tag, Span::call_site());
 
     let expanded = quote! {
         impl #name {
             /// Returns the Move type tag for this struct.
             pub fn type_tag() -> &'static str {
-                #type_tag
+                #type_tag_lit
             }
 
             /// Serializes this struct to BCS bytes.
-            pub fn to_bcs(&self) -> aptos_rust_sdk_v2::error::AptosResult<Vec<u8>> {
-                aptos_bcs::to_bytes(self)
-                    .map_err(|e| aptos_rust_sdk_v2::error::AptosError::Bcs(e.to_string()))
+            pub fn to_bcs(&self) -> ::aptos_rust_sdk_v2::error::AptosResult<Vec<u8>> {
+                ::aptos_rust_sdk_v2::aptos_bcs::to_bytes(self)
+                    .map_err(|e| ::aptos_rust_sdk_v2::error::AptosError::Bcs(e.to_string()))
             }
 
             /// Deserializes this struct from BCS bytes.
-            pub fn from_bcs(bytes: &[u8]) -> aptos_rust_sdk_v2::error::AptosResult<Self> {
-                aptos_bcs::from_bytes(bytes)
-                    .map_err(|e| aptos_rust_sdk_v2::error::AptosError::Bcs(e.to_string()))
+            pub fn from_bcs(bytes: &[u8]) -> ::aptos_rust_sdk_v2::error::AptosResult<Self> {
+                ::aptos_rust_sdk_v2::aptos_bcs::from_bytes(bytes)
+                    .map_err(|e| ::aptos_rust_sdk_v2::error::AptosError::Bcs(e.to_string()))
             }
         }
     };

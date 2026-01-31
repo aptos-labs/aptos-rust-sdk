@@ -1,0 +1,5 @@
+error: Unknown attribute 'invalid_attr'. Expected 'address', 'module', or 'name'
+ --> tests/ui/fail/move_struct_invalid_attr.rs:7:32
+  |
+7 | #[move_struct(address = "0x1", invalid_attr = "value")]
+  |                                ^^^^^^^^^^^^

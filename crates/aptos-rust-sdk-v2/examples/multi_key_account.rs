@@ -119,6 +119,8 @@ async fn main() -> anyhow::Result<()> {
 /// Demonstrates how different parties can sign independently
 /// and combine signatures later.
 async fn demonstrate_distributed_signing() -> anyhow::Result<()> {
+    use aptos_rust_sdk_v2::types::ChainId;
+
     // Scenario: 3 parties each have one key, need 2-of-3 to sign
 
     // Generate keys (in real scenario, each party generates their own)
@@ -151,17 +153,37 @@ async fn demonstrate_distributed_signing() -> anyhow::Result<()> {
     println!("Address: {} (same)", party2_account.address());
     println!("Party 2 owns key at index 1");
 
-    // Both parties can create signature contributions
-    let message = b"transaction_signing_message";
+    // Build a real transaction that each party will sign
+    // In production, this would be shared among all parties (e.g., via a JSON payload)
+    println!("\n--- Building Transaction for Distributed Signing ---");
+    let recipient = aptos_rust_sdk_v2::AccountAddress::ZERO; // Placeholder recipient
+    let payload = EntryFunction::apt_transfer(recipient, 1000)?;
+
+    let raw_txn = TransactionBuilder::new()
+        .sender(party1_account.address())
+        .sequence_number(0)
+        .payload(payload.into())
+        .chain_id(ChainId::testnet())
+        .max_gas_amount(100_000)
+        .gas_unit_price(100)
+        .build()?;
+
+    // Get the actual transaction signing message
+    // This is what parties must sign for a valid on-chain transaction
+    let signing_message = raw_txn.signing_message()?;
+    println!(
+        "Transaction signing message: {} bytes",
+        signing_message.len()
+    );
 
     println!("\n--- Creating Signature Contributions ---");
 
-    // Party 1 creates their signature
-    let (idx1, sig1) = party1_account.create_signature_contribution(message, 0)?;
+    // Party 1 creates their signature on the real transaction message
+    let (idx1, sig1) = party1_account.create_signature_contribution(&signing_message, 0)?;
     println!("Party 1 signed with key index {}", idx1);
 
-    // Party 2 creates their signature
-    let (idx2, sig2) = party2_account.create_signature_contribution(message, 1)?;
+    // Party 2 creates their signature on the real transaction message
+    let (idx2, sig2) = party2_account.create_signature_contribution(&signing_message, 1)?;
     println!("Party 2 signed with key index {}", idx2);
 
     // Combine signatures (can be done by any party or a relayer)
@@ -169,10 +191,10 @@ async fn demonstrate_distributed_signing() -> anyhow::Result<()> {
     let multi_sig = MultiKeyAccount::aggregate_signatures(vec![(idx1, sig1), (idx2, sig2)])?;
     println!("Combined {} signatures", multi_sig.num_signatures());
 
-    // Verify the combined signature
+    // Verify the combined signature against the transaction signing message
     let pk = party1_account.public_key();
-    pk.verify(message, &multi_sig)?;
-    println!("✅ Combined signature verified!");
+    pk.verify(&signing_message, &multi_sig)?;
+    println!("Combined signature verified against transaction!");
 
     // Demonstrate view-only account
     println!("\n--- View-Only Account ---");
