@@ -508,7 +508,9 @@ impl Aptos {
 
     // === View Functions ===
 
-    /// Calls a view function.
+    /// Calls a view function using JSON encoding.
+    ///
+    /// For lossless serialization of large integers, use [`view_bcs`](Self::view_bcs) instead.
     ///
     /// # Errors
     ///
@@ -521,6 +523,74 @@ impl Aptos {
         args: Vec<serde_json::Value>,
     ) -> AptosResult<Vec<serde_json::Value>> {
         let response = self.fullnode.view(function, type_args, args).await?;
+        Ok(response.into_inner())
+    }
+
+    /// Calls a view function using BCS encoding for both inputs and outputs.
+    ///
+    /// This method provides lossless serialization by using BCS (Binary Canonical Serialization)
+    /// instead of JSON, which is important for large integers (u128, u256) and other types
+    /// where JSON can lose precision.
+    ///
+    /// # Type Parameter
+    ///
+    /// * `T` - The expected return type. Must implement `serde::de::DeserializeOwned`.
+    ///
+    /// # Arguments
+    ///
+    /// * `function` - The fully qualified function name (e.g., `0x1::coin::balance`)
+    /// * `type_args` - Type arguments as strings (e.g., `0x1::aptos_coin::AptosCoin`)
+    /// * `args` - Pre-serialized BCS arguments as byte vectors
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// use aptos_rust_sdk_v2::{Aptos, AptosConfig, AccountAddress};
+    ///
+    /// let aptos = Aptos::new(AptosConfig::testnet())?;
+    /// let owner = AccountAddress::from_hex("0x1")?;
+    ///
+    /// // BCS-encode the argument
+    /// let args = vec![aptos_bcs::to_bytes(&owner)?];
+    ///
+    /// // Call view function with typed return
+    /// let balance: u64 = aptos.view_bcs(
+    ///     "0x1::coin::balance",
+    ///     vec!["0x1::aptos_coin::AptosCoin".to_string()],
+    ///     args,
+    /// ).await?;
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the HTTP request fails, the API returns an error status code,
+    /// or the BCS deserialization fails.
+    pub async fn view_bcs<T: serde::de::DeserializeOwned>(
+        &self,
+        function: &str,
+        type_args: Vec<String>,
+        args: Vec<Vec<u8>>,
+    ) -> AptosResult<T> {
+        let response = self.fullnode.view_bcs(function, type_args, args).await?;
+        let bytes = response.into_inner();
+        aptos_bcs::from_bytes(&bytes).map_err(|e| AptosError::Bcs(e.to_string()))
+    }
+
+    /// Calls a view function with BCS inputs and returns raw BCS bytes.
+    ///
+    /// Use this when you need to manually deserialize the response or when
+    /// the return type is complex or dynamic.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the HTTP request fails or the API returns an error status code.
+    pub async fn view_bcs_raw(
+        &self,
+        function: &str,
+        type_args: Vec<String>,
+        args: Vec<Vec<u8>>,
+    ) -> AptosResult<Vec<u8>> {
+        let response = self.fullnode.view_bcs(function, type_args, args).await?;
         Ok(response.into_inner())
     }
 

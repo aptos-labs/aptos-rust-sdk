@@ -149,13 +149,22 @@ async fn main() -> anyhow::Result<()> {
     println!("=== Type-Safe Contract Bindings Example ===\n");
 
     // ANCHOR: use_contract
-    // The macro generates a struct with static methods
+    // The macro generates a struct with instance methods and address override support
+    // Create instances using the default address or a custom address
+    let coin_module = CoinModule::new(); // Uses default address from ABI
+    let my_token = MyToken::new();
+
+    // You can also override the address for different deployments
+    let _custom_deployment = MyToken::with_address("0xabcd1234");
+
     println!("CoinModule constants:");
-    println!("  Address: {}", CoinModule::ADDRESS);
+    println!("  Default Address: {}", CoinModule::DEFAULT_ADDRESS);
+    println!("  Effective Address: {}", coin_module.address());
     println!("  Module: {}", CoinModule::MODULE);
 
     println!("\nMyToken constants:");
-    println!("  Address: {}", MyToken::ADDRESS);
+    println!("  Default Address: {}", MyToken::DEFAULT_ADDRESS);
+    println!("  Effective Address: {}", my_token.address());
     println!("  Module: {}", MyToken::MODULE);
     // ANCHOR_END: use_contract
 
@@ -165,7 +174,8 @@ async fn main() -> anyhow::Result<()> {
     let amount = 1_000_000u64;
 
     // With Move source, we get meaningful parameter names: `to`, `amount`
-    let transfer_payload = CoinModule::transfer(
+    // Methods are called on the instance, which uses the configured address
+    let transfer_payload = coin_module.transfer(
         recipient, // to: address
         amount,    // amount: u64
         vec![],    // type_args (e.g., AptosCoin type)
@@ -176,13 +186,13 @@ async fn main() -> anyhow::Result<()> {
 
     // ANCHOR: custom_token_operations
     // Build custom token operations
-    let mint_payload = MyToken::mint(
+    let mint_payload = my_token.mint(
         recipient, // recipient
         500_000,   // amount
     )?;
     println!("Generated mint payload: {:?}", mint_payload);
 
-    let burn_payload = MyToken::burn(
+    let burn_payload = my_token.burn(
         100_000, // amount
     )?;
     println!("Generated burn payload: {:?}", burn_payload);
@@ -194,8 +204,9 @@ async fn main() -> anyhow::Result<()> {
     println!("To call view functions, you need an Aptos client:");
     println!();
     println!("  let aptos = Aptos::new(AptosConfig::testnet())?;");
-    println!("  let balance = CoinModule::view_balance(&aptos, owner, type_args).await?;");
-    println!("  let supply = MyToken::view_total_supply(&aptos).await?;");
+    println!("  let coin = CoinModule::new();");
+    println!("  let balance = coin.view_balance(&aptos, owner, type_args).await?;");
+    println!("  let supply = my_token.view_total_supply(&aptos).await?;");
     // ANCHOR_END: view_functions
 
     // ANCHOR: generated_structs

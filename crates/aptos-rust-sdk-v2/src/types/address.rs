@@ -16,11 +16,14 @@ pub const ADDRESS_LENGTH: usize = 32;
 /// Account addresses on Aptos are derived from public keys through a
 /// specific derivation scheme that includes an authentication key prefix.
 ///
-/// # Display Format
+/// # Display Format (AIP-40)
 ///
-/// Addresses are typically displayed as 64 hexadecimal characters with a
-/// `0x` prefix. Short addresses (like `0x1` for the core framework) are
-/// zero-padded on the left.
+/// The `Display` trait follows [AIP-40](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-40.md):
+/// - **Special addresses** (0x1 through 0xf) use SHORT format: `0x1`, `0x3`, `0xa`
+/// - **Normal addresses** use LONG format: full 64 hex characters with `0x` prefix
+///
+/// Use `to_long_string()` to always get the full 64-character format,
+/// or `to_short_string()` to always get the trimmed format.
 ///
 /// # Example
 ///
@@ -29,9 +32,12 @@ pub const ADDRESS_LENGTH: usize = 32;
 ///
 /// // Parse from hex string
 /// let addr = AccountAddress::from_hex("0x1").unwrap();
-/// assert_eq!(addr.to_string(), "0x0000000000000000000000000000000000000000000000000000000000000001");
 ///
-/// // Short display format
+/// // Display uses AIP-40: SHORT for special addresses
+/// assert_eq!(addr.to_string(), "0x1");
+///
+/// // Explicit long/short string methods
+/// assert_eq!(addr.to_long_string(), "0x0000000000000000000000000000000000000000000000000000000000000001");
 /// assert_eq!(addr.to_short_string(), "0x1");
 /// ```
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -49,6 +55,9 @@ impl AccountAddress {
 
     /// The fungible asset framework address (0x4).
     pub const FOUR: Self = Self::from_u64(4);
+
+    /// The APT fungible asset metadata address (0xa).
+    pub const A: Self = Self::from_u64(10);
 
     /// Creates an address from a byte array.
     pub const fn new(bytes: [u8; ADDRESS_LENGTH]) -> Self {
@@ -155,8 +164,18 @@ impl AccountAddress {
         self.0
     }
 
-    /// Returns the address as a hex string with `0x` prefix.
+    /// Returns the address as a hex string with `0x` prefix (always 66 characters).
+    ///
+    /// This is an alias for `to_long_string()`.
     pub fn to_hex(&self) -> String {
+        self.to_long_string()
+    }
+
+    /// Returns the full 64-character hex string with `0x` prefix.
+    ///
+    /// This always returns the LONG format regardless of whether the address is special.
+    /// For example, `0x1` becomes `0x0000000000000000000000000000000000000000000000000000000000000001`.
+    pub fn to_long_string(&self) -> String {
         format!("0x{}", hex::encode(self.0))
     }
 
@@ -170,6 +189,18 @@ impl AccountAddress {
             "0x0".to_string()
         } else {
             format!("0x{trimmed}")
+        }
+    }
+
+    /// Returns the standard string representation following AIP-40.
+    ///
+    /// - Special addresses (0x1 through 0xf) use SHORT format
+    /// - Normal addresses use LONG format (full 64 hex characters)
+    pub fn to_standard_string(&self) -> String {
+        if self.is_special() {
+            self.to_short_string()
+        } else {
+            self.to_long_string()
         }
     }
 
@@ -204,8 +235,11 @@ impl fmt::Debug for AccountAddress {
 }
 
 impl fmt::Display for AccountAddress {
+    /// Formats the address following AIP-40:
+    /// - Special addresses (0x1 through 0xf) use SHORT format
+    /// - Normal addresses use LONG format (full 64 hex characters)
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.to_hex())
+        write!(f, "{}", self.to_standard_string())
     }
 }
 
@@ -294,11 +328,24 @@ mod tests {
 
     #[test]
     fn test_to_string() {
+        // AIP-40: Special addresses use SHORT format in Display
+        assert_eq!(AccountAddress::ONE.to_string(), "0x1");
+        assert_eq!(AccountAddress::THREE.to_string(), "0x3");
+        assert_eq!(AccountAddress::FOUR.to_string(), "0x4");
+        assert_eq!(AccountAddress::A.to_string(), "0xa");
+
+        // ZERO is not special, so it uses LONG format
         assert_eq!(
-            AccountAddress::ONE.to_string(),
+            AccountAddress::ZERO.to_string(),
+            "0x0000000000000000000000000000000000000000000000000000000000000000"
+        );
+
+        // Explicit short/long methods
+        assert_eq!(AccountAddress::ONE.to_short_string(), "0x1");
+        assert_eq!(
+            AccountAddress::ONE.to_long_string(),
             "0x0000000000000000000000000000000000000000000000000000000000000001"
         );
-        assert_eq!(AccountAddress::ONE.to_short_string(), "0x1");
         assert_eq!(AccountAddress::ZERO.to_short_string(), "0x0");
     }
 
@@ -307,6 +354,7 @@ mod tests {
         assert!(AccountAddress::ONE.is_special());
         assert!(AccountAddress::THREE.is_special());
         assert!(AccountAddress::FOUR.is_special());
+        assert!(AccountAddress::A.is_special());
         assert!(!AccountAddress::ZERO.is_special());
     }
 
@@ -359,10 +407,19 @@ mod tests {
 
     #[test]
     fn test_display() {
+        // Special address uses SHORT format (AIP-40)
         let addr = AccountAddress::ONE;
         let display = format!("{addr}");
+        assert_eq!(display, "0x1");
+
+        // Non-special address uses LONG format (AIP-40)
+        let mut bytes = [0u8; ADDRESS_LENGTH];
+        bytes[0] = 0xab;
+        bytes[ADDRESS_LENGTH - 1] = 0xcd;
+        let addr = AccountAddress::new(bytes);
+        let display = format!("{addr}");
         assert!(display.starts_with("0x"));
-        assert_eq!(display.len(), 66);
+        assert_eq!(display.len(), 66); // Full 64 hex chars + "0x"
     }
 
     #[test]
@@ -429,6 +486,7 @@ mod tests {
             AccountAddress::ONE,
             AccountAddress::THREE,
             AccountAddress::FOUR,
+            AccountAddress::A,
         ];
 
         for addr in &addresses {

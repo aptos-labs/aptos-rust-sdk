@@ -15,6 +15,7 @@ use std::time::Duration;
 use url::Url;
 
 const BCS_CONTENT_TYPE: &str = "application/x.aptos.signed_transaction+bcs";
+const BCS_VIEW_CONTENT_TYPE: &str = "application/x-bcs";
 const JSON_CONTENT_TYPE: &str = "application/json";
 /// Default timeout for waiting for a transaction to be committed.
 const DEFAULT_TRANSACTION_WAIT_TIMEOUT_SECS: u64 = 30;
@@ -479,6 +480,86 @@ impl FullnodeClient {
                         .await?;
 
                     Self::handle_response_static(response, max_response_size).await
+                }
+            })
+            .await
+    }
+
+    /// Calls a view function using BCS encoding for both inputs and outputs.
+    ///
+    /// This method provides lossless serialization by using BCS (Binary Canonical Serialization)
+    /// instead of JSON, which is important for large integers (u128, u256) and other types
+    /// where JSON can lose precision.
+    ///
+    /// # Arguments
+    ///
+    /// * `function` - The fully qualified function name (e.g., `0x1::coin::balance`)
+    /// * `type_args` - Type arguments as strings (e.g., `0x1::aptos_coin::AptosCoin`)
+    /// * `args` - Pre-serialized BCS arguments as byte vectors
+    ///
+    /// # Returns
+    ///
+    /// Returns the raw BCS-encoded response bytes, which can be deserialized
+    /// into the expected return type using `aptos_bcs::from_bytes`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the HTTP request fails, the API returns an error status code,
+    /// or the BCS serialization fails.
+    pub async fn view_bcs(
+        &self,
+        function: &str,
+        type_args: Vec<String>,
+        args: Vec<Vec<u8>>,
+    ) -> AptosResult<AptosResponse<Vec<u8>>> {
+        let url = self.build_url("view");
+
+        // Convert BCS args to hex strings for the JSON request body
+        // The Aptos API accepts hex-encoded BCS bytes in the arguments array
+        let hex_args: Vec<serde_json::Value> = args
+            .iter()
+            .map(|bytes| serde_json::json!(format!("0x{}", hex::encode(bytes))))
+            .collect();
+
+        let body = serde_json::json!({
+            "function": function,
+            "type_arguments": type_args,
+            "arguments": hex_args,
+        });
+
+        let client = self.client.clone();
+        let retry_config = self.retry_config.clone();
+
+        let executor = RetryExecutor::new((*retry_config).clone());
+        executor
+            .execute(|| {
+                let client = client.clone();
+                let url = url.clone();
+                let body = body.clone();
+                async move {
+                    let response = client
+                        .post(url)
+                        .header(CONTENT_TYPE, JSON_CONTENT_TYPE)
+                        .header(ACCEPT, BCS_VIEW_CONTENT_TYPE)
+                        .json(&body)
+                        .send()
+                        .await?;
+
+                    // Check for errors before reading body
+                    let status = response.status();
+                    if !status.is_success() {
+                        let error_text = response.text().await.unwrap_or_default();
+                        return Err(AptosError::Api {
+                            status_code: status.as_u16(),
+                            message: error_text,
+                            error_code: None,
+                            vm_error_code: None,
+                        });
+                    }
+
+                    // Read the raw BCS bytes
+                    let bytes = response.bytes().await?;
+                    Ok(AptosResponse::new(bytes.to_vec()))
                 }
             })
             .await

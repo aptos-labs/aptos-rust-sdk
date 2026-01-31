@@ -609,11 +609,24 @@ mod types_tests {
 
     #[test]
     fn test_address_display() {
+        // AIP-40: Special addresses use SHORT format
+        assert_eq!(AccountAddress::ONE.to_string(), "0x1");
+        assert_eq!(AccountAddress::THREE.to_string(), "0x3");
+        assert_eq!(AccountAddress::FOUR.to_string(), "0x4");
+        assert_eq!(AccountAddress::A.to_string(), "0xa");
+
+        // ZERO is not special, uses LONG format
         assert_eq!(
-            AccountAddress::ONE.to_string(),
+            AccountAddress::ZERO.to_string(),
+            "0x0000000000000000000000000000000000000000000000000000000000000000"
+        );
+
+        // Explicit short/long methods
+        assert_eq!(AccountAddress::ONE.to_short_string(), "0x1");
+        assert_eq!(
+            AccountAddress::ONE.to_long_string(),
             "0x0000000000000000000000000000000000000000000000000000000000000001"
         );
-        assert_eq!(AccountAddress::ONE.to_short_string(), "0x1");
     }
 
     #[test]

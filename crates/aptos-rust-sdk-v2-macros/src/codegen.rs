@@ -18,20 +18,20 @@ pub fn generate_contract_impl(
     // Generate struct definitions
     let structs = generate_structs(&abi.structs);
 
-    // Generate entry functions
+    // Generate entry functions (now instance methods)
     let entry_fns: Vec<_> = abi
         .exposed_functions
         .iter()
         .filter(|f| f.is_entry)
-        .map(|f| generate_entry_function(f, address, module_name, source_info))
+        .map(|f| generate_entry_function(f, module_name, source_info))
         .collect();
 
-    // Generate view functions
+    // Generate view functions (now instance methods)
     let view_fns: Vec<_> = abi
         .exposed_functions
         .iter()
         .filter(|f| f.is_view)
-        .map(|f| generate_view_function(f, address, module_name, source_info))
+        .map(|f| generate_view_function(f, module_name, source_info))
         .collect();
 
     // Constants
@@ -39,18 +39,60 @@ pub fn generate_contract_impl(
     let module_const = module_name.to_string();
 
     quote! {
-        /// Generated contract bindings for `#address::#module_name`.
+        /// Generated contract bindings for `#address_const::#module_const`.
         ///
         /// This struct provides type-safe methods for interacting with the contract.
-        #[derive(Debug, Clone, Copy)]
-        pub struct #name;
+        /// You can optionally override the deployment address when creating an instance.
+        ///
+        /// # Example
+        ///
+        /// ```rust,ignore
+        /// // Use default address from ABI
+        /// let contract = #name::new();
+        ///
+        /// // Override for different deployment address
+        /// let contract = #name::with_address("0xabcd...");
+        /// ```
+        #[derive(Debug, Clone)]
+        pub struct #name {
+            address: Option<String>,
+        }
+
+        impl Default for #name {
+            fn default() -> Self {
+                Self::new()
+            }
+        }
 
         impl #name {
-            /// The address where this module is deployed.
-            pub const ADDRESS: &'static str = #address_const;
+            /// The default address where this module is deployed (from ABI).
+            pub const DEFAULT_ADDRESS: &'static str = #address_const;
 
             /// The module name.
             pub const MODULE: &'static str = #module_const;
+
+            /// Create contract bindings using the default address from the ABI.
+            pub fn new() -> Self {
+                Self { address: None }
+            }
+
+            /// Create contract bindings with a custom deployment address.
+            ///
+            /// Use this when the contract is deployed at a different address
+            /// than specified in the ABI (e.g., different networks).
+            pub fn with_address(address: impl Into<String>) -> Self {
+                Self { address: Some(address.into()) }
+            }
+
+            /// Returns the effective module address (override or default).
+            pub fn address(&self) -> &str {
+                self.address.as_deref().unwrap_or(Self::DEFAULT_ADDRESS)
+            }
+
+            /// Returns the full module ID (address::module).
+            pub fn module_id(&self) -> String {
+                format!("{}::{}", self.address(), Self::MODULE)
+            }
 
             #(#entry_fns)*
 
@@ -122,12 +164,11 @@ fn generate_struct(struct_def: &MoveStructDef) -> TokenStream {
 /// Generates an entry function.
 fn generate_entry_function(
     func: &MoveFunction,
-    address: &str,
     module: &str,
     source_info: Option<&MoveSourceInfo>,
 ) -> TokenStream {
     let fn_name = format_ident!("{}", to_snake_case(&func.name));
-    let function_id = format!("{}::{}::{}", address, module, func.name);
+    let func_name_str = &func.name;
 
     // Get enriched param info
     let source_func = source_info.and_then(|s| s.functions.get(&func.name));
@@ -191,17 +232,18 @@ fn generate_entry_function(
         .and_then(|f| f.doc.as_ref())
         .map(|d| format!("{}\n\n", d))
         .unwrap_or_default();
-    let full_doc = format!("{}Entry function: `{}`", doc, function_id);
+    let full_doc = format!("{}Entry function: `{}::{}`", doc, module, func_name_str);
 
     quote! {
         #[doc = #full_doc]
-        pub fn #fn_name(#(#param_defs),* #type_args_param) -> aptos_rust_sdk_v2::error::AptosResult<aptos_rust_sdk_v2::transaction::TransactionPayload> {
+        pub fn #fn_name(&self, #(#param_defs),* #type_args_param) -> aptos_rust_sdk_v2::error::AptosResult<aptos_rust_sdk_v2::transaction::TransactionPayload> {
             let args = vec![
                 #(#arg_encodings),*
             ];
 
+            let function_id = format!("{}::{}::{}", self.address(), Self::MODULE, #func_name_str);
             let entry_fn = aptos_rust_sdk_v2::transaction::EntryFunction::from_function_id(
-                #function_id,
+                &function_id,
                 #type_args_use,
                 args,
             )?;
@@ -211,15 +253,15 @@ fn generate_entry_function(
     }
 }
 
-/// Generates a view function.
+/// Generates view functions (both BCS and JSON variants).
 fn generate_view_function(
     func: &MoveFunction,
-    address: &str,
     module: &str,
     source_info: Option<&MoveSourceInfo>,
 ) -> TokenStream {
     let fn_name = format_ident!("view_{}", to_snake_case(&func.name));
-    let function_id = format!("{}::{}::{}", address, module, func.name);
+    let fn_name_json = format_ident!("view_{}_json", to_snake_case(&func.name));
+    let func_name_str = &func.name;
 
     // Get enriched param info
     let source_func = source_info.and_then(|s| s.functions.get(&func.name));
@@ -248,10 +290,21 @@ fn generate_view_function(
         })
         .collect();
 
-    // Build JSON encoding for args
-    let arg_encodings: Vec<_> = params
+    // Build JSON encoding for args (for JSON variant)
+    let arg_encodings_json: Vec<_> = params
         .iter()
         .map(|(name, _, move_type)| view_arg_encoding(name, move_type))
+        .collect();
+
+    // Build BCS encoding for args (for BCS variant)
+    let arg_encodings_bcs: Vec<_> = params
+        .iter()
+        .map(|(name, _, _)| {
+            quote! {
+                ::aptos_rust_sdk_v2::aptos_bcs::to_bytes(&#name)
+                    .map_err(|e| ::aptos_rust_sdk_v2::error::AptosError::Bcs(e.to_string()))?
+            }
+        })
         .collect();
 
     // Type arguments
@@ -269,25 +322,60 @@ fn generate_view_function(
         quote! { vec![] }
     };
 
+    // Determine return type from the function's return values
+    let return_type = if func.returns.is_empty() {
+        quote! { () }
+    } else if func.returns.len() == 1 {
+        move_type_to_rust(&func.returns[0])
+    } else {
+        // Multiple return values become a tuple
+        let types: Vec<_> = func.returns.iter().map(|t| move_type_to_rust(t)).collect();
+        quote! { (#(#types),*) }
+    };
+
     // Documentation
     let doc = source_func
         .and_then(|f| f.doc.as_ref())
         .map(|d| format!("{}\n\n", d))
         .unwrap_or_default();
-    let full_doc = format!("{}View function: `{}`", doc, function_id);
+    let full_doc_bcs = format!(
+        "{}View function: `{}::{}` (BCS - recommended for type safety)",
+        doc, module, func_name_str
+    );
+    let full_doc_json = format!(
+        "{}View function: `{}::{}` (JSON - for debugging/compatibility)",
+        doc, module, func_name_str
+    );
 
     quote! {
-        #[doc = #full_doc]
+        #[doc = #full_doc_bcs]
         pub async fn #fn_name(
-            aptos: &aptos_rust_sdk_v2::Aptos,
+            &self,
+            aptos: &::aptos_rust_sdk_v2::Aptos,
             #(#param_defs),*
             #type_args_param
-        ) -> aptos_rust_sdk_v2::error::AptosResult<Vec<serde_json::Value>> {
+        ) -> ::aptos_rust_sdk_v2::error::AptosResult<#return_type> {
             let args = vec![
-                #(#arg_encodings),*
+                #(#arg_encodings_bcs),*
             ];
 
-            aptos.view(#function_id, #type_args_use, args).await
+            let function_id = format!("{}::{}::{}", self.address(), Self::MODULE, #func_name_str);
+            aptos.view_bcs(&function_id, #type_args_use, args).await
+        }
+
+        #[doc = #full_doc_json]
+        pub async fn #fn_name_json(
+            &self,
+            aptos: &::aptos_rust_sdk_v2::Aptos,
+            #(#param_defs),*
+            #type_args_param
+        ) -> ::aptos_rust_sdk_v2::error::AptosResult<Vec<serde_json::Value>> {
+            let args = vec![
+                #(#arg_encodings_json),*
+            ];
+
+            let function_id = format!("{}::{}::{}", self.address(), Self::MODULE, #func_name_str);
+            aptos.view(&function_id, #type_args_use, args).await
         }
     }
 }
