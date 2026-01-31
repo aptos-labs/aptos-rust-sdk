@@ -532,7 +532,7 @@ impl EnrichedFunctionInfo {
 mod tests {
     use super::*;
 
-    const SAMPLE_MOVE_SOURCE: &str = r#"
+    const SAMPLE_MOVE_SOURCE: &str = r"
 /// A module for managing tokens.
 ///
 /// This module provides functionality for minting and transferring tokens.
@@ -585,7 +585,7 @@ module my_addr::my_token {
         0
     }
 }
-"#;
+";
 
     #[test]
     fn test_parse_module_doc() {

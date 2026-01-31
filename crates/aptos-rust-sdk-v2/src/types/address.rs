@@ -353,14 +353,14 @@ mod tests {
     #[test]
     fn test_debug() {
         let addr = AccountAddress::ONE;
-        let debug = format!("{:?}", addr);
+        let debug = format!("{addr:?}");
         assert!(debug.contains("AccountAddress"));
     }
 
     #[test]
     fn test_display() {
         let addr = AccountAddress::ONE;
-        let display = format!("{}", addr);
+        let display = format!("{addr}");
         assert!(display.starts_with("0x"));
         assert_eq!(display.len(), 66);
     }
@@ -485,7 +485,7 @@ mod tests {
         let hex = addr.to_hex();
         assert!(hex.starts_with("0x"));
         assert_eq!(hex.len(), 66);
-        assert!(hex.ends_with("1"));
+        assert!(hex.ends_with('1'));
     }
 
     #[test]
@@ -549,5 +549,36 @@ mod tests {
         // Address with last byte == 0 is NOT special (it's ZERO)
         let addr = AccountAddress::ZERO;
         assert!(!addr.is_special());
+    }
+
+    #[test]
+    fn test_from_bytes_wrong_length() {
+        // Test with too short
+        let short = [0u8; 16];
+        let result = AccountAddress::from_bytes(short);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("expected 32 bytes")
+        );
+
+        // Test with too long
+        let long = [0u8; 64];
+        let result = AccountAddress::from_bytes(long);
+        assert!(result.is_err());
+
+        // Test with empty
+        let empty: [u8; 0] = [];
+        let result = AccountAddress::from_bytes(empty);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_from_bytes_valid() {
+        let bytes = [0xab; ADDRESS_LENGTH];
+        let addr = AccountAddress::from_bytes(bytes).unwrap();
+        assert_eq!(addr.as_bytes(), &bytes);
     }
 }

@@ -312,7 +312,7 @@ mod tests {
     #[test]
     fn test_auth_key_display() {
         let key = AuthenticationKey::new([0xff; 32]);
-        let display = format!("{}", key);
+        let display = format!("{key}");
         assert!(display.starts_with("0x"));
         assert_eq!(display.len(), 66); // 0x + 64 hex chars
     }
@@ -320,7 +320,7 @@ mod tests {
     #[test]
     fn test_auth_key_debug() {
         let key = AuthenticationKey::new([0xaa; 32]);
-        let debug = format!("{:?}", key);
+        let debug = format!("{key:?}");
         assert!(debug.contains("AuthenticationKey"));
     }
 
@@ -512,7 +512,7 @@ mod tests {
         {
             let ed25519 = super::super::Ed25519Account::generate();
             let any_account: AnyAccount = ed25519.into();
-            let debug = format!("{:?}", any_account);
+            let debug = format!("{any_account:?}");
             assert!(debug.contains("Ed25519"));
         }
     }

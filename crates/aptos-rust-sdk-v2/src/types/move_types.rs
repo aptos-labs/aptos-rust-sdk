@@ -677,7 +677,7 @@ mod tests {
     #[test]
     fn test_identifier_display() {
         let id = Identifier::new("my_func").unwrap();
-        assert_eq!(format!("{}", id), "my_func");
+        assert_eq!(format!("{id}"), "my_func");
     }
 
     #[test]
@@ -906,8 +906,8 @@ mod tests {
         );
         let display = tag.to_string();
         assert!(display.contains("CoinStore"));
-        assert!(display.contains("<"));
-        assert!(display.contains(">"));
+        assert!(display.contains('<'));
+        assert!(display.contains('>'));
     }
 
     #[test]
@@ -1033,7 +1033,7 @@ mod tests {
     #[test]
     fn test_move_type_display() {
         let t = MoveType::new("bool");
-        assert_eq!(format!("{}", t), "bool");
+        assert_eq!(format!("{t}"), "bool");
     }
 
     #[test]
@@ -1132,5 +1132,118 @@ mod tests {
         let result = TypeTag::from_str_strict(too_deep);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("too deep"));
+    }
+
+    #[test]
+    fn test_identifier_from_str() {
+        // Test FromStr trait implementation for Identifier
+        let id: Identifier = "my_function".parse().unwrap();
+        assert_eq!(id.as_str(), "my_function");
+
+        // Invalid identifier via FromStr
+        let result: Result<Identifier, _> = "123invalid".parse();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_module_id_from_str() {
+        // Test FromStr trait implementation for MoveModuleId
+        let module: MoveModuleId = "0x1::coin".parse().unwrap();
+        assert_eq!(module.address, AccountAddress::ONE);
+        assert_eq!(module.name.as_str(), "coin");
+
+        // Invalid module via FromStr
+        let result: Result<MoveModuleId, _> = "invalid".parse();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_struct_tag_simple() {
+        // Test StructTag::simple constructor
+        let tag = StructTag::simple(AccountAddress::ONE, "coin", "CoinStore").unwrap();
+        assert_eq!(tag.address, AccountAddress::ONE);
+        assert_eq!(tag.module.as_str(), "coin");
+        assert_eq!(tag.name.as_str(), "CoinStore");
+        assert!(tag.type_args.is_empty());
+
+        // Invalid module name
+        let result = StructTag::simple(AccountAddress::ONE, "123invalid", "CoinStore");
+        assert!(result.is_err());
+
+        // Invalid struct name
+        let result = StructTag::simple(AccountAddress::ONE, "coin", "123invalid");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_struct_tag_display_with_multiple_type_args() {
+        // Test Display with multiple type args (exercises line 224 comma separator)
+        let tag = StructTag::new(
+            AccountAddress::ONE,
+            Identifier::new("table").unwrap(),
+            Identifier::new("Table").unwrap(),
+            vec![TypeTag::Address, TypeTag::U64, TypeTag::Bool],
+        );
+        let display = tag.to_string();
+        assert_eq!(display, "0x1::table::Table<address, u64, bool>");
+    }
+
+    #[test]
+    fn test_type_tag_signed_integers_display() {
+        // Test Display for signed integer types (i8, i16, i32, i64, i128, i256)
+        assert_eq!(TypeTag::I8.to_string(), "i8");
+        assert_eq!(TypeTag::I16.to_string(), "i16");
+        assert_eq!(TypeTag::I32.to_string(), "i32");
+        assert_eq!(TypeTag::I64.to_string(), "i64");
+        assert_eq!(TypeTag::I128.to_string(), "i128");
+        assert_eq!(TypeTag::I256.to_string(), "i256");
+    }
+
+    #[test]
+    fn test_move_value_as_u128_comprehensive() {
+        // Test as_u128 method with max value
+        let val = MoveValue::Number("340282366920938463463374607431768211455".to_string()); // max u128
+        assert_eq!(val.as_u128(), Some(u128::MAX));
+
+        let val = MoveValue::Number("0".to_string());
+        assert_eq!(val.as_u128(), Some(0));
+
+        // Non-number returns None
+        let val = MoveValue::Bool(true);
+        assert_eq!(val.as_u128(), None);
+
+        // Invalid number string returns None
+        let val = MoveValue::Number("not_a_number".to_string());
+        assert_eq!(val.as_u128(), None);
+    }
+
+    #[test]
+    fn test_type_tag_parse_empty_type_args() {
+        // Struct with no type args
+        let tag = TypeTag::from_str_strict("0x1::coin::CoinInfo").unwrap();
+        if let TypeTag::Struct(s) = tag {
+            assert!(s.type_args.is_empty());
+        } else {
+            panic!("Expected Struct");
+        }
+    }
+
+    #[test]
+    fn test_type_tag_parse_nested_generics() {
+        // Tests bracket tracking with nested generics (lines 448-449)
+        let tag = TypeTag::from_str_strict(
+            "0x1::table::Table<0x1::string::String, vector<0x1::aptos_coin::AptosCoin>>",
+        )
+        .unwrap();
+        if let TypeTag::Struct(s) = tag {
+            assert_eq!(s.name.as_str(), "Table");
+            assert_eq!(s.type_args.len(), 2);
+            // First arg is a struct
+            assert!(matches!(s.type_args[0], TypeTag::Struct(_)));
+            // Second arg is a vector
+            assert!(matches!(s.type_args[1], TypeTag::Vector(_)));
+        } else {
+            panic!("Expected Struct");
+        }
     }
 }

@@ -567,12 +567,12 @@ mod tests {
         let signature = private_key.sign(b"test");
 
         // Debug should contain type name
-        assert!(format!("{:?}", public_key).contains("Secp256r1PublicKey"));
-        assert!(format!("{:?}", signature).contains("Secp256r1Signature"));
+        assert!(format!("{public_key:?}").contains("Secp256r1PublicKey"));
+        assert!(format!("{signature:?}").contains("Secp256r1Signature"));
 
         // Display should show hex
-        assert!(format!("{}", public_key).starts_with("0x"));
-        assert!(format!("{}", signature).starts_with("0x"));
+        assert!(format!("{public_key}").starts_with("0x"));
+        assert!(format!("{signature}").starts_with("0x"));
     }
 
     #[test]
@@ -683,7 +683,7 @@ mod tests {
     #[test]
     fn test_private_key_debug() {
         let private_key = Secp256r1PrivateKey::generate();
-        let debug = format!("{:?}", private_key);
+        let debug = format!("{private_key:?}");
         assert!(debug.contains("REDACTED"));
         assert!(!debug.contains(&private_key.to_hex()));
     }

@@ -793,9 +793,9 @@ mod tests {
 
     #[test]
     fn test_move_u256_from_u128() {
-        let val = MoveU256::from_u128(123456789);
+        let val = MoveU256::from_u128(123_456_789);
         // First 16 bytes should contain the value in little-endian
-        let expected = 123456789u128.to_le_bytes();
+        let expected = 123_456_789_u128.to_le_bytes();
         assert_eq!(&val.0[..16], &expected);
         // Upper 16 bytes should be zero
         assert_eq!(&val.0[16..], &[0u8; 16]);
@@ -811,7 +811,7 @@ mod tests {
     #[test]
     fn test_move_u256_parse() {
         let val = MoveU256::parse("12345678901234567890").unwrap();
-        let expected = 12345678901234567890u128;
+        let expected = 12_345_678_901_234_567_890_u128;
         let mut expected_bytes = [0u8; 32];
         expected_bytes[..16].copy_from_slice(&expected.to_le_bytes());
         assert_eq!(val.0, expected_bytes);
@@ -826,7 +826,7 @@ mod tests {
 
     #[test]
     fn test_move_u256_serialization() {
-        let val = MoveU256::from_u128(0x0102030405060708);
+        let val = MoveU256::from_u128(0x0102_0304_0506_0708);
         let bcs = aptos_bcs::to_bytes(&val).unwrap();
         // Should serialize as 32 bytes (tuple, not vector with length prefix)
         assert_eq!(bcs.len(), 32);
@@ -848,7 +848,7 @@ mod tests {
 
     #[test]
     fn test_move_i128_serialization_positive() {
-        let val = MoveI128::new(0x0102030405060708);
+        let val = MoveI128::new(0x0102_0304_0506_0708);
         let bcs = aptos_bcs::to_bytes(&val).unwrap();
         // Should serialize as 16 bytes (tuple, not vector)
         assert_eq!(bcs.len(), 16);
@@ -900,7 +900,7 @@ mod tests {
 
     #[test]
     fn test_move_i256_serialization() {
-        let val = MoveI256::from_i128(0x0102030405060708);
+        let val = MoveI256::from_i128(0x0102_0304_0506_0708);
         let bcs = aptos_bcs::to_bytes(&val).unwrap();
         // Should serialize as 32 bytes (tuple, not vector)
         assert_eq!(bcs.len(), 32);
@@ -1019,7 +1019,7 @@ mod tests {
     #[test]
     fn test_input_entry_function_data_builder_debug() {
         let builder = InputEntryFunctionData::new("0x1::coin::transfer");
-        let debug = format!("{:?}", builder);
+        let debug = format!("{builder:?}");
         assert!(debug.contains("InputEntryFunctionDataBuilder"));
     }
 
@@ -1032,22 +1032,22 @@ mod tests {
 
     #[test]
     fn test_move_u256_debug() {
-        let val = MoveU256::from_u128(123456789);
-        let debug = format!("{:?}", val);
+        let val = MoveU256::from_u128(123_456_789);
+        let debug = format!("{val:?}");
         assert!(debug.contains("MoveU256"));
     }
 
     #[test]
     fn test_move_i128_debug() {
         let val = MoveI128::new(-42);
-        let debug = format!("{:?}", val);
+        let debug = format!("{val:?}");
         assert!(debug.contains("MoveI128"));
     }
 
     #[test]
     fn test_move_i256_debug() {
         let val = MoveI256::from_i128(-42);
-        let debug = format!("{:?}", val);
+        let debug = format!("{val:?}");
         assert!(debug.contains("MoveI256"));
     }
 
@@ -1072,14 +1072,14 @@ mod tests {
     #[test]
     fn test_move_u256_clone() {
         let val1 = MoveU256::from_u128(999);
-        let val2 = val1.clone();
+        let val2 = val1;
         assert_eq!(val1, val2);
     }
 
     #[test]
     fn test_move_i256_clone() {
         let val1 = MoveI256::from_i128(-999);
-        let val2 = val1.clone();
+        let val2 = val1;
         assert_eq!(val1, val2);
     }
 }

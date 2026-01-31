@@ -450,7 +450,7 @@ mod tests {
     #[test]
     fn test_debug_output() {
         let account = Ed25519Account::generate();
-        let debug = format!("{:?}", account);
+        let debug = format!("{account:?}");
         assert!(debug.contains("Ed25519Account"));
         assert!(debug.contains("address"));
     }
@@ -561,7 +561,7 @@ mod tests {
     #[test]
     fn test_single_key_debug_output() {
         let account = Ed25519SingleKeyAccount::generate();
-        let debug = format!("{:?}", account);
+        let debug = format!("{account:?}");
         assert!(debug.contains("Ed25519SingleKeyAccount"));
         assert!(debug.contains("address"));
     }

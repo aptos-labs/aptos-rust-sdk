@@ -203,7 +203,7 @@ mod tests {
     #[test]
     fn test_debug_output() {
         let account = Secp256k1Account::generate();
-        let debug = format!("{:?}", account);
+        let debug = format!("{account:?}");
         assert!(debug.contains("Secp256k1Account"));
         assert!(debug.contains("address"));
     }

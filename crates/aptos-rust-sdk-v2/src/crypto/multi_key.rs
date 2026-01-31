@@ -790,7 +790,7 @@ mod tests {
     #[test]
     fn test_any_public_key_debug() {
         let pk = AnyPublicKey::new(AnyPublicKeyVariant::Secp256k1, vec![0xbb; 33]);
-        let debug = format!("{:?}", pk);
+        let debug = format!("{pk:?}");
         assert!(debug.contains("Secp256k1"));
         assert!(debug.contains("0x"));
     }
@@ -817,7 +817,7 @@ mod tests {
     #[test]
     fn test_any_signature_debug() {
         let sig = AnySignature::new(AnyPublicKeyVariant::Secp256r1, vec![0xee; 64]);
-        let debug = format!("{:?}", sig);
+        let debug = format!("{sig:?}");
         assert!(debug.contains("Secp256r1"));
         assert!(debug.contains("64 bytes"));
     }
@@ -876,8 +876,8 @@ mod tests {
         let sig = AnySignature::new(AnyPublicKeyVariant::Ed25519, vec![0; 64]);
         let multi_sig = MultiKeySignature::new(vec![(0, sig)]).unwrap();
 
-        let debug = format!("{:?}", multi_sig);
-        let display = format!("{}", multi_sig);
+        let debug = format!("{multi_sig:?}");
+        let display = format!("{multi_sig}");
 
         assert!(debug.contains("MultiKeySignature"));
         assert!(display.starts_with("0x"));
@@ -1115,7 +1115,7 @@ mod tests {
             .collect();
         let multi_pk = MultiKeyPublicKey::new(keys, 2).unwrap();
 
-        let debug = format!("{:?}", multi_pk);
+        let debug = format!("{multi_pk:?}");
         assert!(debug.contains("MultiKeyPublicKey"));
     }
 
@@ -1128,7 +1128,7 @@ mod tests {
         let sig = AnySignature::ed25519(&private_key.sign(b"test"));
         let multi_sig = MultiKeySignature::new(vec![(0, sig)]).unwrap();
 
-        let debug = format!("{:?}", multi_sig);
+        let debug = format!("{multi_sig:?}");
         assert!(debug.contains("MultiKeySignature"));
     }
 
@@ -1142,7 +1142,7 @@ mod tests {
             .collect();
         let multi_pk = MultiKeyPublicKey::new(keys, 2).unwrap();
 
-        let display = format!("{}", multi_pk);
+        let display = format!("{multi_pk}");
         assert!(display.starts_with("0x"));
     }
 
@@ -1155,7 +1155,7 @@ mod tests {
         let sig = AnySignature::ed25519(&private_key.sign(b"test"));
         let multi_sig = MultiKeySignature::new(vec![(0, sig)]).unwrap();
 
-        let display = format!("{}", multi_sig);
+        let display = format!("{multi_sig}");
         assert!(display.starts_with("0x"));
     }
 
@@ -1176,7 +1176,7 @@ mod tests {
     #[test]
     fn test_any_public_key_variant_debug() {
         let variant = AnyPublicKeyVariant::Ed25519;
-        let debug = format!("{:?}", variant);
+        let debug = format!("{variant:?}");
         assert!(debug.contains("Ed25519"));
     }
 
@@ -1186,7 +1186,7 @@ mod tests {
         use crate::crypto::Ed25519PrivateKey;
 
         let pk = AnyPublicKey::ed25519(&Ed25519PrivateKey::generate().public_key());
-        let debug = format!("{:?}", pk);
+        let debug = format!("{pk:?}");
         assert!(debug.contains("Ed25519"));
     }
 
@@ -1197,7 +1197,7 @@ mod tests {
 
         let private_key = Ed25519PrivateKey::generate();
         let sig = AnySignature::ed25519(&private_key.sign(b"test"));
-        let debug = format!("{:?}", sig);
+        let debug = format!("{sig:?}");
         assert!(debug.contains("Ed25519"));
     }
 

@@ -936,7 +936,7 @@ mod tests {
         use crate::codegen::move_parser::MoveSourceParser;
 
         let abi = sample_abi();
-        let source = r#"
+        let source = r"
             module 0x1::coin {
                 /// Transfers coins from sender to recipient.
                 public entry fun transfer<CoinType>(
@@ -945,7 +945,7 @@ mod tests {
                     value: u64,
                 ) { }
             }
-        "#;
+        ";
         let source_info = MoveSourceParser::parse(source);
 
         let generator =

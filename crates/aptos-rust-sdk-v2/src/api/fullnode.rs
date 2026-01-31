@@ -734,7 +734,7 @@ mod tests {
         assert!(url.as_str().contains("accounts/0x1"));
     }
 
-    async fn create_mock_client(server: &MockServer) -> FullnodeClient {
+    fn create_mock_client(server: &MockServer) -> FullnodeClient {
         // The mock server URL needs to include /v1 since that's part of the base URL
         let url = format!("{}/v1", server.uri());
         let config = AptosConfig::custom(&url).unwrap().without_retry();
@@ -761,7 +761,7 @@ mod tests {
             .mount(&server)
             .await;
 
-        let client = create_mock_client(&server).await;
+        let client = create_mock_client(&server);
         let result = client.get_ledger_info().await.unwrap();
 
         assert_eq!(result.data.chain_id, 2);
@@ -787,7 +787,7 @@ mod tests {
             .mount(&server)
             .await;
 
-        let client = create_mock_client(&server).await;
+        let client = create_mock_client(&server);
         let result = client.get_account(AccountAddress::ONE).await.unwrap();
 
         assert_eq!(result.data.sequence_number().unwrap(), 42);
@@ -808,7 +808,7 @@ mod tests {
             .mount(&server)
             .await;
 
-        let client = create_mock_client(&server).await;
+        let client = create_mock_client(&server);
         let result = client.get_account(AccountAddress::ONE).await;
 
         assert!(result.is_err());
@@ -836,7 +836,7 @@ mod tests {
             .mount(&server)
             .await;
 
-        let client = create_mock_client(&server).await;
+        let client = create_mock_client(&server);
         let result = client
             .get_account_resources(AccountAddress::ONE)
             .await
@@ -860,7 +860,7 @@ mod tests {
             .mount(&server)
             .await;
 
-        let client = create_mock_client(&server).await;
+        let client = create_mock_client(&server);
         let result = client
             .get_account_resource(
                 AccountAddress::ONE,
@@ -893,7 +893,7 @@ mod tests {
             .mount(&server)
             .await;
 
-        let client = create_mock_client(&server).await;
+        let client = create_mock_client(&server);
         let result = client
             .get_account_modules(AccountAddress::ONE)
             .await
@@ -918,7 +918,7 @@ mod tests {
             .mount(&server)
             .await;
 
-        let client = create_mock_client(&server).await;
+        let client = create_mock_client(&server);
         let result = client.estimate_gas_price().await.unwrap();
 
         assert_eq!(result.data.gas_estimate, 100);
@@ -942,7 +942,7 @@ mod tests {
             .mount(&server)
             .await;
 
-        let client = create_mock_client(&server).await;
+        let client = create_mock_client(&server);
         let hash = HashValue::from_hex(
             "0x0000000000000000000000000000000000000000000000000000000000000001",
         )
@@ -953,7 +953,7 @@ mod tests {
             result
                 .data
                 .get("success")
-                .and_then(|v| v.as_bool())
+                .and_then(serde_json::Value::as_bool)
                 .unwrap()
         );
     }
@@ -975,7 +975,7 @@ mod tests {
             .mount(&server)
             .await;
 
-        let client = create_mock_client(&server).await;
+        let client = create_mock_client(&server);
         let hash = HashValue::from_hex(
             "0x0000000000000000000000000000000000000000000000000000000000000001",
         )
@@ -989,7 +989,7 @@ mod tests {
             result
                 .data
                 .get("success")
-                .and_then(|v| v.as_bool())
+                .and_then(serde_json::Value::as_bool)
                 .unwrap()
         );
     }
@@ -1059,7 +1059,7 @@ mod tests {
             .mount(&server)
             .await;
 
-        let client = create_mock_client(&server).await;
+        let client = create_mock_client(&server);
         let result = client.get_block_by_height(1000, false).await.unwrap();
 
         assert!(result.data.get("block_height").is_some());
@@ -1076,7 +1076,7 @@ mod tests {
             .mount(&server)
             .await;
 
-        let client = create_mock_client(&server).await;
+        let client = create_mock_client(&server);
         let result: AptosResponse<Vec<serde_json::Value>> = client
             .view(
                 "0x1::coin::balance",

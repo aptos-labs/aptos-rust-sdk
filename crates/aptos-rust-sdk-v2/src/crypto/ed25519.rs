@@ -627,7 +627,7 @@ mod tests {
     #[test]
     fn test_private_key_debug() {
         let private_key = Ed25519PrivateKey::generate();
-        let debug = format!("{:?}", private_key);
+        let debug = format!("{private_key:?}");
         assert!(debug.contains("REDACTED"));
         assert!(!debug.contains(&private_key.to_hex()));
     }
@@ -636,7 +636,7 @@ mod tests {
     fn test_public_key_debug() {
         let private_key = Ed25519PrivateKey::generate();
         let public_key = private_key.public_key();
-        let debug = format!("{:?}", public_key);
+        let debug = format!("{public_key:?}");
         assert!(debug.contains("Ed25519PublicKey"));
     }
 
@@ -644,7 +644,7 @@ mod tests {
     fn test_public_key_display() {
         let private_key = Ed25519PrivateKey::generate();
         let public_key = private_key.public_key();
-        let display = format!("{}", public_key);
+        let display = format!("{public_key}");
         assert!(display.starts_with("0x"));
     }
 
@@ -652,7 +652,7 @@ mod tests {
     fn test_signature_debug() {
         let private_key = Ed25519PrivateKey::generate();
         let signature = private_key.sign(b"test");
-        let debug = format!("{:?}", signature);
+        let debug = format!("{signature:?}");
         assert!(debug.contains("Ed25519Signature"));
     }
 
@@ -660,7 +660,7 @@ mod tests {
     fn test_signature_display() {
         let private_key = Ed25519PrivateKey::generate();
         let signature = private_key.sign(b"test");
-        let display = format!("{}", signature);
+        let display = format!("{signature}");
         assert!(display.starts_with("0x"));
     }
 

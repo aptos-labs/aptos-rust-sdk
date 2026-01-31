@@ -922,7 +922,7 @@ mod tests {
     #[test]
     fn test_builder_expiration_timestamp() {
         let recipient = AccountAddress::from_hex("0x123").unwrap();
-        let expiration = 1234567890u64;
+        let expiration = 1_234_567_890_u64;
 
         let fee_payer_txn = SponsoredTransactionBuilder::new()
             .sender(AccountAddress::ONE)
@@ -992,7 +992,7 @@ mod tests {
     #[test]
     fn test_builder_debug() {
         let builder = SponsoredTransactionBuilder::new().sender(AccountAddress::ONE);
-        let debug = format!("{:?}", builder);
+        let debug = format!("{builder:?}");
         assert!(debug.contains("SponsoredTransactionBuilder"));
     }
 
@@ -1136,7 +1136,7 @@ mod tests {
             .unwrap();
 
         let partially_signed = PartiallySigned::new(fee_payer_txn);
-        let debug = format!("{:?}", partially_signed);
+        let debug = format!("{partially_signed:?}");
         assert!(debug.contains("PartiallySigned"));
     }
 }

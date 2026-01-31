@@ -713,7 +713,7 @@ mod tests {
         use crate::crypto::Ed25519PrivateKey;
 
         let key = AnyPrivateKey::ed25519(Ed25519PrivateKey::generate());
-        let debug = format!("{:?}", key);
+        let debug = format!("{key:?}");
         assert!(debug.contains("AnyPrivateKey"));
         assert!(debug.contains("Ed25519"));
     }
@@ -820,7 +820,7 @@ mod tests {
             .map(|_| AnyPrivateKey::ed25519(Ed25519PrivateKey::generate()))
             .collect();
         let account = MultiKeyAccount::new(keys, 2).unwrap();
-        let display = format!("{}", account);
+        let display = format!("{account}");
         // Display contains the address which starts with 0x
         assert!(display.contains("0x") || display.contains("MultiKeyAccount"));
     }
@@ -834,7 +834,7 @@ mod tests {
             .map(|_| AnyPrivateKey::ed25519(Ed25519PrivateKey::generate()))
             .collect();
         let account = MultiKeyAccount::new(keys, 2).unwrap();
-        let debug = format!("{:?}", account);
+        let debug = format!("{account:?}");
         assert!(debug.contains("MultiKeyAccount"));
     }
 }

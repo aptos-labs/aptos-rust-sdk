@@ -525,7 +525,10 @@ mod tests {
     #[test]
     fn test_multi_ed25519_sign_verify() {
         let private_keys: Vec<_> = (0..3).map(|_| Ed25519PrivateKey::generate()).collect();
-        let public_keys: Vec<_> = private_keys.iter().map(|k| k.public_key()).collect();
+        let public_keys: Vec<_> = private_keys
+            .iter()
+            .map(Ed25519PrivateKey::public_key)
+            .collect();
 
         let multi_pk = MultiEd25519PublicKey::new(public_keys, 2).unwrap();
         let message = b"test message";
@@ -546,7 +549,10 @@ mod tests {
     #[test]
     fn test_multi_ed25519_insufficient_signatures() {
         let private_keys: Vec<_> = (0..3).map(|_| Ed25519PrivateKey::generate()).collect();
-        let public_keys: Vec<_> = private_keys.iter().map(|k| k.public_key()).collect();
+        let public_keys: Vec<_> = private_keys
+            .iter()
+            .map(Ed25519PrivateKey::public_key)
+            .collect();
 
         let multi_pk = MultiEd25519PublicKey::new(public_keys, 2).unwrap();
         let message = b"test message";
@@ -720,7 +726,10 @@ mod tests {
     #[test]
     fn test_multi_ed25519_verify_invalid_signature_index() {
         let private_keys: Vec<_> = (0..3).map(|_| Ed25519PrivateKey::generate()).collect();
-        let public_keys: Vec<_> = private_keys.iter().map(|k| k.public_key()).collect();
+        let public_keys: Vec<_> = private_keys
+            .iter()
+            .map(Ed25519PrivateKey::public_key)
+            .collect();
 
         let multi_pk = MultiEd25519PublicKey::new(public_keys, 2).unwrap();
         let message = b"test message";
@@ -746,7 +755,10 @@ mod tests {
     #[test]
     fn test_multi_ed25519_verify_wrong_signature() {
         let private_keys: Vec<_> = (0..3).map(|_| Ed25519PrivateKey::generate()).collect();
-        let public_keys: Vec<_> = private_keys.iter().map(|k| k.public_key()).collect();
+        let public_keys: Vec<_> = private_keys
+            .iter()
+            .map(Ed25519PrivateKey::public_key)
+            .collect();
 
         let multi_pk = MultiEd25519PublicKey::new(public_keys, 2).unwrap();
         let message = b"test message";
@@ -768,7 +780,7 @@ mod tests {
             .map(|_| Ed25519PrivateKey::generate().public_key())
             .collect();
         let multi_pk = MultiEd25519PublicKey::new(keys, 2).unwrap();
-        let debug = format!("{:?}", multi_pk);
+        let debug = format!("{multi_pk:?}");
         assert!(debug.contains("MultiEd25519PublicKey"));
         assert!(debug.contains("2-of-2"));
     }
@@ -779,7 +791,7 @@ mod tests {
         let sig = private_key.sign(b"test");
         let multi_sig = MultiEd25519Signature::new(vec![(0, sig)]).unwrap();
 
-        let debug = format!("{:?}", multi_sig);
+        let debug = format!("{multi_sig:?}");
         assert!(debug.contains("MultiEd25519Signature"));
     }
 
@@ -856,10 +868,10 @@ mod tests {
 
         let multi_sig = MultiEd25519Signature::new(vec![(0, sig0), (1, sig1)]).unwrap();
 
-        let sigs = multi_sig.signatures();
-        assert_eq!(sigs.len(), 2);
-        assert_eq!(sigs[0].0, 0);
-        assert_eq!(sigs[1].0, 1);
+        let signatures = multi_sig.signatures();
+        assert_eq!(signatures.len(), 2);
+        assert_eq!(signatures[0].0, 0);
+        assert_eq!(signatures[1].0, 1);
     }
 
     #[test]
@@ -879,7 +891,7 @@ mod tests {
         let sig = private_key.sign(b"test");
         let multi_sig = MultiEd25519Signature::new(vec![(0, sig)]).unwrap();
 
-        let display = format!("{}", multi_sig);
+        let display = format!("{multi_sig}");
         assert!(display.starts_with("0x"));
     }
 
@@ -890,7 +902,7 @@ mod tests {
             .collect();
         let multi_pk = MultiEd25519PublicKey::new(keys, 2).unwrap();
 
-        let display = format!("{}", multi_pk);
+        let display = format!("{multi_pk}");
         assert!(display.starts_with("0x"));
     }
 
@@ -931,10 +943,10 @@ mod tests {
     #[test]
     fn test_multi_ed25519_signature_new_duplicate_index() {
         let private_key = Ed25519PrivateKey::generate();
-        let sig0a = private_key.sign(b"test");
-        let sig0b = private_key.sign(b"test");
+        let first_sig = private_key.sign(b"test");
+        let second_sig = private_key.sign(b"test");
 
-        let result = MultiEd25519Signature::new(vec![(0, sig0a), (0, sig0b)]);
+        let result = MultiEd25519Signature::new(vec![(0, first_sig), (0, second_sig)]);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("duplicate"));
     }

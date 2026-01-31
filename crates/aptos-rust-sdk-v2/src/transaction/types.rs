@@ -453,7 +453,7 @@ mod tests {
             }),
             100_000,
             100,
-            1000000000,
+            1_000_000_000,
             ChainId::testnet(),
         )
     }
@@ -474,7 +474,7 @@ mod tests {
         assert_eq!(txn.sequence_number, 0);
         assert_eq!(txn.max_gas_amount, 100_000);
         assert_eq!(txn.gas_unit_price, 100);
-        assert_eq!(txn.expiration_timestamp_secs, 1000000000);
+        assert_eq!(txn.expiration_timestamp_secs, 1_000_000_000);
         assert_eq!(txn.chain_id, ChainId::testnet());
     }
 
@@ -657,7 +657,7 @@ mod tests {
             }),
             100_000,
             100,
-            1000000000,
+            1_000_000_000,
             ChainId::testnet(),
         )
     }
@@ -676,7 +676,7 @@ mod tests {
             }),
             100_000,
             100,
-            1000000000,
+            1_000_000_000,
             ChainId::testnet(),
         );
         assert_eq!(txn.sender, AccountAddress::ONE);
@@ -697,7 +697,7 @@ mod tests {
             }),
             100_000,
             100,
-            1000000000,
+            1_000_000_000,
             ChainId::testnet(),
         );
         let txn2 = RawTransactionOrderless::new(
@@ -710,7 +710,7 @@ mod tests {
             }),
             100_000,
             100,
-            1000000000,
+            1_000_000_000,
             ChainId::testnet(),
         );
         // Random nonces should be different

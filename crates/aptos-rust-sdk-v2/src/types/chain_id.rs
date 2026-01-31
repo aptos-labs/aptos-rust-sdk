@@ -140,14 +140,14 @@ mod tests {
     #[test]
     fn test_debug() {
         let chain_id = ChainId::mainnet();
-        let debug = format!("{:?}", chain_id);
+        let debug = format!("{chain_id:?}");
         assert_eq!(debug, "ChainId(1)");
     }
 
     #[test]
     fn test_display() {
         let chain_id = ChainId::testnet();
-        let display = format!("{}", chain_id);
+        let display = format!("{chain_id}");
         assert_eq!(display, "2");
     }
 

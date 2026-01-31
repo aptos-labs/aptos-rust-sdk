@@ -176,7 +176,8 @@ impl Serialize for HashValue {
         if serializer.is_human_readable() {
             serializer.serialize_str(&self.to_hex())
         } else {
-            serializer.serialize_bytes(&self.0)
+            // Use fixed-size array serialization to match deserialize
+            self.0.serialize(serializer)
         }
     }
 }
@@ -190,6 +191,7 @@ impl<'de> Deserialize<'de> for HashValue {
             let s = String::deserialize(deserializer)?;
             Self::from_hex(&s).map_err(serde::de::Error::custom)
         } else {
+            // Use fixed-size array deserialization to match serialize
             let bytes = <[u8; HASH_LENGTH]>::deserialize(deserializer)?;
             Ok(Self(bytes))
         }
@@ -299,7 +301,7 @@ mod tests {
     #[test]
     fn test_display() {
         let hash = HashValue::ZERO;
-        let display = format!("{}", hash);
+        let display = format!("{hash}");
         assert!(display.starts_with("0x"));
         assert_eq!(display.len(), 66); // 0x + 64 hex chars
     }
@@ -307,7 +309,7 @@ mod tests {
     #[test]
     fn test_debug() {
         let hash = HashValue::ZERO;
-        let debug = format!("{:?}", hash);
+        let debug = format!("{hash:?}");
         assert!(debug.contains("HashValue"));
     }
 
@@ -336,7 +338,7 @@ mod tests {
     #[test]
     fn test_from_bytes_valid() {
         let bytes = [42u8; HASH_LENGTH];
-        let hash = HashValue::from_bytes(&bytes).unwrap();
+        let hash = HashValue::from_bytes(bytes).unwrap();
         assert_eq!(hash.as_bytes(), &bytes);
     }
 
@@ -440,5 +442,42 @@ mod tests {
         let hash1 = HashValue::sha3_256_of([b"test" as &[u8]]);
         let hash2 = HashValue::sha3_256(b"test");
         assert_eq!(hash1, hash2);
+    }
+
+    #[test]
+    fn test_json_human_readable_serialization_roundtrip() {
+        // JSON uses human-readable format (hex string)
+        let hash = HashValue::sha3_256(b"test");
+        let json = serde_json::to_string(&hash).unwrap();
+
+        // Should be a quoted hex string
+        assert!(json.starts_with('"'));
+        assert!(json.contains("0x"));
+
+        let deserialized: HashValue = serde_json::from_str(&json).unwrap();
+        assert_eq!(hash, deserialized);
+    }
+
+    #[test]
+    fn test_bcs_binary_serialization_roundtrip() {
+        // BCS uses non-human-readable format (binary)
+        let hash = HashValue::sha3_256(b"test");
+        let serialized = aptos_bcs::to_bytes(&hash).unwrap();
+
+        // Fixed-size array serialization should be exactly HASH_LENGTH bytes
+        assert_eq!(serialized.len(), HASH_LENGTH);
+
+        let deserialized: HashValue = aptos_bcs::from_bytes(&serialized).unwrap();
+        assert_eq!(hash, deserialized);
+    }
+
+    #[test]
+    fn test_bcs_binary_serialization_zero_hash() {
+        // Test with zero hash
+        let hash = HashValue::ZERO;
+        let serialized = aptos_bcs::to_bytes(&hash).unwrap();
+        let deserialized: HashValue = aptos_bcs::from_bytes(&serialized).unwrap();
+        assert_eq!(hash, deserialized);
+        assert!(deserialized.is_zero());
     }
 }

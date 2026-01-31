@@ -480,7 +480,7 @@ mod tests {
     fn test_builder_custom_expiration() {
         let recipient = AccountAddress::from_hex("0x123").unwrap();
         let payload = EntryFunction::apt_transfer(recipient, 1000).unwrap();
-        let custom_expiration = 9999999999;
+        let custom_expiration = 9_999_999_999;
 
         let txn = TransactionBuilder::new()
             .sender(AccountAddress::ONE)

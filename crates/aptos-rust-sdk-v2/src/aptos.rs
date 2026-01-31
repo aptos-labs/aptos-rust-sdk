@@ -575,12 +575,12 @@ impl Aptos {
         Ok(txn_hashes)
     }
 
+    #[cfg(all(feature = "faucet", feature = "ed25519"))]
     /// Creates a funded account.
     ///
     /// # Errors
     ///
-    /// Returns an error if funding the account fails (see [`fund_account`] for details).
-    #[cfg(all(feature = "faucet", feature = "ed25519"))]
+    /// Returns an error if funding the account fails (see [`Self::fund_account`] for details).
     pub async fn create_funded_account(
         &self,
         amount: u64,
@@ -721,7 +721,7 @@ mod tests {
         assert_eq!(aptos.chain_id(), ChainId::mainnet());
     }
 
-    async fn create_mock_aptos(server: &MockServer) -> Aptos {
+    fn create_mock_aptos(server: &MockServer) -> Aptos {
         let url = format!("{}/v1", server.uri());
         let config = AptosConfig::custom(&url).unwrap().without_retry();
         Aptos::new(config).unwrap()
@@ -741,7 +741,7 @@ mod tests {
             .mount(&server)
             .await;
 
-        let aptos = create_mock_aptos(&server).await;
+        let aptos = create_mock_aptos(&server);
         let seq = aptos
             .get_sequence_number(AccountAddress::ONE)
             .await
@@ -763,7 +763,7 @@ mod tests {
             .mount(&server)
             .await;
 
-        let aptos = create_mock_aptos(&server).await;
+        let aptos = create_mock_aptos(&server);
         let balance = aptos.get_balance(AccountAddress::ONE).await.unwrap();
         assert_eq!(balance, 5_000_000_000);
     }
@@ -782,7 +782,7 @@ mod tests {
             .mount(&server)
             .await;
 
-        let aptos = create_mock_aptos(&server).await;
+        let aptos = create_mock_aptos(&server);
         let resources = aptos
             .fullnode()
             .get_account_resources(AccountAddress::ONE)
@@ -811,7 +811,7 @@ mod tests {
             .mount(&server)
             .await;
 
-        let aptos = create_mock_aptos(&server).await;
+        let aptos = create_mock_aptos(&server);
         let info = aptos.ledger_info().await.unwrap();
         assert_eq!(info.version().unwrap(), 12345);
     }
@@ -827,7 +827,7 @@ mod tests {
     #[tokio::test]
     async fn test_fullnode_accessor() {
         let server = MockServer::start().await;
-        let aptos = create_mock_aptos(&server).await;
+        let aptos = create_mock_aptos(&server);
 
         // Can access fullnode client directly
         let fullnode = aptos.fullnode();
@@ -860,7 +860,7 @@ mod tests {
             .mount(&server)
             .await;
 
-        let aptos = create_mock_aptos(&server).await;
+        let aptos = create_mock_aptos(&server);
         let account = crate::account::Ed25519Account::generate();
         let recipient = AccountAddress::from_hex("0x123").unwrap();
         let payload = crate::transaction::EntryFunction::apt_transfer(recipient, 1000).unwrap();
@@ -895,7 +895,7 @@ mod tests {
             .mount(&server)
             .await;
 
-        let aptos = create_mock_aptos(&server).await;
+        let aptos = create_mock_aptos(&server);
         let exists = aptos.account_exists(AccountAddress::ONE).await.unwrap();
         assert!(exists);
     }
@@ -914,7 +914,7 @@ mod tests {
             .mount(&server)
             .await;
 
-        let aptos = create_mock_aptos(&server).await;
+        let aptos = create_mock_aptos(&server);
         let exists = aptos.account_exists(AccountAddress::ONE).await.unwrap();
         assert!(!exists);
     }
@@ -930,7 +930,7 @@ mod tests {
             .mount(&server)
             .await;
 
-        let aptos = create_mock_aptos(&server).await;
+        let aptos = create_mock_aptos(&server);
         let result: Vec<serde_json::Value> = aptos
             .view(
                 "0x1::coin::balance",

@@ -747,7 +747,7 @@ mod tests {
     #[test]
     fn test_retry_config_debug() {
         let config = RetryConfig::default();
-        let debug = format!("{:?}", config);
+        let debug = format!("{config:?}");
         assert!(debug.contains("RetryConfig"));
         assert!(debug.contains("max_retries"));
     }
@@ -794,7 +794,7 @@ mod tests {
         let config = RetryConfig::default();
         let executor = RetryExecutor::new(config.clone());
 
-        let debug = format!("{:?}", executor);
+        let debug = format!("{executor:?}");
         assert!(debug.contains("RetryExecutor"));
     }
 
@@ -929,7 +929,7 @@ mod tests {
     #[test]
     fn test_builder_default_debug() {
         let builder = RetryConfigBuilder::default();
-        let debug = format!("{:?}", builder);
+        let debug = format!("{builder:?}");
         assert!(debug.contains("RetryConfigBuilder"));
     }
 }

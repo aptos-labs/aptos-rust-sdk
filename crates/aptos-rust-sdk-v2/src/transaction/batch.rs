@@ -1225,14 +1225,14 @@ mod tests {
     #[test]
     fn test_batch_builder_debug() {
         let builder = TransactionBatchBuilder::new().sender(AccountAddress::ONE);
-        let debug = format!("{:?}", builder);
+        let debug = format!("{builder:?}");
         assert!(debug.contains("TransactionBatchBuilder"));
     }
 
     #[test]
     fn test_signed_transaction_batch_debug() {
         let batch = SignedTransactionBatch::new(vec![create_dummy_signed_txn()]);
-        let debug = format!("{:?}", batch);
+        let debug = format!("{batch:?}");
         assert!(debug.contains("SignedTransactionBatch"));
     }
 
@@ -1245,7 +1245,7 @@ mod tests {
             pending: 1,
             total_gas_used: 500,
         };
-        let debug = format!("{:?}", summary);
+        let debug = format!("{summary:?}");
         assert!(debug.contains("BatchSummary"));
     }
 
@@ -1257,7 +1257,7 @@ mod tests {
             version: 1,
             gas_used: 100,
         };
-        let debug = format!("{:?}", status);
+        let debug = format!("{status:?}");
         assert!(debug.contains("Confirmed"));
     }
 }

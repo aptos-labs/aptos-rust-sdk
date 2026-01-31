@@ -748,9 +748,9 @@ mod tests {
         assert!(!result.failed());
         assert_eq!(result.vm_status(), "Executed successfully");
         assert_eq!(result.gas_used(), 1500);
-        assert_eq!(result.max_gas_amount(), 200000);
+        assert_eq!(result.max_gas_amount(), 200_000);
         assert_eq!(result.gas_unit_price(), 100);
-        assert_eq!(result.gas_cost(), 150000); // 1500 * 100
+        assert_eq!(result.gas_cost(), 150_000); // 1500 * 100
         assert_eq!(result.hash(), "0xabc123");
         assert!(result.events().is_empty());
         assert!(result.changes().is_empty());

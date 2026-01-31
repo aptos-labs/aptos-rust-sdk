@@ -203,7 +203,7 @@ mod tests {
         assert!(client.is_err());
     }
 
-    async fn create_mock_faucet_client(server: &MockServer) -> FaucetClient {
+    fn create_mock_faucet_client(server: &MockServer) -> FaucetClient {
         let config = AptosConfig::custom(&server.uri())
             .unwrap()
             .with_faucet_url(&server.uri())
@@ -225,7 +225,7 @@ mod tests {
             .mount(&server)
             .await;
 
-        let client = create_mock_faucet_client(&server).await;
+        let client = create_mock_faucet_client(&server);
         let result = client.fund(AccountAddress::ONE, 100_000_000).await.unwrap();
 
         assert_eq!(result.len(), 2);
@@ -247,7 +247,7 @@ mod tests {
             .mount(&server)
             .await;
 
-        let client = create_mock_faucet_client(&server).await;
+        let client = create_mock_faucet_client(&server);
         let result = client.fund(AccountAddress::ONE, 100_000_000).await.unwrap();
 
         assert_eq!(result.len(), 2);
@@ -269,7 +269,7 @@ mod tests {
             .mount(&server)
             .await;
 
-        let client = create_mock_faucet_client(&server).await;
+        let client = create_mock_faucet_client(&server);
         let result = client.fund_default(AccountAddress::ONE).await.unwrap();
 
         assert_eq!(result.len(), 1);
@@ -334,7 +334,7 @@ mod tests {
             .mount(&server)
             .await;
 
-        let client = create_mock_faucet_client(&server).await;
+        let client = create_mock_faucet_client(&server);
         let (account, txn_hashes) = client.create_and_fund(100_000_000).await.unwrap();
 
         assert!(!account.address().is_zero());

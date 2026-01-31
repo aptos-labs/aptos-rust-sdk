@@ -312,9 +312,9 @@ mod tests {
     fn test_script_argument_variants() {
         let u8_arg = ScriptArgument::U8(255);
         let u16_arg = ScriptArgument::U16(65535);
-        let u32_arg = ScriptArgument::U32(4294967295);
-        let u64_arg = ScriptArgument::U64(18446744073709551615);
-        let u128_arg = ScriptArgument::U128(340282366920938463463374607431768211455);
+        let u32_arg = ScriptArgument::U32(4_294_967_295);
+        let u64_arg = ScriptArgument::U64(18_446_744_073_709_551_615);
+        let u128_arg = ScriptArgument::U128(340_282_366_920_938_463_463_374_607_431_768_211_455);
         let bool_arg = ScriptArgument::Bool(true);
         let addr_arg = ScriptArgument::Address(AccountAddress::ONE);
         let bytes_arg = ScriptArgument::U8Vector(vec![1, 2, 3]);

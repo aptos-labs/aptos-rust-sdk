@@ -438,7 +438,7 @@ mod tests {
     #[test]
     fn test_partial_keys() {
         let all_keys: Vec<_> = (0..3).map(|_| Ed25519PrivateKey::generate()).collect();
-        let public_keys: Vec<_> = all_keys.iter().map(|k| k.public_key()).collect();
+        let public_keys: Vec<_> = all_keys.iter().map(Ed25519PrivateKey::public_key).collect();
 
         // Only own keys 0 and 2
         let my_keys = vec![(0u8, all_keys[0].clone()), (2u8, all_keys[2].clone())];
@@ -458,7 +458,7 @@ mod tests {
     #[test]
     fn test_insufficient_keys() {
         let all_keys: Vec<_> = (0..3).map(|_| Ed25519PrivateKey::generate()).collect();
-        let public_keys: Vec<_> = all_keys.iter().map(|k| k.public_key()).collect();
+        let public_keys: Vec<_> = all_keys.iter().map(Ed25519PrivateKey::public_key).collect();
 
         // Only own 1 key but need 2
         let my_keys = vec![(0u8, all_keys[0].clone())];
@@ -489,7 +489,7 @@ mod tests {
     #[test]
     fn test_view_only_account() {
         let keys: Vec<_> = (0..3).map(|_| Ed25519PrivateKey::generate()).collect();
-        let public_keys: Vec<_> = keys.iter().map(|k| k.public_key()).collect();
+        let public_keys: Vec<_> = keys.iter().map(Ed25519PrivateKey::public_key).collect();
 
         let view_only = MultiEd25519Account::view_only(public_keys, 2).unwrap();
 
@@ -502,7 +502,7 @@ mod tests {
     #[test]
     fn test_signature_aggregation() {
         let keys: Vec<_> = (0..3).map(|_| Ed25519PrivateKey::generate()).collect();
-        let public_keys: Vec<_> = keys.iter().map(|k| k.public_key()).collect();
+        let public_keys: Vec<_> = keys.iter().map(Ed25519PrivateKey::public_key).collect();
 
         // Simulate 3 parties each with their own key
         let party0 =
@@ -530,7 +530,7 @@ mod tests {
     #[test]
     fn test_deterministic_address() {
         let keys: Vec<_> = (0..3).map(|_| Ed25519PrivateKey::generate()).collect();
-        let public_keys: Vec<_> = keys.iter().map(|k| k.public_key()).collect();
+        let public_keys: Vec<_> = keys.iter().map(Ed25519PrivateKey::public_key).collect();
 
         let account1 = MultiEd25519Account::new(keys.clone(), 2).unwrap();
         let account2 = MultiEd25519Account::view_only(public_keys, 2).unwrap();
@@ -555,7 +555,7 @@ mod tests {
     #[test]
     fn test_from_keys_index_out_of_bounds() {
         let keys: Vec<_> = (0..3).map(|_| Ed25519PrivateKey::generate()).collect();
-        let public_keys: Vec<_> = keys.iter().map(|k| k.public_key()).collect();
+        let public_keys: Vec<_> = keys.iter().map(Ed25519PrivateKey::public_key).collect();
 
         // Index 10 is out of bounds
         let my_keys = vec![(10u8, keys[0].clone())];
@@ -566,7 +566,7 @@ mod tests {
     #[test]
     fn test_from_keys_mismatched_key() {
         let keys: Vec<_> = (0..3).map(|_| Ed25519PrivateKey::generate()).collect();
-        let public_keys: Vec<_> = keys.iter().map(|k| k.public_key()).collect();
+        let public_keys: Vec<_> = keys.iter().map(Ed25519PrivateKey::public_key).collect();
 
         // Provide wrong private key for index 0
         let different_key = Ed25519PrivateKey::generate();
@@ -578,7 +578,7 @@ mod tests {
     #[test]
     fn test_owned_key_indices() {
         let all_keys: Vec<_> = (0..3).map(|_| Ed25519PrivateKey::generate()).collect();
-        let public_keys: Vec<_> = all_keys.iter().map(|k| k.public_key()).collect();
+        let public_keys: Vec<_> = all_keys.iter().map(Ed25519PrivateKey::public_key).collect();
 
         let my_keys = vec![(0u8, all_keys[0].clone()), (2u8, all_keys[2].clone())];
 
@@ -600,7 +600,7 @@ mod tests {
     #[test]
     fn test_sign_with_indices_missing_key() {
         let all_keys: Vec<_> = (0..3).map(|_| Ed25519PrivateKey::generate()).collect();
-        let public_keys: Vec<_> = all_keys.iter().map(|k| k.public_key()).collect();
+        let public_keys: Vec<_> = all_keys.iter().map(Ed25519PrivateKey::public_key).collect();
 
         // Only own key 0
         let my_keys = vec![(0u8, all_keys[0].clone())];
@@ -614,7 +614,7 @@ mod tests {
     #[test]
     fn test_create_signature_contribution_missing_key() {
         let all_keys: Vec<_> = (0..3).map(|_| Ed25519PrivateKey::generate()).collect();
-        let public_keys: Vec<_> = all_keys.iter().map(|k| k.public_key()).collect();
+        let public_keys: Vec<_> = all_keys.iter().map(Ed25519PrivateKey::public_key).collect();
 
         // Only own key 0
         let my_keys = vec![(0u8, all_keys[0].clone())];
@@ -657,7 +657,7 @@ mod tests {
     fn test_display_format() {
         let keys: Vec<_> = (0..3).map(|_| Ed25519PrivateKey::generate()).collect();
         let account = MultiEd25519Account::new(keys, 2).unwrap();
-        let display = format!("{}", account);
+        let display = format!("{account}");
         assert!(display.contains("MultiEd25519Account"));
         assert!(display.contains("2-of-3"));
     }
@@ -666,7 +666,7 @@ mod tests {
     fn test_debug_format() {
         let keys: Vec<_> = (0..3).map(|_| Ed25519PrivateKey::generate()).collect();
         let account = MultiEd25519Account::new(keys, 2).unwrap();
-        let debug = format!("{:?}", account);
+        let debug = format!("{account:?}");
         assert!(debug.contains("MultiEd25519Account"));
         assert!(debug.contains("address"));
     }

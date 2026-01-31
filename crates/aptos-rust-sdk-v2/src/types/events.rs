@@ -124,9 +124,9 @@ mod tests {
     #[test]
     fn test_event_key_display() {
         let key = EventKey::new(42, AccountAddress::ONE);
-        let display = format!("{}", key);
+        let display = format!("{key}");
         assert!(display.contains("42"));
-        assert!(display.contains(":"));
+        assert!(display.contains(':'));
     }
 
     #[test]

@@ -471,8 +471,8 @@ mod tests {
             required: 3,
             provided: 1,
         };
-        assert!(err.to_string().contains("3"));
-        assert!(err.to_string().contains("1"));
+        assert!(err.to_string().contains('3'));
+        assert!(err.to_string().contains('1'));
     }
 
     #[test]
