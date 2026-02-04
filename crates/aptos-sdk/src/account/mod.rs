@@ -1,5 +1,6 @@
 //! Account management for the Aptos SDK.
 #![allow(clippy::module_inception)] // account::account is intentional naming
+#![allow(rustdoc::broken_intra_doc_links)] // Docs don't use one of the features
 //!
 //! This module provides account types that wrap cryptographic keys
 //! and provide a unified interface for signing transactions.

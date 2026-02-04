@@ -17,7 +17,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-aptos-rust-sdk-v2 = "0.1"
+aptos-sdk = "0.1"
 ```
 
 Basic usage:
@@ -64,7 +64,7 @@ For the smallest possible binary:
 
 ```toml
 [dependencies]
-aptos-rust-sdk-v2 = { version = "0.1", default-features = false, features = ["ed25519"] }
+aptos-sdk = { version = "0.1", default-features = false, features = ["ed25519"] }
 ```
 
 ### Full Build
@@ -73,7 +73,7 @@ For all features:
 
 ```toml
 [dependencies]
-aptos-rust-sdk-v2 = { version = "0.1", features = ["full"] }
+aptos-sdk = { version = "0.1", features = ["full"] }
 ```
 
 ## Examples
@@ -112,32 +112,32 @@ See the [`examples/`](examples/) directory for complete working examples:
 
 ```bash
 # Build with default features
-cargo build -p aptos-rust-sdk-v2
+cargo build -p aptos-sdk
 
 # Build with all features
-cargo build -p aptos-rust-sdk-v2 --all-features
+cargo build -p aptos-sdk --all-features
 
 # Build with specific features only
-cargo build -p aptos-rust-sdk-v2 --features "ed25519,secp256r1,bls"
+cargo build -p aptos-sdk --features "ed25519,secp256r1,bls"
 
 # Check compilation (faster than build)
-cargo check -p aptos-rust-sdk-v2 --all-features
+cargo check -p aptos-sdk --all-features
 
 # Release build (optimized)
-cargo build -p aptos-rust-sdk-v2 --release --all-features
+cargo build -p aptos-sdk --release --all-features
 ```
 
 ### Linting
 
 ```bash
 # Run clippy lints
-cargo clippy -p aptos-rust-sdk-v2 --all-features -- -D warnings
+cargo clippy -p aptos-sdk --all-features -- -D warnings
 
 # Check formatting
-cargo fmt -p aptos-rust-sdk-v2 -- --check
+cargo fmt -p aptos-sdk -- --check
 
 # Format code
-cargo fmt -p aptos-rust-sdk-v2
+cargo fmt -p aptos-sdk
 ```
 
 ### Testing
@@ -146,25 +146,25 @@ cargo fmt -p aptos-rust-sdk-v2
 
 ```bash
 # Run unit tests with default features
-cargo test -p aptos-rust-sdk-v2
+cargo test -p aptos-sdk
 
 # Run tests with all features
-cargo test -p aptos-rust-sdk-v2 --all-features
+cargo test -p aptos-sdk --all-features
 
 # Run tests with specific features
-cargo test -p aptos-rust-sdk-v2 --features "full"
+cargo test -p aptos-sdk --features "full"
 
 # Run a specific test by name
-cargo test -p aptos-rust-sdk-v2 test_name
+cargo test -p aptos-sdk test_name
 
 # Run tests with output visible
-cargo test -p aptos-rust-sdk-v2 -- --nocapture
+cargo test -p aptos-sdk -- --nocapture
 
 # Run doc tests only
-cargo test -p aptos-rust-sdk-v2 --doc
+cargo test -p aptos-sdk --doc
 
 # Run library tests only (no integration tests)
-cargo test -p aptos-rust-sdk-v2 --lib
+cargo test -p aptos-sdk --lib
 ```
 
 #### E2E Tests
@@ -176,7 +176,7 @@ E2E tests require a running Aptos localnet:
 aptos node run-localnet
 
 # Terminal 2: Run E2E tests
-cargo test -p aptos-rust-sdk-v2 --features "e2e" -- --ignored
+cargo test -p aptos-sdk --features "e2e" -- --ignored
 ```
 
 #### Behavioral Tests
@@ -196,10 +196,10 @@ cargo test -- --nocapture
 
 ```bash
 # Unit tests only (default)
-cargo tarpaulin -p aptos-rust-sdk-v2 --features "full" --skip-clean
+cargo tarpaulin -p aptos-sdk --features "full" --skip-clean
 
 # Include E2E tests (requires localnet)
-cargo tarpaulin -p aptos-rust-sdk-v2 --features "full,e2e" --ignored --skip-clean --timeout 300
+cargo tarpaulin -p aptos-sdk --features "full,e2e" --ignored --skip-clean --timeout 300
 
 # Or use the helper script
 ./scripts/coverage.sh        # Unit tests only
@@ -213,18 +213,18 @@ See `tarpaulin.toml` for coverage configuration profiles.
 
 ```bash
 # Generate and open documentation
-cargo doc -p aptos-rust-sdk-v2 --all-features --open
+cargo doc -p aptos-sdk --all-features --open
 
 # Generate docs without opening browser
-cargo doc -p aptos-rust-sdk-v2 --all-features
+cargo doc -p aptos-sdk --all-features
 
 # Include private items in docs
-cargo doc -p aptos-rust-sdk-v2 --all-features --document-private-items
+cargo doc -p aptos-sdk --all-features --document-private-items
 ```
 
 ## Resources
 
-- [API Documentation](https://docs.rs/aptos-rust-sdk-v2)
+- [API Documentation](https://docs.rs/aptos-sdk)
 - [Aptos Developer Documentation](https://aptos.dev)
 
 ## License

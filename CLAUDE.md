@@ -8,8 +8,8 @@ The Aptos Rust SDK is a user-friendly, idiomatic Rust SDK for interacting with t
 
 The project consists of two workspace crates:
 
-- **aptos-rust-sdk-v2**: Main SDK crate with API clients, account management, transaction building, and cryptography
-- **aptos-rust-sdk-v2-macros**: Procedural macros for type-safe contract bindings
+- **aptos-sdk**: Main SDK crate with API clients, account management, transaction building, and cryptography
+- **aptos-sdk-macros**: Procedural macros for type-safe contract bindings
 
 ## Development Commands
 
@@ -17,22 +17,22 @@ The project consists of two workspace crates:
 
 ```bash
 cargo build                                    # Build with default features (ed25519 + secp256k1)
-cargo build -p aptos-rust-sdk-v2 --all-features  # Build with all features
+cargo build -p aptos-sdk --all-features  # Build with all features
 cargo build --release                          # Release build
 ```
 
 ### Testing
 
 ```bash
-cargo test -p aptos-rust-sdk-v2                # Run unit tests
-cargo test -p aptos-rust-sdk-v2 --all-features # Test with all features
-cargo test -p aptos-rust-sdk-v2 --features "e2e" -- --ignored  # E2E tests (requires localnet)
+cargo test -p aptos-sdk                # Run unit tests
+cargo test -p aptos-sdk --all-features # Test with all features
+cargo test -p aptos-sdk --features "e2e" -- --ignored  # E2E tests (requires localnet)
 ```
 
 ### Linting and Formatting
 
 ```bash
-cargo clippy -p aptos-rust-sdk-v2 --all-features -- -D warnings  # Strict linting
+cargo clippy -p aptos-sdk --all-features -- -D warnings  # Strict linting
 cargo fmt                                      # Format code
 cargo fmt -- --check                           # Check formatting
 ```
@@ -40,19 +40,19 @@ cargo fmt -- --check                           # Check formatting
 ### Running Examples
 
 ```bash
-cargo run -p aptos-rust-sdk-v2 --example transfer --features "ed25519,faucet"
-cargo run -p aptos-rust-sdk-v2 --example view_function --features "ed25519"
+cargo run -p aptos-sdk --example transfer --features "ed25519,faucet"
+cargo run -p aptos-sdk --example view_function --features "ed25519"
 ```
 
-Examples are in `crates/aptos-rust-sdk-v2/examples/`.
+Examples are in `crates/aptos-sdk/examples/`.
 
 ## Code Architecture
 
 ### Main Entry Point
 
 The SDK follows a client-centric design with `Aptos` as the main entry point:
-- `Aptos` in `crates/aptos-rust-sdk-v2/src/aptos.rs` - Primary client combining all API capabilities
-- `AptosConfig` in `crates/aptos-rust-sdk-v2/src/config.rs` - Network configuration (mainnet, testnet, devnet, localnet)
+- `Aptos` in `crates/aptos-sdk/src/aptos.rs` - Primary client combining all API capabilities
+- `AptosConfig` in `crates/aptos-sdk/src/config.rs` - Network configuration (mainnet, testnet, devnet, localnet)
 
 ### Module Structure
 
@@ -96,12 +96,12 @@ The SDK follows a client-centric design with `Aptos` as the main entry point:
 
 ### Important Files to Understand
 
-- `crates/aptos-rust-sdk-v2/src/aptos.rs` - Main SDK client combining all capabilities
-- `crates/aptos-rust-sdk-v2/src/config.rs` - Network configuration
-- `crates/aptos-rust-sdk-v2/src/transaction/builder.rs` - Transaction builder
-- `crates/aptos-rust-sdk-v2/src/account/mod.rs` - Account trait and implementations
-- `crates/aptos-rust-sdk-v2/src/crypto/traits.rs` - Core cryptographic traits
-- `crates/aptos-rust-sdk-v2/examples/transfer.rs` - Working example of basic transfer
+- `crates/aptos-sdk/src/aptos.rs` - Main SDK client combining all capabilities
+- `crates/aptos-sdk/src/config.rs` - Network configuration
+- `crates/aptos-sdk/src/transaction/builder.rs` - Transaction builder
+- `crates/aptos-sdk/src/account/mod.rs` - Account trait and implementations
+- `crates/aptos-sdk/src/crypto/traits.rs` - Core cryptographic traits
+- `crates/aptos-sdk/examples/transfer.rs` - Working example of basic transfer
 
 ## Rust Toolchain
 

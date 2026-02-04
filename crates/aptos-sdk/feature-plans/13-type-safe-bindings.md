@@ -152,7 +152,7 @@ async fn main() -> anyhow::Result<()> {
 ### Crate Structure
 
 ```
-crates/aptos-rust-sdk-v2-macros/
+crates/aptos-sdk-macros/
 ├── Cargo.toml
 ├── src/
 │   ├── lib.rs       # Macro definitions
@@ -167,7 +167,7 @@ Enable with the `macros` feature:
 
 ```toml
 [dependencies]
-aptos-rust-sdk-v2 = { version = "0.1", features = ["macros"] }
+aptos-sdk = { version = "0.1", features = ["macros"] }
 ```
 
 ## Benefits

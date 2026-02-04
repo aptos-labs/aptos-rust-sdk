@@ -63,15 +63,15 @@ jobs:
         uses: Swatinem/rust-cache@v2
       
       - name: Verify crate can be packaged
-        run: cargo package -p aptos-rust-sdk-v2 --allow-dirty
+        run: cargo package -p aptos-sdk --allow-dirty
       
-      - name: Publish aptos-rust-sdk-v2 (dry run)
+      - name: Publish aptos-sdk (dry run)
         if: github.event.inputs.dry_run == 'true'
-        run: cargo publish -p aptos-rust-sdk-v2 --dry-run
+        run: cargo publish -p aptos-sdk --dry-run
       
-      - name: Publish aptos-rust-sdk-v2
+      - name: Publish aptos-sdk
         if: github.event.inputs.dry_run != 'true' || github.event_name == 'push'
-        run: cargo publish -p aptos-rust-sdk-v2
+        run: cargo publish -p aptos-sdk
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 

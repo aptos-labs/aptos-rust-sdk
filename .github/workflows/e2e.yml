@@ -62,7 +62,7 @@ jobs:
           done
       
       - name: Run E2E tests
-        run: cargo test -p aptos-rust-sdk-v2 --features "e2e,full"
+        run: cargo test -p aptos-sdk --features "e2e,full"
         env:
           APTOS_LOCAL_FAUCET_URL: http://127.0.0.1:8081
           APTOS_LOCAL_NODE_URL: http://127.0.0.1:8080/v1

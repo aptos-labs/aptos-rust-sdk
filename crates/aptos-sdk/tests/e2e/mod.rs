@@ -16,14 +16,14 @@
 //! aptos node run-localnet --with-faucet
 //!
 //! # In another terminal, run tests:
-//! cargo test -p aptos-rust-sdk-v2 --features "e2e,full"
+//! cargo test -p aptos-sdk --features "e2e,full"
 //! ```
 //!
 //! ### Option 3: Using custom node URLs
 //! ```bash
 //! export APTOS_LOCAL_NODE_URL=http://127.0.0.1:8080/v1
 //! export APTOS_LOCAL_FAUCET_URL=http://127.0.0.1:8081
-//! cargo test -p aptos-rust-sdk-v2 --features "e2e,full"
+//! cargo test -p aptos-sdk --features "e2e,full"
 //! ```
 //!
 //! ## Test Categories

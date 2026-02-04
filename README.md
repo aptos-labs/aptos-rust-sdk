@@ -13,8 +13,8 @@ A user-friendly, idiomatic Rust SDK for the Aptos blockchain with feature parity
 
 ## Workspace Layout
 
-- `crates/aptos-rust-sdk-v2` – Main SDK crate with async clients, account management, transaction building, and crypto
-- `crates/aptos-rust-sdk-v2-macros` – Procedural macros for type-safe contract bindings
+- `crates/aptos-sdk` – Main SDK crate with async clients, account management, transaction building, and crypto
+- `crates/aptos-sdk-macros` – Procedural macros for type-safe contract bindings
 
 ## Prerequisites
 
@@ -27,7 +27,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-aptos-rust-sdk-v2 = { git = "https://github.com/aptos-labs/aptos-rust-sdk", package = "aptos-rust-sdk-v2" }
+aptos-sdk = { git = "https://github.com/aptos-labs/aptos-rust-sdk", package = "aptos-sdk" }
 ```
 
 Basic usage:
@@ -74,7 +74,7 @@ For the smallest possible binary:
 
 ```toml
 [dependencies]
-aptos-rust-sdk-v2 = { git = "https://github.com/aptos-labs/aptos-rust-sdk", package = "aptos-rust-sdk-v2", default-features = false, features = ["ed25519"] }
+aptos-sdk = { git = "https://github.com/aptos-labs/aptos-rust-sdk", package = "aptos-sdk", default-features = false, features = ["ed25519"] }
 ```
 
 ### Full Build
@@ -83,38 +83,38 @@ For all features:
 
 ```toml
 [dependencies]
-aptos-rust-sdk-v2 = { git = "https://github.com/aptos-labs/aptos-rust-sdk", package = "aptos-rust-sdk-v2", features = ["full"] }
+aptos-sdk = { git = "https://github.com/aptos-labs/aptos-rust-sdk", package = "aptos-sdk", features = ["full"] }
 ```
 
 ## Examples
 
-See the [`crates/aptos-rust-sdk-v2/examples/`](crates/aptos-rust-sdk-v2/examples/) directory for complete working examples:
+See the [`crates/aptos-sdk/examples/`](crates/aptos-sdk/examples/) directory for complete working examples:
 
 ### Basic Operations
-- [`transfer.rs`](crates/aptos-rust-sdk-v2/examples/transfer.rs) - Basic APT transfer
-- [`view_function.rs`](crates/aptos-rust-sdk-v2/examples/view_function.rs) - Read-only view function calls
-- [`transaction_data.rs`](crates/aptos-rust-sdk-v2/examples/transaction_data.rs) - Working with transaction data
+- [`transfer.rs`](crates/aptos-sdk/examples/transfer.rs) - Basic APT transfer
+- [`view_function.rs`](crates/aptos-sdk/examples/view_function.rs) - Read-only view function calls
+- [`transaction_data.rs`](crates/aptos-sdk/examples/transaction_data.rs) - Working with transaction data
 
 ### Advanced Transactions
-- [`entry_function.rs`](crates/aptos-rust-sdk-v2/examples/entry_function.rs) - Entry function transaction building
-- [`script_transaction.rs`](crates/aptos-rust-sdk-v2/examples/script_transaction.rs) - Script-based transactions
-- [`sponsored_transaction.rs`](crates/aptos-rust-sdk-v2/examples/sponsored_transaction.rs) - Fee payer (sponsored) transactions
-- [`multi_agent.rs`](crates/aptos-rust-sdk-v2/examples/multi_agent.rs) - Multi-signer transactions
-- [`transaction_waiting.rs`](crates/aptos-rust-sdk-v2/examples/transaction_waiting.rs) - Transaction waiting strategies
-- [`advanced_transactions.rs`](crates/aptos-rust-sdk-v2/examples/advanced_transactions.rs) - Complex transaction combinations
+- [`entry_function.rs`](crates/aptos-sdk/examples/entry_function.rs) - Entry function transaction building
+- [`script_transaction.rs`](crates/aptos-sdk/examples/script_transaction.rs) - Script-based transactions
+- [`sponsored_transaction.rs`](crates/aptos-sdk/examples/sponsored_transaction.rs) - Fee payer (sponsored) transactions
+- [`multi_agent.rs`](crates/aptos-sdk/examples/multi_agent.rs) - Multi-signer transactions
+- [`transaction_waiting.rs`](crates/aptos-sdk/examples/transaction_waiting.rs) - Transaction waiting strategies
+- [`advanced_transactions.rs`](crates/aptos-sdk/examples/advanced_transactions.rs) - Complex transaction combinations
 
 ### Account Types
-- [`multi_key_account.rs`](crates/aptos-rust-sdk-v2/examples/multi_key_account.rs) - Multi-key (mixed signature) accounts
-- [`multi_sig_account.rs`](crates/aptos-rust-sdk-v2/examples/multi_sig_account.rs) - MultiEd25519 threshold accounts
-- [`multisig_v2.rs`](crates/aptos-rust-sdk-v2/examples/multisig_v2.rs) - On-chain multisig (governance) accounts
+- [`multi_key_account.rs`](crates/aptos-sdk/examples/multi_key_account.rs) - Multi-key (mixed signature) accounts
+- [`multi_sig_account.rs`](crates/aptos-sdk/examples/multi_sig_account.rs) - MultiEd25519 threshold accounts
+- [`multisig_v2.rs`](crates/aptos-sdk/examples/multisig_v2.rs) - On-chain multisig (governance) accounts
 
 ### Smart Contracts
-- [`deploy_module.rs`](crates/aptos-rust-sdk-v2/examples/deploy_module.rs) - Deploy a Move module
-- [`call_contract.rs`](crates/aptos-rust-sdk-v2/examples/call_contract.rs) - Call contract entry functions
-- [`read_contract_state.rs`](crates/aptos-rust-sdk-v2/examples/read_contract_state.rs) - Read contract state
-- [`nft_operations.rs`](crates/aptos-rust-sdk-v2/examples/nft_operations.rs) - NFT/Digital Asset interactions
-- [`codegen.rs`](crates/aptos-rust-sdk-v2/examples/codegen.rs) - Contract binding generation
-- [`contract_bindings.rs`](crates/aptos-rust-sdk-v2/examples/contract_bindings.rs) - Using generated type-safe bindings
+- [`deploy_module.rs`](crates/aptos-sdk/examples/deploy_module.rs) - Deploy a Move module
+- [`call_contract.rs`](crates/aptos-sdk/examples/call_contract.rs) - Call contract entry functions
+- [`read_contract_state.rs`](crates/aptos-sdk/examples/read_contract_state.rs) - Read contract state
+- [`nft_operations.rs`](crates/aptos-sdk/examples/nft_operations.rs) - NFT/Digital Asset interactions
+- [`codegen.rs`](crates/aptos-sdk/examples/codegen.rs) - Contract binding generation
+- [`contract_bindings.rs`](crates/aptos-sdk/examples/contract_bindings.rs) - Using generated type-safe bindings
 
 ## Development
 
@@ -122,34 +122,34 @@ See the [`crates/aptos-rust-sdk-v2/examples/`](crates/aptos-rust-sdk-v2/examples
 
 ```bash
 # Build with default features (ed25519 + secp256k1)
-cargo build -p aptos-rust-sdk-v2
+cargo build -p aptos-sdk
 
 # Build with all features
-cargo build -p aptos-rust-sdk-v2 --all-features
+cargo build -p aptos-sdk --all-features
 
 # Release build
-cargo build -p aptos-rust-sdk-v2 --release
+cargo build -p aptos-sdk --release
 ```
 
 ### Testing
 
 ```bash
 # Run unit tests
-cargo test -p aptos-rust-sdk-v2
+cargo test -p aptos-sdk
 
 # Run tests with all features
-cargo test -p aptos-rust-sdk-v2 --all-features
+cargo test -p aptos-sdk --all-features
 
 # Run E2E tests (requires localnet)
 aptos node run-localnet --with-faucet
-cargo test -p aptos-rust-sdk-v2 --features "e2e" -- --ignored
+cargo test -p aptos-sdk --features "e2e" -- --ignored
 ```
 
 ### Linting and Formatting
 
 ```bash
 # Run clippy
-cargo clippy -p aptos-rust-sdk-v2 --all-features -- -D warnings
+cargo clippy -p aptos-sdk --all-features -- -D warnings
 
 # Format code
 cargo fmt

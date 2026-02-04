@@ -2,8 +2,8 @@
 resolver = "2"
 
 members = [
-    "crates/aptos-rust-sdk-v2",
-    "crates/aptos-rust-sdk-v2-macros",
+    "crates/aptos-sdk",
+    "crates/aptos-sdk-macros",
 ]
 
 # NOTE: default-members is the complete list of binaries that form the "production Aptos codebase". These members should
@@ -12,7 +12,7 @@ members = [
 #
 # For more, see the "Conditional compilation for tests" section in documentation/coding_guidelines.md.
 default-members = [
-    "crates/aptos-rust-sdk-v2",
+    "crates/aptos-sdk",
 ]
 
 # All workspace members should inherit these keys
@@ -29,8 +29,8 @@ rust-version = "1.90.0"
 [workspace.dependencies]
 # Internal crate dependencies.
 # Please do not add any test features here: they should be declared by the individual crate.
-aptos-rust-sdk-v2 = { path = "crates/aptos-rust-sdk-v2" }
-aptos-rust-sdk-v2-macros = { path = "crates/aptos-rust-sdk-v2-macros" }
+aptos-sdk = { path = "crates/aptos-sdk" }
+aptos-sdk-macros = { path = "crates/aptos-sdk-macros" }
 
 # External crate dependencies.
 # Please do not add any test features here: they should be declared by the individual crate.

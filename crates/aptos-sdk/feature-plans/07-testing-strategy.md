@@ -220,8 +220,8 @@ test:
     # Feature combination tests
     - name: Test feature combinations
       run: |
-        cargo test -p aptos-rust-sdk-v2 --no-default-features --features ed25519
-        cargo test -p aptos-rust-sdk-v2 --features full
+        cargo test -p aptos-sdk --no-default-features --features ed25519
+        cargo test -p aptos-sdk --features full
 
 e2e-tests:
   runs-on: ubuntu-latest

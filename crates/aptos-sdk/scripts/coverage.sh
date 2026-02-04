@@ -1,5 +1,5 @@
 #!/bin/bash
-# Coverage helper script for aptos-rust-sdk-v2
+# Coverage helper script for aptos-sdk
 #
 # Usage:
 #   ./scripts/coverage.sh          # Unit tests only (default)
@@ -21,25 +21,25 @@ cd "$SDK_DIR"
 case "$PROFILE" in
     "default")
         echo "Running unit tests with default features..."
-        cargo tarpaulin -p aptos-rust-sdk-v2 --features "ed25519,secp256k1" --skip-clean --out Stdout
+        cargo tarpaulin -p aptos-sdk --features "ed25519,secp256k1" --skip-clean --out Stdout
         ;;
     "full")
         echo "Running unit tests with all features..."
-        cargo tarpaulin -p aptos-rust-sdk-v2 --features "full" --skip-clean --out Stdout
+        cargo tarpaulin -p aptos-sdk --features "full" --skip-clean --out Stdout
         ;;
     "e2e")
         echo "Running unit tests + E2E tests (ensure localnet is running)..."
         echo "To start localnet: aptos node run-localnet"
-        cargo tarpaulin -p aptos-rust-sdk-v2 --features "full,e2e" --ignored --skip-clean --timeout 300 --out Stdout
+        cargo tarpaulin -p aptos-sdk --features "full,e2e" --ignored --skip-clean --timeout 300 --out Stdout
         ;;
     "all")
         echo "Running all tests including E2E (ensure localnet is running)..."
-        cargo tarpaulin -p aptos-rust-sdk-v2 --features "full,e2e" --ignored --skip-clean --timeout 300 --out Stdout
+        cargo tarpaulin -p aptos-sdk --features "full,e2e" --ignored --skip-clean --timeout 300 --out Stdout
         ;;
     "ci")
         echo "Running CI coverage (unit tests, XML + HTML output)..."
         mkdir -p target/coverage
-        cargo tarpaulin -p aptos-rust-sdk-v2 --features "full" --skip-clean --out Xml --out Html --output-dir target/coverage
+        cargo tarpaulin -p aptos-sdk --features "full" --skip-clean --out Xml --out Html --output-dir target/coverage
         echo "Coverage report written to target/coverage/"
         ;;
     *)

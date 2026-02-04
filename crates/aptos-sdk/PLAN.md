@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document outlines the comprehensive plan for building `aptos-rust-sdk-v2`, a user-friendly, idiomatic Rust SDK that provides feature parity with the `@aptos-labs/ts-sdk` TypeScript SDK.
+This document outlines the comprehensive plan for building `aptos-sdk`, a user-friendly, idiomatic Rust SDK that provides feature parity with the `@aptos-labs/ts-sdk` TypeScript SDK.
 
 ### Goals
 
@@ -18,7 +18,7 @@ This document outlines the comprehensive plan for building `aptos-rust-sdk-v2`, 
 ## Phase 1: Project Foundation ✅
 
 ### 1.1 Project Structure
-- [x] Create workspace member `crates/aptos-rust-sdk-v2`
+- [x] Create workspace member `crates/aptos-sdk`
 - [x] Setup `Cargo.toml` with workspace dependencies
 - [x] Define feature flags for optional functionality
 - [x] Create module structure

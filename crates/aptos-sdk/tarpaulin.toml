@@ -1,16 +1,16 @@
-# Tarpaulin coverage configuration for aptos-rust-sdk-v2
+# Tarpaulin coverage configuration for aptos-sdk
 #
 # Run unit tests only (default):
-#   cargo tarpaulin -p aptos-rust-sdk-v2
+#   cargo tarpaulin -p aptos-sdk
 #
 # Run unit tests with all features:
-#   cargo tarpaulin -p aptos-rust-sdk-v2 --profile full
+#   cargo tarpaulin -p aptos-sdk --profile full
 #
 # Run with E2E tests (requires localnet running):
-#   cargo tarpaulin -p aptos-rust-sdk-v2 --profile e2e
+#   cargo tarpaulin -p aptos-sdk --profile e2e
 #
 # Run all tests including E2E:
-#   cargo tarpaulin -p aptos-rust-sdk-v2 --profile all
+#   cargo tarpaulin -p aptos-sdk --profile all
 
 # Default profile - unit tests with default features
 [default]
@@ -27,7 +27,7 @@ verbose = false
 output-dir = "target/coverage"
 
 # E2E profile - includes E2E tests (requires running localnet)
-# Run with: cargo tarpaulin -p aptos-rust-sdk-v2 --profile e2e
+# Run with: cargo tarpaulin -p aptos-sdk --profile e2e
 [e2e]
 features = "full,e2e"
 run-types = ["Tests", "Doctests"]

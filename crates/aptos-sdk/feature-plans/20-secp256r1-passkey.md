@@ -163,7 +163,7 @@ The Secp256r1 support is behind the `secp256r1` feature flag:
 
 ```toml
 [dependencies]
-aptos-rust-sdk-v2 = { version = "0.1", features = ["secp256r1"] }
+aptos-sdk = { version = "0.1", features = ["secp256r1"] }
 ```
 
 ## Key Differences from Other Curves

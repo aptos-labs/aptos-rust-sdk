@@ -1,4 +1,4 @@
-# aptos-rust-sdk-v2-macros
+# aptos-sdk-macros
 
 Procedural macros for generating type-safe Aptos contract bindings at compile time.
 

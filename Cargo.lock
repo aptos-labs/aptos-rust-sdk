@@ -78,12 +78,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "aptos-rust-sdk-v2"
-version = "0.1.0"
+name = "aptos-sdk"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "aptos-bcs",
- "aptos-rust-sdk-v2-macros",
+ "aptos-sdk-macros",
  "arbitrary",
  "async-trait",
  "bip39",
@@ -119,10 +119,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "aptos-rust-sdk-v2-macros"
+name = "aptos-sdk-macros"
 version = "0.1.0"
 dependencies = [
- "aptos-rust-sdk-v2",
+ "aptos-sdk",
  "proc-macro2",
  "quote",
  "serde",

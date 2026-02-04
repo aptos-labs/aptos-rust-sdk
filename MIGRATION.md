@@ -679,5 +679,5 @@ aptos.transfer_apt(&account, recipient, amount).await?;
 ## Getting Help
 
 - [SDK Documentation](https://docs.rs/aptos-sdk)
-- [Examples](./crates/aptos-rust-sdk-v2/examples/)
+- [Examples](./crates/aptos-sdk/examples/)
 - [GitHub Issues](https://github.com/aptos-labs/aptos-rust-sdk/issues)

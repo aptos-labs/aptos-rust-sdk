@@ -42,13 +42,13 @@ jobs:
         uses: Swatinem/rust-cache@v2
       
       - name: Run Clippy (default features)
-        run: cargo clippy -p aptos-rust-sdk-v2 --all-targets -- -D warnings
+        run: cargo clippy -p aptos-sdk --all-targets -- -D warnings
       
       - name: Run Clippy (all features)
-        run: cargo clippy -p aptos-rust-sdk-v2 --all-targets --all-features -- -D warnings
+        run: cargo clippy -p aptos-sdk --all-targets --all-features -- -D warnings
       
       - name: Run Clippy (no default features)
-        run: cargo clippy -p aptos-rust-sdk-v2 --no-default-features -- -D warnings
+        run: cargo clippy -p aptos-sdk --no-default-features -- -D warnings
 
   test:
     name: Test
@@ -70,13 +70,13 @@ jobs:
         uses: Swatinem/rust-cache@v2
       
       - name: Build
-        run: cargo build -p aptos-rust-sdk-v2 --all-targets
+        run: cargo build -p aptos-sdk --all-targets
       
       - name: Run tests
-        run: cargo test -p aptos-rust-sdk-v2 --all-targets
+        run: cargo test -p aptos-sdk --all-targets
       
       - name: Run tests (all features)
-        run: cargo test -p aptos-rust-sdk-v2 --all-targets --all-features
+        run: cargo test -p aptos-sdk --all-targets --all-features
 
   test-features:
     name: Test Feature Combinations
@@ -93,25 +93,25 @@ jobs:
         uses: Swatinem/rust-cache@v2
       
       - name: Test with only ed25519
-        run: cargo test -p aptos-rust-sdk-v2 --no-default-features --features ed25519
+        run: cargo test -p aptos-sdk --no-default-features --features ed25519
       
       - name: Test with only secp256k1
-        run: cargo test -p aptos-rust-sdk-v2 --no-default-features --features secp256k1
+        run: cargo test -p aptos-sdk --no-default-features --features secp256k1
       
       - name: Test with secp256r1
-        run: cargo test -p aptos-rust-sdk-v2 --features secp256r1
+        run: cargo test -p aptos-sdk --features secp256r1
       
       - name: Test with bls
-        run: cargo test -p aptos-rust-sdk-v2 --features bls
+        run: cargo test -p aptos-sdk --features bls
       
       - name: Test with faucet
-        run: cargo test -p aptos-rust-sdk-v2 --features faucet
+        run: cargo test -p aptos-sdk --features faucet
       
       - name: Test with indexer
-        run: cargo test -p aptos-rust-sdk-v2 --features indexer
+        run: cargo test -p aptos-sdk --features indexer
       
       - name: Test with full features
-        run: cargo test -p aptos-rust-sdk-v2 --features full
+        run: cargo test -p aptos-sdk --features full
 
   # Spec tests (behavioral tests from specifications)
   # TODO: Re-enable once specification tests are stabilized
@@ -148,12 +148,12 @@ jobs:
       - name: Check documentation
         env:
           RUSTDOCFLAGS: -D warnings
-        run: cargo doc -p aptos-rust-sdk-v2 --no-deps --all-features
+        run: cargo doc -p aptos-sdk --no-deps --all-features
       
       - name: Check examples documentation
         env:
           RUSTDOCFLAGS: -D warnings
-        run: cargo doc -p aptos-rust-sdk-v2 --all-features --document-private-items
+        run: cargo doc -p aptos-sdk --all-features --document-private-items
 
   # Deploy docs to GitHub Pages on main branch
   deploy-docs:
@@ -182,7 +182,7 @@ jobs:
       - name: Build documentation
         env:
           RUSTDOCFLAGS: --cfg docsrs
-        run: cargo doc -p aptos-rust-sdk-v2 --no-deps --all-features
+        run: cargo doc -p aptos-sdk --no-deps --all-features
       
       - name: Add redirect to main crate
         run: |
@@ -215,7 +215,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
       
       - name: Check MSRV
-        run: cargo check -p aptos-rust-sdk-v2
+        run: cargo check -p aptos-sdk
 
   security-audit:
     name: Security Audit

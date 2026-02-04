@@ -43,7 +43,7 @@ e2e = ["ed25519", "secp256k1", "faucet"]
 cli = ["dep:clap"]
 
 # Proc macros for contract bindings
-macros = ["dep:aptos-rust-sdk-v2-macros"]
+macros = ["dep:aptos-sdk-macros"]
 
 [dependencies]
 # Core dependencies
@@ -100,7 +100,7 @@ proptest-derive = { workspace = true, optional = true }
 clap = { version = "4.5", features = ["derive"], optional = true }
 
 # Proc macro for contract bindings
-aptos-rust-sdk-v2-macros = { workspace = true, optional = true }
+aptos-sdk-macros = { workspace = true, optional = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full", "test-util"] }
