@@ -40,7 +40,7 @@ async fn main() -> anyhow::Result<()> {
     println!(
         r#"
     use std::fs;
-    use aptos_rust_sdk_v2::transaction::{{EntryFunction, TransactionBuilder}};
+    use aptos_rust_sdk_v2::transaction::{EntryFunction, TransactionBuilder};
     use aptos_rust_sdk_v2::types::MoveModuleId;
     
     // Read compiled module bytecode

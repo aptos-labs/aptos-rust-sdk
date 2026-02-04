@@ -105,7 +105,7 @@ async fn main() -> anyhow::Result<()> {
 
     // 9. Verify recipient received funds
     tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-    let recipient_balance = aptos.get_balance(recipient.address()).await.unwrap_or(0);
+    let recipient_balance = aptos.get_balance(recipient.address()).await?;
     println!("\nRecipient balance: {} octas", recipient_balance);
 
     // 10. Demonstrate distributed signing scenario
