@@ -13,7 +13,7 @@
 //! # Example
 //!
 //! ```rust,ignore
-//! use aptos_rust_sdk_v2::transaction::batch::TransactionBatch;
+//! use aptos_sdk::transaction::batch::TransactionBatch;
 //!
 //! let batch = TransactionBatch::new(&aptos, &sender)
 //!     .add(payload1)

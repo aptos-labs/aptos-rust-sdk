@@ -8,7 +8,7 @@
 //!
 //! Run with: `cargo run --example entry_function --features "ed25519,faucet"`
 
-use aptos_rust_sdk_v2::{
+use aptos_sdk::{
     Aptos, AptosConfig,
     account::Ed25519Account,
     transaction::{
@@ -166,7 +166,7 @@ async fn main() -> anyhow::Result<()> {
     );
 
     println!("\nAvailable type constants:");
-    println!("  aptos_rust_sdk_v2::transaction::types::APT_COIN = \"0x1::aptos_coin::AptosCoin\"");
+    println!("  aptos_sdk::transaction::types::APT_COIN = \"0x1::aptos_coin::AptosCoin\"");
 
     // Using constants
     let payload6 = InputEntryFunctionData::new(functions::APT_TRANSFER)

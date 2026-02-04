@@ -5,7 +5,7 @@
 
 #[cfg(feature = "ed25519")]
 mod crypto_tests {
-    use aptos_rust_sdk_v2::crypto::Ed25519PrivateKey;
+    use aptos_sdk::crypto::Ed25519PrivateKey;
 
     #[test]
     fn test_sign_verify_roundtrip() {
@@ -80,7 +80,7 @@ mod crypto_tests {
 
 #[cfg(all(feature = "ed25519", feature = "secp256k1"))]
 mod multi_scheme_crypto_tests {
-    use aptos_rust_sdk_v2::crypto::{Ed25519PrivateKey, Secp256k1PrivateKey};
+    use aptos_sdk::crypto::{Ed25519PrivateKey, Secp256k1PrivateKey};
 
     #[test]
     fn test_ed25519_and_secp256k1_produce_different_signatures() {
@@ -107,8 +107,7 @@ mod multi_scheme_crypto_tests {
 
         // This should fail because the signature format doesn't match
         let ed_sig_bytes = ed_sig.to_bytes();
-        let secp_sig_result =
-            aptos_rust_sdk_v2::crypto::Secp256k1Signature::from_bytes(&ed_sig_bytes);
+        let secp_sig_result = aptos_sdk::crypto::Secp256k1Signature::from_bytes(&ed_sig_bytes);
         assert!(
             secp_sig_result.is_err()
                 || secp_pub.verify(message, &secp_sig_result.unwrap()).is_err()
@@ -119,8 +118,8 @@ mod multi_scheme_crypto_tests {
 #[cfg(feature = "ed25519")]
 mod account_tests {
     #[cfg(feature = "mnemonic")]
-    use aptos_rust_sdk_v2::account::Mnemonic;
-    use aptos_rust_sdk_v2::account::{Account, Ed25519Account};
+    use aptos_sdk::account::Mnemonic;
+    use aptos_sdk::account::{Account, Ed25519Account};
 
     #[test]
     #[cfg(feature = "mnemonic")]
@@ -209,8 +208,8 @@ mod account_tests {
 
 #[cfg(feature = "ed25519")]
 mod multi_ed25519_tests {
-    use aptos_rust_sdk_v2::account::MultiEd25519Account;
-    use aptos_rust_sdk_v2::crypto::Ed25519PrivateKey;
+    use aptos_sdk::account::MultiEd25519Account;
+    use aptos_sdk::crypto::Ed25519PrivateKey;
 
     #[test]
     fn test_multi_ed25519_2_of_3() {
@@ -280,8 +279,8 @@ mod multi_ed25519_tests {
 
 #[cfg(all(feature = "ed25519", feature = "secp256k1"))]
 mod multi_key_tests {
-    use aptos_rust_sdk_v2::account::{Account, AnyPrivateKey, MultiKeyAccount};
-    use aptos_rust_sdk_v2::crypto::{AnyPublicKey, Ed25519PrivateKey, Secp256k1PrivateKey};
+    use aptos_sdk::account::{Account, AnyPrivateKey, MultiKeyAccount};
+    use aptos_sdk::crypto::{AnyPublicKey, Ed25519PrivateKey, Secp256k1PrivateKey};
 
     #[test]
     fn test_multi_key_mixed_types_2_of_3() {
@@ -401,8 +400,8 @@ mod multi_key_tests {
 }
 
 mod transaction_tests {
-    use aptos_rust_sdk_v2::transaction::{EntryFunction, TransactionBuilder, TransactionPayload};
-    use aptos_rust_sdk_v2::types::{AccountAddress, ChainId};
+    use aptos_sdk::transaction::{EntryFunction, TransactionBuilder, TransactionPayload};
+    use aptos_sdk::types::{AccountAddress, ChainId};
 
     #[test]
     fn test_transaction_builder_requires_all_fields() {
@@ -508,11 +507,11 @@ mod transaction_tests {
 
 #[cfg(feature = "ed25519")]
 mod signing_flow_tests {
-    use aptos_rust_sdk_v2::account::Ed25519Account;
-    use aptos_rust_sdk_v2::transaction::{
+    use aptos_sdk::account::Ed25519Account;
+    use aptos_sdk::transaction::{
         EntryFunction, TransactionBuilder, TransactionPayload, builder::sign_transaction,
     };
-    use aptos_rust_sdk_v2::types::{AccountAddress, ChainId};
+    use aptos_sdk::types::{AccountAddress, ChainId};
 
     #[test]
     fn test_sign_transaction_flow() {
@@ -537,7 +536,7 @@ mod signing_flow_tests {
         // Should have an authenticator
         // The authenticator type depends on the account type
         match &signed_txn.authenticator {
-            aptos_rust_sdk_v2::transaction::TransactionAuthenticator::Ed25519 {
+            aptos_sdk::transaction::TransactionAuthenticator::Ed25519 {
                 public_key,
                 signature,
             } => {
@@ -570,13 +569,11 @@ mod signing_flow_tests {
         // Same transaction + same account = same signature
         match (&signed1.authenticator, &signed2.authenticator) {
             (
-                aptos_rust_sdk_v2::transaction::TransactionAuthenticator::Ed25519 {
-                    signature: sig1,
-                    ..
+                aptos_sdk::transaction::TransactionAuthenticator::Ed25519 {
+                    signature: sig1, ..
                 },
-                aptos_rust_sdk_v2::transaction::TransactionAuthenticator::Ed25519 {
-                    signature: sig2,
-                    ..
+                aptos_sdk::transaction::TransactionAuthenticator::Ed25519 {
+                    signature: sig2, ..
                 },
             ) => {
                 assert_eq!(sig1, sig2);
@@ -587,7 +584,7 @@ mod signing_flow_tests {
 }
 
 mod types_tests {
-    use aptos_rust_sdk_v2::types::{AccountAddress, ChainId, HashValue, TypeTag};
+    use aptos_sdk::types::{AccountAddress, ChainId, HashValue, TypeTag};
 
     #[test]
     fn test_address_parsing() {
@@ -673,7 +670,7 @@ mod types_tests {
 }
 
 mod error_tests {
-    use aptos_rust_sdk_v2::error::AptosError;
+    use aptos_sdk::error::AptosError;
 
     #[test]
     fn test_error_is_not_found() {
@@ -704,7 +701,7 @@ mod error_tests {
 }
 
 mod bcs_serialization_tests {
-    use aptos_rust_sdk_v2::types::{AccountAddress, ChainId};
+    use aptos_sdk::types::{AccountAddress, ChainId};
 
     #[test]
     fn test_address_serialization() {
@@ -742,11 +739,11 @@ mod bcs_serialization_tests {
 
 #[cfg(feature = "ed25519")]
 mod transaction_bcs_tests {
-    use aptos_rust_sdk_v2::account::Ed25519Account;
-    use aptos_rust_sdk_v2::transaction::{
+    use aptos_sdk::account::Ed25519Account;
+    use aptos_sdk::transaction::{
         EntryFunction, TransactionBuilder, TransactionPayload, builder::sign_transaction,
     };
-    use aptos_rust_sdk_v2::types::{AccountAddress, ChainId};
+    use aptos_sdk::types::{AccountAddress, ChainId};
 
     #[test]
     fn test_raw_transaction_fields() {
@@ -816,8 +813,8 @@ mod transaction_bcs_tests {
 /// validated against aptos-core implementations.
 #[cfg(all(feature = "ed25519", feature = "secp256k1", feature = "secp256r1"))]
 mod auth_key_tests {
-    use aptos_rust_sdk_v2::account::{Account, Ed25519Account, Ed25519SingleKeyAccount};
-    use aptos_rust_sdk_v2::crypto::{
+    use aptos_sdk::account::{Account, Ed25519Account, Ed25519SingleKeyAccount};
+    use aptos_sdk::crypto::{
         ED25519_SCHEME, Ed25519PrivateKey, SINGLE_KEY_SCHEME, Secp256k1PrivateKey,
         Secp256r1PrivateKey, derive_authentication_key,
     };
@@ -976,7 +973,7 @@ mod auth_key_tests {
     /// Test that scheme bytes are correct
     #[test]
     fn test_scheme_byte_values() {
-        use aptos_rust_sdk_v2::crypto::{KEYLESS_SCHEME, MULTI_ED25519_SCHEME, MULTI_KEY_SCHEME};
+        use aptos_sdk::crypto::{KEYLESS_SCHEME, MULTI_ED25519_SCHEME, MULTI_KEY_SCHEME};
 
         assert_eq!(ED25519_SCHEME, 0, "Ed25519 scheme should be 0");
         assert_eq!(MULTI_ED25519_SCHEME, 1, "MultiEd25519 scheme should be 1");

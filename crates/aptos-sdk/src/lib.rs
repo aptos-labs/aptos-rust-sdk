@@ -9,8 +9,8 @@
 //! ## Quick Start
 //!
 //! ```rust,ignore
-//! use aptos_rust_sdk_v2::{Aptos, AptosConfig};
-//! use aptos_rust_sdk_v2::account::{Account, Ed25519Account};
+//! use aptos_sdk::{Aptos, AptosConfig};
+//! use aptos_sdk::account::{Account, Ed25519Account};
 //!
 //! #[tokio::main]
 //! async fn main() -> anyhow::Result<()> {
@@ -92,7 +92,7 @@ pub use types::{AccountAddress, ChainId, HashValue};
 // Re-export proc macros when the feature is enabled
 #[cfg(feature = "macros")]
 #[cfg_attr(docsrs, doc(cfg(feature = "macros")))]
-pub use aptos_rust_sdk_v2_macros::{MoveStruct, aptos_contract, aptos_contract_file};
+pub use aptos_sdk_macros::{MoveStruct, aptos_contract, aptos_contract_file};
 
 // Re-export aptos_bcs for use by the MoveStruct derive macro
 // This allows downstream users to use the derive macro without adding aptos-bcs as a dependency

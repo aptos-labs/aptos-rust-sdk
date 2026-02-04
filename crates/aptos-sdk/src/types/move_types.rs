@@ -329,7 +329,7 @@ impl TypeTag {
     /// # Example
     ///
     /// ```rust
-    /// use aptos_rust_sdk_v2::types::TypeTag;
+    /// use aptos_sdk::types::TypeTag;
     ///
     /// let tag = TypeTag::from_str_strict("0x1::aptos_coin::AptosCoin").unwrap();
     /// let tag = TypeTag::from_str_strict("u64").unwrap();

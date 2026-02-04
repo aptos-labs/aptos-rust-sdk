@@ -28,9 +28,9 @@ const DEFAULT_TRANSACTION_WAIT_TIMEOUT_SECS: u64 = 30;
 /// # Example
 ///
 /// ```rust,no_run
-/// use aptos_rust_sdk_v2::api::FullnodeClient;
-/// use aptos_rust_sdk_v2::config::AptosConfig;
-/// use aptos_rust_sdk_v2::retry::RetryConfig;
+/// use aptos_sdk::api::FullnodeClient;
+/// use aptos_sdk::config::AptosConfig;
+/// use aptos_sdk::retry::RetryConfig;
 ///
 /// #[tokio::main]
 /// async fn main() -> anyhow::Result<()> {

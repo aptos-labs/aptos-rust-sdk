@@ -5,7 +5,7 @@
 //!
 //! Run with: `cargo run --example sponsored_transaction --features "ed25519,faucet"`
 
-use aptos_rust_sdk_v2::{
+use aptos_sdk::{
     Aptos, AptosConfig,
     account::Ed25519Account,
     transaction::{

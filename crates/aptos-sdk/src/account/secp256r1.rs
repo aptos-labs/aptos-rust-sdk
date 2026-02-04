@@ -19,7 +19,7 @@ use std::fmt;
 /// # Example
 ///
 /// ```rust
-/// use aptos_rust_sdk_v2::account::Secp256r1Account;
+/// use aptos_sdk::account::Secp256r1Account;
 ///
 /// let account = Secp256r1Account::generate();
 /// println!("Address: {}", account.address());

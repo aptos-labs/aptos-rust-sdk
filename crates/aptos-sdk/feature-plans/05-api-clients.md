@@ -460,7 +460,7 @@ fn is_retryable(error: &AptosError) -> bool {
 ### Basic Usage
 
 ```rust
-use aptos_rust_sdk_v2::{Aptos, AptosConfig};
+use aptos_sdk::{Aptos, AptosConfig};
 
 // Connect to testnet
 let aptos = Aptos::new(AptosConfig::testnet()).await?;

@@ -8,7 +8,7 @@
 //!
 //! Run with: `cargo run --example transfer --features "ed25519,faucet"`
 
-use aptos_rust_sdk_v2::{Aptos, AptosConfig, account::Ed25519Account};
+use aptos_sdk::{Aptos, AptosConfig, account::Ed25519Account};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

@@ -6,7 +6,7 @@
 //! # Example
 //!
 //! ```rust,ignore
-//! use aptos_rust_sdk_v2_macros::aptos_contract;
+//! use aptos_sdk_macros::aptos_contract;
 //!
 //! aptos_contract! {
 //!     name: CoinModule,
@@ -49,7 +49,7 @@ use codegen::generate_contract_impl;
 /// # Example
 ///
 /// ```rust,ignore
-/// use aptos_rust_sdk_v2_macros::aptos_contract;
+/// use aptos_sdk_macros::aptos_contract;
 ///
 /// aptos_contract! {
 ///     name: AptosCoin,
@@ -102,7 +102,7 @@ pub fn aptos_contract(input: TokenStream) -> TokenStream {
 /// # Example
 ///
 /// ```rust,ignore
-/// use aptos_rust_sdk_v2_macros::aptos_contract_file;
+/// use aptos_sdk_macros::aptos_contract_file;
 ///
 /// aptos_contract_file!("abi/my_module.json", MyModule);
 /// ```
@@ -176,7 +176,7 @@ pub fn aptos_contract_file(input: TokenStream) -> TokenStream {
 /// # Example
 ///
 /// ```rust,ignore
-/// use aptos_rust_sdk_v2_macros::MoveStruct;
+/// use aptos_sdk_macros::MoveStruct;
 ///
 /// #[derive(MoveStruct)]
 /// #[move_struct(address = "0x1", module = "coin", name = "CoinStore")]
@@ -251,15 +251,15 @@ pub fn derive_move_struct(input: TokenStream) -> TokenStream {
             }
 
             /// Serializes this struct to BCS bytes.
-            pub fn to_bcs(&self) -> ::aptos_rust_sdk_v2::error::AptosResult<Vec<u8>> {
-                ::aptos_rust_sdk_v2::aptos_bcs::to_bytes(self)
-                    .map_err(|e| ::aptos_rust_sdk_v2::error::AptosError::Bcs(e.to_string()))
+            pub fn to_bcs(&self) -> ::aptos_sdk::error::AptosResult<Vec<u8>> {
+                ::aptos_sdk::aptos_bcs::to_bytes(self)
+                    .map_err(|e| ::aptos_sdk::error::AptosError::Bcs(e.to_string()))
             }
 
             /// Deserializes this struct from BCS bytes.
-            pub fn from_bcs(bytes: &[u8]) -> ::aptos_rust_sdk_v2::error::AptosResult<Self> {
-                ::aptos_rust_sdk_v2::aptos_bcs::from_bytes(bytes)
-                    .map_err(|e| ::aptos_rust_sdk_v2::error::AptosError::Bcs(e.to_string()))
+            pub fn from_bcs(bytes: &[u8]) -> ::aptos_sdk::error::AptosResult<Self> {
+                ::aptos_sdk::aptos_bcs::from_bytes(bytes)
+                    .map_err(|e| ::aptos_sdk::error::AptosError::Bcs(e.to_string()))
             }
         }
     };

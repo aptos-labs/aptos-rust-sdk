@@ -1,6 +1,6 @@
 //! Test that MoveStruct derive works with basic attributes.
 
-use aptos_rust_sdk_v2_macros::MoveStruct;
+use aptos_sdk_macros::MoveStruct;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, MoveStruct)]

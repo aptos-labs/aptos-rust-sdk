@@ -227,9 +227,9 @@ impl PoolConfigBuilder {
 /// # Example
 ///
 /// ```rust
-/// use aptos_rust_sdk_v2::AptosConfig;
-/// use aptos_rust_sdk_v2::retry::RetryConfig;
-/// use aptos_rust_sdk_v2::config::PoolConfig;
+/// use aptos_sdk::AptosConfig;
+/// use aptos_sdk::retry::RetryConfig;
+/// use aptos_sdk::config::PoolConfig;
 ///
 /// // Use testnet with default settings
 /// let config = AptosConfig::testnet();
@@ -311,7 +311,7 @@ impl AptosConfig {
     /// # Example
     ///
     /// ```rust
-    /// use aptos_rust_sdk_v2::AptosConfig;
+    /// use aptos_sdk::AptosConfig;
     ///
     /// let config = AptosConfig::mainnet();
     /// ```
@@ -339,7 +339,7 @@ impl AptosConfig {
     /// # Example
     ///
     /// ```rust
-    /// use aptos_rust_sdk_v2::AptosConfig;
+    /// use aptos_sdk::AptosConfig;
     ///
     /// let config = AptosConfig::testnet();
     /// ```
@@ -369,7 +369,7 @@ impl AptosConfig {
     /// # Example
     ///
     /// ```rust
-    /// use aptos_rust_sdk_v2::AptosConfig;
+    /// use aptos_sdk::AptosConfig;
     ///
     /// let config = AptosConfig::devnet();
     /// ```
@@ -402,7 +402,7 @@ impl AptosConfig {
     /// # Example
     ///
     /// ```rust
-    /// use aptos_rust_sdk_v2::AptosConfig;
+    /// use aptos_sdk::AptosConfig;
     ///
     /// let config = AptosConfig::local();
     /// ```
@@ -437,7 +437,7 @@ impl AptosConfig {
     /// # Example
     ///
     /// ```rust
-    /// use aptos_rust_sdk_v2::AptosConfig;
+    /// use aptos_sdk::AptosConfig;
     ///
     /// let config = AptosConfig::custom("https://my-node.example.com/v1").unwrap();
     /// ```
@@ -468,8 +468,8 @@ impl AptosConfig {
     /// # Example
     ///
     /// ```rust
-    /// use aptos_rust_sdk_v2::AptosConfig;
-    /// use aptos_rust_sdk_v2::retry::RetryConfig;
+    /// use aptos_sdk::AptosConfig;
+    /// use aptos_sdk::retry::RetryConfig;
     ///
     /// let config = AptosConfig::testnet()
     ///     .with_retry(RetryConfig::aggressive());
@@ -509,8 +509,8 @@ impl AptosConfig {
     /// # Example
     ///
     /// ```rust
-    /// use aptos_rust_sdk_v2::AptosConfig;
-    /// use aptos_rust_sdk_v2::config::PoolConfig;
+    /// use aptos_sdk::AptosConfig;
+    /// use aptos_sdk::config::PoolConfig;
     ///
     /// let config = AptosConfig::testnet()
     ///     .with_pool(PoolConfig::high_throughput());

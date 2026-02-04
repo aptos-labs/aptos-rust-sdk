@@ -8,7 +8,7 @@
 //!
 //! Run with: `cargo run --example advanced_transactions --features "ed25519,secp256k1,faucet"`
 
-use aptos_rust_sdk_v2::{
+use aptos_sdk::{
     Aptos, AptosConfig,
     account::{Account, AnyPrivateKey, Ed25519Account, MultiEd25519Account, MultiKeyAccount},
     crypto::{Ed25519PrivateKey, Secp256k1PrivateKey},

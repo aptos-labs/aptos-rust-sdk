@@ -102,8 +102,8 @@ pub enum ScriptArgument {
 /// # Example
 ///
 /// ```rust
-/// use aptos_rust_sdk_v2::transaction::EntryFunction;
-/// use aptos_rust_sdk_v2::types::{MoveModuleId, TypeTag, AccountAddress};
+/// use aptos_sdk::transaction::EntryFunction;
+/// use aptos_sdk::types::{MoveModuleId, TypeTag, AccountAddress};
 ///
 /// // Create a coin transfer payload
 /// let module = MoveModuleId::from_str_strict("0x1::coin").unwrap();

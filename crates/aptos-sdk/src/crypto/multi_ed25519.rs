@@ -28,7 +28,7 @@ pub const MIN_THRESHOLD: u8 = 1;
 /// # Example
 ///
 /// ```rust,ignore
-/// use aptos_rust_sdk_v2::crypto::{Ed25519PrivateKey, MultiEd25519PublicKey};
+/// use aptos_sdk::crypto::{Ed25519PrivateKey, MultiEd25519PublicKey};
 ///
 /// let keys: Vec<_> = (0..3).map(|_| Ed25519PrivateKey::generate().public_key()).collect();
 /// let multi_pk = MultiEd25519PublicKey::new(keys, 2).unwrap(); // 2-of-3

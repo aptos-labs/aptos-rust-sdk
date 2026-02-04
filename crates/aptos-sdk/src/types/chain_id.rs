@@ -21,7 +21,7 @@ use std::fmt;
 /// # Example
 ///
 /// ```rust
-/// use aptos_rust_sdk_v2::ChainId;
+/// use aptos_sdk::ChainId;
 ///
 /// let mainnet = ChainId::mainnet();
 /// assert_eq!(mainnet.id(), 1);

@@ -120,8 +120,8 @@ impl fmt::Debug for AnyPrivateKey {
 /// # Example
 ///
 /// ```rust,ignore
-/// use aptos_rust_sdk_v2::account::{MultiKeyAccount, AnyPrivateKey};
-/// use aptos_rust_sdk_v2::crypto::{Ed25519PrivateKey, Secp256k1PrivateKey};
+/// use aptos_sdk::account::{MultiKeyAccount, AnyPrivateKey};
+/// use aptos_sdk::crypto::{Ed25519PrivateKey, Secp256k1PrivateKey};
 ///
 /// // Create a 2-of-3 multisig with mixed key types
 /// let keys = vec![

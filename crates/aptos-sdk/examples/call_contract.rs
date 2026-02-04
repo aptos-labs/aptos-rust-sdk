@@ -7,7 +7,7 @@
 //!
 //! Run with: `cargo run --example call_contract --features "ed25519,faucet"`
 
-use aptos_rust_sdk_v2::{
+use aptos_sdk::{
     Aptos, AptosConfig,
     account::Ed25519Account,
     transaction::{EntryFunction, TransactionBuilder, TransactionPayload},
@@ -205,7 +205,7 @@ async fn main() -> anyhow::Result<()> {
             .expiration_from_now(300) // 5 minutes
             .build()?;
 
-        let signed = aptos_rust_sdk_v2::transaction::builder::sign_transaction(&raw_txn, &account)?;
+        let signed = aptos_sdk::transaction::builder::sign_transaction(&raw_txn, &account)?;
 
         // Simulate first to check gas
         let simulation = aptos.simulate_transaction(&signed).await?;

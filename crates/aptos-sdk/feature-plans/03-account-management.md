@@ -222,7 +222,7 @@ Account (as above)
 ### Creating Accounts
 
 ```rust
-use aptos_rust_sdk_v2::account::{Ed25519Account, Mnemonic, Account};
+use aptos_sdk::account::{Ed25519Account, Mnemonic, Account};
 
 // Generate random
 let account = Ed25519Account::generate();
@@ -261,7 +261,7 @@ let sig2 = sign_message(&secp, b"hello");
 ### Dynamic Account Selection
 
 ```rust
-use aptos_rust_sdk_v2::account::AnyAccount;
+use aptos_sdk::account::AnyAccount;
 
 fn load_account(config: &Config) -> AnyAccount {
     match config.key_type.as_str() {

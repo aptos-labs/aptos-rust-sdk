@@ -5,7 +5,7 @@
 //!
 //! Run with: `cargo run --example view_function --features ed25519`
 
-use aptos_rust_sdk_v2::{Aptos, AptosConfig};
+use aptos_sdk::{Aptos, AptosConfig};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

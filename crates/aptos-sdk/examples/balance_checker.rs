@@ -7,7 +7,7 @@
 //!
 //! Run with: `cargo run --example balance_checker --features "ed25519,faucet"`
 
-use aptos_rust_sdk_v2::{Aptos, AptosConfig, account::Ed25519Account, types::AccountAddress};
+use aptos_sdk::{Aptos, AptosConfig, account::Ed25519Account, types::AccountAddress};
 use std::time::Duration;
 
 const OCTAS_PER_APT: f64 = 100_000_000.0;

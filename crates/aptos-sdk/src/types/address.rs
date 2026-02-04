@@ -28,7 +28,7 @@ pub const ADDRESS_LENGTH: usize = 32;
 /// # Example
 ///
 /// ```rust
-/// use aptos_rust_sdk_v2::AccountAddress;
+/// use aptos_sdk::AccountAddress;
 ///
 /// // Parse from hex string
 /// let addr = AccountAddress::from_hex("0x1").unwrap();

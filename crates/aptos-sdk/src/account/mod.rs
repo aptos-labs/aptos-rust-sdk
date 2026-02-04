@@ -18,7 +18,7 @@
 //! # Example
 //!
 //! ```rust,ignore
-//! use aptos_rust_sdk_v2::account::Ed25519Account;
+//! use aptos_sdk::account::Ed25519Account;
 //!
 //! // Generate a new random account
 //! let account = Ed25519Account::generate();

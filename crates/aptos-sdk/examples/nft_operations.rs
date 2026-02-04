@@ -7,7 +7,7 @@
 //!
 //! Run with: `cargo run --example nft_operations --features "ed25519,indexer"`
 
-use aptos_rust_sdk_v2::{Aptos, AptosConfig, types::AccountAddress};
+use aptos_sdk::{Aptos, AptosConfig, types::AccountAddress};
 use serde::Deserialize;
 
 /// Token data from Token V2 standard

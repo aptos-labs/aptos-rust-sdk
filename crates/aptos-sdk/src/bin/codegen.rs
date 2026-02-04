@@ -18,7 +18,7 @@
 //! aptos-codegen --input abi.json --output src/ --module-name my_module
 //! ```
 
-use aptos_rust_sdk_v2::{
+use aptos_sdk::{
     Aptos, AptosConfig,
     api::response::MoveModuleABI,
     codegen::{GeneratorConfig, ModuleGenerator, MoveSourceParser},
@@ -122,7 +122,7 @@ async fn main() -> anyhow::Result<()> {
             );
         }
 
-        let address = aptos_rust_sdk_v2::types::AccountAddress::from_hex(parts[0])?;
+        let address = aptos_sdk::types::AccountAddress::from_hex(parts[0])?;
         let module_name = parts[1];
 
         // Fetch module

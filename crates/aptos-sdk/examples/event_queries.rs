@@ -6,7 +6,7 @@
 //!
 //! Run with: `cargo run --example event_queries --features "ed25519,faucet"`
 
-use aptos_rust_sdk_v2::{Aptos, AptosConfig, account::Ed25519Account, types::AccountAddress};
+use aptos_sdk::{Aptos, AptosConfig, account::Ed25519Account, types::AccountAddress};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

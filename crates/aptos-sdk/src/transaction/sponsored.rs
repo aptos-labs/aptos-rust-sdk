@@ -16,7 +16,7 @@
 //! # Example
 //!
 //! ```rust,ignore
-//! use aptos_rust_sdk_v2::transaction::{SponsoredTransactionBuilder, EntryFunction};
+//! use aptos_sdk::transaction::{SponsoredTransactionBuilder, EntryFunction};
 //!
 //! // Build a sponsored transaction
 //! let fee_payer_txn = SponsoredTransactionBuilder::new()
@@ -55,7 +55,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 /// # Example
 ///
 /// ```rust,ignore
-/// use aptos_rust_sdk_v2::transaction::{SponsoredTransactionBuilder, EntryFunction};
+/// use aptos_sdk::transaction::{SponsoredTransactionBuilder, EntryFunction};
 ///
 /// // Build the fee payer transaction structure
 /// let fee_payer_txn = SponsoredTransactionBuilder::new()
@@ -286,7 +286,7 @@ impl SponsoredTransactionBuilder {
 /// # Example
 ///
 /// ```rust,ignore
-/// use aptos_rust_sdk_v2::transaction::sign_sponsored_transaction;
+/// use aptos_sdk::transaction::sign_sponsored_transaction;
 ///
 /// let signed_txn = sign_sponsored_transaction(
 ///     &fee_payer_txn,
@@ -542,7 +542,7 @@ pub trait Sponsor: Account + Sized {
     /// # Example
     ///
     /// ```rust,ignore
-    /// use aptos_rust_sdk_v2::transaction::Sponsor;
+    /// use aptos_sdk::transaction::Sponsor;
     ///
     /// let signed_txn = sponsor_account.sponsor(
     ///     &user_account,
@@ -608,7 +608,7 @@ impl<A: Account + Sized> Sponsor for A {}
 /// # Example
 ///
 /// ```rust,ignore
-/// use aptos_rust_sdk_v2::transaction::sponsor_transaction;
+/// use aptos_sdk::transaction::sponsor_transaction;
 ///
 /// let signed = sponsor_transaction(
 ///     &sender_account,

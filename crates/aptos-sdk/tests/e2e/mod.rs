@@ -35,7 +35,7 @@
 //! - **multi_signer_tests**: Multi-agent and fee payer transactions
 //! - **state_tests**: Resource and state queries
 
-use aptos_rust_sdk_v2::{Aptos, AptosConfig};
+use aptos_sdk::{Aptos, AptosConfig};
 use std::env;
 
 /// Gets the configuration for E2E tests.
@@ -65,7 +65,7 @@ async fn wait_for_finality() {
 #[cfg(all(feature = "ed25519", feature = "faucet"))]
 mod account_tests {
     use super::*;
-    use aptos_rust_sdk_v2::account::Ed25519Account;
+    use aptos_sdk::account::Ed25519Account;
 
     #[tokio::test]
     #[ignore]
@@ -162,7 +162,7 @@ mod account_tests {
 #[cfg(all(feature = "ed25519", feature = "faucet"))]
 mod transfer_tests {
     use super::*;
-    use aptos_rust_sdk_v2::account::Ed25519Account;
+    use aptos_sdk::account::Ed25519Account;
 
     #[tokio::test]
     #[ignore]
@@ -274,7 +274,7 @@ mod transfer_tests {
 #[cfg(all(feature = "ed25519", feature = "faucet"))]
 mod view_tests {
     use super::*;
-    use aptos_rust_sdk_v2::account::Ed25519Account;
+    use aptos_sdk::account::Ed25519Account;
 
     #[tokio::test]
     #[ignore]
@@ -383,8 +383,8 @@ mod view_tests {
 #[cfg(all(feature = "ed25519", feature = "faucet"))]
 mod transaction_tests {
     use super::*;
-    use aptos_rust_sdk_v2::account::Ed25519Account;
-    use aptos_rust_sdk_v2::transaction::{EntryFunction, builder::sign_transaction};
+    use aptos_sdk::account::Ed25519Account;
+    use aptos_sdk::transaction::{EntryFunction, builder::sign_transaction};
 
     #[tokio::test]
     #[ignore]
@@ -438,9 +438,9 @@ mod transaction_tests {
     #[tokio::test]
     #[ignore]
     async fn e2e_simulate_transaction() {
-        use aptos_rust_sdk_v2::account::Account;
-        use aptos_rust_sdk_v2::transaction::authenticator::{Ed25519PublicKey, Ed25519Signature};
-        use aptos_rust_sdk_v2::transaction::{SignedTransaction, TransactionAuthenticator};
+        use aptos_sdk::account::Account;
+        use aptos_sdk::transaction::authenticator::{Ed25519PublicKey, Ed25519Signature};
+        use aptos_sdk::transaction::{SignedTransaction, TransactionAuthenticator};
 
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
@@ -484,7 +484,7 @@ mod transaction_tests {
     #[tokio::test]
     #[ignore]
     async fn e2e_get_transaction_by_hash() {
-        use aptos_rust_sdk_v2::types::HashValue;
+        use aptos_sdk::types::HashValue;
 
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
@@ -526,7 +526,7 @@ mod transaction_tests {
         let payload =
             EntryFunction::apt_transfer(Ed25519Account::generate().address(), 1000).unwrap();
 
-        let raw_txn = aptos_rust_sdk_v2::transaction::TransactionBuilder::new()
+        let raw_txn = aptos_sdk::transaction::TransactionBuilder::new()
             .sender(account.address())
             .sequence_number(0)
             .payload(payload.into())
@@ -606,8 +606,8 @@ mod ledger_tests {
 #[cfg(all(feature = "ed25519", feature = "faucet"))]
 mod multi_signer_tests {
     use super::*;
-    use aptos_rust_sdk_v2::account::{Account, Ed25519Account};
-    use aptos_rust_sdk_v2::transaction::{
+    use aptos_sdk::account::{Account, Ed25519Account};
+    use aptos_sdk::transaction::{
         EntryFunction, TransactionBuilder,
         builder::{sign_fee_payer_transaction, sign_multi_agent_transaction},
         types::{FeePayerRawTransaction, MultiAgentRawTransaction},
@@ -750,11 +750,9 @@ mod multi_signer_tests {
 #[cfg(all(feature = "ed25519", feature = "secp256k1", feature = "faucet"))]
 mod multi_key_e2e_tests {
     use super::*;
-    use aptos_rust_sdk_v2::account::{AnyPrivateKey, MultiKeyAccount};
-    use aptos_rust_sdk_v2::crypto::{Ed25519PrivateKey, Secp256k1PrivateKey};
-    use aptos_rust_sdk_v2::transaction::{
-        EntryFunction, TransactionBuilder, builder::sign_transaction,
-    };
+    use aptos_sdk::account::{AnyPrivateKey, MultiKeyAccount};
+    use aptos_sdk::crypto::{Ed25519PrivateKey, Secp256k1PrivateKey};
+    use aptos_sdk::transaction::{EntryFunction, TransactionBuilder, builder::sign_transaction};
 
     #[tokio::test]
     #[ignore]
@@ -792,7 +790,7 @@ mod multi_key_e2e_tests {
         println!("Multi-key balance: {}", balance);
 
         // Build and sign a transfer
-        let recipient = aptos_rust_sdk_v2::account::Ed25519Account::generate();
+        let recipient = aptos_sdk::account::Ed25519Account::generate();
         let payload = EntryFunction::apt_transfer(recipient.address(), 1_000_000).unwrap();
 
         let seq = aptos
@@ -905,7 +903,7 @@ mod state_tests {
 
 #[cfg(all(feature = "ed25519", feature = "faucet"))]
 mod single_key_tests {
-    use aptos_rust_sdk_v2::account::Ed25519SingleKeyAccount;
+    use aptos_sdk::account::Ed25519SingleKeyAccount;
 
     #[tokio::test]
     #[ignore]
@@ -931,7 +929,7 @@ mod single_key_tests {
 
 #[cfg(all(feature = "secp256k1", feature = "faucet"))]
 mod secp256k1_tests {
-    use aptos_rust_sdk_v2::account::Secp256k1Account;
+    use aptos_sdk::account::Secp256k1Account;
 
     #[tokio::test]
     #[ignore]
@@ -958,9 +956,9 @@ mod secp256k1_tests {
 #[cfg(all(feature = "ed25519", feature = "faucet"))]
 mod batch_tests {
     use super::*;
-    use aptos_rust_sdk_v2::account::Ed25519Account;
-    use aptos_rust_sdk_v2::transaction::{InputEntryFunctionData, TransactionBatchBuilder};
-    use aptos_rust_sdk_v2::types::ChainId;
+    use aptos_sdk::account::Ed25519Account;
+    use aptos_sdk::transaction::{InputEntryFunctionData, TransactionBatchBuilder};
+    use aptos_sdk::types::ChainId;
 
     #[tokio::test]
     #[ignore]
@@ -1013,7 +1011,7 @@ mod batch_tests {
 #[cfg(all(feature = "ed25519", feature = "faucet"))]
 mod balance_tests {
     use super::*;
-    use aptos_rust_sdk_v2::account::Ed25519Account;
+    use aptos_sdk::account::Ed25519Account;
 
     #[tokio::test]
     #[ignore]

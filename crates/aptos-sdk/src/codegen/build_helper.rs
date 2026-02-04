@@ -7,7 +7,7 @@
 //! Add to your `build.rs`:
 //!
 //! ```rust,ignore
-//! use aptos_rust_sdk_v2::codegen::build_helper;
+//! use aptos_sdk::codegen::build_helper;
 //!
 //! fn main() {
 //!     // Generate from a local ABI file

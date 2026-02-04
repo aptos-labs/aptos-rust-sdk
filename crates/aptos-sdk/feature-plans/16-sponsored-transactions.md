@@ -23,8 +23,8 @@ This feature provides high-level utilities for creating and managing sponsored (
 ### SponsoredTransactionBuilder
 
 ```rust
-use aptos_rust_sdk_v2::transaction::{SponsoredTransactionBuilder, EntryFunction};
-use aptos_rust_sdk_v2::types::ChainId;
+use aptos_sdk::transaction::{SponsoredTransactionBuilder, EntryFunction};
+use aptos_sdk::types::ChainId;
 
 // Build and sign in one step
 let signed_txn = SponsoredTransactionBuilder::new()
@@ -59,7 +59,7 @@ let signed = sign_sponsored_transaction(
 For scenarios where signers are in different systems/processes:
 
 ```rust
-use aptos_rust_sdk_v2::transaction::PartiallySigned;
+use aptos_sdk::transaction::PartiallySigned;
 
 // Create transaction structure
 let fee_payer_txn = SponsoredTransactionBuilder::new()
@@ -91,7 +91,7 @@ let signed = partial.finalize()?;
 Extension trait for accounts to easily sponsor transactions:
 
 ```rust
-use aptos_rust_sdk_v2::transaction::Sponsor;
+use aptos_sdk::transaction::Sponsor;
 
 // Any account can sponsor another
 let signed = sponsor_account.sponsor(
@@ -117,7 +117,7 @@ let signed = sponsor_account.sponsor_with_gas(
 For simple cases:
 
 ```rust
-use aptos_rust_sdk_v2::transaction::sponsor_transaction;
+use aptos_sdk::transaction::sponsor_transaction;
 
 let signed = sponsor_transaction(
     &sender_account,

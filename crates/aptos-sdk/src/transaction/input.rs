@@ -13,7 +13,7 @@
 //! # Example
 //!
 //! ```rust,ignore
-//! use aptos_rust_sdk_v2::transaction::InputEntryFunctionData;
+//! use aptos_sdk::transaction::InputEntryFunctionData;
 //!
 //! // Simple transfer
 //! let payload = InputEntryFunctionData::new("0x1::aptos_account::transfer")
@@ -42,8 +42,8 @@ use serde::Serialize;
 /// # Example
 ///
 /// ```rust,ignore
-/// use aptos_rust_sdk_v2::transaction::InputEntryFunctionData;
-/// use aptos_rust_sdk_v2::types::AccountAddress;
+/// use aptos_sdk::transaction::InputEntryFunctionData;
+/// use aptos_sdk::types::AccountAddress;
 ///
 /// let payload = InputEntryFunctionData::new("0x1::aptos_account::transfer")
 ///     .arg(AccountAddress::from_hex("0x123").unwrap())

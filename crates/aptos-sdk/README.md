@@ -23,8 +23,8 @@ aptos-sdk = "0.1"
 Basic usage:
 
 ```rust
-use aptos_rust_sdk_v2::{Aptos, AptosConfig};
-use aptos_rust_sdk_v2::account::{Account, Ed25519Account};
+use aptos_sdk::{Aptos, AptosConfig};
+use aptos_sdk::account::{Account, Ed25519Account};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

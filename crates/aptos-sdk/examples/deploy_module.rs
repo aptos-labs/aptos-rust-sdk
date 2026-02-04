@@ -5,7 +5,7 @@
 //!
 //! Run with: `cargo run --example deploy_module --features "ed25519,faucet"`
 
-use aptos_rust_sdk_v2::{Aptos, AptosConfig, account::Ed25519Account};
+use aptos_sdk::{Aptos, AptosConfig, account::Ed25519Account};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -40,8 +40,8 @@ async fn main() -> anyhow::Result<()> {
     println!(
         r#"
     use std::fs;
-    use aptos_rust_sdk_v2::transaction::{EntryFunction, TransactionBuilder};
-    use aptos_rust_sdk_v2::types::MoveModuleId;
+    use aptos_sdk::transaction::{EntryFunction, TransactionBuilder};
+    use aptos_sdk::types::MoveModuleId;
     
     // Read compiled module bytecode
     let module_bytecode = fs::read("build/MyModule/bytecode_modules/my_module.mv")?;

@@ -29,7 +29,7 @@ use std::fmt;
 /// # Example
 ///
 /// ```rust
-/// use aptos_rust_sdk_v2::account::Ed25519Account;
+/// use aptos_sdk::account::Ed25519Account;
 ///
 /// // Generate a new random account
 /// let account = Ed25519Account::generate();
@@ -94,7 +94,7 @@ impl Ed25519Account {
     /// # Example
     ///
     /// ```rust,ignore
-    /// use aptos_rust_sdk_v2::account::Ed25519Account;
+    /// use aptos_sdk::account::Ed25519Account;
     ///
     /// let mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
     /// let account = Ed25519Account::from_mnemonic(mnemonic, 0).unwrap();
@@ -203,7 +203,7 @@ impl fmt::Debug for Ed25519Account {
 /// # Example
 ///
 /// ```rust
-/// use aptos_rust_sdk_v2::account::Ed25519SingleKeyAccount;
+/// use aptos_sdk::account::Ed25519SingleKeyAccount;
 ///
 /// // Generate a new random account
 /// let account = Ed25519SingleKeyAccount::generate();

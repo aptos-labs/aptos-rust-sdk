@@ -9,7 +9,7 @@ use crate::error::{AptosError, AptosResult};
 /// # Example
 ///
 /// ```rust
-/// use aptos_rust_sdk_v2::account::Mnemonic;
+/// use aptos_sdk::account::Mnemonic;
 ///
 /// // Generate a new mnemonic
 /// let mnemonic = Mnemonic::generate(24).unwrap();

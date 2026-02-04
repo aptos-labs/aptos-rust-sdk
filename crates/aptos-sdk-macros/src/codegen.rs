@@ -204,7 +204,7 @@ fn generate_entry_function(
         .map(|(name, _, _)| {
             quote! {
                 aptos_bcs::to_bytes(&#name)
-                    .map_err(|e| aptos_rust_sdk_v2::error::AptosError::Bcs(e.to_string()))?
+                    .map_err(|e| aptos_sdk::error::AptosError::Bcs(e.to_string()))?
             }
         })
         .collect();
@@ -216,7 +216,7 @@ fn generate_entry_function(
         .unwrap_or_default();
 
     let type_args_param = if has_type_params {
-        quote! { , type_args: Vec<aptos_rust_sdk_v2::types::TypeTag> }
+        quote! { , type_args: Vec<aptos_sdk::types::TypeTag> }
     } else {
         quote! {}
     };
@@ -236,19 +236,19 @@ fn generate_entry_function(
 
     quote! {
         #[doc = #full_doc]
-        pub fn #fn_name(&self, #(#param_defs),* #type_args_param) -> aptos_rust_sdk_v2::error::AptosResult<aptos_rust_sdk_v2::transaction::TransactionPayload> {
+        pub fn #fn_name(&self, #(#param_defs),* #type_args_param) -> aptos_sdk::error::AptosResult<aptos_sdk::transaction::TransactionPayload> {
             let args = vec![
                 #(#arg_encodings),*
             ];
 
             let function_id = format!("{}::{}::{}", self.address(), Self::MODULE, #func_name_str);
-            let entry_fn = aptos_rust_sdk_v2::transaction::EntryFunction::from_function_id(
+            let entry_fn = aptos_sdk::transaction::EntryFunction::from_function_id(
                 &function_id,
                 #type_args_use,
                 args,
             )?;
 
-            Ok(aptos_rust_sdk_v2::transaction::TransactionPayload::EntryFunction(entry_fn))
+            Ok(aptos_sdk::transaction::TransactionPayload::EntryFunction(entry_fn))
         }
     }
 }
@@ -301,8 +301,8 @@ fn generate_view_function(
         .iter()
         .map(|(name, _, _)| {
             quote! {
-                ::aptos_rust_sdk_v2::aptos_bcs::to_bytes(&#name)
-                    .map_err(|e| ::aptos_rust_sdk_v2::error::AptosError::Bcs(e.to_string()))?
+                ::aptos_sdk::aptos_bcs::to_bytes(&#name)
+                    .map_err(|e| ::aptos_sdk::error::AptosError::Bcs(e.to_string()))?
             }
         })
         .collect();
@@ -351,10 +351,10 @@ fn generate_view_function(
         #[doc = #full_doc_bcs]
         pub async fn #fn_name(
             &self,
-            aptos: &::aptos_rust_sdk_v2::Aptos,
+            aptos: &::aptos_sdk::Aptos,
             #(#param_defs),*
             #type_args_param
-        ) -> ::aptos_rust_sdk_v2::error::AptosResult<#return_type> {
+        ) -> ::aptos_sdk::error::AptosResult<#return_type> {
             let args = vec![
                 #(#arg_encodings_bcs),*
             ];
@@ -366,10 +366,10 @@ fn generate_view_function(
         #[doc = #full_doc_json]
         pub async fn #fn_name_json(
             &self,
-            aptos: &::aptos_rust_sdk_v2::Aptos,
+            aptos: &::aptos_sdk::Aptos,
             #(#param_defs),*
             #type_args_param
-        ) -> ::aptos_rust_sdk_v2::error::AptosResult<Vec<serde_json::Value>> {
+        ) -> ::aptos_sdk::error::AptosResult<Vec<serde_json::Value>> {
             let args = vec![
                 #(#arg_encodings_json),*
             ];
@@ -430,8 +430,8 @@ fn move_type_to_rust(move_type: &str) -> TokenStream {
         "u32" => quote! { u32 },
         "u64" => quote! { u64 },
         "u128" => quote! { u128 },
-        "u256" => quote! { aptos_rust_sdk_v2::types::U256 },
-        "address" | "&signer" | "signer" => quote! { aptos_rust_sdk_v2::types::AccountAddress },
+        "u256" => quote! { aptos_sdk::types::U256 },
+        "address" | "&signer" | "signer" => quote! { aptos_sdk::types::AccountAddress },
         t if t.starts_with("vector<u8>") => quote! { Vec<u8> },
         t if t.starts_with("vector<") => {
             // Extract inner type
@@ -452,7 +452,7 @@ fn move_type_to_rust(move_type: &str) -> TokenStream {
             }
             quote! { serde_json::Value }
         }
-        t if t.contains("::object::Object<") => quote! { aptos_rust_sdk_v2::types::AccountAddress },
+        t if t.contains("::object::Object<") => quote! { aptos_sdk::types::AccountAddress },
         _ => quote! { serde_json::Value },
     }
 }

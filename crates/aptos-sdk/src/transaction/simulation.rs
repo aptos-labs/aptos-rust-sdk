@@ -14,7 +14,7 @@
 //! # Example
 //!
 //! ```rust,ignore
-//! use aptos_rust_sdk_v2::transaction::simulation::SimulationResult;
+//! use aptos_sdk::transaction::simulation::SimulationResult;
 //!
 //! let aptos = Aptos::testnet()?;
 //!

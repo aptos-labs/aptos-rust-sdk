@@ -34,7 +34,7 @@ use crate::api::IndexerClient;
 /// # Example
 ///
 /// ```rust,no_run
-/// use aptos_rust_sdk_v2::{Aptos, AptosConfig};
+/// use aptos_sdk::{Aptos, AptosConfig};
 ///
 /// #[tokio::main]
 /// async fn main() -> anyhow::Result<()> {
@@ -545,7 +545,7 @@ impl Aptos {
     /// # Example
     ///
     /// ```rust,ignore
-    /// use aptos_rust_sdk_v2::{Aptos, AptosConfig, AccountAddress};
+    /// use aptos_sdk::{Aptos, AptosConfig, AccountAddress};
     ///
     /// let aptos = Aptos::new(AptosConfig::testnet())?;
     /// let owner = AccountAddress::from_hex("0x1")?;

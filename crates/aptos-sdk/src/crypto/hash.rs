@@ -20,7 +20,7 @@ pub enum HashFunction {
 /// # Example
 ///
 /// ```rust
-/// use aptos_rust_sdk_v2::crypto::sha2_256;
+/// use aptos_sdk::crypto::sha2_256;
 ///
 /// let hash = sha2_256(b"hello world");
 /// assert_eq!(hash.len(), 32);
@@ -41,7 +41,7 @@ pub fn sha2_256(data: &[u8]) -> [u8; 32] {
 /// # Example
 ///
 /// ```rust
-/// use aptos_rust_sdk_v2::crypto::sha3_256;
+/// use aptos_sdk::crypto::sha3_256;
 ///
 /// let hash = sha3_256(b"hello world");
 /// assert_eq!(hash.len(), 32);

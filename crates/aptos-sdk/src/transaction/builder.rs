@@ -22,8 +22,8 @@ pub const DEFAULT_EXPIRATION_SECONDS: u64 = 600; // 10 minutes
 /// # Example
 ///
 /// ```rust,no_run
-/// use aptos_rust_sdk_v2::transaction::{TransactionBuilder, EntryFunction};
-/// use aptos_rust_sdk_v2::types::{AccountAddress, ChainId};
+/// use aptos_sdk::transaction::{TransactionBuilder, EntryFunction};
+/// use aptos_sdk::types::{AccountAddress, ChainId};
 ///
 /// let payload = EntryFunction::apt_transfer(
 ///     AccountAddress::from_hex("0x123").unwrap(),

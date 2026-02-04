@@ -23,7 +23,7 @@ pub const HASH_LENGTH: usize = 32;
 /// # Example
 ///
 /// ```rust
-/// use aptos_rust_sdk_v2::HashValue;
+/// use aptos_sdk::HashValue;
 ///
 /// // Compute a hash
 /// let hash = HashValue::sha3_256(b"hello world");

@@ -17,7 +17,7 @@ This feature implements automatic retry logic for API calls with exponential bac
 ### RetryConfig
 
 ```rust
-use aptos_rust_sdk_v2::retry::RetryConfig;
+use aptos_sdk::retry::RetryConfig;
 
 // Default configuration (3 retries, 100ms initial delay, 2x backoff)
 let config = RetryConfig::default();
@@ -42,8 +42,8 @@ let custom = RetryConfig::builder()
 ### Integration with AptosConfig
 
 ```rust
-use aptos_rust_sdk_v2::{Aptos, AptosConfig};
-use aptos_rust_sdk_v2::retry::RetryConfig;
+use aptos_sdk::{Aptos, AptosConfig};
+use aptos_sdk::retry::RetryConfig;
 
 // Configure retry at client level
 let aptos = Aptos::new(
@@ -113,7 +113,7 @@ Non-retryable errors (immediate failure):
 The `RetryExecutor` provides fine-grained control over retry behavior:
 
 ```rust
-use aptos_rust_sdk_v2::retry::{RetryConfig, RetryExecutor};
+use aptos_sdk::retry::{RetryConfig, RetryExecutor};
 
 let executor = RetryExecutor::new(RetryConfig::default());
 
@@ -136,7 +136,7 @@ let result = executor.execute_with_predicate(
 ### Convenience Functions
 
 ```rust
-use aptos_rust_sdk_v2::retry::{retry, retry_with_config, RetryConfig};
+use aptos_sdk::retry::{retry, retry_with_config, RetryConfig};
 
 // Retry with default config
 let result = retry(|| async {
@@ -220,8 +220,8 @@ When all retries are exhausted, the last error is returned. This ensures:
 ## Example Usage
 
 ```rust
-use aptos_rust_sdk_v2::{Aptos, AptosConfig};
-use aptos_rust_sdk_v2::retry::RetryConfig;
+use aptos_sdk::{Aptos, AptosConfig};
+use aptos_sdk::retry::RetryConfig;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

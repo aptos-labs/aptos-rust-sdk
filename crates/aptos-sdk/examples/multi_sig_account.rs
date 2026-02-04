@@ -8,7 +8,7 @@
 //!
 //! Run with: `cargo run --example multi_sig_account --features "ed25519,faucet"`
 
-use aptos_rust_sdk_v2::{
+use aptos_sdk::{
     Aptos, AptosConfig,
     account::MultiEd25519Account,
     crypto::Ed25519PrivateKey,
@@ -85,8 +85,7 @@ async fn main() -> anyhow::Result<()> {
         .build()?;
 
     // Create signed transaction (signs with the multi-sig account using threshold keys automatically)
-    let signed =
-        aptos_rust_sdk_v2::transaction::builder::sign_transaction(&raw_txn, &multi_account)?;
+    let signed = aptos_sdk::transaction::builder::sign_transaction(&raw_txn, &multi_account)?;
 
     println!(
         "Signed with threshold {}-of-{}",

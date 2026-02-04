@@ -20,7 +20,7 @@ Generate compile-time type-safe bindings for Move contracts using procedural mac
 Generates contract bindings from inline ABI:
 
 ```rust
-use aptos_rust_sdk_v2::aptos_contract;
+use aptos_sdk::aptos_contract;
 
 aptos_contract! {
     name: CoinModule,
@@ -58,7 +58,7 @@ aptos_contract! {
 Generates bindings from an ABI file:
 
 ```rust
-use aptos_rust_sdk_v2::aptos_contract_file;
+use aptos_sdk::aptos_contract_file;
 
 // Reads ABI at compile time
 aptos_contract_file!("abi/my_module.json", MyModule);
@@ -72,7 +72,7 @@ aptos_contract_file!("abi/my_module.json", MyModule, "sources/my_module.move");
 Derives BCS serialization for Move-compatible structs:
 
 ```rust
-use aptos_rust_sdk_v2::MoveStruct;
+use aptos_sdk::MoveStruct;
 
 #[derive(MoveStruct, Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[move_struct(address = "0x1", module = "coin", name = "CoinStore")]
@@ -123,7 +123,7 @@ For each struct:
 ## Usage Example
 
 ```rust
-use aptos_rust_sdk_v2::{aptos_contract, Aptos, AptosConfig};
+use aptos_sdk::{aptos_contract, Aptos, AptosConfig};
 
 aptos_contract! {
     name: MyToken,

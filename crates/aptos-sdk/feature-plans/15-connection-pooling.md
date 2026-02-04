@@ -16,7 +16,7 @@ This feature adds configurable HTTP connection pooling for all API clients, impr
 ### PoolConfig
 
 ```rust
-use aptos_rust_sdk_v2::config::PoolConfig;
+use aptos_sdk::config::PoolConfig;
 
 // Default configuration
 let config = PoolConfig::default();
@@ -39,8 +39,8 @@ let custom = PoolConfig::builder()
 ### Integration with AptosConfig
 
 ```rust
-use aptos_rust_sdk_v2::{Aptos, AptosConfig};
-use aptos_rust_sdk_v2::config::PoolConfig;
+use aptos_sdk::{Aptos, AptosConfig};
+use aptos_sdk::config::PoolConfig;
 
 // Configure pool at client level
 let aptos = Aptos::new(

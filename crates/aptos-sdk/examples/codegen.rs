@@ -8,7 +8,7 @@
 //! cargo run --example codegen --features ed25519
 //! ```
 
-use aptos_rust_sdk_v2::{
+use aptos_sdk::{
     api::response::{MoveFunction, MoveModuleABI, MoveStructDef, MoveStructField},
     codegen::{GeneratorConfig, ModuleGenerator, MoveSourceParser},
 };
@@ -266,7 +266,7 @@ module 0xcafe::my_token {
     // // Import the generated module
     // mod my_token;
     //
-    // use aptos_rust_sdk_v2::{Aptos, AptosConfig};
+    // use aptos_sdk::{Aptos, AptosConfig};
     // use my_token::*;
     //
     // async fn example() -> anyhow::Result<()> {

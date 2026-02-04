@@ -12,7 +12,7 @@
 //!
 //! Run with: `cargo run --example multisig_v2 --features "ed25519,faucet"`
 
-use aptos_rust_sdk_v2::{
+use aptos_sdk::{
     Aptos, AptosConfig,
     account::Ed25519Account,
     transaction::{
@@ -170,7 +170,7 @@ async fn main() -> anyhow::Result<()> {
         .expiration_from_now(600)
         .build()?;
 
-    let signed = aptos_rust_sdk_v2::transaction::builder::sign_transaction(&raw_txn, &owner3)?;
+    let signed = aptos_sdk::transaction::builder::sign_transaction(&raw_txn, &owner3)?;
 
     println!("Owner 3 executing approved transaction...");
     let exec_result = aptos.submit_and_wait(&signed, None).await?;

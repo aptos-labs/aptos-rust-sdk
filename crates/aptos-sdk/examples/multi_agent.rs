@@ -5,7 +5,7 @@
 //!
 //! Run with: `cargo run --example multi_agent --features "ed25519,faucet"`
 
-use aptos_rust_sdk_v2::{
+use aptos_sdk::{
     Aptos, AptosConfig,
     account::{Account, Ed25519Account},
     transaction::{

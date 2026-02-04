@@ -186,7 +186,7 @@ jobs:
       
       - name: Add redirect to main crate
         run: |
-          echo '<meta http-equiv="refresh" content="0; url=aptos_rust_sdk_v2/index.html">' > target/doc/index.html
+          echo '<meta http-equiv="refresh" content="0; url=aptos_sdk/index.html">' > target/doc/index.html
       
       - name: Setup Pages
         uses: actions/configure-pages@v5

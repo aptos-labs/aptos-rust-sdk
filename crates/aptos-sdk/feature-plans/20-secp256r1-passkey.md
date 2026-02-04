@@ -104,7 +104,7 @@ impl Account for Secp256r1Account { ... }
 ### Basic Account Usage
 
 ```rust
-use aptos_rust_sdk_v2::account::Secp256r1Account;
+use aptos_sdk::account::Secp256r1Account;
 
 // Generate new account
 let account = Secp256r1Account::generate();
@@ -131,7 +131,7 @@ let result = aptos.sign_submit_and_wait(&account, payload, None).await?;
 ### Multi-Key Account with Secp256r1
 
 ```rust
-use aptos_rust_sdk_v2::account::{MultiKeyAccount, AnyPrivateKey};
+use aptos_sdk::account::{MultiKeyAccount, AnyPrivateKey};
 
 let secp256r1_key = Secp256r1PrivateKey::generate();
 let ed25519_key = Ed25519PrivateKey::generate();

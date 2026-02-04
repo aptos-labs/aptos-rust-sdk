@@ -7,7 +7,7 @@
 //!
 //! Run with: `cargo run --example indexer_queries --features "ed25519,indexer"`
 
-use aptos_rust_sdk_v2::{Aptos, AptosConfig, api::PaginationParams, types::AccountAddress};
+use aptos_sdk::{Aptos, AptosConfig, api::PaginationParams, types::AccountAddress};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

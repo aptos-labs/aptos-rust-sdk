@@ -411,7 +411,7 @@ Transaction fields are serialized in this exact order:
 ### Simple Transfer
 
 ```rust
-use aptos_rust_sdk_v2::transaction::{TransactionBuilder, EntryFunction};
+use aptos_sdk::transaction::{TransactionBuilder, EntryFunction};
 
 // Create payload
 let payload = EntryFunction::apt_transfer(recipient, 1_000_000)?;

@@ -10,7 +10,7 @@
 //!
 //! Run with: `cargo run --example script_transaction --features "ed25519,faucet"`
 
-use aptos_rust_sdk_v2::{
+use aptos_sdk::{
     Aptos, AptosConfig,
     account::Ed25519Account,
     transaction::{Script, ScriptArgument, TransactionBuilder, TransactionPayload},
@@ -126,7 +126,7 @@ async fn main() -> anyhow::Result<()> {
     println!("  Max gas: {}", raw_txn.max_gas_amount);
 
     // Sign the transaction
-    let _signed_txn = aptos_rust_sdk_v2::transaction::builder::sign_transaction(&raw_txn, &sender)?;
+    let _signed_txn = aptos_sdk::transaction::builder::sign_transaction(&raw_txn, &sender)?;
     println!("Transaction signed successfully");
 
     // Note: We won't submit this transaction since we don't have valid bytecode

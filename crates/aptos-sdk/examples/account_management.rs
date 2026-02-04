@@ -8,7 +8,7 @@
 //!
 //! Run with: `cargo run --example account_management --features "ed25519,secp256k1,mnemonic,faucet"`
 
-use aptos_rust_sdk_v2::{
+use aptos_sdk::{
     Aptos, AptosConfig,
     account::{Ed25519Account, Secp256k1Account},
 };

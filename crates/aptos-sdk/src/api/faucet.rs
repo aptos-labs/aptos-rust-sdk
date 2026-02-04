@@ -17,9 +17,9 @@ use url::Url;
 /// # Example
 ///
 /// ```rust,no_run
-/// use aptos_rust_sdk_v2::api::FaucetClient;
-/// use aptos_rust_sdk_v2::config::AptosConfig;
-/// use aptos_rust_sdk_v2::types::AccountAddress;
+/// use aptos_sdk::api::FaucetClient;
+/// use aptos_sdk::config::AptosConfig;
+/// use aptos_sdk::types::AccountAddress;
 ///
 /// #[tokio::main]
 /// async fn main() -> anyhow::Result<()> {

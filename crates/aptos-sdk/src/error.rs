@@ -243,7 +243,7 @@ impl AptosError {
     /// # Example
     ///
     /// ```rust
-    /// use aptos_rust_sdk_v2::AptosError;
+    /// use aptos_sdk::AptosError;
     ///
     /// let err = AptosError::api(500, "Internal server error with details...");
     /// let safe_msg = err.sanitized_message();

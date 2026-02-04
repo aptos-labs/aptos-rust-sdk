@@ -20,8 +20,8 @@ use std::fmt;
 /// # Example
 ///
 /// ```rust,ignore
-/// use aptos_rust_sdk_v2::account::MultiEd25519Account;
-/// use aptos_rust_sdk_v2::crypto::Ed25519PrivateKey;
+/// use aptos_sdk::account::MultiEd25519Account;
+/// use aptos_sdk::crypto::Ed25519PrivateKey;
 ///
 /// // Create a 2-of-3 multisig account
 /// let keys: Vec<_> = (0..3).map(|_| Ed25519PrivateKey::generate()).collect();

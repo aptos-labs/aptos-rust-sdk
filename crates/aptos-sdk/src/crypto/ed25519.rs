@@ -24,7 +24,7 @@ pub const ED25519_SIGNATURE_LENGTH: usize = 64;
 /// # Example
 ///
 /// ```rust
-/// use aptos_rust_sdk_v2::crypto::{Ed25519PrivateKey, Signer};
+/// use aptos_sdk::crypto::{Ed25519PrivateKey, Signer};
 ///
 /// // Generate a random key
 /// let private_key = Ed25519PrivateKey::generate();
@@ -94,7 +94,7 @@ impl Ed25519PrivateKey {
     /// # Example
     ///
     /// ```rust
-    /// use aptos_rust_sdk_v2::crypto::Ed25519PrivateKey;
+    /// use aptos_sdk::crypto::Ed25519PrivateKey;
     ///
     /// let key = Ed25519PrivateKey::from_aip80(
     ///     "ed25519-priv-0x0000000000000000000000000000000000000000000000000000000000000001"
@@ -131,7 +131,7 @@ impl Ed25519PrivateKey {
     /// # Example
     ///
     /// ```rust
-    /// use aptos_rust_sdk_v2::crypto::Ed25519PrivateKey;
+    /// use aptos_sdk::crypto::Ed25519PrivateKey;
     ///
     /// let key = Ed25519PrivateKey::generate();
     /// let aip80 = key.to_aip80();
@@ -178,7 +178,7 @@ impl fmt::Debug for Ed25519PrivateKey {
 /// # Example
 ///
 /// ```rust
-/// use aptos_rust_sdk_v2::crypto::{Ed25519PrivateKey, Ed25519PublicKey, Signer, Verifier};
+/// use aptos_sdk::crypto::{Ed25519PrivateKey, Ed25519PublicKey, Signer, Verifier};
 ///
 /// let private_key = Ed25519PrivateKey::generate();
 /// let public_key = private_key.public_key();

@@ -8,7 +8,7 @@
 //!
 //! Run with: `cargo run --example read_contract_state --features ed25519`
 
-use aptos_rust_sdk_v2::{Aptos, AptosConfig, types::AccountAddress};
+use aptos_sdk::{Aptos, AptosConfig, types::AccountAddress};
 use serde::Deserialize;
 
 /// CoinStore resource structure

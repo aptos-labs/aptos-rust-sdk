@@ -10,7 +10,7 @@
 //!
 //! Run with: `cargo run --example transaction_waiting --features "ed25519,faucet"`
 
-use aptos_rust_sdk_v2::{
+use aptos_sdk::{
     Aptos, AptosConfig,
     account::Ed25519Account,
     transaction::{BatchSummary, BatchTransactionStatus, EntryFunction, TransactionBatchBuilder},
@@ -71,7 +71,7 @@ async fn main() -> anyhow::Result<()> {
 async fn basic_submit_and_wait(
     aptos: &Aptos,
     sender: &Ed25519Account,
-    recipient: aptos_rust_sdk_v2::types::AccountAddress,
+    recipient: aptos_sdk::types::AccountAddress,
 ) -> anyhow::Result<()> {
     let payload = EntryFunction::apt_transfer(recipient, 100_000)?;
 
@@ -96,7 +96,7 @@ async fn basic_submit_and_wait(
 async fn custom_timeout(
     aptos: &Aptos,
     sender: &Ed25519Account,
-    recipient: aptos_rust_sdk_v2::types::AccountAddress,
+    recipient: aptos_sdk::types::AccountAddress,
 ) -> anyhow::Result<()> {
     let payload = EntryFunction::apt_transfer(recipient, 100_000)?;
 
@@ -135,7 +135,7 @@ async fn custom_timeout(
 async fn deferred_waiting(
     aptos: &Aptos,
     sender: &Ed25519Account,
-    recipient: aptos_rust_sdk_v2::types::AccountAddress,
+    recipient: aptos_sdk::types::AccountAddress,
 ) -> anyhow::Result<()> {
     let payload = EntryFunction::apt_transfer(recipient, 100_000)?;
 
@@ -303,7 +303,7 @@ async fn batch_sequential_waiting(aptos: &Aptos, sender: &Ed25519Account) -> any
 async fn parsing_results(
     aptos: &Aptos,
     sender: &Ed25519Account,
-    recipient: aptos_rust_sdk_v2::types::AccountAddress,
+    recipient: aptos_sdk::types::AccountAddress,
 ) -> anyhow::Result<()> {
     let payload = EntryFunction::apt_transfer(recipient, 100_000)?;
 
@@ -405,14 +405,14 @@ async fn parsing_results(
 async fn retry_patterns(
     aptos: &Aptos,
     sender: &Ed25519Account,
-    recipient: aptos_rust_sdk_v2::types::AccountAddress,
+    recipient: aptos_sdk::types::AccountAddress,
 ) -> anyhow::Result<()> {
     println!("Demonstrating safe retry patterns:");
 
     // Build a transaction
     let payload = EntryFunction::apt_transfer(recipient, 50_000)?;
     let raw_txn = aptos.build_transaction(sender, payload.into()).await?;
-    let signed_txn = aptos_rust_sdk_v2::transaction::builder::sign_transaction(&raw_txn, sender)?;
+    let signed_txn = aptos_sdk::transaction::builder::sign_transaction(&raw_txn, sender)?;
 
     // Pattern 1: Idempotent resubmission
     println!("\n1. Idempotent resubmission:");

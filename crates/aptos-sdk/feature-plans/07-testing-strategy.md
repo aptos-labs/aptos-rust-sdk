@@ -93,7 +93,7 @@ Location: `tests/e2e/`
 
 ```rust
 // tests/e2e/transfer.rs
-use aptos_rust_sdk_v2::testing::LocalNet;
+use aptos_sdk::testing::LocalNet;
 
 #[tokio::test]
 async fn test_apt_transfer_e2e() {

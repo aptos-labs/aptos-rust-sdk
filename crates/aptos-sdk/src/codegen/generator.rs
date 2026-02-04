@@ -313,7 +313,7 @@ impl<'a> ModuleGenerator<'a> {
     /// Writes import statements.
     #[allow(clippy::unused_self)] // Some methods take &self for future extensibility
     fn write_imports(&self, output: &mut String) -> std::fmt::Result {
-        writeln!(output, "use aptos_rust_sdk_v2::{{")?;
+        writeln!(output, "use aptos_sdk::{{")?;
         writeln!(output, "    account::Account,")?;
         writeln!(output, "    error::{{AptosError, AptosResult}},")?;
         writeln!(

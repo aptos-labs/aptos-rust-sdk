@@ -7,7 +7,7 @@
 //! # Example
 //!
 //! ```rust,ignore
-//! use aptos_rust_sdk_v2::retry::{RetryConfig, RetryPolicy};
+//! use aptos_sdk::retry::{RetryConfig, RetryPolicy};
 //!
 //! // Create a custom retry policy
 //! let config = RetryConfig::builder()

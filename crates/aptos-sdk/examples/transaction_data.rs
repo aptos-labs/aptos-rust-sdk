@@ -8,7 +8,7 @@
 //!
 //! Run with: `cargo run --example transaction_data --features "ed25519,faucet"`
 
-use aptos_rust_sdk_v2::{Aptos, AptosConfig, account::Ed25519Account, transaction::EntryFunction};
+use aptos_sdk::{Aptos, AptosConfig, account::Ed25519Account, transaction::EntryFunction};
 use serde::Deserialize;
 
 /// Coin deposit event from 0x1::coin

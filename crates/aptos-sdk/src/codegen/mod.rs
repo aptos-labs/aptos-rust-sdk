@@ -13,8 +13,8 @@
 //! # Runtime Code Generation
 //!
 //! ```rust,ignore
-//! use aptos_rust_sdk_v2::codegen::{ModuleGenerator, GeneratorConfig};
-//! use aptos_rust_sdk_v2::api::response::MoveModuleABI;
+//! use aptos_sdk::codegen::{ModuleGenerator, GeneratorConfig};
+//! use aptos_sdk::api::response::MoveModuleABI;
 //!
 //! // Load ABI from file or API
 //! let abi_json = std::fs::read_to_string("my_module_abi.json")?;
@@ -34,7 +34,7 @@
 //!
 //! ```rust,ignore
 //! // build.rs
-//! use aptos_rust_sdk_v2::codegen::build_helper;
+//! use aptos_sdk::codegen::build_helper;
 //!
 //! fn main() {
 //!     // Generate from local ABI files
@@ -56,7 +56,7 @@
 //! # With Move Source (Better Parameter Names)
 //!
 //! ```rust,ignore
-//! use aptos_rust_sdk_v2::codegen::{ModuleGenerator, GeneratorConfig, MoveSourceParser};
+//! use aptos_sdk::codegen::{ModuleGenerator, GeneratorConfig, MoveSourceParser};
 //!
 //! // Load ABI
 //! let abi: MoveModuleABI = serde_json::from_str(&abi_json)?;

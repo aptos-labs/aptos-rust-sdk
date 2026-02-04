@@ -6,7 +6,7 @@
 //!
 //! Run with: `cargo run --example multi_key_account --features "ed25519,secp256k1,faucet"`
 
-use aptos_rust_sdk_v2::{
+use aptos_sdk::{
     Aptos, AptosConfig,
     account::{AnyPrivateKey, MultiKeyAccount},
     crypto::{AnyPublicKey, Ed25519PrivateKey, Secp256k1PrivateKey},
@@ -95,7 +95,7 @@ async fn main() -> anyhow::Result<()> {
         multi_key_account.num_keys()
     );
     let signed_txn =
-        aptos_rust_sdk_v2::transaction::builder::sign_transaction(&raw_txn, &multi_key_account)?;
+        aptos_sdk::transaction::builder::sign_transaction(&raw_txn, &multi_key_account)?;
 
     // 8. Submit and wait for confirmation
     println!("Submitting transaction...");
@@ -119,7 +119,7 @@ async fn main() -> anyhow::Result<()> {
 /// Demonstrates how different parties can sign independently
 /// and combine signatures later.
 async fn demonstrate_distributed_signing() -> anyhow::Result<()> {
-    use aptos_rust_sdk_v2::types::ChainId;
+    use aptos_sdk::types::ChainId;
 
     // Scenario: 3 parties each have one key, need 2-of-3 to sign
 
@@ -156,7 +156,7 @@ async fn demonstrate_distributed_signing() -> anyhow::Result<()> {
     // Build a real transaction that each party will sign
     // In production, this would be shared among all parties (e.g., via a JSON payload)
     println!("\n--- Building Transaction for Distributed Signing ---");
-    let recipient = aptos_rust_sdk_v2::AccountAddress::ZERO; // Placeholder recipient
+    let recipient = aptos_sdk::AccountAddress::ZERO; // Placeholder recipient
     let payload = EntryFunction::apt_transfer(recipient, 1000)?;
 
     let raw_txn = TransactionBuilder::new()

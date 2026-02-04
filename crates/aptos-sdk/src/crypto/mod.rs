@@ -35,7 +35,7 @@
 //! # Example
 //!
 //! ```rust,ignore
-//! use aptos_rust_sdk_v2::crypto::{Ed25519PrivateKey, Signer};
+//! use aptos_sdk::crypto::{Ed25519PrivateKey, Signer};
 //!
 //! let private_key = Ed25519PrivateKey::generate();
 //! let message = b"hello world";
