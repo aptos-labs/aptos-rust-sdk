@@ -86,7 +86,7 @@ p256 = { version = "0.13", features = ["ecdsa", "sha256", "std"], optional = tru
 blst = { version = "0.3", optional = true }
 
 # Optional keyless dependencies
-jsonwebtoken = { version = "9.3", optional = true }
+jsonwebtoken = { version = "10.3", features = ["aws_lc_rs"], optional = true }
 
 # Optional indexer dependencies
 graphql_client = { version = "0.14", optional = true }
