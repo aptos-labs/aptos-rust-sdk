@@ -62,9 +62,28 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
       
-      - name: Verify crate can be packaged
-        run: cargo package -p aptos-sdk --allow-dirty
+      - name: Verify crates can be packaged
+        run: |
+          cargo package -p aptos-sdk-macros --allow-dirty
+          cargo package -p aptos-sdk --allow-dirty
       
+      # Publish macros crate first (aptos-sdk depends on it)
+      - name: Publish aptos-sdk-macros (dry run)
+        if: github.event.inputs.dry_run == 'true'
+        run: cargo publish -p aptos-sdk-macros --dry-run
+      
+      - name: Publish aptos-sdk-macros
+        if: github.event.inputs.dry_run != 'true' || github.event_name == 'push'
+        run: cargo publish -p aptos-sdk-macros
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      
+      # Wait for crates.io to index the macros crate
+      - name: Wait for crates.io indexing
+        if: github.event.inputs.dry_run != 'true' || github.event_name == 'push'
+        run: sleep 30
+      
+      # Publish main SDK crate
       - name: Publish aptos-sdk (dry run)
         if: github.event.inputs.dry_run == 'true'
         run: cargo publish -p aptos-sdk --dry-run
