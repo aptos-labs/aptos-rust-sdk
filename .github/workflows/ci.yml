@@ -217,6 +217,37 @@ jobs:
       - name: Check MSRV
         run: cargo check -p aptos-sdk
 
+  coverage:
+    name: Code Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.90"
+      
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+      
+      - name: Install cargo-tarpaulin
+        run: cargo install cargo-tarpaulin
+      
+      - name: Run coverage
+        run: |
+          cargo tarpaulin -p aptos-sdk --features "full" --skip-clean --out Xml --out Html --output-dir target/coverage
+        working-directory: crates/aptos-sdk
+      
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: crates/aptos-sdk/target/coverage/cobertura.xml
+          flags: unittests
+          name: aptos-sdk-coverage
+          fail_ci_if_error: false
+          verbose: true
+
   security-audit:
     name: Security Audit
     runs-on: ubuntu-latest

@@ -1,0 +1,51 @@
+# Codecov configuration for aptos-sdk
+# https://docs.codecov.com/docs/codecovyml-reference
+
+coverage:
+  # Coverage status checks
+  status:
+    project:
+      default:
+        # Require coverage to not drop by more than 1%
+        threshold: 1%
+        # Only fail if coverage drops significantly
+        target: auto
+    patch:
+      default:
+        # New code should have at least 50% coverage
+        target: 50%
+        # Allow some flexibility for patches
+        threshold: 5%
+
+  # Precision of coverage percentage
+  precision: 2
+  
+  # Round coverage percentage
+  round: down
+
+# Comment configuration for PRs
+comment:
+  # Post coverage report as a PR comment
+  layout: "reach,diff,flags,files"
+  behavior: default
+  require_changes: true
+  require_base: false
+  require_head: true
+
+# Flags for different test types
+flags:
+  unittests:
+    paths:
+      - crates/aptos-sdk/src/
+    carryforward: true
+
+# Ignore certain paths from coverage
+ignore:
+  - "crates/aptos-sdk/examples/**"
+  - "crates/aptos-sdk/tests/**"
+  - "**/tests/**"
+  - "**/*_test.rs"
+
+# GitHub Checks annotations
+github_checks:
+  annotations: true
