@@ -64,8 +64,8 @@ jobs:
       
       - name: Verify crates can be packaged
         run: |
-          cargo package -p aptos-sdk-macros --allow-dirty
-          cargo package -p aptos-sdk --allow-dirty
+          cargo package -p aptos-sdk-macros
+          cargo package -p aptos-sdk
       
       # Publish macros crate first (aptos-sdk depends on it)
       - name: Publish aptos-sdk-macros (dry run)
