@@ -81,7 +81,7 @@ jobs:
       # Wait for crates.io to index the macros crate
       - name: Wait for crates.io indexing
         if: github.event.inputs.dry_run != 'true' || github.event_name == 'push'
-        run: sleep 30
+        run: sleep 90
       
       # Publish main SDK crate
       - name: Publish aptos-sdk (dry run)
