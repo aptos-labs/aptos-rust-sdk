@@ -525,12 +525,16 @@ mod transaction_tests {
         // Build transaction with very short expiration (already expired)
         let payload =
             EntryFunction::apt_transfer(Ed25519Account::generate().address(), 1000).unwrap();
+        let chain_id = aptos
+            .ensure_chain_id()
+            .await
+            .expect("failed to resolve chain id");
 
         let raw_txn = aptos_sdk::transaction::TransactionBuilder::new()
             .sender(account.address())
             .sequence_number(0)
             .payload(payload.into())
-            .chain_id(aptos.chain_id())
+            .chain_id(chain_id)
             .expiration_timestamp_secs(1) // Already expired
             .build()
             .expect("failed to build");
@@ -644,12 +648,16 @@ mod multi_signer_tests {
             .get_sequence_number(sender.address())
             .await
             .unwrap_or(0);
+        let chain_id = aptos
+            .ensure_chain_id()
+            .await
+            .expect("failed to resolve chain id");
 
         let raw_txn = TransactionBuilder::new()
             .sender(sender.address())
             .sequence_number(sender_seq)
             .payload(payload.into())
-            .chain_id(aptos.chain_id())
+            .chain_id(chain_id)
             .max_gas_amount(100_000)
             .gas_unit_price(100)
             .build()
@@ -708,12 +716,16 @@ mod multi_signer_tests {
             .get_sequence_number(sender.address())
             .await
             .unwrap_or(0);
+        let chain_id = aptos
+            .ensure_chain_id()
+            .await
+            .expect("failed to resolve chain id");
 
         let raw_txn = TransactionBuilder::new()
             .sender(sender.address())
             .sequence_number(sender_seq)
             .payload(payload.into())
-            .chain_id(aptos.chain_id())
+            .chain_id(chain_id)
             .max_gas_amount(100_000)
             .gas_unit_price(100)
             .build()
@@ -797,12 +809,16 @@ mod multi_key_e2e_tests {
             .get_sequence_number(multi_key_account.address())
             .await
             .unwrap_or(0);
+        let chain_id = aptos
+            .ensure_chain_id()
+            .await
+            .expect("failed to resolve chain id");
 
         let raw_txn = TransactionBuilder::new()
             .sender(multi_key_account.address())
             .sequence_number(seq)
             .payload(payload.into())
-            .chain_id(aptos.chain_id())
+            .chain_id(chain_id)
             .max_gas_amount(100_000)
             .gas_unit_price(100)
             .build()
@@ -958,7 +974,6 @@ mod batch_tests {
     use super::*;
     use aptos_sdk::account::Ed25519Account;
     use aptos_sdk::transaction::{InputEntryFunctionData, TransactionBatchBuilder};
-    use aptos_sdk::types::ChainId;
 
     #[tokio::test]
     #[ignore]
@@ -977,12 +992,16 @@ mod batch_tests {
 
         wait_for_finality().await;
 
-        // Get sequence number
+        // Get sequence number and resolve chain ID
         let seq_num = aptos
             .fullnode()
             .get_sequence_number(sender.address())
             .await
             .expect("failed to get seq num");
+        let chain_id = aptos
+            .ensure_chain_id()
+            .await
+            .expect("failed to resolve chain id");
 
         // Build batch using TransactionBatchBuilder
         let payload1 = InputEntryFunctionData::transfer_apt(recipient1.address(), 10_000_000)
@@ -993,7 +1012,7 @@ mod batch_tests {
         let batch = TransactionBatchBuilder::new()
             .sender(sender.address())
             .starting_sequence_number(seq_num)
-            .chain_id(ChainId::new(4)) // localnet chain id
+            .chain_id(chain_id)
             .add_payload(payload1)
             .add_payload(payload2)
             .build_and_sign(&sender)
