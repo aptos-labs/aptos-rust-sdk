@@ -5,7 +5,7 @@ use crate::crypto::{Ed25519PrivateKey, Ed25519PublicKey, KEYLESS_SCHEME};
 use crate::error::{AptosError, AptosResult};
 use crate::types::AccountAddress;
 use async_trait::async_trait;
-use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode};
+use jsonwebtoken::dangerous::insecure_decode as dangerous_insecure_decode;
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use sha3::{Digest, Sha3_256};
@@ -571,13 +571,7 @@ fn decode_claims(jwt: &str) -> AptosResult<JwtClaims> {
     // SECURITY: Signature validation is intentionally disabled.
     // See function documentation for the security rationale.
     // JWT authenticity is verified by pepper/prover services and ZK proofs.
-    let mut validation = Validation::new(Algorithm::RS256);
-    validation.insecure_disable_signature_validation();
-    validation.validate_aud = false;
-    validation.validate_exp = false;
-    validation.set_required_spec_claims::<String>(&[]);
-
-    let data = decode::<JwtClaims>(jwt, &DecodingKey::from_secret(&[]), &validation)
+    let data = dangerous_insecure_decode::<JwtClaims>(jwt)
         .map_err(|e| AptosError::InvalidJwt(format!("failed to decode JWT claims: {e}")))?;
     Ok(data.claims)
 }
@@ -652,7 +646,7 @@ fn sha3_256_bytes(data: &[u8]) -> [u8; 32] {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use jsonwebtoken::{EncodingKey, Header, encode};
+    use jsonwebtoken::{Algorithm, EncodingKey, Header, encode};
 
     struct StaticPepperService {
         pepper: Pepper,
