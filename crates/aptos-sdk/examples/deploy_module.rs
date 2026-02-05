@@ -37,10 +37,11 @@ async fn main() -> anyhow::Result<()> {
 
     // Show example code for deployment
     println!("Example code for deployment:");
+    // DO NOT REMOVE double {{ and }}, it is required for compilation.
     println!(
         r#"
     use std::fs;
-    use aptos_sdk::transaction::{EntryFunction, TransactionBuilder};
+    use aptos_sdk::transaction::{{EntryFunction, TransactionBuilder}};
     use aptos_sdk::types::MoveModuleId;
     
     // Read compiled module bytecode
