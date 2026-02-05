@@ -10,7 +10,7 @@ on:
       dry_run:
         description: 'Dry run (do not actually publish)'
         required: false
-        default: 'true'
+        default: true
         type: boolean
 
 env:
@@ -69,27 +69,27 @@ jobs:
       
       # Publish macros crate first (aptos-sdk depends on it)
       - name: Publish aptos-sdk-macros (dry run)
-        if: github.event.inputs.dry_run == 'true'
+        if: inputs.dry_run == true
         run: cargo publish -p aptos-sdk-macros --locked --dry-run
       
       - name: Publish aptos-sdk-macros
-        if: github.event.inputs.dry_run != 'true' || github.event_name == 'push'
+        if: inputs.dry_run != true || github.event_name == 'push'
         run: cargo publish -p aptos-sdk-macros --locked
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
       
-      # Wait for crates.io to index the macros crate
+      # Wait for crates.io to index the macros crate (120s for reliability during high load)
       - name: Wait for crates.io indexing
-        if: github.event.inputs.dry_run != 'true' || github.event_name == 'push'
-        run: sleep 90
+        if: inputs.dry_run != true || github.event_name == 'push'
+        run: sleep 120
       
       # Publish main SDK crate
       - name: Publish aptos-sdk (dry run)
-        if: github.event.inputs.dry_run == 'true'
+        if: inputs.dry_run == true
         run: cargo publish -p aptos-sdk --locked --dry-run
       
       - name: Publish aptos-sdk
-        if: github.event.inputs.dry_run != 'true' || github.event_name == 'push'
+        if: inputs.dry_run != true || github.event_name == 'push'
         run: cargo publish -p aptos-sdk --locked
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}

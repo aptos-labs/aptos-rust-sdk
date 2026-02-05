@@ -49,8 +49,8 @@ pub use account::{Account, AnyAccount, AuthenticationKey};
 pub use ed25519::{Ed25519Account, Ed25519SingleKeyAccount};
 #[cfg(feature = "keyless")]
 pub use keyless::{
-    EphemeralKeyPair, HttpPepperService, HttpProverService, KeylessAccount, KeylessSignature,
-    OidcProvider, Pepper, PepperService, ProverService, ZkProof,
+    EphemeralKeyPair, HttpPepperService, HttpProverService, JwkSet, KeylessAccount,
+    KeylessSignature, OidcProvider, Pepper, PepperService, ProverService, ZkProof,
 };
 #[cfg(feature = "mnemonic")]
 pub use mnemonic::Mnemonic;
