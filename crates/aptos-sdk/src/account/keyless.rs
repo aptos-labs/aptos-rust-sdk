@@ -5,7 +5,7 @@ use crate::crypto::{Ed25519PrivateKey, Ed25519PublicKey, KEYLESS_SCHEME};
 use crate::error::{AptosError, AptosResult};
 use crate::types::AccountAddress;
 use async_trait::async_trait;
-use jsonwebtoken::dangerous::insecure_decode as dangerous_insecure_decode;
+use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode, decode_header, jwk::JwkSet};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use sha3::{Digest, Sha3_256};
@@ -342,15 +342,17 @@ pub struct KeylessAccount {
 impl KeylessAccount {
     /// Creates a keyless account from an OIDC JWT token.
     ///
-    /// Note: JWT signature validation is not performed. Validate the JWT
-    /// using the OIDC provider before calling this method.
+    /// This method verifies the JWT signature using the OIDC provider's JWKS endpoint
+    /// before extracting claims and creating the account.
     ///
     /// # Errors
     ///
     /// This function will return an error if:
+    /// - The JWT signature verification fails
     /// - The JWT cannot be decoded or is missing required claims (iss, aud, sub, nonce)
     /// - The JWT nonce doesn't match the ephemeral key's nonce
     /// - The JWT is expired
+    /// - The JWKS cannot be fetched from the provider
     /// - The pepper service fails to return a pepper
     /// - The prover service fails to generate a proof
     pub async fn from_jwt(
@@ -359,7 +361,20 @@ impl KeylessAccount {
         pepper_service: &dyn PepperService,
         prover_service: &dyn ProverService,
     ) -> AptosResult<Self> {
-        let claims = decode_claims(jwt)?;
+        // First, decode without verification to get the issuer for JWKS lookup
+        let unverified_claims = decode_claims_unverified(jwt)?;
+        let issuer = unverified_claims
+            .iss
+            .as_ref()
+            .ok_or_else(|| AptosError::InvalidJwt("missing iss claim".into()))?;
+
+        // Determine provider and fetch JWKS
+        let provider = OidcProvider::from_issuer(issuer);
+        let client = reqwest::Client::new();
+        let jwks = fetch_jwks(&client, provider.jwks_url()).await?;
+
+        // Now verify and decode the JWT properly
+        let claims = decode_and_verify_jwt(jwt, &jwks)?;
         let (issuer, audience, user_id, exp, nonce) = extract_claims(&claims)?;
 
         if nonce != ephemeral_key.nonce() {
@@ -427,9 +442,12 @@ impl KeylessAccount {
 
     /// Refreshes the proof using a new JWT.
     ///
+    /// This method verifies the JWT signature using the OIDC provider's JWKS endpoint.
+    ///
     /// # Errors
     ///
     /// Returns an error if:
+    /// - The JWT signature verification fails
     /// - The JWT cannot be decoded
     /// - The JWT nonce does not match the ephemeral key
     /// - The JWT identity does not match the account
@@ -439,7 +457,10 @@ impl KeylessAccount {
         jwt: &str,
         prover_service: &dyn ProverService,
     ) -> AptosResult<()> {
-        let claims = decode_claims(jwt)?;
+        // Fetch JWKS and verify JWT
+        let client = reqwest::Client::new();
+        let jwks = fetch_jwks(&client, self.provider.jwks_url()).await?;
+        let claims = decode_and_verify_jwt(jwt, &jwks)?;
         let (issuer, audience, user_id, exp, nonce) = extract_claims(&claims)?;
 
         if nonce != self.ephemeral_key.nonce() {
@@ -468,6 +489,56 @@ impl KeylessAccount {
             ephemeral_signature: signature.to_vec(),
             proof: self.proof.as_bytes().to_vec(),
         }
+    }
+
+    /// Creates a keyless account from pre-verified JWT claims.
+    ///
+    /// This is useful for testing or when JWT verification is handled externally.
+    /// The caller is responsible for ensuring the JWT was properly verified.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if:
+    /// - The nonce doesn't match the ephemeral key's nonce
+    /// - The pepper service fails to return a pepper
+    /// - The prover service fails to generate a proof
+    #[doc(hidden)]
+    #[allow(clippy::too_many_arguments)]
+    pub async fn from_verified_claims(
+        issuer: String,
+        audience: String,
+        user_id: String,
+        nonce: String,
+        exp: Option<SystemTime>,
+        ephemeral_key: EphemeralKeyPair,
+        pepper_service: &dyn PepperService,
+        prover_service: &dyn ProverService,
+        jwt_for_services: &str,
+    ) -> AptosResult<Self> {
+        if nonce != ephemeral_key.nonce() {
+            return Err(AptosError::InvalidJwt("nonce mismatch".into()));
+        }
+
+        let pepper = pepper_service.get_pepper(jwt_for_services).await?;
+        let proof = prover_service
+            .generate_proof(jwt_for_services, &ephemeral_key, &pepper)
+            .await?;
+
+        let address = derive_keyless_address(&issuer, &audience, &user_id, &pepper);
+        let auth_key = AuthenticationKey::new(address.to_bytes());
+
+        Ok(Self {
+            provider: OidcProvider::from_issuer(&issuer),
+            issuer,
+            audience,
+            user_id,
+            pepper,
+            proof,
+            address,
+            auth_key,
+            jwt_expiration: exp,
+            ephemeral_key,
+        })
     }
 }
 
@@ -533,45 +604,92 @@ impl AudClaim {
     }
 }
 
-/// Decodes JWT claims without performing signature validation.
+/// Fetches the JWKS (JSON Web Key Set) from an OIDC provider.
 ///
-/// # Security Notice
+/// # Errors
 ///
-/// **IMPORTANT**: This function intentionally disables JWT signature validation.
-/// This is NOT a security vulnerability - it is by design for the keyless account flow.
+/// Returns an error if the JWKS cannot be fetched or parsed.
+async fn fetch_jwks(client: &reqwest::Client, jwks_url: &str) -> AptosResult<JwkSet> {
+    let response = client.get(jwks_url).send().await?;
+
+    if !response.status().is_success() {
+        return Err(AptosError::InvalidJwt(format!(
+            "JWKS endpoint returned status: {}",
+            response.status()
+        )));
+    }
+
+    let jwks: JwkSet = response.json().await?;
+    Ok(jwks)
+}
+
+/// Decodes and verifies a JWT using the provided JWKS.
 ///
-/// ## Why signature validation is disabled here:
+/// This function:
+/// 1. Extracts the `kid` (key ID) from the JWT header
+/// 2. Finds the matching key in the JWKS
+/// 3. Verifies the signature and decodes the claims
 ///
-/// In the Aptos keyless authentication flow, JWT signature verification is performed
-/// separately through a different mechanism:
+/// # Errors
 ///
-/// 1. The user obtains a JWT from an OIDC provider (Google, Apple, etc.)
-/// 2. This function extracts claims (iss, aud, sub, nonce) for address derivation
-/// 3. The actual cryptographic verification happens via:
-///    - The pepper service validates the JWT before returning a pepper
-///    - The prover service validates the JWT before generating a ZK proof
-///    - On-chain verification uses the ZK proof to validate the JWT was legitimate
+/// Returns an error if:
+/// - The JWT header cannot be decoded
+/// - No matching key is found in the JWKS
+/// - The signature verification fails
+/// - The claims cannot be decoded
+fn decode_and_verify_jwt(jwt: &str, jwks: &JwkSet) -> AptosResult<JwtClaims> {
+    // Decode header to get the key ID
+    let header = decode_header(jwt)
+        .map_err(|e| AptosError::InvalidJwt(format!("failed to decode JWT header: {e}")))?;
+
+    let kid = header
+        .kid
+        .as_ref()
+        .ok_or_else(|| AptosError::InvalidJwt("JWT header missing 'kid' field".into()))?;
+
+    // Find the matching key in the JWKS
+    let signing_key = jwks
+        .find(kid)
+        .ok_or_else(|| AptosError::InvalidJwt(format!("no matching key found for kid: {kid}")))?;
+
+    // Create decoding key from JWK
+    let decoding_key = DecodingKey::from_jwk(signing_key)
+        .map_err(|e| AptosError::InvalidJwt(format!("failed to create decoding key: {e}")))?;
+
+    // Determine the algorithm from the JWK or header
+    let algorithm = signing_key
+        .common
+        .key_algorithm
+        .and_then(|alg| match alg {
+            jsonwebtoken::jwk::KeyAlgorithm::RS256 => Some(Algorithm::RS256),
+            jsonwebtoken::jwk::KeyAlgorithm::RS384 => Some(Algorithm::RS384),
+            jsonwebtoken::jwk::KeyAlgorithm::RS512 => Some(Algorithm::RS512),
+            jsonwebtoken::jwk::KeyAlgorithm::ES256 => Some(Algorithm::ES256),
+            jsonwebtoken::jwk::KeyAlgorithm::ES384 => Some(Algorithm::ES384),
+            _ => None,
+        })
+        .unwrap_or(header.alg);
+
+    // Configure validation - we'll validate exp ourselves with more detailed errors
+    let mut validation = Validation::new(algorithm);
+    validation.validate_exp = false;
+    validation.validate_aud = false; // We'll check aud after decoding
+    validation.set_required_spec_claims::<String>(&[]);
+
+    let data = decode::<JwtClaims>(jwt, &decoding_key, &validation)
+        .map_err(|e| AptosError::InvalidJwt(format!("JWT verification failed: {e}")))?;
+
+    Ok(data.claims)
+}
+
+/// Decodes JWT claims without signature verification.
 ///
-/// The ZK proof cryptographically proves that the user possessed a valid JWT from
-/// the claimed issuer, without revealing the JWT itself on-chain.
-///
-/// ## Do NOT use this function for general JWT validation
-///
-/// This function should ONLY be used within the keyless account creation flow where
-/// JWT authenticity is verified through the pepper/prover services and ZK proofs.
-/// For general JWT validation, use the `jsonwebtoken` crate with proper signature
-/// verification using the OIDC provider's JWKS endpoint.
-///
-/// ## Security model
-///
-/// - Pepper service: Validates JWT signature using OIDC provider's JWKS
-/// - Prover service: Validates JWT signature before generating proof
-/// - Blockchain: Verifies ZK proof that commits to valid JWT claims
-fn decode_claims(jwt: &str) -> AptosResult<JwtClaims> {
-    // SECURITY: Signature validation is intentionally disabled.
-    // See function documentation for the security rationale.
-    // JWT authenticity is verified by pepper/prover services and ZK proofs.
-    let data = dangerous_insecure_decode::<JwtClaims>(jwt)
+/// This is used only to extract the issuer before we know which JWKS to fetch.
+/// The JWT is fully verified afterwards using `decode_and_verify_jwt`.
+fn decode_claims_unverified(jwt: &str) -> AptosResult<JwtClaims> {
+    // Use dangerous decode only for initial issuer extraction
+    // The JWT will be properly verified after we fetch the JWKS
+    let data = jsonwebtoken::dangerous::insecure_decode::<JwtClaims>(jwt)
         .map_err(|e| AptosError::InvalidJwt(format!("failed to decode JWT claims: {e}")))?;
     Ok(data.claims)
 }
@@ -692,6 +810,7 @@ mod tests {
             .expect("time went backwards")
             .as_secs();
 
+        // Create a test JWT for the services (they don't validate it)
         let claims = TestClaims {
             iss: "https://accounts.google.com".to_string(),
             aud: "client-id".to_string(),
@@ -714,14 +833,118 @@ mod tests {
             proof: ZkProof::new(vec![9, 9, 9]),
         };
 
-        let account = KeylessAccount::from_jwt(&jwt, ephemeral, &pepper_service, &prover_service)
-            .await
-            .unwrap();
+        // Use from_verified_claims for unit testing since we can't mock JWKS
+        let exp_time = UNIX_EPOCH + std::time::Duration::from_secs(now + 3600);
+        let account = KeylessAccount::from_verified_claims(
+            "https://accounts.google.com".to_string(),
+            "client-id".to_string(),
+            "user-123".to_string(),
+            ephemeral.nonce().to_string(),
+            Some(exp_time),
+            ephemeral,
+            &pepper_service,
+            &prover_service,
+            &jwt,
+        )
+        .await
+        .unwrap();
 
         assert_eq!(account.issuer(), "https://accounts.google.com");
         assert_eq!(account.audience(), "client-id");
         assert_eq!(account.user_id(), "user-123");
         assert!(account.is_valid());
         assert!(!account.address().is_zero());
+    }
+
+    #[tokio::test]
+    async fn test_keyless_account_nonce_mismatch() {
+        let ephemeral = EphemeralKeyPair::generate(3600);
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("time went backwards")
+            .as_secs();
+
+        let claims = TestClaims {
+            iss: "https://accounts.google.com".to_string(),
+            aud: "client-id".to_string(),
+            sub: "user-123".to_string(),
+            exp: now + 3600,
+            nonce: ephemeral.nonce().to_string(),
+        };
+
+        let jwt = encode(
+            &Header::new(Algorithm::HS256),
+            &claims,
+            &EncodingKey::from_secret(b"secret"),
+        )
+        .unwrap();
+
+        let pepper_service = StaticPepperService {
+            pepper: Pepper::new(vec![1, 2, 3, 4]),
+        };
+        let prover_service = StaticProverService {
+            proof: ZkProof::new(vec![9, 9, 9]),
+        };
+
+        // Use a different nonce to trigger mismatch
+        let result = KeylessAccount::from_verified_claims(
+            "https://accounts.google.com".to_string(),
+            "client-id".to_string(),
+            "user-123".to_string(),
+            "wrong-nonce".to_string(), // This doesn't match ephemeral.nonce()
+            None,
+            ephemeral,
+            &pepper_service,
+            &prover_service,
+            &jwt,
+        )
+        .await;
+
+        assert!(result.is_err());
+        assert!(matches!(result, Err(AptosError::InvalidJwt(_))));
+    }
+
+    #[test]
+    fn test_decode_claims_unverified() {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("time went backwards")
+            .as_secs();
+
+        let claims = TestClaims {
+            iss: "https://accounts.google.com".to_string(),
+            aud: "test-aud".to_string(),
+            sub: "test-sub".to_string(),
+            exp: now + 3600,
+            nonce: "test-nonce".to_string(),
+        };
+
+        let jwt = encode(
+            &Header::new(Algorithm::HS256),
+            &claims,
+            &EncodingKey::from_secret(b"secret"),
+        )
+        .unwrap();
+
+        let decoded = decode_claims_unverified(&jwt).unwrap();
+        assert_eq!(decoded.iss.unwrap(), "https://accounts.google.com");
+        assert_eq!(decoded.sub.unwrap(), "test-sub");
+        assert_eq!(decoded.nonce.unwrap(), "test-nonce");
+    }
+
+    #[test]
+    fn test_oidc_provider_detection() {
+        assert!(matches!(
+            OidcProvider::from_issuer("https://accounts.google.com"),
+            OidcProvider::Google
+        ));
+        assert!(matches!(
+            OidcProvider::from_issuer("https://appleid.apple.com"),
+            OidcProvider::Apple
+        ));
+        assert!(matches!(
+            OidcProvider::from_issuer("https://unknown.example.com"),
+            OidcProvider::Custom { .. }
+        ));
     }
 }
