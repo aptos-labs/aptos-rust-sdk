@@ -718,11 +718,8 @@ const JWKS_FETCH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(1
 /// - The JWKS endpoint returns a non-success status code
 /// - The response cannot be parsed as valid JWKS JSON
 async fn fetch_jwks(client: &reqwest::Client, jwks_url: &str) -> AptosResult<JwkSet> {
-    let response = client
-        .get(jwks_url)
-        .timeout(JWKS_FETCH_TIMEOUT)
-        .send()
-        .await?;
+    // Note: timeout is configured on the client, not per-request
+    let response = client.get(jwks_url).send().await?;
 
     if !response.status().is_success() {
         return Err(AptosError::InvalidJwt(format!(
@@ -775,11 +772,19 @@ fn decode_and_verify_jwt(jwt: &str, jwks: &JwkSet) -> AptosResult<JwtClaims> {
         .ok_or_else(|| AptosError::InvalidJwt("JWK missing 'alg' (key_algorithm) field".into()))?;
 
     let algorithm = match jwk_alg {
+        // RSA algorithms
         jsonwebtoken::jwk::KeyAlgorithm::RS256 => Algorithm::RS256,
         jsonwebtoken::jwk::KeyAlgorithm::RS384 => Algorithm::RS384,
         jsonwebtoken::jwk::KeyAlgorithm::RS512 => Algorithm::RS512,
+        // RSA-PSS algorithms
+        jsonwebtoken::jwk::KeyAlgorithm::PS256 => Algorithm::PS256,
+        jsonwebtoken::jwk::KeyAlgorithm::PS384 => Algorithm::PS384,
+        jsonwebtoken::jwk::KeyAlgorithm::PS512 => Algorithm::PS512,
+        // ECDSA algorithms
         jsonwebtoken::jwk::KeyAlgorithm::ES256 => Algorithm::ES256,
         jsonwebtoken::jwk::KeyAlgorithm::ES384 => Algorithm::ES384,
+        // EdDSA algorithm
+        jsonwebtoken::jwk::KeyAlgorithm::EdDSA => Algorithm::EdDSA,
         _ => {
             return Err(AptosError::InvalidJwt(format!(
                 "unsupported JWK algorithm: {jwk_alg:?}"
@@ -1077,5 +1082,87 @@ mod tests {
             OidcProvider::from_issuer("https://unknown.example.com"),
             OidcProvider::Custom { .. }
         ));
+    }
+
+    #[test]
+    fn test_decode_and_verify_jwt_missing_kid() {
+        // Create a JWT without a kid in the header
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("time went backwards")
+            .as_secs();
+
+        let claims = TestClaims {
+            iss: "https://accounts.google.com".to_string(),
+            aud: "test-aud".to_string(),
+            sub: "test-sub".to_string(),
+            exp: now + 3600,
+            nonce: "test-nonce".to_string(),
+        };
+
+        // HS256 JWT without kid
+        let jwt = encode(
+            &Header::new(Algorithm::HS256),
+            &claims,
+            &EncodingKey::from_secret(b"secret"),
+        )
+        .unwrap();
+
+        // Empty JWKS
+        let jwks = JwkSet { keys: vec![] };
+
+        let result = decode_and_verify_jwt(&jwt, &jwks);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(
+            matches!(&err, AptosError::InvalidJwt(msg) if msg.contains("kid")),
+            "Expected error about missing kid, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn test_decode_and_verify_jwt_no_matching_key() {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("time went backwards")
+            .as_secs();
+
+        let claims = TestClaims {
+            iss: "https://accounts.google.com".to_string(),
+            aud: "test-aud".to_string(),
+            sub: "test-sub".to_string(),
+            exp: now + 3600,
+            nonce: "test-nonce".to_string(),
+        };
+
+        // Create JWT with a kid in header (using HS256 for encoding)
+        let mut header = Header::new(Algorithm::HS256);
+        header.kid = Some("test-kid-123".to_string());
+
+        let jwt = encode(&header, &claims, &EncodingKey::from_secret(b"secret")).unwrap();
+
+        // Empty JWKS - no matching key
+        let jwks = JwkSet { keys: vec![] };
+
+        let result = decode_and_verify_jwt(&jwt, &jwks);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(
+            matches!(&err, AptosError::InvalidJwt(msg) if msg.contains("no matching key")),
+            "Expected error about no matching key, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn test_decode_and_verify_jwt_invalid_jwt_format() {
+        let jwks = JwkSet { keys: vec![] };
+
+        // Completely invalid JWT
+        let result = decode_and_verify_jwt("not-a-valid-jwt", &jwks);
+        assert!(result.is_err());
+
+        // JWT with invalid base64
+        let result = decode_and_verify_jwt("aaa.bbb.ccc", &jwks);
+        assert!(result.is_err());
     }
 }
