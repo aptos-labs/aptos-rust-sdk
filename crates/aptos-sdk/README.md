@@ -17,7 +17,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-aptos-sdk = "0.1"
+aptos-sdk = "0.3"
 ```
 
 Basic usage:

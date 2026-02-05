@@ -30,7 +30,7 @@ rust-version = "1.90.0"
 # Internal crate dependencies.
 # Please do not add any test features here: they should be declared by the individual crate.
 aptos-sdk = { path = "crates/aptos-sdk" }
-aptos-sdk-macros = { path = "crates/aptos-sdk-macros" }
+aptos-sdk-macros = { version = "0.1.0", path = "crates/aptos-sdk-macros" }
 
 # External crate dependencies.
 # Please do not add any test features here: they should be declared by the individual crate.
