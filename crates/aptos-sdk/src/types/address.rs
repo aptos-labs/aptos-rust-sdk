@@ -1,0 +1,642 @@
+//! Account address type.
+//!
+//! Aptos account addresses are 32-byte values, typically displayed as
+//! 64 hexadecimal characters with a `0x` prefix.
+
+use crate::error::{AptosError, AptosResult};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::fmt;
+use std::str::FromStr;
+
+/// The length of an account address in bytes.
+pub const ADDRESS_LENGTH: usize = 32;
+
+/// A 32-byte Aptos account address.
+///
+/// Account addresses on Aptos are derived from public keys through a
+/// specific derivation scheme that includes an authentication key prefix.
+///
+/// # Display Format (AIP-40)
+///
+/// The `Display` trait follows [AIP-40](https://github.com/aptos-foundation/AIPs/blob/main/aips/aip-40.md):
+/// - **Special addresses** (0x1 through 0xf) use SHORT format: `0x1`, `0x3`, `0xa`
+/// - **Normal addresses** use LONG format: full 64 hex characters with `0x` prefix
+///
+/// Use `to_long_string()` to always get the full 64-character format,
+/// or `to_short_string()` to always get the trimmed format.
+///
+/// # Example
+///
+/// ```rust
+/// use aptos_sdk::AccountAddress;
+///
+/// // Parse from hex string
+/// let addr = AccountAddress::from_hex("0x1").unwrap();
+///
+/// // Display uses AIP-40: SHORT for special addresses
+/// assert_eq!(addr.to_string(), "0x1");
+///
+/// // Explicit long/short string methods
+/// assert_eq!(addr.to_long_string(), "0x0000000000000000000000000000000000000000000000000000000000000001");
+/// assert_eq!(addr.to_short_string(), "0x1");
+/// ```
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct AccountAddress([u8; ADDRESS_LENGTH]);
+
+impl AccountAddress {
+    /// The "zero" address (all zeros).
+    pub const ZERO: Self = Self([0u8; ADDRESS_LENGTH]);
+
+    /// The core framework address (0x1).
+    pub const ONE: Self = Self::from_u64(1);
+
+    /// The token framework address (0x3).
+    pub const THREE: Self = Self::from_u64(3);
+
+    /// The fungible asset framework address (0x4).
+    pub const FOUR: Self = Self::from_u64(4);
+
+    /// The APT fungible asset metadata address (0xa).
+    pub const A: Self = Self::from_u64(10);
+
+    /// Creates an address from a byte array.
+    pub const fn new(bytes: [u8; ADDRESS_LENGTH]) -> Self {
+        Self(bytes)
+    }
+
+    /// Creates an address from a u64 value (for small addresses like 0x1).
+    const fn from_u64(value: u64) -> Self {
+        let mut bytes = [0u8; ADDRESS_LENGTH];
+        let value_bytes = value.to_be_bytes();
+        bytes[ADDRESS_LENGTH - 8] = value_bytes[0];
+        bytes[ADDRESS_LENGTH - 7] = value_bytes[1];
+        bytes[ADDRESS_LENGTH - 6] = value_bytes[2];
+        bytes[ADDRESS_LENGTH - 5] = value_bytes[3];
+        bytes[ADDRESS_LENGTH - 4] = value_bytes[4];
+        bytes[ADDRESS_LENGTH - 3] = value_bytes[5];
+        bytes[ADDRESS_LENGTH - 2] = value_bytes[6];
+        bytes[ADDRESS_LENGTH - 1] = value_bytes[7];
+        Self(bytes)
+    }
+
+    /// Creates an address from a hex string (with or without `0x` prefix).
+    ///
+    /// The hex string must contain at least one hex digit. Empty strings and
+    /// bare "0x" prefixes are rejected as invalid addresses.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the input is empty, contains invalid UTF-8, has no hex digits
+    /// after the prefix, exceeds the maximum length (64 hex characters), or contains
+    /// invalid hex characters.
+    pub fn from_hex<T: AsRef<[u8]>>(hex_str: T) -> AptosResult<Self> {
+        let hex_str = hex_str.as_ref();
+
+        // Reject empty input
+        if hex_str.is_empty() {
+            return Err(AptosError::InvalidAddress(
+                "address cannot be empty".to_string(),
+            ));
+        }
+
+        let hex_str = if hex_str.starts_with(b"0x") || hex_str.starts_with(b"0X") {
+            &hex_str[2..]
+        } else {
+            hex_str
+        };
+
+        // Handle short addresses by zero-padding
+        let hex_string =
+            std::str::from_utf8(hex_str).map_err(|e| AptosError::InvalidAddress(e.to_string()))?;
+
+        // Reject empty hex string (e.g., just "0x" prefix with no digits)
+        if hex_string.is_empty() {
+            return Err(AptosError::InvalidAddress(
+                "address must contain at least one hex digit".to_string(),
+            ));
+        }
+
+        if hex_string.len() > ADDRESS_LENGTH * 2 {
+            return Err(AptosError::InvalidAddress(format!(
+                "address too long: {} characters (max {})",
+                hex_string.len(),
+                ADDRESS_LENGTH * 2
+            )));
+        }
+
+        // Zero-pad to full length
+        let padded = format!("{hex_string:0>64}");
+        let bytes = hex::decode(&padded)?;
+
+        let mut address = [0u8; ADDRESS_LENGTH];
+        address.copy_from_slice(&bytes);
+        Ok(Self(address))
+    }
+
+    /// Creates an address from a byte slice.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the byte slice is not exactly 32 bytes long.
+    pub fn from_bytes<T: AsRef<[u8]>>(bytes: T) -> AptosResult<Self> {
+        let bytes = bytes.as_ref();
+        if bytes.len() != ADDRESS_LENGTH {
+            return Err(AptosError::InvalidAddress(format!(
+                "expected {} bytes, got {}",
+                ADDRESS_LENGTH,
+                bytes.len()
+            )));
+        }
+        let mut address = [0u8; ADDRESS_LENGTH];
+        address.copy_from_slice(bytes);
+        Ok(Self(address))
+    }
+
+    /// Returns the address as a byte slice.
+    #[inline]
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.0
+    }
+
+    /// Returns the address as a byte array.
+    #[inline]
+    pub fn to_bytes(&self) -> [u8; ADDRESS_LENGTH] {
+        self.0
+    }
+
+    /// Returns the address as a hex string with `0x` prefix (always 66 characters).
+    ///
+    /// This is an alias for `to_long_string()`.
+    pub fn to_hex(&self) -> String {
+        self.to_long_string()
+    }
+
+    /// Returns the full 64-character hex string with `0x` prefix.
+    ///
+    /// This always returns the LONG format regardless of whether the address is special.
+    /// For example, `0x1` becomes `0x0000000000000000000000000000000000000000000000000000000000000001`.
+    pub fn to_long_string(&self) -> String {
+        format!("0x{}", hex::encode(self.0))
+    }
+
+    /// Returns a short hex string, trimming leading zeros.
+    ///
+    /// For example, `0x0000...0001` becomes `0x1`.
+    pub fn to_short_string(&self) -> String {
+        let hex = hex::encode(self.0);
+        let trimmed = hex.trim_start_matches('0');
+        if trimmed.is_empty() {
+            "0x0".to_string()
+        } else {
+            format!("0x{trimmed}")
+        }
+    }
+
+    /// Returns the standard string representation following AIP-40.
+    ///
+    /// - Special addresses (0x1 through 0xf) use SHORT format
+    /// - Normal addresses use LONG format (full 64 hex characters)
+    pub fn to_standard_string(&self) -> String {
+        if self.is_special() {
+            self.to_short_string()
+        } else {
+            self.to_long_string()
+        }
+    }
+
+    /// Returns true if this is the zero address.
+    #[inline]
+    pub fn is_zero(&self) -> bool {
+        self == &Self::ZERO
+    }
+
+    /// Returns true if this is a "special" address (first 63 bytes are zero,
+    /// and the last byte is non-zero and less than 16).
+    ///
+    /// Special addresses include framework addresses like 0x1, 0x3, 0x4.
+    #[inline]
+    pub fn is_special(&self) -> bool {
+        self.0[..ADDRESS_LENGTH - 1].iter().all(|&b| b == 0)
+            && self.0[ADDRESS_LENGTH - 1] > 0
+            && self.0[ADDRESS_LENGTH - 1] < 16
+    }
+}
+
+impl Default for AccountAddress {
+    fn default() -> Self {
+        Self::ZERO
+    }
+}
+
+impl fmt::Debug for AccountAddress {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "AccountAddress({})", self.to_short_string())
+    }
+}
+
+impl fmt::Display for AccountAddress {
+    /// Formats the address following AIP-40:
+    /// - Special addresses (0x1 through 0xf) use SHORT format
+    /// - Normal addresses use LONG format (full 64 hex characters)
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.to_standard_string())
+    }
+}
+
+impl FromStr for AccountAddress {
+    type Err = AptosError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::from_hex(s)
+    }
+}
+
+impl Serialize for AccountAddress {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        if serializer.is_human_readable() {
+            serializer.serialize_str(&self.to_hex())
+        } else {
+            // BCS serialization: fixed-size array without length prefix
+            // Use tuple serialization to serialize each byte individually
+            use serde::ser::SerializeTuple;
+            let mut tuple = serializer.serialize_tuple(ADDRESS_LENGTH)?;
+            for byte in &self.0 {
+                tuple.serialize_element(byte)?;
+            }
+            tuple.end()
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for AccountAddress {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        if deserializer.is_human_readable() {
+            let s = String::deserialize(deserializer)?;
+            Self::from_hex(&s).map_err(serde::de::Error::custom)
+        } else {
+            let bytes = <[u8; ADDRESS_LENGTH]>::deserialize(deserializer)?;
+            Ok(Self(bytes))
+        }
+    }
+}
+
+impl From<[u8; ADDRESS_LENGTH]> for AccountAddress {
+    fn from(bytes: [u8; ADDRESS_LENGTH]) -> Self {
+        Self(bytes)
+    }
+}
+
+impl From<AccountAddress> for [u8; ADDRESS_LENGTH] {
+    fn from(addr: AccountAddress) -> Self {
+        addr.0
+    }
+}
+
+impl AsRef<[u8]> for AccountAddress {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_from_hex() {
+        // Full address
+        let addr = AccountAddress::from_hex(
+            "0x0000000000000000000000000000000000000000000000000000000000000001",
+        )
+        .unwrap();
+        assert_eq!(addr, AccountAddress::ONE);
+
+        // Short address
+        let addr = AccountAddress::from_hex("0x1").unwrap();
+        assert_eq!(addr, AccountAddress::ONE);
+
+        // Without prefix
+        let addr = AccountAddress::from_hex("1").unwrap();
+        assert_eq!(addr, AccountAddress::ONE);
+    }
+
+    #[test]
+    fn test_to_string() {
+        // AIP-40: Special addresses use SHORT format in Display
+        assert_eq!(AccountAddress::ONE.to_string(), "0x1");
+        assert_eq!(AccountAddress::THREE.to_string(), "0x3");
+        assert_eq!(AccountAddress::FOUR.to_string(), "0x4");
+        assert_eq!(AccountAddress::A.to_string(), "0xa");
+
+        // ZERO is not special, so it uses LONG format
+        assert_eq!(
+            AccountAddress::ZERO.to_string(),
+            "0x0000000000000000000000000000000000000000000000000000000000000000"
+        );
+
+        // Explicit short/long methods
+        assert_eq!(AccountAddress::ONE.to_short_string(), "0x1");
+        assert_eq!(
+            AccountAddress::ONE.to_long_string(),
+            "0x0000000000000000000000000000000000000000000000000000000000000001"
+        );
+        assert_eq!(AccountAddress::ZERO.to_short_string(), "0x0");
+    }
+
+    #[test]
+    fn test_special_addresses() {
+        assert!(AccountAddress::ONE.is_special());
+        assert!(AccountAddress::THREE.is_special());
+        assert!(AccountAddress::FOUR.is_special());
+        assert!(AccountAddress::A.is_special());
+        assert!(!AccountAddress::ZERO.is_special());
+    }
+
+    #[test]
+    fn test_json_serialization() {
+        let addr = AccountAddress::ONE;
+        let json = serde_json::to_string(&addr).unwrap();
+        assert_eq!(
+            json,
+            "\"0x0000000000000000000000000000000000000000000000000000000000000001\""
+        );
+
+        let parsed: AccountAddress = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed, addr);
+    }
+
+    #[test]
+    fn test_from_str() {
+        let addr: AccountAddress = "0x1".parse().unwrap();
+        assert_eq!(addr, AccountAddress::ONE);
+    }
+
+    #[test]
+    fn test_from_bytes() {
+        let bytes = [0u8; ADDRESS_LENGTH];
+        let addr = AccountAddress::new(bytes);
+        assert_eq!(addr, AccountAddress::ZERO);
+    }
+
+    #[test]
+    fn test_as_bytes() {
+        let addr = AccountAddress::ONE;
+        let bytes = addr.as_bytes();
+        assert_eq!(bytes.len(), ADDRESS_LENGTH);
+        assert_eq!(bytes[ADDRESS_LENGTH - 1], 1);
+    }
+
+    #[test]
+    fn test_is_zero() {
+        assert!(AccountAddress::ZERO.is_zero());
+        assert!(!AccountAddress::ONE.is_zero());
+    }
+
+    #[test]
+    fn test_debug() {
+        let addr = AccountAddress::ONE;
+        let debug = format!("{addr:?}");
+        assert!(debug.contains("AccountAddress"));
+    }
+
+    #[test]
+    fn test_display() {
+        // Special address uses SHORT format (AIP-40)
+        let addr = AccountAddress::ONE;
+        let display = format!("{addr}");
+        assert_eq!(display, "0x1");
+
+        // Non-special address uses LONG format (AIP-40)
+        let mut bytes = [0u8; ADDRESS_LENGTH];
+        bytes[0] = 0xab;
+        bytes[ADDRESS_LENGTH - 1] = 0xcd;
+        let addr = AccountAddress::new(bytes);
+        let display = format!("{addr}");
+        assert!(display.starts_with("0x"));
+        assert_eq!(display.len(), 66); // Full 64 hex chars + "0x"
+    }
+
+    #[test]
+    fn test_from_hex_uppercase() {
+        let addr = AccountAddress::from_hex("0X1").unwrap();
+        assert_eq!(addr, AccountAddress::ONE);
+    }
+
+    #[test]
+    fn test_from_hex_invalid() {
+        let result = AccountAddress::from_hex("not_hex");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_into_array() {
+        let addr = AccountAddress::new([42u8; ADDRESS_LENGTH]);
+        let bytes: [u8; ADDRESS_LENGTH] = addr.into();
+        assert_eq!(bytes, [42u8; ADDRESS_LENGTH]);
+    }
+
+    #[test]
+    fn test_as_ref() {
+        let addr = AccountAddress::ONE;
+        let slice: &[u8] = addr.as_ref();
+        assert_eq!(slice.len(), ADDRESS_LENGTH);
+    }
+
+    #[test]
+    fn test_equality() {
+        assert_eq!(AccountAddress::ONE, AccountAddress::ONE);
+        assert_ne!(AccountAddress::ONE, AccountAddress::THREE);
+    }
+
+    #[test]
+    fn test_hash() {
+        use std::collections::HashSet;
+        let mut set = HashSet::new();
+        set.insert(AccountAddress::ONE);
+        set.insert(AccountAddress::THREE);
+        assert_eq!(set.len(), 2);
+        assert!(set.contains(&AccountAddress::ONE));
+    }
+
+    #[test]
+    fn test_from_array() {
+        let bytes = [0x12u8; ADDRESS_LENGTH];
+        let addr: AccountAddress = bytes.into();
+        assert_eq!(addr.as_bytes(), &bytes);
+    }
+
+    #[test]
+    fn test_bcs_serialization() {
+        let addr = AccountAddress::ONE;
+        let serialized = aptos_bcs::to_bytes(&addr).unwrap();
+        let deserialized: AccountAddress = aptos_bcs::from_bytes(&serialized).unwrap();
+        assert_eq!(addr, deserialized);
+    }
+
+    #[test]
+    fn test_bcs_serialization_roundtrip_all_special() {
+        let addresses = [
+            AccountAddress::ZERO,
+            AccountAddress::ONE,
+            AccountAddress::THREE,
+            AccountAddress::FOUR,
+            AccountAddress::A,
+        ];
+
+        for addr in &addresses {
+            let serialized = aptos_bcs::to_bytes(addr).unwrap();
+            let deserialized: AccountAddress = aptos_bcs::from_bytes(&serialized).unwrap();
+            assert_eq!(addr, &deserialized);
+        }
+    }
+
+    #[test]
+    fn test_from_hex_too_long() {
+        // More than 64 hex characters (32 bytes)
+        let long_hex = "0x".to_string() + &"a".repeat(65);
+        let result = AccountAddress::from_hex(&long_hex);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_from_hex_empty() {
+        let result = AccountAddress::from_hex("");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_from_hex_just_prefix() {
+        let result = AccountAddress::from_hex("0x");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_from_hex_with_leading_zeros() {
+        let addr = AccountAddress::from_hex("0x0000000000000001").unwrap();
+        assert_eq!(addr, AccountAddress::ONE);
+    }
+
+    #[test]
+    fn test_short_string_non_special() {
+        // Create an address that isn't "special" (first 15 bytes not all zeros)
+        let mut bytes = [0u8; ADDRESS_LENGTH];
+        bytes[0] = 0xab;
+        bytes[ADDRESS_LENGTH - 1] = 0xcd;
+        let addr = AccountAddress::new(bytes);
+
+        // Should return full hex without stripping zeros
+        let short = addr.to_short_string();
+        assert!(short.starts_with("0x"));
+        // Non-special addresses return the full form
+        assert_eq!(short.len(), 66);
+    }
+
+    #[test]
+    fn test_to_hex() {
+        let addr = AccountAddress::ONE;
+        let hex = addr.to_hex();
+        assert!(hex.starts_with("0x"));
+        assert_eq!(hex.len(), 66);
+        assert!(hex.ends_with('1'));
+    }
+
+    #[test]
+    fn test_json_deserialization_short() {
+        // JSON with short address
+        let json = "\"0x1\"";
+        let addr: AccountAddress = serde_json::from_str(json).unwrap();
+        assert_eq!(addr, AccountAddress::ONE);
+    }
+
+    #[test]
+    fn test_clone() {
+        let addr = AccountAddress::ONE;
+        // AccountAddress is Copy, so we can just copy it
+        let cloned = addr;
+        assert_eq!(addr, cloned);
+    }
+
+    #[test]
+    fn test_copy() {
+        let addr = AccountAddress::ONE;
+        let copied = addr; // Copy
+        assert_eq!(addr, copied);
+    }
+
+    #[test]
+    fn test_default() {
+        let addr = AccountAddress::default();
+        assert_eq!(addr, AccountAddress::ZERO);
+    }
+
+    #[test]
+    fn test_from_hex_mixed_case() {
+        let addr1 = AccountAddress::from_hex("0xAbCdEf").unwrap();
+        let addr2 = AccountAddress::from_hex("0xabcdef").unwrap();
+        let addr3 = AccountAddress::from_hex("0xABCDEF").unwrap();
+        assert_eq!(addr1, addr2);
+        assert_eq!(addr2, addr3);
+    }
+
+    #[test]
+    fn test_special_address_boundary() {
+        // Address with non-zero first 31 bytes is not special
+        let mut bytes = [0u8; ADDRESS_LENGTH];
+        bytes[14] = 1; // Set byte 14 to non-zero
+        let addr = AccountAddress::new(bytes);
+        assert!(!addr.is_special());
+
+        // Address with all zeros in first 31 bytes and last byte 1-15 is special
+        let mut bytes = [0u8; ADDRESS_LENGTH];
+        bytes[ADDRESS_LENGTH - 1] = 0x0f; // 15 is the max for special
+        let addr = AccountAddress::new(bytes);
+        assert!(addr.is_special());
+
+        // Address with last byte >= 16 is NOT special
+        let mut bytes = [0u8; ADDRESS_LENGTH];
+        bytes[ADDRESS_LENGTH - 1] = 0x10; // 16 is NOT special
+        let addr = AccountAddress::new(bytes);
+        assert!(!addr.is_special());
+
+        // Address with last byte == 0 is NOT special (it's ZERO)
+        let addr = AccountAddress::ZERO;
+        assert!(!addr.is_special());
+    }
+
+    #[test]
+    fn test_from_bytes_wrong_length() {
+        // Test with too short
+        let short = [0u8; 16];
+        let result = AccountAddress::from_bytes(short);
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("expected 32 bytes")
+        );
+
+        // Test with too long
+        let long = [0u8; 64];
+        let result = AccountAddress::from_bytes(long);
+        assert!(result.is_err());
+
+        // Test with empty
+        let empty: [u8; 0] = [];
+        let result = AccountAddress::from_bytes(empty);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_from_bytes_valid() {
+        let bytes = [0xab; ADDRESS_LENGTH];
+        let addr = AccountAddress::from_bytes(bytes).unwrap();
+        assert_eq!(addr.as_bytes(), &bytes);
+    }
+}

@@ -1,0 +1,117 @@
+name: E2E Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Run daily at midnight UTC
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  e2e-localnet:
+    name: E2E Tests (Localnet)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.90"
+      
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+      
+      - name: Install Aptos CLI
+        run: |
+          curl -fsSL "https://aptos.dev/scripts/install_cli.py" | python3
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+      
+      - name: Verify Aptos CLI installation
+        run: aptos --version
+      
+      - name: Start localnet
+        run: |
+          aptos node run-localnet --with-faucet --force-restart &
+          sleep 30
+          # Wait for localnet to be ready
+          for i in {1..60}; do
+            if curl -s http://127.0.0.1:8080/v1 > /dev/null; then
+              echo "Localnet is ready"
+              break
+            fi
+            echo "Waiting for localnet... ($i)"
+            sleep 2
+          done
+          # Verify faucet is also ready
+          for i in {1..30}; do
+            if curl -s http://127.0.0.1:8081/health > /dev/null 2>&1; then
+              echo "Faucet is ready"
+              break
+            fi
+            echo "Waiting for faucet... ($i)"
+            sleep 2
+          done
+      
+      - name: Run E2E tests
+        run: cargo test -p aptos-sdk --features "e2e,full"
+        env:
+          APTOS_LOCAL_FAUCET_URL: http://127.0.0.1:8081
+          APTOS_LOCAL_NODE_URL: http://127.0.0.1:8080/v1
+      
+      - name: Stop localnet
+        if: always()
+        run: pkill -f "aptos node" || true
+
+  # Spec tests that require network connectivity
+  # TODO: Re-enable once specification tests are stabilized
+  # spec-tests-network:
+  #   name: Spec Tests (Network Required)
+  #   runs-on: ubuntu-latest
+  #   timeout-minutes: 30
+  #   steps:
+  #     - uses: actions/checkout@v6
+  #     
+  #     - name: Install Rust
+  #       uses: dtolnay/rust-toolchain@stable
+  #     
+  #     - name: Cache cargo
+  #       uses: Swatinem/rust-cache@v2
+  #     
+  #     - name: Install Aptos CLI
+  #       run: |
+  #         curl -fsSL "https://aptos.dev/scripts/install_cli.py" | python3
+  #         echo "$HOME/.local/bin" >> $GITHUB_PATH
+  #     
+  #     - name: Start localnet
+  #       run: |
+  #         aptos node run-localnet --with-faucet --force-restart &
+  #         sleep 30
+  #         for i in {1..60}; do
+  #           if curl -s http://127.0.0.1:8080/v1 > /dev/null; then
+  #             echo "Localnet is ready"
+  #             break
+  #           fi
+  #           echo "Waiting for localnet... ($i)"
+  #           sleep 2
+  #         done
+  #     
+  #     - name: Run spec tests
+  #       run: cargo test --test specs
+  #       working-directory: specifications/tests/rust
+  #       env:
+  #         APTOS_LOCAL_FAUCET_URL: http://127.0.0.1:8081
+  #         APTOS_LOCAL_NODE_URL: http://127.0.0.1:8080/v1
+  #     
+  #     - name: Stop localnet
+  #       if: always()
+  #       run: pkill -f "aptos node" || true
+

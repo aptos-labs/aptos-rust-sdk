@@ -1,0 +1,60 @@
+# Tarpaulin coverage configuration for aptos-sdk
+#
+# Run unit tests only (default):
+#   cargo tarpaulin -p aptos-sdk
+#
+# Run unit tests with all features:
+#   cargo tarpaulin -p aptos-sdk --profile full
+#
+# Run with E2E tests (requires localnet running):
+#   cargo tarpaulin -p aptos-sdk --profile e2e
+#
+# Run all tests including E2E:
+#   cargo tarpaulin -p aptos-sdk --profile all
+
+# Default profile - unit tests with default features
+[default]
+features = "ed25519,secp256k1"
+skip-clean = true
+verbose = false
+output-dir = "target/coverage"
+
+# Full features profile - unit tests with all features
+[full]
+features = "full"
+skip-clean = true
+verbose = false
+output-dir = "target/coverage"
+
+# E2E profile - includes E2E tests (requires running localnet)
+# Run with: cargo tarpaulin -p aptos-sdk --profile e2e
+[e2e]
+features = "full,e2e"
+run-types = ["Tests", "Doctests"]
+# Run ignored tests (E2E tests are marked #[ignore])
+ignored = true
+skip-clean = true
+verbose = false
+output-dir = "target/coverage"
+# Longer timeout for E2E tests
+timeout = "300s"
+
+# All tests profile - everything including E2E
+[all]
+features = "full,e2e"
+run-types = ["Tests", "Doctests"]
+ignored = true
+skip-clean = true
+verbose = false
+output-dir = "target/coverage"
+timeout = "300s"
+
+# CI profile - for GitHub Actions (no E2E)
+[ci]
+features = "full"
+skip-clean = true
+verbose = false
+output-dir = "target/coverage"
+out = ["Xml", "Html"]
+coveralls = false
+
