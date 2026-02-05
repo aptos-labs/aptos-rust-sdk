@@ -21,97 +21,66 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
-      
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
           toolchain: "1.90"
-      
+
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
-      
+
       - name: Install Aptos CLI
         run: |
           curl -fsSL "https://aptos.dev/scripts/install_cli.py" | python3
           echo "$HOME/.local/bin" >> $GITHUB_PATH
-      
+
       - name: Verify Aptos CLI installation
         run: aptos --version
-      
+
       - name: Start localnet
         run: |
-          aptos node run-localnet --with-faucet --force-restart &
-          sleep 30
+          aptos node run-localnet --with-faucet --force-restart > "${{ runner.temp }}/localnet.log" 2>&1 &
+          echo "LOCALNET_PID=$!" >> $GITHUB_ENV
           # Wait for localnet to be ready
-          for i in {1..60}; do
-            if curl -s http://127.0.0.1:8080/v1 > /dev/null; then
-              echo "Localnet is ready"
+          for i in $(seq 1 90); do
+            if curl -s http://127.0.0.1:8080/v1 > /dev/null 2>&1; then
+              echo "Localnet is ready after ~$((i * 2))s"
               break
             fi
-            echo "Waiting for localnet... ($i)"
+            if [ "$i" -eq 90 ]; then
+              echo "Localnet failed to start within 180s"
+              cat "${{ runner.temp }}/localnet.log"
+              exit 1
+            fi
             sleep 2
           done
-          # Verify faucet is also ready
-          for i in {1..30}; do
+          # Wait for faucet to be ready
+          for i in $(seq 1 30); do
             if curl -s http://127.0.0.1:8081/health > /dev/null 2>&1; then
               echo "Faucet is ready"
               break
             fi
-            echo "Waiting for faucet... ($i)"
+            if [ "$i" -eq 30 ]; then
+              echo "Faucet failed to start within 60s"
+              cat "${{ runner.temp }}/localnet.log"
+              exit 1
+            fi
             sleep 2
           done
-      
+
       - name: Run E2E tests
-        run: cargo test -p aptos-sdk --features "e2e,full"
         env:
           APTOS_LOCAL_FAUCET_URL: http://127.0.0.1:8081
           APTOS_LOCAL_NODE_URL: http://127.0.0.1:8080/v1
-      
+        run: cargo test -p aptos-sdk --features "e2e,full" -- --ignored
+
+      - name: Print localnet logs on failure
+        if: failure()
+        run: cat "${{ runner.temp }}/localnet.log"
+
       - name: Stop localnet
         if: always()
-        run: pkill -f "aptos node" || true
-
-  # Spec tests that require network connectivity
-  # TODO: Re-enable once specification tests are stabilized
-  # spec-tests-network:
-  #   name: Spec Tests (Network Required)
-  #   runs-on: ubuntu-latest
-  #   timeout-minutes: 30
-  #   steps:
-  #     - uses: actions/checkout@v6
-  #     
-  #     - name: Install Rust
-  #       uses: dtolnay/rust-toolchain@stable
-  #     
-  #     - name: Cache cargo
-  #       uses: Swatinem/rust-cache@v2
-  #     
-  #     - name: Install Aptos CLI
-  #       run: |
-  #         curl -fsSL "https://aptos.dev/scripts/install_cli.py" | python3
-  #         echo "$HOME/.local/bin" >> $GITHUB_PATH
-  #     
-  #     - name: Start localnet
-  #       run: |
-  #         aptos node run-localnet --with-faucet --force-restart &
-  #         sleep 30
-  #         for i in {1..60}; do
-  #           if curl -s http://127.0.0.1:8080/v1 > /dev/null; then
-  #             echo "Localnet is ready"
-  #             break
-  #           fi
-  #           echo "Waiting for localnet... ($i)"
-  #           sleep 2
-  #         done
-  #     
-  #     - name: Run spec tests
-  #       run: cargo test --test specs
-  #       working-directory: specifications/tests/rust
-  #       env:
-  #         APTOS_LOCAL_FAUCET_URL: http://127.0.0.1:8081
-  #         APTOS_LOCAL_NODE_URL: http://127.0.0.1:8080/v1
-  #     
-  #     - name: Stop localnet
-  #       if: always()
-  #       run: pkill -f "aptos node" || true
-
+        run: |
+          kill "$LOCALNET_PID" 2>/dev/null || true
+          pkill -f "aptos node" || true
