@@ -10,7 +10,7 @@ use crate::transaction::{
     RawTransaction, SignedTransaction, TransactionBuilder, TransactionPayload,
 };
 use crate::types::{AccountAddress, ChainId};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 #[cfg(feature = "ed25519")]
@@ -52,6 +52,9 @@ use crate::api::IndexerClient;
 pub struct Aptos {
     config: AptosConfig,
     fullnode: Arc<FullnodeClient>,
+    /// Resolved chain ID. Initialized from config; lazily fetched from node
+    /// for custom networks where the chain ID is unknown (0).
+    chain_id: RwLock<ChainId>,
     #[cfg(feature = "faucet")]
     faucet: Option<FaucetClient>,
     #[cfg(feature = "indexer")]
@@ -73,9 +76,12 @@ impl Aptos {
         #[cfg(feature = "indexer")]
         let indexer = IndexerClient::new(&config).ok();
 
+        let chain_id = RwLock::new(config.chain_id());
+
         Ok(Self {
             config,
             fullnode,
+            chain_id,
             #[cfg(feature = "faucet")]
             faucet,
             #[cfg(feature = "indexer")]
@@ -145,18 +151,76 @@ impl Aptos {
 
     /// Gets the current ledger information.
     ///
+    /// As a side effect, this also resolves the chain ID if it was unknown
+    /// (e.g., for custom network configurations).
+    ///
     /// # Errors
     ///
     /// Returns an error if the HTTP request fails, the API returns an error status code,
     /// or the response cannot be parsed.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal `chain_id` lock is poisoned (only possible if another thread
+    /// panicked while holding the lock).
     pub async fn ledger_info(&self) -> AptosResult<crate::api::response::LedgerInfo> {
         let response = self.fullnode.get_ledger_info().await?;
-        Ok(response.into_inner())
+        let info = response.into_inner();
+
+        // Update chain_id if it was unknown (custom network)
+        if self.chain_id.read().expect("chain_id lock poisoned").id() == 0 && info.chain_id > 0 {
+            *self.chain_id.write().expect("chain_id lock poisoned") = ChainId::new(info.chain_id);
+        }
+
+        Ok(info)
     }
 
     /// Returns the current chain ID.
+    ///
+    /// For known networks (mainnet, testnet, devnet, local), this returns the
+    /// well-known chain ID immediately. For custom networks, this returns
+    /// `ChainId(0)` until the chain ID is resolved via [`ensure_chain_id`](Self::ensure_chain_id)
+    /// or any method that makes a request to the node (e.g., [`build_transaction`](Self::build_transaction),
+    /// [`ledger_info`](Self::ledger_info)).
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal `chain_id` lock is poisoned.
     pub fn chain_id(&self) -> ChainId {
-        self.config.chain_id()
+        *self.chain_id.read().expect("chain_id lock poisoned")
+    }
+
+    /// Resolves the chain ID from the node if it is unknown.
+    ///
+    /// For known networks, this returns the chain ID immediately without
+    /// making a network request. For custom networks (chain ID 0), this
+    /// fetches the ledger info from the node to discover the actual chain ID
+    /// and caches it for future use.
+    ///
+    /// This is called automatically by [`build_transaction`](Self::build_transaction)
+    /// and other transaction methods, so you typically don't need to call it
+    /// directly unless you need the chain ID before building a transaction.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the HTTP request to fetch ledger info fails.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal `chain_id` lock is poisoned.
+    pub async fn ensure_chain_id(&self) -> AptosResult<ChainId> {
+        {
+            let chain_id = self.chain_id.read().expect("chain_id lock poisoned");
+            if chain_id.id() > 0 {
+                return Ok(*chain_id);
+            }
+        }
+        // Chain ID is unknown; fetch from node
+        let response = self.fullnode.get_ledger_info().await?;
+        let info = response.into_inner();
+        let new_chain_id = ChainId::new(info.chain_id);
+        *self.chain_id.write().expect("chain_id lock poisoned") = new_chain_id;
+        Ok(new_chain_id)
     }
 
     // === Account ===
@@ -213,20 +277,22 @@ impl Aptos {
         sender: &A,
         payload: TransactionPayload,
     ) -> AptosResult<RawTransaction> {
-        // Fetch sequence number and gas price in parallel - they're independent
-        let (sequence_number, gas_estimation) = tokio::join!(
+        // Fetch sequence number, gas price, and chain ID in parallel
+        let (sequence_number, gas_estimation, chain_id) = tokio::join!(
             self.get_sequence_number(sender.address()),
-            self.fullnode.estimate_gas_price()
+            self.fullnode.estimate_gas_price(),
+            self.ensure_chain_id()
         );
         let sequence_number = sequence_number?;
         let gas_estimation = gas_estimation?;
+        let chain_id = chain_id?;
 
         TransactionBuilder::new()
             .sender(sender.address())
             .sequence_number(sequence_number)
             .payload(payload)
             .gas_unit_price(gas_estimation.data.recommended())
-            .chain_id(self.chain_id())
+            .chain_id(chain_id)
             .expiration_from_now(600)
             .build()
     }
@@ -679,7 +745,7 @@ impl Aptos {
     /// let results = aptos.batch().submit_and_wait(&sender, payloads, None).await?;
     /// ```
     pub fn batch(&self) -> crate::transaction::BatchOperations<'_> {
-        crate::transaction::BatchOperations::new(&self.fullnode, &self.config)
+        crate::transaction::BatchOperations::new(&self.fullnode, &self.chain_id)
     }
 
     /// Submits multiple transactions in parallel.
@@ -925,6 +991,23 @@ mod tests {
             .and(path("/v1/estimate_gas_price"))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
                 "gas_estimate": 100
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        // Mock for ledger info (needed for chain_id resolution on custom networks)
+        Mock::given(method("GET"))
+            .and(path("/v1"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "chain_id": 4,
+                "epoch": "1",
+                "ledger_version": "100",
+                "oldest_ledger_version": "0",
+                "ledger_timestamp": "1000000",
+                "node_role": "full_node",
+                "oldest_block_height": "0",
+                "block_height": "50"
             })))
             .expect(1)
             .mount(&server)

@@ -31,7 +31,7 @@
 
 use crate::account::Account;
 use crate::api::FullnodeClient;
-use crate::config::AptosConfig;
+
 use crate::error::{AptosError, AptosResult};
 use crate::transaction::{
     RawTransaction, SignedTransaction, TransactionBuilder, TransactionPayload,
@@ -529,18 +529,35 @@ impl BatchSummary {
 #[allow(missing_debug_implementations)] // Contains references that may not implement Debug
 pub struct BatchOperations<'a> {
     client: &'a FullnodeClient,
-    config: &'a AptosConfig,
+    chain_id: &'a std::sync::RwLock<ChainId>,
 }
 
 impl<'a> BatchOperations<'a> {
     /// Creates a new batch operations helper.
-    pub fn new(client: &'a FullnodeClient, config: &'a AptosConfig) -> Self {
-        Self { client, config }
+    pub fn new(client: &'a FullnodeClient, chain_id: &'a std::sync::RwLock<ChainId>) -> Self {
+        Self { client, chain_id }
+    }
+
+    /// Resolves the chain ID, fetching from the node if unknown.
+    async fn resolve_chain_id(&self) -> AptosResult<ChainId> {
+        {
+            let chain_id = self.chain_id.read().expect("chain_id lock poisoned");
+            if chain_id.id() > 0 {
+                return Ok(*chain_id);
+            }
+        }
+        // Chain ID is unknown; fetch from node
+        let response = self.client.get_ledger_info().await?;
+        let info = response.into_inner();
+        let new_chain_id = ChainId::new(info.chain_id);
+        *self.chain_id.write().expect("chain_id lock poisoned") = new_chain_id;
+        Ok(new_chain_id)
     }
 
     /// Builds a batch of transactions for an account.
     ///
-    /// This automatically fetches the current sequence number and gas price.
+    /// This automatically fetches the current sequence number, gas price,
+    /// and chain ID (if unknown).
     ///
     /// # Errors
     ///
@@ -550,18 +567,20 @@ impl<'a> BatchOperations<'a> {
         account: &A,
         payloads: Vec<TransactionPayload>,
     ) -> AptosResult<SignedTransactionBatch> {
-        // Fetch sequence number and gas price in parallel - they're independent
-        let (sequence_number, gas_estimation) = tokio::join!(
+        // Fetch sequence number, gas price, and chain ID in parallel
+        let (sequence_number, gas_estimation, chain_id) = tokio::join!(
             self.client.get_sequence_number(account.address()),
-            self.client.estimate_gas_price()
+            self.client.estimate_gas_price(),
+            self.resolve_chain_id()
         );
         let sequence_number = sequence_number?;
         let gas_estimation = gas_estimation?;
+        let chain_id = chain_id?;
 
         let batch = TransactionBatchBuilder::new()
             .sender(account.address())
             .starting_sequence_number(sequence_number)
-            .chain_id(self.config.chain_id())
+            .chain_id(chain_id)
             .gas_unit_price(gas_estimation.data.recommended())
             .add_payloads(payloads)
             .build_and_sign(account)?;
