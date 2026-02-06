@@ -51,7 +51,7 @@ jobs:
         run: cargo clippy -p aptos-sdk --no-default-features -- -D warnings
 
   test:
-    name: Test
+    name: Test SDK
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -77,6 +77,109 @@ jobs:
       
       - name: Run tests (all features)
         run: cargo test -p aptos-sdk --all-targets --all-features
+
+  # -------------------------------------------------------------------------
+  # CLI crate: build & test across OS × arch
+  # -------------------------------------------------------------------------
+
+  cli-lint:
+    name: CLI Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y lld
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.90"
+          components: clippy
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Clippy
+        run: cargo clippy -p aptos-repl --all-targets -- -D warnings
+
+  cli-test:
+    name: CLI Test (${{ matrix.name }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux x86_64
+          - name: linux-x86_64
+            runner: ubuntu-latest
+          # Linux ARM64
+          - name: linux-arm64
+            runner: ubuntu-24.04-arm
+          # macOS x86_64 (Intel)
+          - name: macos-x86_64
+            runner: macos-13
+          # macOS ARM64 (Apple Silicon)
+          - name: macos-arm64
+            runner: macos-latest
+          # Windows x86_64
+          - name: windows-x86_64
+            runner: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y lld
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.90"
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build CLI
+        run: cargo build -p aptos-repl
+
+      - name: Test CLI
+        run: cargo test -p aptos-repl
+
+  cli-build-release:
+    name: CLI Release Build (${{ matrix.name }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-x86_64
+            runner: ubuntu-latest
+          - name: linux-arm64
+            runner: ubuntu-24.04-arm
+          - name: macos-x86_64
+            runner: macos-13
+          - name: macos-arm64
+            runner: macos-latest
+          - name: windows-x86_64
+            runner: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y lld
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.90"
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build CLI (cli profile)
+        run: cargo build -p aptos-repl --profile cli
 
   test-features:
     name: Test Feature Combinations

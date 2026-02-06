@@ -235,7 +235,7 @@ fn find_aptos_cli() -> Result<PathBuf> {
 }
 
 /// Parse a version string like "aptos 7.14.2" into (major, minor, patch).
-fn parse_version(s: &str) -> Option<(u32, u32, u32)> {
+pub(crate) fn parse_version(s: &str) -> Option<(u32, u32, u32)> {
     let s = s.trim();
     let version_part = s.strip_prefix("aptos ").unwrap_or(s);
     let mut parts = version_part.split('.');
@@ -968,4 +968,70 @@ async fn cmd_inspect(args: &InspectArgs, global: &GlobalOpts) -> Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // -----------------------------------------------------------------------
+    // parse_version
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn parse_version_standard() {
+        assert_eq!(parse_version("aptos 7.14.2"), Some((7, 14, 2)));
+    }
+
+    #[test]
+    fn parse_version_with_newline() {
+        assert_eq!(parse_version("aptos 7.14.2\n"), Some((7, 14, 2)));
+    }
+
+    #[test]
+    fn parse_version_just_numbers() {
+        assert_eq!(parse_version("1.2.3"), Some((1, 2, 3)));
+    }
+
+    #[test]
+    fn parse_version_large_numbers() {
+        assert_eq!(parse_version("aptos 10.200.3000"), Some((10, 200, 3000)));
+    }
+
+    #[test]
+    fn parse_version_zero() {
+        assert_eq!(parse_version("aptos 0.0.0"), Some((0, 0, 0)));
+    }
+
+    #[test]
+    fn parse_version_missing_patch() {
+        assert_eq!(parse_version("aptos 7.14"), None);
+    }
+
+    #[test]
+    fn parse_version_empty() {
+        assert_eq!(parse_version(""), None);
+    }
+
+    #[test]
+    fn parse_version_garbage() {
+        assert_eq!(parse_version("not a version"), None);
+    }
+
+    #[test]
+    fn parse_version_partial() {
+        assert_eq!(parse_version("aptos "), None);
+    }
+
+    #[test]
+    fn parse_version_non_numeric() {
+        assert_eq!(parse_version("aptos a.b.c"), None);
+    }
+
+    #[test]
+    fn parse_version_comparison() {
+        let v1 = parse_version("aptos 7.9.0").unwrap();
+        let v2 = parse_version("aptos 7.14.2").unwrap();
+        assert!(v2 > v1, "7.14.2 should be greater than 7.9.0");
+    }
 }

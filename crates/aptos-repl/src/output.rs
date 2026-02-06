@@ -123,3 +123,58 @@ pub fn format_apt(octas: u64) -> String {
     let apt = octas as f64 / 100_000_000.0;
     format!("{apt:.8} APT ({octas} octas)")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn format_apt_zero() {
+        let s = format_apt(0);
+        assert_eq!(s, "0.00000000 APT (0 octas)");
+    }
+
+    #[test]
+    fn format_apt_one_apt() {
+        let s = format_apt(100_000_000);
+        assert_eq!(s, "1.00000000 APT (100000000 octas)");
+    }
+
+    #[test]
+    fn format_apt_fractional() {
+        let s = format_apt(123_456_789);
+        assert_eq!(s, "1.23456789 APT (123456789 octas)");
+    }
+
+    #[test]
+    fn format_apt_small_amount() {
+        let s = format_apt(1);
+        assert_eq!(s, "0.00000001 APT (1 octas)");
+    }
+
+    #[test]
+    fn format_apt_large_amount() {
+        // 1 billion APT
+        let s = format_apt(100_000_000_000_000_000);
+        assert!(s.contains("APT"));
+        assert!(s.contains("octas"));
+    }
+
+    #[test]
+    fn print_json_valid() {
+        let val = serde_json::json!({"key": "value"});
+        assert!(print_json(&val).is_ok());
+    }
+
+    #[test]
+    fn print_json_array() {
+        let val = serde_json::json!([1, 2, 3]);
+        assert!(print_json(&val).is_ok());
+    }
+
+    #[test]
+    fn print_json_null() {
+        let val = serde_json::json!(null);
+        assert!(print_json(&val).is_ok());
+    }
+}

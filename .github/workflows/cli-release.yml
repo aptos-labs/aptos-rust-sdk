@@ -1,0 +1,302 @@
+name: Release CLI
+
+on:
+  push:
+    tags:
+      - "cli-v*.*.*"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run (do not create GitHub release)"
+        required: false
+        default: true
+        type: boolean
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  BIN_NAME: aptos-repl
+
+permissions:
+  contents: write
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Pre-flight: lint, test, verify version
+  # ---------------------------------------------------------------------------
+  preflight:
+    name: Preflight checks
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y lld
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.90"
+          components: clippy, rustfmt
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy -p aptos-repl --all-targets -- -D warnings
+
+      - name: Test
+        run: cargo test -p aptos-repl
+
+      - name: Extract version
+        id: meta
+        shell: bash
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/cli-v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/cli-v}"
+          else
+            VERSION="0.0.0-dev"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "CLI version: $VERSION"
+
+  # ---------------------------------------------------------------------------
+  # Build matrix: one job per platform
+  # ---------------------------------------------------------------------------
+  build:
+    name: Build ${{ matrix.name }}
+    needs: preflight
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # ---- Linux x86_64 ----
+          - name: linux-x86_64
+            runner: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            os: Linux
+            arch: x86_64
+            ext: ""
+
+          # ---- Linux x86_64 generic (no SIMD) ----
+          - name: linux-x86_64-generic
+            runner: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            os: Linux
+            arch: x86_64-generic
+            ext: ""
+            generic: true
+
+          # ---- Linux ARM64 ----
+          - name: linux-arm64
+            runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            os: Linux
+            arch: aarch64
+            ext: ""
+
+          # ---- macOS x86_64 (Intel) ----
+          - name: macos-x86_64
+            runner: macos-13
+            target: x86_64-apple-darwin
+            os: macOS
+            arch: x86_64
+            ext: ""
+
+          # ---- macOS ARM64 (Apple Silicon) ----
+          - name: macos-arm64
+            runner: macos-latest
+            target: aarch64-apple-darwin
+            os: macOS
+            arch: aarch64
+            ext: ""
+
+          # ---- Windows x86_64 ----
+          - name: windows-x86_64
+            runner: windows-latest
+            target: x86_64-pc-windows-msvc
+            os: Windows
+            arch: x86_64
+            ext: ".exe"
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y lld zip
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.90"
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.name }}
+
+      # Generic build: disable SIMD to run on any x86_64 CPU
+      - name: Build CLI (generic / no SIMD)
+        if: matrix.generic == true
+        shell: bash
+        env:
+          RUSTFLAGS: "-C target-cpu=generic -C target-feature=-sse4.2,-avx,-avx2"
+        run: cargo build -p aptos-repl --profile cli --target ${{ matrix.target }}
+
+      # Normal (platform-native) build
+      - name: Build CLI
+        if: matrix.generic != true
+        shell: bash
+        run: cargo build -p aptos-repl --profile cli --target ${{ matrix.target }}
+
+      # Package
+      - name: Package binary
+        shell: bash
+        run: |
+          VERSION="${{ needs.preflight.outputs.version }}"
+          ARTIFACT="${BIN_NAME}-${VERSION}-${{ matrix.os }}-${{ matrix.arch }}"
+
+          SRC="target/${{ matrix.target }}/cli/${BIN_NAME}${{ matrix.ext }}"
+
+          if [[ "${{ matrix.os }}" == "Windows" ]]; then
+            7z a "${ARTIFACT}.zip" "$SRC"
+          else
+            chmod +x "$SRC"
+            zip -j "${ARTIFACT}.zip" "$SRC"
+          fi
+
+      # Record system library versions for the release notes
+      - name: Record build environment (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          echo "## ${{ matrix.name }}" >> build-info.txt
+          echo "- **GLIBC**: $(ldd --version 2>&1 | head -1 | grep -oP '\d+\.\d+$')" >> build-info.txt
+          echo "- **OpenSSL**: $(openssl version 2>/dev/null || echo 'N/A')" >> build-info.txt
+          echo "- **Runner**: ${{ matrix.runner }}" >> build-info.txt
+          echo "" >> build-info.txt
+          cat build-info.txt
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: "*.zip"
+          retention-days: 7
+
+      - name: Upload build info
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-info-${{ matrix.name }}
+          path: build-info.txt
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # Create GitHub Release with all binaries
+  # ---------------------------------------------------------------------------
+  release:
+    name: Create Release
+    needs: [preflight, build]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/cli-v') && (!inputs.dry_run || inputs.dry_run == false)
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: List artifacts
+        run: ls -lhR artifacts/
+
+      - name: Compose release body
+        shell: bash
+        run: |
+          cat > release-body.md << 'EOF'
+          ## Platform Compatibility
+
+          | Binary | OS | Arch | Min GLIBC | TLS Backend | Notes |
+          |--------|----|------|-----------|-------------|-------|
+          | `linux-x86_64` | Linux | x86_64 | 2.35 (Ubuntu 22.04+) | OpenSSL 3.x | Requires SSE4.2+ capable CPU |
+          | `linux-x86_64-generic` | Linux | x86_64 | 2.35 (Ubuntu 22.04+) | OpenSSL 3.x | No SIMD; works on any x86_64 CPU |
+          | `linux-arm64` | Linux | aarch64 | 2.39 (Ubuntu 24.04+) | OpenSSL 3.x | |
+          | `macos-x86_64` | macOS | x86_64 | — | Security.framework | macOS 13+ (Ventura) |
+          | `macos-arm64` | macOS | aarch64 | — | Security.framework | macOS 14+ (Sonoma) |
+          | `windows-x86_64` | Windows | x86_64 | — | SChannel | Windows 10+ |
+
+          ### Linux runtime requirements
+
+          Linux binaries dynamically link against the system's **GLIBC** and **OpenSSL 3.x**.
+          Make sure your system satisfies the minimum GLIBC version listed above.
+          You can check your GLIBC version with:
+
+          ```bash
+          ldd --version 2>&1 | head -1
+          ```
+
+          If your system ships OpenSSL 1.1 instead of 3.x, you may need to install a
+          compatibility package (e.g. `libssl3` on Debian/Ubuntu) or build from source
+          with `--features rustls-tls`.
+
+          ### macOS & Windows
+
+          macOS builds use the native **Security.framework** for TLS — no extra
+          dependencies required. Windows builds use **SChannel** — also no extra
+          dependencies.
+
+          ---
+          EOF
+          sed -i 's/^          //' release-body.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Aptos REPL v${{ needs.preflight.outputs.version }}"
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          body_path: release-body.md
+          append_body: true
+          draft: false
+          prerelease: ${{ contains(github.ref, '-') }}
+          files: artifacts/*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ---------------------------------------------------------------------------
+  # Checksums
+  # ---------------------------------------------------------------------------
+  checksums:
+    name: Generate checksums
+    needs: [preflight, build]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/cli-v')
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Generate SHA256 checksums
+        shell: bash
+        run: |
+          cd artifacts
+          sha256sum *.zip > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Upload checksums
+        uses: actions/upload-artifact@v4
+        with:
+          name: checksums
+          path: artifacts/SHA256SUMS.txt

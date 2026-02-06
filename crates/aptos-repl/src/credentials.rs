@@ -347,7 +347,7 @@ fn derive_cipher(password: &str, salt: &[u8]) -> Result<Aes256Gcm> {
     Ok(cipher)
 }
 
-fn key_type_str(kt: &KeyType) -> String {
+pub(crate) fn key_type_str(kt: &KeyType) -> String {
     match kt {
         KeyType::Ed25519 => "ed25519".to_string(),
         KeyType::Secp256k1 => "secp256k1".to_string(),
@@ -355,7 +355,7 @@ fn key_type_str(kt: &KeyType) -> String {
     }
 }
 
-fn parse_key_type(s: &str) -> Result<KeyType> {
+pub(crate) fn parse_key_type(s: &str) -> Result<KeyType> {
     match s {
         "ed25519" => Ok(KeyType::Ed25519),
         "secp256k1" => Ok(KeyType::Secp256k1),
@@ -372,4 +372,174 @@ pub fn prompt_password(prompt: &str) -> Result<String> {
 /// Check if a vault file exists.
 pub fn vault_exists() -> bool {
     Vault::default_path().map(|p| p.exists()).unwrap_or(false)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // -----------------------------------------------------------------------
+    // key_type_str / parse_key_type
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn key_type_str_ed25519() {
+        assert_eq!(key_type_str(&KeyType::Ed25519), "ed25519");
+    }
+
+    #[test]
+    fn key_type_str_secp256k1() {
+        assert_eq!(key_type_str(&KeyType::Secp256k1), "secp256k1");
+    }
+
+    #[test]
+    fn key_type_str_secp256r1() {
+        assert_eq!(key_type_str(&KeyType::Secp256r1), "secp256r1");
+    }
+
+    #[test]
+    fn parse_key_type_ed25519() {
+        let kt = parse_key_type("ed25519").unwrap();
+        assert!(matches!(kt, KeyType::Ed25519));
+    }
+
+    #[test]
+    fn parse_key_type_secp256k1() {
+        let kt = parse_key_type("secp256k1").unwrap();
+        assert!(matches!(kt, KeyType::Secp256k1));
+    }
+
+    #[test]
+    fn parse_key_type_secp256r1() {
+        let kt = parse_key_type("secp256r1").unwrap();
+        assert!(matches!(kt, KeyType::Secp256r1));
+    }
+
+    #[test]
+    fn parse_key_type_unknown_fails() {
+        assert!(parse_key_type("rsa").is_err());
+    }
+
+    #[test]
+    fn key_type_roundtrip() {
+        for kt in &[KeyType::Ed25519, KeyType::Secp256k1, KeyType::Secp256r1] {
+            let s = key_type_str(kt);
+            let parsed = parse_key_type(&s).unwrap();
+            assert_eq!(key_type_str(&parsed), s);
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // derive_cipher
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn derive_cipher_produces_valid_cipher() {
+        let salt = [42u8; SALT_LEN];
+        let cipher = derive_cipher("test-password", &salt).unwrap();
+
+        // Should be able to encrypt and decrypt
+        let nonce = aes_gcm::Nonce::from_slice(&[0u8; NONCE_LEN]);
+        let plaintext = b"hello world";
+        let ciphertext = cipher.encrypt(nonce, plaintext.as_ref()).unwrap();
+        let decrypted = cipher.decrypt(nonce, ciphertext.as_ref()).unwrap();
+        assert_eq!(decrypted, plaintext);
+    }
+
+    #[test]
+    fn derive_cipher_different_passwords_yield_different_keys() {
+        let salt = [42u8; SALT_LEN];
+        let cipher1 = derive_cipher("password1", &salt).unwrap();
+        let cipher2 = derive_cipher("password2", &salt).unwrap();
+
+        let nonce = aes_gcm::Nonce::from_slice(&[0u8; NONCE_LEN]);
+        let plaintext = b"secret data";
+
+        let ct1 = cipher1.encrypt(nonce, plaintext.as_ref()).unwrap();
+        // cipher2 should NOT be able to decrypt cipher1's ciphertext
+        assert!(cipher2.decrypt(nonce, ct1.as_ref()).is_err());
+    }
+
+    #[test]
+    fn derive_cipher_different_salts_yield_different_keys() {
+        let salt1 = [1u8; SALT_LEN];
+        let salt2 = [2u8; SALT_LEN];
+        let cipher1 = derive_cipher("same-password", &salt1).unwrap();
+        let cipher2 = derive_cipher("same-password", &salt2).unwrap();
+
+        let nonce = aes_gcm::Nonce::from_slice(&[0u8; NONCE_LEN]);
+        let plaintext = b"secret data";
+
+        let ct1 = cipher1.encrypt(nonce, plaintext.as_ref()).unwrap();
+        assert!(cipher2.decrypt(nonce, ct1.as_ref()).is_err());
+    }
+
+    // -----------------------------------------------------------------------
+    // Credential
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn credential_to_cli_account() {
+        let account = aptos_sdk::account::Ed25519Account::generate();
+        let hex = hex::encode(account.private_key().to_bytes());
+        let cred = Credential {
+            alias: "test".to_string(),
+            key_type: KeyType::Ed25519,
+            private_key_hex: hex.clone(),
+        };
+        let cli = cred.to_cli_account().unwrap();
+        assert_eq!(cli.address(), account.address());
+    }
+
+    #[test]
+    fn credential_private_key_hex_accessor() {
+        let cred = Credential {
+            alias: "test".to_string(),
+            key_type: KeyType::Ed25519,
+            private_key_hex: "deadbeef".to_string(),
+        };
+        assert_eq!(cred.private_key_hex(), "deadbeef");
+    }
+
+    // -----------------------------------------------------------------------
+    // VaultFile serialization
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn vault_file_round_trip() {
+        let mut entries = BTreeMap::new();
+        entries.insert(
+            "alice".to_string(),
+            VaultEntry {
+                key_type: "ed25519".to_string(),
+                nonce: B64.encode([0u8; NONCE_LEN]),
+                ciphertext: B64.encode(b"encrypted_data"),
+            },
+        );
+
+        let file = VaultFile {
+            version: VAULT_VERSION,
+            salt: B64.encode([0u8; SALT_LEN]),
+            entries,
+        };
+
+        let json = serde_json::to_string(&file).unwrap();
+        let parsed: VaultFile = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(parsed.version, VAULT_VERSION);
+        assert!(parsed.entries.contains_key("alice"));
+        assert_eq!(parsed.entries["alice"].key_type, "ed25519");
+    }
+
+    // -----------------------------------------------------------------------
+    // Vault default_path
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn vault_default_path_ends_with_vault_json() {
+        let path = Vault::default_path().unwrap();
+        assert!(path.ends_with("vault.json"));
+        assert!(path.to_string_lossy().contains(".aptos"));
+        assert!(path.to_string_lossy().contains("credentials"));
+    }
 }
