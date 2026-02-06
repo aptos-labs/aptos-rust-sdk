@@ -78,6 +78,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "aptos-cli"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aptos-bcs",
+ "aptos-sdk",
+ "clap",
+ "hex",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "aptos-sdk"
 version = "0.3.0"
 dependencies = [

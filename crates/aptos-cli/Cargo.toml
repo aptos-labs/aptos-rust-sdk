@@ -1,0 +1,32 @@
+[package]
+name = "aptos-cli"
+version = "0.1.0"
+description = "A command-line interface for the Aptos blockchain, powered by the Aptos Rust SDK"
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+publish = false
+repository.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "aptos-sdk-cli"
+path = "src/main.rs"
+
+[dependencies]
+aptos-sdk = { workspace = true, features = [
+    "ed25519",
+    "secp256k1",
+    "secp256r1",
+    "mnemonic",
+    "faucet",
+    "indexer",
+] }
+aptos-bcs = { workspace = true }
+anyhow = { workspace = true }
+clap = { version = "4.5", features = ["derive"] }
+hex = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
