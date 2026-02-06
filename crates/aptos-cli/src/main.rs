@@ -6,7 +6,9 @@
 
 mod commands;
 mod common;
+mod credentials;
 mod output;
+mod repl;
 mod tui;
 
 use clap::Parser;
@@ -16,16 +18,16 @@ use common::GlobalOpts;
 /// Aptos SDK CLI - Interact with the Aptos blockchain from the command line.
 #[derive(Parser, Debug)]
 #[command(name = "aptos-sdk-cli", version, about, long_about = None)]
-struct Cli {
+pub struct Cli {
     #[command(flatten)]
-    global: GlobalOpts,
+    pub global: GlobalOpts,
 
     #[command(subcommand)]
-    command: Command,
+    pub command: Command,
 }
 
 #[derive(clap::Subcommand, Debug)]
-enum Command {
+pub enum Command {
     /// Account management (create, fund, balance, lookup, transfer)
     #[command(subcommand)]
     Account(AccountCommand),
@@ -48,6 +50,9 @@ enum Command {
 
     /// Launch interactive TUI dashboard
     Dashboard,
+
+    /// Start interactive REPL with encrypted credential support
+    Repl,
 }
 
 #[tokio::main]
@@ -68,6 +73,7 @@ async fn main() -> anyhow::Result<()> {
             let aptos = cli.global.build_client()?;
             tui::run_tui(aptos, network_name).await
         }
+        Command::Repl => repl::run_repl(cli.global).await,
     };
 
     if let Err(e) = result {
