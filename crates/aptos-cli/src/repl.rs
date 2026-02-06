@@ -79,7 +79,10 @@ pub async fn run_repl(global: GlobalOpts) -> Result<()> {
             continue;
         }
 
-        let _ = rl.add_history_entry(trimmed);
+        // Never persist sensitive data to history
+        if !contains_secret(trimmed) {
+            let _ = rl.add_history_entry(trimmed);
+        }
 
         match handle_line(trimmed, &mut session).await {
             Ok(ShouldContinue::Yes) => {}
@@ -608,6 +611,21 @@ async fn dispatch_command(argv: &[String]) -> Result<()> {
             Ok(())
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// Security
+// ---------------------------------------------------------------------------
+
+/// Returns `true` if the input line contains credential material that must
+/// never be persisted to the REPL history file.
+fn contains_secret(line: &str) -> bool {
+    let lower = line.to_ascii_lowercase();
+    lower.contains("--private-key")
+        || lower.contains("--private_key")
+        || lower.contains("--secret")
+        || lower.contains("--mnemonic")
+        || lower.contains("--seed")
 }
 
 // ---------------------------------------------------------------------------
