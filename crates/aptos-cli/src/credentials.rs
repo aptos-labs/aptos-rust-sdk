@@ -2,7 +2,7 @@
 //!
 //! Private keys are encrypted with AES-256-GCM using a key derived from a
 //! user-supplied password via Argon2id. The encrypted vault is stored at
-//! `~/.aptos-sdk-cli/vault.json`.
+//! `~/.aptos/credentials/vault.json`.
 //!
 //! On-disk format (JSON):
 //! ```json
@@ -104,10 +104,10 @@ pub struct Vault {
 }
 
 impl Vault {
-    /// The default vault file path: `~/.aptos-sdk-cli/vault.json`.
+    /// The default vault file path: `~/.aptos/credentials/vault.json`.
     pub fn default_path() -> Result<PathBuf> {
         let home = dirs::home_dir().context("cannot determine home directory")?;
-        Ok(home.join(".aptos-sdk-cli").join("vault.json"))
+        Ok(home.join(".aptos").join("credentials").join("vault.json"))
     }
 
     /// Create a brand-new vault with the given password.

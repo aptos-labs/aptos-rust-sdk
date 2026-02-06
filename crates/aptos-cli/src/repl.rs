@@ -53,7 +53,8 @@ pub async fn run_repl(global: GlobalOpts) -> Result<()> {
     let mut rl = DefaultEditor::new().context("failed to initialise line editor")?;
 
     // Try to load history
-    let history_path = dirs::home_dir().map(|h| h.join(".aptos-sdk-cli").join("repl_history"));
+    let history_path =
+        dirs::home_dir().map(|h| h.join(".aptos").join("config").join("repl_history"));
     if let Some(ref hp) = history_path {
         let _ = rl.load_history(hp);
     }
