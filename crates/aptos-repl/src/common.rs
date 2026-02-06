@@ -177,25 +177,67 @@ pub fn parse_address(s: &str) -> Result<AccountAddress> {
     AccountAddress::from_hex(s).context("invalid account address")
 }
 
+/// Resolve an optional address string: if `Some`, parse it; if `None`, fail
+/// with a helpful message telling the user to provide `--address` or set an
+/// active account.
+pub fn require_address(addr: &Option<String>) -> Result<AccountAddress> {
+    match addr {
+        Some(s) => parse_address(s),
+        None => anyhow::bail!(
+            "No --address provided. Either pass --address <hex> or set an active account with `use <alias>`."
+        ),
+    }
+}
+
+/// Parse an amount string that can be either:
+/// - An integer (treated as octas): "100000000"
+/// - A decimal APT value: "1.5" (converted to 150000000 octas)
+pub fn parse_amount(s: &str) -> Result<u64> {
+    let s = s.trim();
+    if s.contains('.') {
+        // Parse as APT decimal
+        let apt: f64 = s.parse().context(
+            "invalid amount — expected a number like '1.5' (APT) or '150000000' (octas)",
+        )?;
+        if apt < 0.0 {
+            anyhow::bail!("amount cannot be negative");
+        }
+        // Convert to octas: 1 APT = 100_000_000 octas
+        let octas = (apt * 100_000_000.0).round() as u64;
+        Ok(octas)
+    } else {
+        // Parse as octas integer
+        let octas: u64 = s.parse().context(
+            "invalid amount — expected a number like '1.5' (APT) or '150000000' (octas)",
+        )?;
+        Ok(octas)
+    }
+}
+
 /// Load an account from a private key hex string and key type.
+///
+/// Error messages are sanitized to never include the private key material.
 pub fn load_account(private_key_hex: &str, key_type: &KeyType) -> Result<CliAccount> {
     let hex_str = private_key_hex
         .strip_prefix("0x")
         .unwrap_or(private_key_hex);
     match key_type {
         KeyType::Ed25519 => {
-            let account = Ed25519Account::from_private_key_hex(hex_str)
-                .context("invalid Ed25519 private key")?;
+            let account = Ed25519Account::from_private_key_hex(hex_str).map_err(|_| {
+                anyhow::anyhow!("invalid Ed25519 private key (wrong length or format)")
+            })?;
             Ok(CliAccount::Ed25519(account))
         }
         KeyType::Secp256k1 => {
-            let account = Secp256k1Account::from_private_key_hex(hex_str)
-                .context("invalid Secp256k1 private key")?;
+            let account = Secp256k1Account::from_private_key_hex(hex_str).map_err(|_| {
+                anyhow::anyhow!("invalid Secp256k1 private key (wrong length or format)")
+            })?;
             Ok(CliAccount::Secp256k1(account))
         }
         KeyType::Secp256r1 => {
-            let account = Secp256r1Account::from_private_key_hex(hex_str)
-                .context("invalid Secp256r1 private key")?;
+            let account = Secp256r1Account::from_private_key_hex(hex_str).map_err(|_| {
+                anyhow::anyhow!("invalid Secp256r1 private key (wrong length or format)")
+            })?;
             Ok(CliAccount::Secp256r1(account))
         }
     }
@@ -548,5 +590,110 @@ mod tests {
             json: false,
         };
         assert!(opts.build_client().is_ok());
+    }
+
+    // -----------------------------------------------------------------------
+    // require_address
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn require_address_some_valid() {
+        let addr = require_address(&Some("0x1".to_string())).unwrap();
+        assert_eq!(addr, AccountAddress::ONE);
+    }
+
+    #[test]
+    fn require_address_some_invalid() {
+        assert!(require_address(&Some("not_hex".to_string())).is_err());
+    }
+
+    #[test]
+    fn require_address_none_fails_with_helpful_message() {
+        let err = require_address(&None).unwrap_err();
+        let msg = format!("{err}");
+        assert!(
+            msg.contains("--address"),
+            "error should mention --address flag"
+        );
+        assert!(
+            msg.contains("active account"),
+            "error should mention active account"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // parse_amount
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn parse_amount_integer_octas() {
+        assert_eq!(parse_amount("100000000").unwrap(), 100_000_000);
+    }
+
+    #[test]
+    fn parse_amount_one_apt() {
+        assert_eq!(parse_amount("1.0").unwrap(), 100_000_000);
+    }
+
+    #[test]
+    fn parse_amount_fractional_apt() {
+        assert_eq!(parse_amount("0.5").unwrap(), 50_000_000);
+    }
+
+    #[test]
+    fn parse_amount_1_5_apt() {
+        assert_eq!(parse_amount("1.5").unwrap(), 150_000_000);
+    }
+
+    #[test]
+    fn parse_amount_small_fraction() {
+        // 0.00000001 APT = 1 octa
+        assert_eq!(parse_amount("0.00000001").unwrap(), 1);
+    }
+
+    #[test]
+    fn parse_amount_zero() {
+        assert_eq!(parse_amount("0").unwrap(), 0);
+    }
+
+    #[test]
+    fn parse_amount_zero_apt() {
+        assert_eq!(parse_amount("0.0").unwrap(), 0);
+    }
+
+    #[test]
+    fn parse_amount_large_number() {
+        assert_eq!(parse_amount("1000000000").unwrap(), 1_000_000_000);
+    }
+
+    #[test]
+    fn parse_amount_with_whitespace() {
+        assert_eq!(parse_amount("  100  ").unwrap(), 100);
+    }
+
+    #[test]
+    fn parse_amount_negative_fails() {
+        assert!(parse_amount("-1.0").is_err());
+    }
+
+    #[test]
+    fn parse_amount_not_a_number_fails() {
+        assert!(parse_amount("abc").is_err());
+    }
+
+    #[test]
+    fn parse_amount_empty_fails() {
+        assert!(parse_amount("").is_err());
+    }
+
+    #[test]
+    fn parse_amount_10_apt() {
+        assert_eq!(parse_amount("10.0").unwrap(), 1_000_000_000);
+    }
+
+    #[test]
+    fn parse_amount_rounding() {
+        // 0.123456789 APT should round to 12345679 octas
+        assert_eq!(parse_amount("0.123456789").unwrap(), 12_345_679);
     }
 }

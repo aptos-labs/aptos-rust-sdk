@@ -10,6 +10,7 @@ use aptos_sdk::account::{Ed25519Account, Secp256k1Account, Secp256r1Account};
 use crossterm::style::{Attribute, Color, ResetColor, SetAttribute, SetForegroundColor};
 use rustyline::DefaultEditor;
 use std::io::Write;
+use zeroize::Zeroize;
 
 use crate::common::{GlobalOpts, KeyType, NetworkArg};
 use crate::config::CliConfig;
@@ -116,6 +117,13 @@ pub async fn run_repl(mut global: GlobalOpts) -> Result<()> {
             let _ = std::fs::create_dir_all(parent);
         }
         let _ = rl.save_history(hp);
+
+        // Set restrictive permissions on the history file (Unix)
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = std::fs::set_permissions(hp, std::fs::Permissions::from_mode(0o600));
+        }
     }
 
     let mut stdout = std::io::stdout();
@@ -295,9 +303,7 @@ fn handle_credential(args: &[String], session: &mut Session) -> Result<()> {
             if password != confirm {
                 bail!("Passwords do not match.");
             }
-            if password.len() < 8 {
-                bail!("Password must be at least 8 characters.");
-            }
+            validate_password_strength(&password)?;
             let vault = Vault::create(&password)?;
             output::print_success("Vault created and unlocked");
             session.vault = Some(vault);
@@ -435,22 +441,18 @@ fn handle_credential(args: &[String], session: &mut Session) -> Result<()> {
             if new_password != confirm {
                 bail!("Passwords do not match.");
             }
-            if new_password.len() < 8 {
-                bail!("Password must be at least 8 characters.");
-            }
+            validate_password_strength(&new_password)?;
 
-            // Collect existing credentials (alias, key_type, private_key_hex)
-            let existing: Vec<(String, KeyType, String)> = vault
+            // Collect alias/key_type pairs only (no secrets yet)
+            let entries: Vec<(String, KeyType)> = vault
                 .list()
                 .iter()
-                .filter_map(|(alias, _kt, _addr)| {
-                    vault.get(alias).map(|c| {
-                        (
-                            alias.to_string(),
-                            c.key_type.clone(),
-                            c.private_key_hex().to_string(),
-                        )
-                    })
+                .map(|(alias, _kt, _addr)| {
+                    let kt = vault
+                        .get(alias)
+                        .map(|c| c.key_type.clone())
+                        .unwrap_or(KeyType::Ed25519);
+                    (alias.to_string(), kt)
                 })
                 .collect();
 
@@ -459,9 +461,14 @@ fn handle_credential(args: &[String], session: &mut Session) -> Result<()> {
             std::fs::remove_file(&vault_path).context("failed to remove old vault")?;
             let mut new_vault = Vault::create(&new_password)?;
 
-            // Re-add all credentials
-            for (alias, key_type, key_hex) in &existing {
-                new_vault.add(alias, key_type, key_hex)?;
+            // Re-encrypt credentials one at a time, zeroizing each key after use
+            let old_vault = session.vault.as_ref().unwrap();
+            for (alias, key_type) in &entries {
+                if let Some(cred) = old_vault.get(alias) {
+                    let mut key_hex = cred.private_key_hex().to_string();
+                    new_vault.add(alias, key_type, &key_hex)?;
+                    key_hex.zeroize();
+                }
             }
 
             let count = new_vault.len();
@@ -514,18 +521,45 @@ fn print_credential_help() {
 }
 
 fn unlock_vault(session: &mut Session) -> Result<()> {
-    let password = credentials::prompt_password("Vault password: ")?;
-    let mut stdout = std::io::stdout();
-    let _ = crossterm::execute!(stdout, SetForegroundColor(Color::DarkGrey));
-    print!("  Deriving key...");
-    let _ = stdout.flush();
-    let vault = Vault::open(&password)?;
-    println!(" done.");
-    let _ = crossterm::execute!(stdout, ResetColor);
-    let count = vault.len();
-    session.vault = Some(vault);
-    output::print_success(&format!("Vault unlocked ({count} credential(s))"));
-    Ok(())
+    const MAX_ATTEMPTS: u32 = 5;
+    let mut attempts = 0u32;
+
+    loop {
+        let password = credentials::prompt_password("Vault password: ")?;
+        let mut stdout = std::io::stdout();
+        let _ = crossterm::execute!(stdout, SetForegroundColor(Color::DarkGrey));
+        print!("  Deriving key...");
+        let _ = stdout.flush();
+
+        match Vault::open(&password) {
+            Ok(vault) => {
+                println!(" done.");
+                let _ = crossterm::execute!(stdout, ResetColor);
+                let count = vault.len();
+                session.vault = Some(vault);
+                output::print_success(&format!("Vault unlocked ({count} credential(s))"));
+                return Ok(());
+            }
+            Err(_) => {
+                println!();
+                let _ = crossterm::execute!(stdout, ResetColor);
+                attempts += 1;
+                if attempts >= MAX_ATTEMPTS {
+                    bail!(
+                        "Too many failed attempts ({MAX_ATTEMPTS}). Please restart the REPL to try again."
+                    );
+                }
+                // Exponential backoff: 1s, 2s, 4s, 8s...
+                let delay = std::time::Duration::from_secs(1 << (attempts - 1));
+                output::print_error(&format!(
+                    "Wrong password. {remaining} attempt(s) remaining. Waiting {delay}s...",
+                    remaining = MAX_ATTEMPTS - attempts,
+                    delay = delay.as_secs()
+                ));
+                std::thread::sleep(delay);
+            }
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -573,9 +607,10 @@ fn run_onboarding(session: &mut Session) -> Result<()> {
     println!();
 
     let password = loop {
-        let pw = credentials::prompt_password("  Vault password (min 8 chars): ")?;
-        if pw.len() < 8 {
-            output::print_error("Password must be at least 8 characters. Try again.");
+        let pw =
+            credentials::prompt_password("  Vault password (min 12 chars, letters + numbers): ")?;
+        if let Err(e) = validate_password_strength(&pw) {
+            output::print_error(&format!("{e} Try again."));
             continue;
         }
         let confirm = credentials::prompt_password("  Confirm password: ")?;
@@ -1126,10 +1161,11 @@ fn print_config_help() {
 // ---------------------------------------------------------------------------
 
 /// Handle SDK commands. If a command needs `--private-key`, and none is supplied
-/// but an active account is set, we inject the stored credential.
+/// but an active account is set, we inject the stored credential. If a command
+/// needs `--address` or `--sender`, we auto-inject from the active account.
 async fn handle_sdk_command(cmd: &str, args: &[String], session: &mut Session) -> Result<()> {
-    // Build a clap-style argument vector: ["aptos-sdk-cli", <cmd>, ...args]
-    let mut argv: Vec<String> = vec!["aptos-sdk-cli".to_string(), cmd.to_string()];
+    // Build a clap-style argument vector: ["aptos-repl", <cmd>, ...args]
+    let mut argv: Vec<String> = vec!["aptos-repl".to_string(), cmd.to_string()];
     argv.extend_from_slice(args);
 
     // Inject credentials if needed
@@ -1145,6 +1181,42 @@ async fn handle_sdk_command(cmd: &str, args: &[String], session: &mut Session) -
         && let Some(cred) = vault.get(alias)
     {
         inject_credential(&mut argv, cred)?;
+    }
+
+    // Auto-inject --address from active account for read-only commands
+    let needs_address = argv.iter().any(|a| {
+        a == "balance"
+            || a == "lookup"
+            || a == "resources"
+            || a == "resource"
+            || a == "modules"
+            || a == "fund"
+            || a == "inspect"
+    });
+    let has_address = argv.iter().any(|a| a == "--address");
+    if needs_address
+        && !has_address
+        && let Some(ref alias) = session.active_account
+        && let Some(vault) = &session.vault
+        && let Some(cred) = vault.get(alias)
+    {
+        let account = cred.to_cli_account()?;
+        argv.push("--address".to_string());
+        argv.push(account.address().to_string());
+    }
+
+    // Auto-inject --sender from active account for simulate
+    let needs_sender = argv.iter().any(|a| a == "simulate");
+    let has_sender = argv.iter().any(|a| a == "--sender");
+    if needs_sender
+        && !has_sender
+        && let Some(ref alias) = session.active_account
+        && let Some(vault) = &session.vault
+        && let Some(cred) = vault.get(alias)
+    {
+        let account = cred.to_cli_account()?;
+        argv.push("--sender".to_string());
+        argv.push(account.address().to_string());
     }
 
     // Also inject global options
@@ -1168,8 +1240,15 @@ async fn handle_sdk_command(cmd: &str, args: &[String], session: &mut Session) -
         argv.push("--json".to_string());
     }
 
-    // Parse and dispatch
-    dispatch_command(&argv).await
+    // Parse and dispatch (argv stays in-process, never passed to an external process)
+    let result = dispatch_command(&argv).await;
+
+    // Zeroize any sensitive data in the argument vector (private keys, API keys)
+    for arg in &mut argv {
+        arg.zeroize();
+    }
+
+    result
 }
 
 fn inject_credential(argv: &mut Vec<String>, cred: &credentials::Credential) -> Result<()> {
@@ -1215,11 +1294,54 @@ async fn dispatch_command(argv: &[String]) -> Result<()> {
 /// never be persisted to the REPL history file.
 pub(crate) fn contains_secret(line: &str) -> bool {
     let lower = line.to_ascii_lowercase();
-    lower.contains("--private-key")
+
+    // Check for common secret flags
+    if lower.contains("--private-key")
         || lower.contains("--private_key")
         || lower.contains("--secret")
         || lower.contains("--mnemonic")
         || lower.contains("--seed")
+        || lower.contains("password")
+    {
+        return true;
+    }
+
+    // Check for credential add command (user pastes a private key)
+    if lower.starts_with("cred") && lower.contains("add") {
+        return true;
+    }
+
+    // Check for long hex strings that look like private keys (>= 64 hex chars)
+    for token in line.split_whitespace() {
+        let stripped = token.strip_prefix("0x").unwrap_or(token);
+        if stripped.len() >= 64 && stripped.chars().all(|c| c.is_ascii_hexdigit()) {
+            return true;
+        }
+    }
+
+    false
+}
+
+// ---------------------------------------------------------------------------
+// Password validation
+// ---------------------------------------------------------------------------
+
+/// Validate password strength. Requires:
+/// - At least 12 characters
+/// - At least one letter and one non-letter (digit, symbol, etc.)
+pub(crate) fn validate_password_strength(password: &str) -> Result<()> {
+    if password.len() < 12 {
+        bail!(
+            "Password must be at least 12 characters (got {}).",
+            password.len()
+        );
+    }
+    let has_letter = password.chars().any(|c| c.is_ascii_alphabetic());
+    let has_non_letter = password.chars().any(|c| !c.is_ascii_alphabetic());
+    if !has_letter || !has_non_letter {
+        bail!("Password must contain both letters and numbers/symbols.");
+    }
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -1395,5 +1517,69 @@ mod tests {
         assert!(parse_network_str("foonet").is_none());
         assert!(parse_network_str("").is_none());
         assert!(parse_network_str("MAINNET").is_none()); // case-sensitive
+    }
+
+    // -----------------------------------------------------------------------
+    // contains_secret — enhanced patterns
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn contains_secret_long_hex_string() {
+        // 64 hex chars looks like a private key
+        let hex = "a".repeat(64);
+        assert!(contains_secret(&format!("something {hex}")));
+    }
+
+    #[test]
+    fn contains_secret_long_hex_with_0x_prefix() {
+        let hex = "b".repeat(64);
+        assert!(contains_secret(&format!("something 0x{hex}")));
+    }
+
+    #[test]
+    fn contains_secret_short_hex_is_safe() {
+        // Short hex (like addresses) should be fine
+        assert!(!contains_secret("account balance --address 0x1234abcd"));
+    }
+
+    #[test]
+    fn contains_secret_credential_add() {
+        assert!(contains_secret("credential add my-key ed25519"));
+        assert!(contains_secret("cred add alice"));
+    }
+
+    #[test]
+    fn contains_secret_password_keyword() {
+        assert!(contains_secret("change-password"));
+        assert!(contains_secret("Password reset"));
+    }
+
+    // -----------------------------------------------------------------------
+    // validate_password_strength
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn password_too_short() {
+        assert!(validate_password_strength("short1!").is_err());
+    }
+
+    #[test]
+    fn password_no_numbers() {
+        assert!(validate_password_strength("onlylettershere").is_err());
+    }
+
+    #[test]
+    fn password_no_letters() {
+        assert!(validate_password_strength("123456789012").is_err());
+    }
+
+    #[test]
+    fn password_valid() {
+        assert!(validate_password_strength("MyPassword123!").is_ok());
+    }
+
+    #[test]
+    fn password_valid_with_symbols() {
+        assert!(validate_password_strength("p@ssw0rd!#$%^").is_ok());
     }
 }

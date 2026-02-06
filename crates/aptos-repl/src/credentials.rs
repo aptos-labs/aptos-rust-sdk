@@ -41,9 +41,10 @@ use crate::common::{CliAccount, KeyType};
 const VAULT_VERSION: u32 = 1;
 const SALT_LEN: usize = 32;
 const NONCE_LEN: usize = 12;
-// Argon2 parameters – tuned for interactive use (fast-ish on modern hardware)
-const ARGON2_MEM_KIB: u32 = 64 * 1024; // 64 MiB
-const ARGON2_ITERS: u32 = 3;
+// Argon2 parameters – tuned per OWASP recommendations for protecting
+// high-value keys while remaining tolerable for interactive use (~1-2s).
+const ARGON2_MEM_KIB: u32 = 256 * 1024; // 256 MiB
+const ARGON2_ITERS: u32 = 4;
 const ARGON2_PARALLEL: u32 = 1;
 
 #[derive(Serialize, Deserialize)]

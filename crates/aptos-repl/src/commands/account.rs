@@ -40,41 +40,41 @@ pub struct CreateArgs {
 
 #[derive(Args, Debug)]
 pub struct FundArgs {
-    /// Address to fund
+    /// Address to fund (defaults to active account in REPL)
     #[arg(long)]
-    address: String,
+    address: Option<String>,
 
-    /// Amount in octas (1 APT = 100,000,000 octas)
+    /// Amount in APT (e.g. "1.5") or octas (e.g. "150000000")
     #[arg(long)]
-    amount: u64,
+    amount: String,
 }
 
 #[derive(Args, Debug)]
 pub struct BalanceArgs {
-    /// Account address
+    /// Account address (defaults to active account in REPL)
     #[arg(long)]
-    address: String,
+    address: Option<String>,
 }
 
 #[derive(Args, Debug)]
 pub struct LookupArgs {
-    /// Account address
+    /// Account address (defaults to active account in REPL)
     #[arg(long)]
-    address: String,
+    address: Option<String>,
 }
 
 #[derive(Args, Debug)]
 pub struct ResourcesArgs {
-    /// Account address
+    /// Account address (defaults to active account in REPL)
     #[arg(long)]
-    address: String,
+    address: Option<String>,
 }
 
 #[derive(Args, Debug)]
 pub struct ResourceArgs {
-    /// Account address
+    /// Account address (defaults to active account in REPL)
     #[arg(long)]
-    address: String,
+    address: Option<String>,
 
     /// Resource type (e.g., "0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>")
     #[arg(long, name = "type")]
@@ -83,9 +83,9 @@ pub struct ResourceArgs {
 
 #[derive(Args, Debug)]
 pub struct ModulesArgs {
-    /// Account address
+    /// Account address (defaults to active account in REPL)
     #[arg(long)]
-    address: String,
+    address: Option<String>,
 }
 
 #[derive(Args, Debug)]
@@ -102,9 +102,9 @@ pub struct TransferArgs {
     #[arg(long)]
     to: String,
 
-    /// Amount in octas (1 APT = 100,000,000 octas)
+    /// Amount in APT (e.g. "1.5") or octas (e.g. "150000000")
     #[arg(long)]
-    amount: u64,
+    amount: String,
 
     /// Coin type for non-APT transfers (e.g., "0x1::aptos_coin::AptosCoin")
     #[arg(long)]
@@ -225,24 +225,25 @@ fn cmd_create(args: &CreateArgs, global: &GlobalOpts) -> Result<()> {
 
 async fn cmd_fund(args: &FundArgs, global: &GlobalOpts) -> Result<()> {
     let aptos = global.build_client()?;
-    let address = common::parse_address(&args.address)?;
+    let address = common::require_address(&args.address)?;
+    let amount = common::parse_amount(&args.amount)?;
 
     aptos
-        .fund_account(address, args.amount)
+        .fund_account(address, amount)
         .await
         .context("failed to fund account")?;
 
     if global.json {
         output::print_json(&serde_json::json!({
             "address": address.to_string(),
-            "amount_funded": args.amount,
+            "amount_funded": amount,
             "status": "success",
         }))?;
     } else {
         output::print_success(&format!(
             "Funded {} with {}",
             address,
-            output::format_apt(args.amount),
+            output::format_apt(amount),
         ));
     }
     Ok(())
@@ -250,7 +251,7 @@ async fn cmd_fund(args: &FundArgs, global: &GlobalOpts) -> Result<()> {
 
 async fn cmd_balance(args: &BalanceArgs, global: &GlobalOpts) -> Result<()> {
     let aptos = global.build_client()?;
-    let address = common::parse_address(&args.address)?;
+    let address = common::require_address(&args.address)?;
 
     let balance = aptos
         .get_balance(address)
@@ -273,7 +274,7 @@ async fn cmd_balance(args: &BalanceArgs, global: &GlobalOpts) -> Result<()> {
 
 async fn cmd_lookup(args: &LookupArgs, global: &GlobalOpts) -> Result<()> {
     let aptos = global.build_client()?;
-    let address = common::parse_address(&args.address)?;
+    let address = common::require_address(&args.address)?;
 
     let account_data = aptos
         .fullnode()
@@ -298,7 +299,7 @@ async fn cmd_lookup(args: &LookupArgs, global: &GlobalOpts) -> Result<()> {
 
 async fn cmd_resources(args: &ResourcesArgs, global: &GlobalOpts) -> Result<()> {
     let aptos = global.build_client()?;
-    let address = common::parse_address(&args.address)?;
+    let address = common::require_address(&args.address)?;
 
     let resources = aptos
         .fullnode()
@@ -333,7 +334,7 @@ async fn cmd_resources(args: &ResourcesArgs, global: &GlobalOpts) -> Result<()> 
 
 async fn cmd_resource(args: &ResourceArgs, global: &GlobalOpts) -> Result<()> {
     let aptos = global.build_client()?;
-    let address = common::parse_address(&args.address)?;
+    let address = common::require_address(&args.address)?;
 
     let resource = aptos
         .fullnode()
@@ -355,7 +356,7 @@ async fn cmd_resource(args: &ResourceArgs, global: &GlobalOpts) -> Result<()> {
 
 async fn cmd_modules(args: &ModulesArgs, global: &GlobalOpts) -> Result<()> {
     let aptos = global.build_client()?;
-    let address = common::parse_address(&args.address)?;
+    let address = common::require_address(&args.address)?;
 
     let modules = aptos
         .fullnode()
@@ -412,16 +413,17 @@ async fn cmd_transfer(args: &TransferArgs, global: &GlobalOpts) -> Result<()> {
     let aptos = global.build_client()?;
     let account = common::load_account(&args.private_key, &args.key_type)?;
     let recipient = common::parse_address(&args.to)?;
+    let amount = common::parse_amount(&args.amount)?;
 
     let result = if let Some(coin_type_str) = &args.coin_type {
         let coin_type = TypeTag::from_str_strict(coin_type_str).context("invalid coin type")?;
         account
-            .transfer_coin(&aptos, recipient, coin_type, args.amount)
+            .transfer_coin(&aptos, recipient, coin_type, amount)
             .await
             .context("coin transfer failed")?
     } else {
         account
-            .transfer_apt(&aptos, recipient, args.amount)
+            .transfer_apt(&aptos, recipient, amount)
             .await
             .context("APT transfer failed")?
     };
@@ -450,7 +452,7 @@ async fn cmd_transfer(args: &TransferArgs, global: &GlobalOpts) -> Result<()> {
         output::print_kv("Transaction Hash", hash);
         output::print_kv("Version", version);
         output::print_kv("Gas Used", gas_used);
-        output::print_kv("Amount", &output::format_apt(args.amount));
+        output::print_kv("Amount", &output::format_apt(amount));
         output::print_kv("Recipient", &recipient.to_string());
     } else {
         let vm_status = result

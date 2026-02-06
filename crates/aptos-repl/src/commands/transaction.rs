@@ -29,9 +29,9 @@ pub struct SimulateArgs {
     #[arg(long)]
     function: String,
 
-    /// Sender address (for simulation, no private key needed)
+    /// Sender address (defaults to active account in REPL)
     #[arg(long)]
-    sender: String,
+    sender: Option<String>,
 
     /// Type arguments
     #[arg(long, num_args = 0..)]
@@ -126,7 +126,7 @@ async fn cmd_simulate(args: &SimulateArgs, global: &GlobalOpts) -> Result<()> {
 
     // For simulation we need an account - create a dummy one from the sender address.
     // We use an Ed25519Account since simulation doesn't verify signatures.
-    let sender = common::parse_address(&args.sender)?;
+    let sender = common::require_address(&args.sender)?;
     let dummy_account = aptos_sdk::account::Ed25519Account::generate();
 
     // Build the raw transaction with the sender address and simulate

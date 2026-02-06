@@ -64,9 +64,25 @@ impl CliConfig {
         let path = Self::default_path()?;
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).context("failed to create config directory")?;
+
+            // Set restrictive permissions on the config directory (Unix)
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let _ = std::fs::set_permissions(parent, std::fs::Permissions::from_mode(0o700));
+            }
         }
         let contents = serde_json::to_string_pretty(self).context("failed to serialize config")?;
-        std::fs::write(&path, contents).context("failed to write config file")?;
+        std::fs::write(&path, &contents).context("failed to write config file")?;
+
+        // Set restrictive permissions on the config file (Unix)
+        // This file may contain an API key.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+        }
+
         Ok(())
     }
 

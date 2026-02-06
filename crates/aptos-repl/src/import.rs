@@ -19,6 +19,7 @@ use anyhow::{Context, Result};
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
+use zeroize::Zeroize;
 
 use crate::common::KeyType;
 
@@ -48,6 +49,7 @@ pub struct LegacyProfile {
 }
 
 /// A parsed profile ready for import.
+/// The private key is zeroized when this struct is dropped.
 pub struct ImportableProfile {
     pub alias: String,
     pub private_key_hex: String,
@@ -55,6 +57,12 @@ pub struct ImportableProfile {
     pub network: Option<String>,
     #[allow(dead_code)]
     pub address: Option<String>,
+}
+
+impl Drop for ImportableProfile {
+    fn drop(&mut self) {
+        self.private_key_hex.zeroize();
+    }
 }
 
 // ---------------------------------------------------------------------------

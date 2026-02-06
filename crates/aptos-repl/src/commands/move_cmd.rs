@@ -157,9 +157,9 @@ pub struct BuildPublishArgs {
 
 #[derive(Args, Debug)]
 pub struct InspectArgs {
-    /// Account address that owns the module
+    /// Account address that owns the module (defaults to active account in REPL)
     #[arg(long)]
-    address: String,
+    address: Option<String>,
 
     /// Module name (e.g., "coin")
     #[arg(long)]
@@ -243,6 +243,32 @@ pub(crate) fn parse_version(s: &str) -> Option<(u32, u32, u32)> {
     let minor = parts.next()?.parse().ok()?;
     let patch = parts.next()?.parse().ok()?;
     Some((major, minor, patch))
+}
+
+/// Validate that a named address is in the expected `name=address` format.
+/// Rejects anything that contains shell metacharacters or unexpected patterns.
+fn validate_named_addresses(addrs: &[String]) -> Result<()> {
+    for addr in addrs {
+        let Some((name, value)) = addr.split_once('=') else {
+            anyhow::bail!("Invalid named address format: '{addr}'. Expected: name=0xADDRESS");
+        };
+
+        // Name: must be a valid Move identifier (alphanumeric + underscore)
+        if name.is_empty() || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+            anyhow::bail!(
+                "Invalid named address identifier: '{name}'. Use only letters, numbers, underscores."
+            );
+        }
+
+        // Value: must look like a hex address (optionally 0x-prefixed)
+        let hex_part = value.strip_prefix("0x").unwrap_or(value);
+        if hex_part.is_empty() || !hex_part.chars().all(|c| c.is_ascii_hexdigit()) {
+            anyhow::bail!(
+                "Invalid named address value: '{value}'. Expected a hex address (e.g. 0x1)."
+            );
+        }
+    }
+    Ok(())
 }
 
 /// Build a `Command` for the `aptos` CLI with clean environment.
@@ -425,11 +451,11 @@ module {named_address}::{name}_tests {{
         println!("  Next steps:");
         println!("    cd {}", target_dir.display());
         println!(
-            "    aptos-sdk-cli move compile --named-addresses {}=0x<YOUR_ADDRESS>",
+            "    aptos-repl move compile --named-addresses {}=0x<YOUR_ADDRESS>",
             args.named_address
         );
         println!(
-            "    aptos-sdk-cli move test --named-addresses {}=0x42",
+            "    aptos-repl move test --named-addresses {}=0x42",
             args.named_address
         );
     }
@@ -460,7 +486,8 @@ fn cmd_compile(args: &CompileArgs, global: &GlobalOpts) -> Result<()> {
         cmd_args.push("--save-metadata");
     }
 
-    // Build named-addresses string
+    // Validate and build named-addresses string
+    validate_named_addresses(&args.named_addresses)?;
     let named_addr_str = args.named_addresses.join(",");
     if !args.named_addresses.is_empty() {
         cmd_args.push("--named-addresses");
@@ -549,6 +576,7 @@ fn cmd_test(args: &TestArgs, global: &GlobalOpts) -> Result<()> {
         cmd_args.push(filter);
     }
 
+    validate_named_addresses(&args.named_addresses)?;
     let named_addr_str = args.named_addresses.join(",");
     if !args.named_addresses.is_empty() {
         cmd_args.push("--named-addresses");
@@ -708,7 +736,7 @@ async fn cmd_publish(args: &PublishArgs, global: &GlobalOpts) -> Result<()> {
     if module_bytecodes.is_empty() {
         anyhow::bail!(
             "No .mv bytecode files found in {}. \
-             Run `aptos-sdk-cli move compile` first.",
+             Run `aptos-repl move compile` first.",
             modules_dir.display()
         );
     }
@@ -788,6 +816,7 @@ async fn cmd_build_publish(args: &BuildPublishArgs, global: &GlobalOpts) -> Resu
 
     let mut compile_args = vec!["move", "compile", "--save-metadata"];
 
+    validate_named_addresses(&args.named_addresses)?;
     let named_addr_str = args.named_addresses.join(",");
     if !args.named_addresses.is_empty() {
         compile_args.push("--named-addresses");
@@ -860,7 +889,7 @@ fn find_build_package(build_dir: &std::path::Path) -> Result<PathBuf> {
 
 async fn cmd_inspect(args: &InspectArgs, global: &GlobalOpts) -> Result<()> {
     let aptos = global.build_client()?;
-    let address = common::parse_address(&args.address)?;
+    let address = common::require_address(&args.address)?;
 
     let module = aptos
         .fullnode()
@@ -1033,5 +1062,57 @@ mod tests {
         let v1 = parse_version("aptos 7.9.0").unwrap();
         let v2 = parse_version("aptos 7.14.2").unwrap();
         assert!(v2 > v1, "7.14.2 should be greater than 7.9.0");
+    }
+
+    // -----------------------------------------------------------------------
+    // validate_named_addresses
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn named_address_valid() {
+        let addrs = vec!["my_module=0x1".to_string(), "other=0xabcdef".to_string()];
+        assert!(validate_named_addresses(&addrs).is_ok());
+    }
+
+    #[test]
+    fn named_address_no_equals() {
+        let addrs = vec!["bad_format".to_string()];
+        assert!(validate_named_addresses(&addrs).is_err());
+    }
+
+    #[test]
+    fn named_address_bad_identifier() {
+        let addrs = vec!["bad-name=0x1".to_string()]; // dashes not allowed
+        assert!(validate_named_addresses(&addrs).is_err());
+    }
+
+    #[test]
+    fn named_address_empty_name() {
+        let addrs = vec!["=0x1".to_string()];
+        assert!(validate_named_addresses(&addrs).is_err());
+    }
+
+    #[test]
+    fn named_address_bad_hex() {
+        let addrs = vec!["module=notahex".to_string()];
+        assert!(validate_named_addresses(&addrs).is_err());
+    }
+
+    #[test]
+    fn named_address_empty_value() {
+        let addrs = vec!["module=".to_string()];
+        assert!(validate_named_addresses(&addrs).is_err());
+    }
+
+    #[test]
+    fn named_address_shell_injection_blocked() {
+        let addrs = vec!["module=0x1;rm -rf /".to_string()];
+        assert!(validate_named_addresses(&addrs).is_err());
+    }
+
+    #[test]
+    fn named_address_empty_list_ok() {
+        let addrs: Vec<String> = vec![];
+        assert!(validate_named_addresses(&addrs).is_ok());
     }
 }
