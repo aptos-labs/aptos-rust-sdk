@@ -28,6 +28,7 @@ pub fn draw(frame: &mut Frame, app: &App) {
         Tab::Dashboard => draw_dashboard(frame, app, chunks[2]),
         Tab::Account => draw_account(frame, app, chunks[2]),
         Tab::Move => draw_move(frame, app, chunks[2]),
+        Tab::Compile => draw_compile(frame, app, chunks[2]),
     }
 
     draw_status_bar(frame, app, chunks[3]);
@@ -104,8 +105,10 @@ fn draw_tabs(frame: &mut Frame, app: &App, area: Rect) {
 fn draw_status_bar(frame: &mut Frame, app: &App, area: Rect) {
     let keybinds = if app.input_mode {
         "Enter: confirm │ Esc: cancel │ Tab: next field │ Ctrl+C: quit"
+    } else if app.tab == Tab::Compile {
+        "Tab/←→: switch tabs │ 1-4: jump │ i: edit │ x: compile │ t: test │ r: refresh │ q: quit"
     } else {
-        "Tab/←→: switch tabs │ 1-3: jump to tab │ i/Enter: edit │ x: execute │ r: refresh │ q: quit"
+        "Tab/←→: switch tabs │ 1-4: jump to tab │ i/Enter: edit │ x: execute │ r: refresh │ q: quit"
     };
 
     let status = Line::from(vec![
@@ -424,8 +427,12 @@ fn draw_input_field(
     value: &str,
     field_index: usize,
 ) {
-    let is_editing = app.input_mode && app.tab == Tab::Move && app.active_field == field_index;
-    let is_selected = !app.input_mode && app.tab == Tab::Move && app.active_field == field_index;
+    let is_editing = app.input_mode
+        && matches!(app.tab, Tab::Move | Tab::Compile)
+        && app.active_field == field_index;
+    let is_selected = !app.input_mode
+        && matches!(app.tab, Tab::Move | Tab::Compile)
+        && app.active_field == field_index;
 
     let display_text = if is_editing { &app.input_buffer } else { value };
 
@@ -455,6 +462,148 @@ fn draw_input_field(
     if is_editing {
         frame.set_cursor_position((area.x + display_text.len() as u16 + 1, area.y + 1));
     }
+}
+
+// =============================================================================
+// Compile tab
+// =============================================================================
+
+fn draw_compile(frame: &mut Frame, app: &App, area: Rect) {
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(1)
+        .constraints([
+            Constraint::Length(3), // Package dir input
+            Constraint::Length(3), // Named addresses input
+            Constraint::Length(3), // Action buttons
+            Constraint::Min(5),    // Output
+        ])
+        .split(area);
+
+    // Package directory input
+    draw_input_field(
+        frame,
+        app,
+        chunks[0],
+        " Package Directory ",
+        &app.compile.package_dir,
+        0,
+    );
+
+    // Named addresses input
+    draw_input_field(
+        frame,
+        app,
+        chunks[1],
+        " Named Addresses (e.g. my_addr=0x1234) ",
+        &app.compile.named_addresses,
+        1,
+    );
+
+    // Action hints bar
+    let status_indicator = match app.compile.success {
+        Some(true) => Span::styled(
+            " PASS ",
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Green)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Some(false) => Span::styled(
+            " FAIL ",
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Red)
+                .add_modifier(Modifier::BOLD),
+        ),
+        None if app.compile.is_running => Span::styled(
+            " RUNNING ",
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        ),
+        None => Span::styled(
+            " READY ",
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::DarkGray)
+                .add_modifier(Modifier::BOLD),
+        ),
+    };
+
+    let last_action = app.compile.last_action.as_deref().unwrap_or("None");
+
+    let action_line = Line::from(vec![
+        Span::raw("  "),
+        status_indicator,
+        Span::raw("  "),
+        Span::styled(
+            format!("Last: {last_action}"),
+            Style::default().fg(Color::DarkGray),
+        ),
+        Span::raw("    "),
+        Span::styled(
+            "[x] Compile",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::raw("    "),
+        Span::styled(
+            "[t] Test",
+            Style::default()
+                .fg(Color::Magenta)
+                .add_modifier(Modifier::BOLD),
+        ),
+    ]);
+
+    let action_block = Paragraph::new(action_line).block(
+        Block::default()
+            .title(Line::from(" Actions ").bold().yellow())
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::Yellow)),
+    );
+    frame.render_widget(action_block, chunks[2]);
+
+    // Output
+    let output_lines: Vec<Line> = if app.compile.output.is_empty() {
+        vec![Line::from(Span::styled(
+            "Press [x] to compile or [t] to run tests",
+            Style::default().fg(Color::DarkGray),
+        ))]
+    } else {
+        app.compile
+            .output
+            .iter()
+            .map(|line| {
+                let color = if line.starts_with("Error") || line.contains("error") {
+                    Color::Red
+                } else if line.contains("warning") {
+                    Color::Yellow
+                } else if line.contains("PASS")
+                    || line.contains("Success")
+                    || line.contains("succeeded")
+                {
+                    Color::Green
+                } else {
+                    Color::White
+                };
+                Line::from(Span::styled(line.clone(), Style::default().fg(color)))
+            })
+            .collect()
+    };
+
+    let output_block = Paragraph::new(output_lines)
+        .wrap(Wrap { trim: false })
+        .block(
+            Block::default()
+                .title(Line::from(" Output ").bold().green())
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Green))
+                .padding(Padding::horizontal(1)),
+        );
+    frame.render_widget(output_block, chunks[3]);
 }
 
 // =============================================================================

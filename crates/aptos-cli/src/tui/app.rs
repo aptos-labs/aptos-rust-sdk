@@ -14,6 +14,7 @@ pub enum Tab {
     Dashboard,
     Account,
     Move,
+    Compile,
 }
 
 impl Tab {
@@ -22,26 +23,29 @@ impl Tab {
             Tab::Dashboard => "Dashboard",
             Tab::Account => "Account",
             Tab::Move => "Move",
+            Tab::Compile => "Compile",
         }
     }
 
     pub fn all() -> &'static [Tab] {
-        &[Tab::Dashboard, Tab::Account, Tab::Move]
+        &[Tab::Dashboard, Tab::Account, Tab::Move, Tab::Compile]
     }
 
     pub fn next(self) -> Tab {
         match self {
             Tab::Dashboard => Tab::Account,
             Tab::Account => Tab::Move,
-            Tab::Move => Tab::Dashboard,
+            Tab::Move => Tab::Compile,
+            Tab::Compile => Tab::Dashboard,
         }
     }
 
     pub fn prev(self) -> Tab {
         match self {
-            Tab::Dashboard => Tab::Move,
+            Tab::Dashboard => Tab::Compile,
             Tab::Account => Tab::Dashboard,
             Tab::Move => Tab::Account,
+            Tab::Compile => Tab::Move,
         }
     }
 }
@@ -81,6 +85,17 @@ pub struct MoveViewData {
     pub error: Option<String>,
 }
 
+/// Compile/test tab state.
+#[derive(Debug, Clone, Default)]
+pub struct CompileData {
+    pub package_dir: String,
+    pub named_addresses: String,
+    pub output: Vec<String>,
+    pub is_running: bool,
+    pub last_action: Option<String>,
+    pub success: Option<bool>,
+}
+
 /// The application state.
 pub struct App {
     pub aptos: Aptos,
@@ -90,6 +105,7 @@ pub struct App {
     pub ledger: LedgerData,
     pub account: AccountData,
     pub move_view: MoveViewData,
+    pub compile: CompileData,
     /// Which input field is active (for Account and Move tabs)
     pub input_mode: bool,
     /// Current input buffer text
@@ -114,6 +130,10 @@ impl App {
             ledger: LedgerData::default(),
             account: AccountData::default(),
             move_view: MoveViewData::default(),
+            compile: CompileData {
+                package_dir: ".".to_string(),
+                ..Default::default()
+            },
             input_mode: false,
             input_buffer: String::new(),
             active_field: 0,
@@ -274,6 +294,11 @@ impl App {
                 2 => self.move_view.args = self.input_buffer.clone(),
                 _ => {}
             },
+            Tab::Compile => match self.active_field {
+                0 => self.compile.package_dir = self.input_buffer.clone(),
+                1 => self.compile.named_addresses = self.input_buffer.clone(),
+                _ => {}
+            },
             Tab::Dashboard => {}
         }
     }
@@ -288,6 +313,11 @@ impl App {
                 2 => self.move_view.args.clone(),
                 _ => String::new(),
             },
+            Tab::Compile => match self.active_field {
+                0 => self.compile.package_dir.clone(),
+                1 => self.compile.named_addresses.clone(),
+                _ => String::new(),
+            },
             Tab::Dashboard => String::new(),
         };
     }
@@ -297,6 +327,111 @@ impl App {
             Tab::Dashboard => 0,
             Tab::Account => 1,
             Tab::Move => 3,
+            Tab::Compile => 2,
+        }
+    }
+
+    /// Run the Move compiler on the package.
+    pub fn run_compile(&mut self) {
+        self.compile.is_running = true;
+        self.compile.output.clear();
+        self.compile.success = None;
+        self.compile.last_action = Some("Compile".to_string());
+        self.status = "Compiling...".to_string();
+
+        let package_dir = std::path::Path::new(&self.compile.package_dir);
+        if !package_dir.join("Move.toml").exists() {
+            self.compile.output.push(format!(
+                "Error: No Move.toml found in '{}'",
+                self.compile.package_dir
+            ));
+            self.compile.is_running = false;
+            self.compile.success = Some(false);
+            self.status = "Compile failed: no Move.toml".to_string();
+            return;
+        }
+
+        let mut args = vec!["move", "compile", "--save-metadata"];
+        let named_addr_str = self.compile.named_addresses.trim().to_string();
+        if !named_addr_str.is_empty() {
+            args.push("--named-addresses");
+            args.push(&named_addr_str);
+        }
+
+        match crate::commands::move_cmd::run_aptos_cmd_capture(&args, package_dir) {
+            Ok((success, stdout, stderr)) => {
+                for line in stdout.lines() {
+                    self.compile.output.push(line.to_string());
+                }
+                for line in stderr.lines() {
+                    self.compile.output.push(line.to_string());
+                }
+                self.compile.success = Some(success);
+                self.compile.is_running = false;
+                if success {
+                    self.status = "Compilation succeeded".to_string();
+                } else {
+                    self.status = "Compilation failed".to_string();
+                }
+            }
+            Err(e) => {
+                self.compile.output.push(format!("Error: {e}"));
+                self.compile.success = Some(false);
+                self.compile.is_running = false;
+                self.status = format!("Compile error: {e}");
+            }
+        }
+    }
+
+    /// Run Move unit tests.
+    pub fn run_tests(&mut self) {
+        self.compile.is_running = true;
+        self.compile.output.clear();
+        self.compile.success = None;
+        self.compile.last_action = Some("Test".to_string());
+        self.status = "Running tests...".to_string();
+
+        let package_dir = std::path::Path::new(&self.compile.package_dir);
+        if !package_dir.join("Move.toml").exists() {
+            self.compile.output.push(format!(
+                "Error: No Move.toml found in '{}'",
+                self.compile.package_dir
+            ));
+            self.compile.is_running = false;
+            self.compile.success = Some(false);
+            self.status = "Test failed: no Move.toml".to_string();
+            return;
+        }
+
+        let mut args = vec!["move", "test"];
+        let named_addr_str = self.compile.named_addresses.trim().to_string();
+        if !named_addr_str.is_empty() {
+            args.push("--named-addresses");
+            args.push(&named_addr_str);
+        }
+
+        match crate::commands::move_cmd::run_aptos_cmd_capture(&args, package_dir) {
+            Ok((success, stdout, stderr)) => {
+                for line in stdout.lines() {
+                    self.compile.output.push(line.to_string());
+                }
+                for line in stderr.lines() {
+                    self.compile.output.push(line.to_string());
+                }
+                self.compile.success = Some(success);
+                self.compile.is_running = false;
+                if success {
+                    self.status = "All tests passed".to_string();
+                } else {
+                    self.status = "Some tests failed".to_string();
+                }
+            }
+            Err(e) => {
+                self.compile.output.push(format!("Error: {e}"));
+                self.compile.success = Some(false);
+                self.compile.is_running = false;
+                self.status = format!("Test error: {e}");
+            }
         }
     }
 }
@@ -393,6 +528,10 @@ async fn run_app(terminal: &mut DefaultTerminal, aptos: Aptos, network_name: Str
                         app.tab = Tab::Move;
                         app.active_field = 0;
                     }
+                    KeyCode::Char('4') => {
+                        app.tab = Tab::Compile;
+                        app.active_field = 0;
+                    }
                     KeyCode::Char('r') => {
                         app.refresh_ledger().await;
                     }
@@ -412,7 +551,11 @@ async fn run_app(terminal: &mut DefaultTerminal, aptos: Aptos, network_name: Str
                             Tab::Account => app.fetch_account().await,
                             Tab::Move => app.execute_view().await,
                             Tab::Dashboard => app.refresh_ledger().await,
+                            Tab::Compile => app.run_compile(),
                         }
+                    }
+                    KeyCode::Char('t') if app.tab == Tab::Compile => {
+                        app.run_tests();
                     }
                     KeyCode::Down | KeyCode::Char('j') => {
                         if app.max_fields() > 0 {

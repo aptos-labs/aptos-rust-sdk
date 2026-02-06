@@ -32,3 +32,4 @@ ratatui = "0.30"
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
+which = "7"
