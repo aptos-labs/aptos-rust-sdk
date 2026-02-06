@@ -33,7 +33,6 @@ crossterm = "0.29"
 dirs = "6"
 hex = { workspace = true }
 rand = "0.8"
-ratatui = "0.30"
 rpassword = "7"
 rustyline = "15"
 serde = { workspace = true }

@@ -277,27 +277,12 @@ fn aptos_command(args: &[&str], package_dir: &std::path::Path) -> Result<Command
 }
 
 /// Run the `aptos` CLI with the given arguments, streaming output.
-pub fn run_aptos_cmd(args: &[&str], package_dir: &std::path::Path) -> Result<bool> {
+fn run_aptos_cmd(args: &[&str], package_dir: &std::path::Path) -> Result<bool> {
     let status = aptos_command(args, package_dir)?
         .status()
         .context("failed to execute aptos CLI")?;
 
     Ok(status.success())
-}
-
-/// Run the `aptos` CLI and capture output.
-pub fn run_aptos_cmd_capture(
-    args: &[&str],
-    package_dir: &std::path::Path,
-) -> Result<(bool, String, String)> {
-    let output = aptos_command(args, package_dir)?
-        .output()
-        .context("failed to execute aptos CLI")?;
-
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-
-    Ok((output.status.success(), stdout, stderr))
 }
 
 // =============================================================================

@@ -2,14 +2,14 @@
 //!
 //! This CLI wraps the Aptos Rust SDK to provide command-line access to
 //! account management, transfers, Move interactions, transaction operations,
-//! key management, and network queries.
+//! key management, network queries, and an interactive REPL with encrypted
+//! credential storage.
 
 mod commands;
 mod common;
 mod credentials;
 mod output;
 mod repl;
-mod tui;
 
 use clap::Parser;
 use commands::{AccountCommand, InfoCommand, KeyCommand, MoveCommand, TransactionCommand};
@@ -48,9 +48,6 @@ pub enum Command {
     #[command(subcommand)]
     Info(InfoCommand),
 
-    /// Launch interactive TUI dashboard
-    Dashboard,
-
     /// Start interactive REPL with encrypted credential support
     Repl,
 }
@@ -65,14 +62,6 @@ async fn main() -> anyhow::Result<()> {
         Command::Move(cmd) => cmd.run(&cli.global).await,
         Command::Transaction(cmd) => cmd.run(&cli.global).await,
         Command::Info(cmd) => cmd.run(&cli.global).await,
-        Command::Dashboard => {
-            let network_name = cli.global.node_url.as_deref().map_or_else(
-                || format!("{:?}", cli.global.network),
-                |url| url.to_string(),
-            );
-            let aptos = cli.global.build_client()?;
-            tui::run_tui(aptos, network_name).await
-        }
         Command::Repl => repl::run_repl(cli.global).await,
     };
 

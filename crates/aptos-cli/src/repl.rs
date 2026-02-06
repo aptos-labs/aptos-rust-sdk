@@ -204,11 +204,6 @@ async fn handle_line(line: &str, session: &mut Session) -> Result<ShouldContinue
         "move" => handle_sdk_command(cmd, args, session).await?,
         "transaction" | "tx" => handle_sdk_command("transaction", args, session).await?,
         "info" => handle_sdk_command(cmd, args, session).await?,
-        "dashboard" => {
-            let network_name = format!("{:?}", session.global.network);
-            let aptos = session.global.build_client()?;
-            crate::tui::run_tui(aptos, network_name).await?;
-        }
         _ => {
             output::print_error(&format!(
                 "Unknown command: `{cmd}`. Type `help` for available commands."
@@ -607,11 +602,6 @@ async fn dispatch_command(argv: &[String]) -> Result<()> {
         crate::Command::Move(cmd) => cmd.run(&cli.global).await,
         crate::Command::Transaction(cmd) => cmd.run(&cli.global).await,
         crate::Command::Info(cmd) => cmd.run(&cli.global).await,
-        crate::Command::Dashboard => {
-            let network_name = format!("{:?}", cli.global.network);
-            let aptos = cli.global.build_client()?;
-            crate::tui::run_tui(aptos, network_name).await
-        }
         crate::Command::Repl => {
             output::print_dim("Already in REPL mode.");
             Ok(())
@@ -677,7 +667,6 @@ fn print_repl_help() {
     println!("  Other");
     let _ = crossterm::execute!(stdout, ResetColor, SetAttribute(Attribute::Reset));
 
-    print_help_row(&mut stdout, "dashboard", "Launch TUI dashboard");
     print_help_row(&mut stdout, "help", "Show this help");
     print_help_row(&mut stdout, "quit", "Exit the REPL");
 
