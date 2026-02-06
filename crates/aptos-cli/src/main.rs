@@ -7,6 +7,7 @@
 mod commands;
 mod common;
 mod output;
+mod tui;
 
 use clap::Parser;
 use commands::{AccountCommand, InfoCommand, KeyCommand, MoveCommand, TransactionCommand};
@@ -44,6 +45,9 @@ enum Command {
     /// Network information (ledger info, gas price, blocks)
     #[command(subcommand)]
     Info(InfoCommand),
+
+    /// Launch interactive TUI dashboard
+    Dashboard,
 }
 
 #[tokio::main]
@@ -56,6 +60,14 @@ async fn main() -> anyhow::Result<()> {
         Command::Move(cmd) => cmd.run(&cli.global).await,
         Command::Transaction(cmd) => cmd.run(&cli.global).await,
         Command::Info(cmd) => cmd.run(&cli.global).await,
+        Command::Dashboard => {
+            let network_name = cli.global.node_url.as_deref().map_or_else(
+                || format!("{:?}", cli.global.network),
+                |url| url.to_string(),
+            );
+            let aptos = cli.global.build_client()?;
+            tui::run_tui(aptos, network_name).await
+        }
     };
 
     if let Err(e) = result {
