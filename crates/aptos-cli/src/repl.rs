@@ -6,9 +6,10 @@
 //! a raw private key.
 
 use anyhow::{Context, Result, bail};
+use crossterm::style::{Attribute, Color, ResetColor, SetAttribute, SetForegroundColor};
 use rustyline::DefaultEditor;
+use std::io::Write;
 
-// commands module is used via crate::Cli / crate::Command dispatch
 use crate::common::{GlobalOpts, KeyType, NetworkArg};
 use crate::credentials::{self, Vault};
 use crate::output;
@@ -35,18 +36,15 @@ impl Session {
 pub async fn run_repl(global: GlobalOpts) -> Result<()> {
     let mut session = Session::new(global);
 
-    println!();
-    println!("  Aptos SDK CLI - Interactive REPL");
-    println!("  ================================");
-    println!();
+    print_banner();
 
     // Try to unlock vault if one exists
     if credentials::vault_exists() {
-        println!("  Encrypted vault found. Enter your password to unlock credentials.");
+        output::print_info("Encrypted vault found. Enter your password to unlock.");
         unlock_vault(&mut session)?;
     } else {
-        println!("  No credential vault found. Use `credential init` to create one,");
-        println!("  or continue without stored credentials.");
+        output::print_dim("No credential vault found.");
+        output::print_dim("Use `credential init` to create one, or continue without.");
     }
 
     println!();
@@ -70,7 +68,7 @@ pub async fn run_repl(global: GlobalOpts) -> Result<()> {
                 break;
             }
             Err(e) => {
-                eprintln!("Error: {e}");
+                output::print_error(&format!("{e}"));
                 break;
             }
         };
@@ -86,7 +84,7 @@ pub async fn run_repl(global: GlobalOpts) -> Result<()> {
             Ok(ShouldContinue::Yes) => {}
             Ok(ShouldContinue::Quit) => break,
             Err(e) => {
-                eprintln!("Error: {e:#}");
+                output::print_error(&format!("{e:#}"));
             }
         }
     }
@@ -99,8 +97,37 @@ pub async fn run_repl(global: GlobalOpts) -> Result<()> {
         let _ = rl.save_history(hp);
     }
 
+    let mut stdout = std::io::stdout();
+    let _ = crossterm::execute!(stdout, SetForegroundColor(Color::DarkGrey));
     println!("Goodbye.");
+    let _ = crossterm::execute!(stdout, ResetColor);
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Banner
+// ---------------------------------------------------------------------------
+
+fn print_banner() {
+    let mut stdout = std::io::stdout();
+    println!();
+
+    let _ = crossterm::execute!(
+        stdout,
+        SetForegroundColor(Color::Cyan),
+        SetAttribute(Attribute::Bold)
+    );
+    println!("    ╔══════════════════════════════════════════╗");
+    println!("    ║                                          ║");
+    println!("    ║          Aptos SDK CLI  ·  REPL          ║");
+    println!("    ║                                          ║");
+    println!("    ╚══════════════════════════════════════════╝");
+    let _ = crossterm::execute!(stdout, ResetColor, SetAttribute(Attribute::Reset));
+
+    let _ = crossterm::execute!(stdout, SetForegroundColor(Color::DarkGrey));
+    println!("     Encrypted credentials · Interactive shell");
+    let _ = crossterm::execute!(stdout, ResetColor);
+    println!();
 }
 
 // ---------------------------------------------------------------------------
@@ -115,12 +142,36 @@ fn build_prompt(session: &Session) -> String {
         NetworkArg::Local => "local",
     };
 
-    let account_part = session
-        .active_account
-        .as_deref()
-        .map_or(String::new(), |a| format!(":{a}"));
+    // Use ANSI codes directly in the prompt string.
+    // Wrap color escapes in \x01..\x02 so rustyline doesn't count them
+    // towards the visible prompt width (prevents cursor misalignment).
+    let net_color = match session.global.network {
+        NetworkArg::Mainnet => "\x1b[32m", // green
+        NetworkArg::Testnet => "\x1b[33m", // yellow
+        NetworkArg::Devnet => "\x1b[36m",  // cyan
+        NetworkArg::Local => "\x1b[35m",   // magenta
+    };
+    let reset = "\x1b[0m";
+    let bold = "\x1b[1m";
+    let cyan = "\x1b[36m";
+    let magenta = "\x1b[35m";
+    let dim = "\x1b[2m";
 
-    format!("aptos({network}{account_part})> ")
+    let account_part = if let Some(ref alias) = session.active_account {
+        format!("{dim}:{reset}{magenta}{bold}{alias}{reset}")
+    } else {
+        String::new()
+    };
+
+    let vault_indicator = if session.vault.is_some() {
+        format!("{dim}🔓{reset} ")
+    } else {
+        String::new()
+    };
+
+    format!(
+        "{vault_indicator}{cyan}{bold}aptos{reset}{dim}({reset}{net_color}{bold}{network}{reset}{account_part}{dim}){reset}{cyan}{bold}>{reset} "
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -159,7 +210,9 @@ async fn handle_line(line: &str, session: &mut Session) -> Result<ShouldContinue
             crate::tui::run_tui(aptos, network_name).await?;
         }
         _ => {
-            eprintln!("Unknown command: {cmd}. Type `help` for available commands.");
+            output::print_error(&format!(
+                "Unknown command: `{cmd}`. Type `help` for available commands."
+            ));
         }
     }
 
@@ -196,7 +249,7 @@ fn handle_credential(args: &[String], session: &mut Session) -> Result<()> {
         "lock" => {
             session.vault = None;
             session.active_account = None;
-            output::print_success("Vault locked");
+            output::print_success("Vault locked — credentials cleared from memory");
         }
         "add" => {
             let vault = session
@@ -226,7 +279,7 @@ fn handle_credential(args: &[String], session: &mut Session) -> Result<()> {
             // Show address
             if let Some(cred) = vault.get(alias) {
                 let account = cred.to_cli_account()?;
-                output::print_success(&format!("Added '{alias}' -> {}", account.address()));
+                output::print_success(&format!("Added '{alias}' → {}", account.address()));
             }
         }
         "remove" | "rm" => {
@@ -242,16 +295,45 @@ fn handle_credential(args: &[String], session: &mut Session) -> Result<()> {
             let vault = session.vault.as_ref().context("vault not unlocked")?;
             let entries = vault.list();
             if entries.is_empty() {
-                println!("  No credentials stored. Use `credential add <alias>` to add one.");
+                output::print_dim(
+                    "No credentials stored. Use `credential add <alias>` to add one.",
+                );
             } else {
                 output::print_header(&format!("Stored Credentials ({})", entries.len()));
+                let mut stdout = std::io::stdout();
                 for (alias, key_type, address) in &entries {
-                    let active = if session.active_account.as_deref() == Some(*alias) {
-                        " *"
+                    let is_active = session.active_account.as_deref() == Some(*alias);
+
+                    print!("    ");
+                    if is_active {
+                        let _ = crossterm::execute!(
+                            stdout,
+                            SetForegroundColor(Color::Green),
+                            SetAttribute(Attribute::Bold)
+                        );
+                        print!("▸ ");
                     } else {
-                        ""
-                    };
-                    println!("  {alias:16} {key_type:12?} {address}{active}",);
+                        print!("  ");
+                    }
+                    let _ = crossterm::execute!(
+                        stdout,
+                        SetForegroundColor(Color::White),
+                        SetAttribute(Attribute::Bold)
+                    );
+                    print!("{alias:16}");
+                    let _ = crossterm::execute!(stdout, SetAttribute(Attribute::Reset));
+
+                    let _ = crossterm::execute!(stdout, SetForegroundColor(Color::DarkGrey));
+                    print!("{key_type:12?}");
+                    let _ = crossterm::execute!(stdout, SetForegroundColor(Color::Cyan));
+                    print!("{address}");
+
+                    if is_active {
+                        let _ = crossterm::execute!(stdout, SetForegroundColor(Color::Green));
+                        print!("  (active)");
+                    }
+                    let _ = crossterm::execute!(stdout, ResetColor);
+                    println!();
                 }
             }
         }
@@ -299,24 +381,55 @@ fn handle_credential(args: &[String], session: &mut Session) -> Result<()> {
             ));
         }
         _ => {
-            println!("Credential commands:");
-            println!("  credential init              Create a new encrypted vault");
-            println!("  credential unlock            Unlock an existing vault");
-            println!("  credential lock              Lock the vault (clear from memory)");
-            println!("  credential add <alias> [kt]  Add a private key (prompted securely)");
-            println!("  credential remove <alias>    Remove a stored credential");
-            println!("  credential list              List all stored credentials");
-            println!("  credential change-password   Change the vault password");
+            print_credential_help();
         }
     }
     Ok(())
 }
 
+fn print_credential_help() {
+    let mut stdout = std::io::stdout();
+
+    output::print_header("Credential Commands");
+
+    let commands = [
+        ("init", "Create a new encrypted vault"),
+        ("unlock", "Unlock an existing vault"),
+        ("lock", "Lock the vault (clear from memory)"),
+        (
+            "add <alias> [type]",
+            "Add a private key (prompted securely)",
+        ),
+        ("remove <alias>", "Remove a stored credential"),
+        ("list", "List all stored credentials"),
+        ("change-password", "Change the vault password"),
+    ];
+
+    for (cmd, desc) in &commands {
+        print!("    ");
+        let _ = crossterm::execute!(
+            stdout,
+            SetForegroundColor(Color::Cyan),
+            SetAttribute(Attribute::Bold)
+        );
+        print!("credential {cmd:22}");
+        let _ = crossterm::execute!(stdout, ResetColor, SetAttribute(Attribute::Reset));
+        let _ = crossterm::execute!(stdout, SetForegroundColor(Color::DarkGrey));
+        println!("{desc}");
+        let _ = crossterm::execute!(stdout, ResetColor);
+    }
+    println!();
+}
+
 fn unlock_vault(session: &mut Session) -> Result<()> {
     let password = credentials::prompt_password("Vault password: ")?;
-    print!("Deriving key...");
+    let mut stdout = std::io::stdout();
+    let _ = crossterm::execute!(stdout, SetForegroundColor(Color::DarkGrey));
+    print!("  Deriving key...");
+    let _ = stdout.flush();
     let vault = Vault::open(&password)?;
     println!(" done.");
+    let _ = crossterm::execute!(stdout, ResetColor);
     let count = vault.len();
     session.vault = Some(vault);
     output::print_success(&format!("Vault unlocked ({count} credential(s))"));
@@ -334,7 +447,7 @@ fn handle_use(args: &[String], session: &mut Session) -> Result<()> {
 
     if alias == "none" {
         session.active_account = None;
-        println!("  Active account cleared.");
+        output::print_info("Active account cleared.");
         return Ok(());
     }
 
@@ -345,7 +458,7 @@ fn handle_use(args: &[String], session: &mut Session) -> Result<()> {
     ))?;
 
     let account = cred.to_cli_account()?;
-    println!("  Active account: {alias} ({})", account.address());
+    output::print_success(&format!("Active account: {alias} ({})", account.address()));
     session.active_account = Some(alias.clone());
     Ok(())
 }
@@ -356,13 +469,34 @@ fn handle_whoami(session: &Session) -> Result<()> {
             let vault = session.vault.as_ref().context("vault not unlocked")?;
             if let Some(cred) = vault.get(alias) {
                 let account = cred.to_cli_account()?;
-                println!("  Active: {alias}");
-                println!("  Address: {}", account.address());
-                println!("  Key type: {:?}", cred.key_type);
+                let mut stdout = std::io::stdout();
+                output::print_header("Active Identity");
+                // Alias
+                let _ = crossterm::execute!(stdout, SetForegroundColor(Color::DarkGrey));
+                print!("    Alias:    ");
+                let _ = crossterm::execute!(
+                    stdout,
+                    SetForegroundColor(Color::Magenta),
+                    SetAttribute(Attribute::Bold)
+                );
+                println!("{alias}");
+                let _ = crossterm::execute!(stdout, ResetColor, SetAttribute(Attribute::Reset));
+                // Address
+                let _ = crossterm::execute!(stdout, SetForegroundColor(Color::DarkGrey));
+                print!("    Address:  ");
+                let _ = crossterm::execute!(stdout, SetForegroundColor(Color::Cyan));
+                println!("{}", account.address());
+                let _ = crossterm::execute!(stdout, ResetColor);
+                // Key type
+                let _ = crossterm::execute!(stdout, SetForegroundColor(Color::DarkGrey));
+                print!("    Key type: ");
+                let _ = crossterm::execute!(stdout, SetForegroundColor(Color::White));
+                println!("{:?}", cred.key_type);
+                let _ = crossterm::execute!(stdout, ResetColor);
             }
         }
         None => {
-            println!("  No active account. Use `use <alias>` to set one.");
+            output::print_dim("No active account. Use `use <alias>` to set one.");
         }
     }
     Ok(())
@@ -377,10 +511,19 @@ fn handle_network(args: &[String], session: &mut Session) -> Result<()> {
             "local" => NetworkArg::Local,
             _ => bail!("unknown network: {net}. Options: mainnet, testnet, devnet, local"),
         };
-        println!("  Network: {net}");
+        output::print_success(&format!("Switched to {net}"));
     } else {
-        println!("  Current network: {:?}", session.global.network);
-        println!("  usage: network <mainnet|testnet|devnet|local>");
+        let mut stdout = std::io::stdout();
+        let _ = crossterm::execute!(stdout, SetForegroundColor(Color::DarkGrey));
+        print!("  Current network: ");
+        let _ = crossterm::execute!(
+            stdout,
+            SetForegroundColor(Color::Yellow),
+            SetAttribute(Attribute::Bold)
+        );
+        println!("{:?}", session.global.network);
+        let _ = crossterm::execute!(stdout, ResetColor, SetAttribute(Attribute::Reset));
+        output::print_dim("usage: network <mainnet|testnet|devnet|local>");
     }
     Ok(())
 }
@@ -437,14 +580,6 @@ async fn handle_sdk_command(cmd: &str, args: &[String], session: &mut Session) -
 }
 
 fn inject_credential(argv: &mut Vec<String>, cred: &credentials::Credential) -> Result<()> {
-    // We need the raw private key hex. Credential exposes to_cli_account but
-    // we need the hex for injection. Add a helper that returns the account
-    // along with the hex. Since Credential holds private_key_hex we access
-    // it through a dedicated method.
-
-    // For now, use a workaround: the credential's to_cli_account validates the key,
-    // but we need the hex for --private-key injection.
-    // We'll use an internal accessor added to Credential.
     argv.push("--private-key".to_string());
     argv.push(cred.private_key_hex().to_string());
 
@@ -478,7 +613,7 @@ async fn dispatch_command(argv: &[String]) -> Result<()> {
             crate::tui::run_tui(aptos, network_name).await
         }
         crate::Command::Repl => {
-            println!("  Already in REPL mode.");
+            output::print_dim("Already in REPL mode.");
             Ok(())
         }
     }
@@ -489,24 +624,80 @@ async fn dispatch_command(argv: &[String]) -> Result<()> {
 // ---------------------------------------------------------------------------
 
 fn print_repl_help() {
-    println!("  Commands:");
-    println!("    credential init/unlock/lock/add/remove/list");
-    println!("    use <alias>              Set active account for signing");
-    println!("    use none                 Clear active account");
-    println!("    whoami                   Show active account details");
-    println!("    network <name>           Switch network");
+    let mut stdout = std::io::stdout();
+
+    // Session commands
+    let _ = crossterm::execute!(
+        stdout,
+        SetForegroundColor(Color::Cyan),
+        SetAttribute(Attribute::Bold)
+    );
+    println!("  Session");
+    let _ = crossterm::execute!(stdout, ResetColor, SetAttribute(Attribute::Reset));
+
+    print_help_row(
+        &mut stdout,
+        "credential <sub>",
+        "Manage encrypted credentials",
+    );
+    print_help_row(&mut stdout, "use <alias>", "Set active account for signing");
+    print_help_row(&mut stdout, "use none", "Clear active account");
+    print_help_row(&mut stdout, "whoami", "Show active account details");
+    print_help_row(&mut stdout, "network <name>", "Switch network");
+
     println!();
-    println!("    account <subcommand>     Account operations");
-    println!("    key <subcommand>         Key management");
-    println!("    move <subcommand>        Move operations (compile, test, view, run, publish)");
-    println!("    transaction <subcommand> Transaction operations (also: tx)");
-    println!("    info <subcommand>        Network info");
-    println!("    dashboard                Launch TUI");
+    let _ = crossterm::execute!(
+        stdout,
+        SetForegroundColor(Color::Cyan),
+        SetAttribute(Attribute::Bold)
+    );
+    println!("  Blockchain");
+    let _ = crossterm::execute!(stdout, ResetColor, SetAttribute(Attribute::Reset));
+
+    print_help_row(&mut stdout, "account <sub>", "Account operations");
+    print_help_row(&mut stdout, "key <sub>", "Key management");
+    print_help_row(
+        &mut stdout,
+        "move <sub>",
+        "Move ops (compile, test, view, run, publish)",
+    );
+    print_help_row(&mut stdout, "tx <sub>", "Transaction operations");
+    print_help_row(
+        &mut stdout,
+        "info <sub>",
+        "Network info (ledger, gas, block)",
+    );
+
     println!();
-    println!("    help                     Show this help");
-    println!("    quit / exit / q          Exit the REPL");
+    let _ = crossterm::execute!(
+        stdout,
+        SetForegroundColor(Color::Cyan),
+        SetAttribute(Attribute::Bold)
+    );
+    println!("  Other");
+    let _ = crossterm::execute!(stdout, ResetColor, SetAttribute(Attribute::Reset));
+
+    print_help_row(&mut stdout, "dashboard", "Launch TUI dashboard");
+    print_help_row(&mut stdout, "help", "Show this help");
+    print_help_row(&mut stdout, "quit", "Exit the REPL");
+
     println!();
-    println!("  When an active account is set, commands that need --private-key");
-    println!("  will automatically use the stored credential.");
+    let _ = crossterm::execute!(stdout, SetForegroundColor(Color::DarkGrey));
+    println!("  Tip: When an active account is set, signing commands auto-inject");
+    println!("  the stored credential — no --private-key needed.");
+    let _ = crossterm::execute!(stdout, ResetColor);
     println!();
+}
+
+fn print_help_row(stdout: &mut std::io::Stdout, cmd: &str, desc: &str) {
+    let _ = crossterm::execute!(
+        stdout,
+        SetForegroundColor(Color::Yellow),
+        SetAttribute(Attribute::Bold)
+    );
+    print!("    {cmd:24}");
+    let _ = crossterm::execute!(stdout, ResetColor, SetAttribute(Attribute::Reset));
+    let _ = crossterm::execute!(stdout, SetForegroundColor(Color::DarkGrey));
+    println!("{desc}");
+    let _ = crossterm::execute!(stdout, ResetColor);
 }
