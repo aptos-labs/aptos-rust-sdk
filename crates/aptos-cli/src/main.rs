@@ -113,7 +113,8 @@ mod tests {
 
     #[test]
     fn network_flag_testnet() {
-        let cli = Cli::try_parse_from(["aptos-cli", "--network", "testnet", "interactive"]).unwrap();
+        let cli =
+            Cli::try_parse_from(["aptos-cli", "--network", "testnet", "interactive"]).unwrap();
         assert!(matches!(cli.global.network, common::NetworkArg::Testnet));
     }
 
@@ -154,8 +155,8 @@ mod tests {
 
     #[test]
     fn node_url_flag() {
-        let cli = Cli::try_parse_from(["aptos-cli", "--node-url", "https://custom.example.com"])
-            .unwrap();
+        let cli =
+            Cli::try_parse_from(["aptos-cli", "--node-url", "https://custom.example.com"]).unwrap();
         assert_eq!(
             cli.global.node_url,
             Some("https://custom.example.com".to_string())
@@ -310,16 +311,13 @@ mod tests {
     #[test]
     fn account_fund_without_address_parses() {
         // --address is now optional (auto-injected)
-        let cli =
-            Cli::try_parse_from(["aptos-cli", "account", "fund", "--amount", "100"]).unwrap();
+        let cli = Cli::try_parse_from(["aptos-cli", "account", "fund", "--amount", "100"]).unwrap();
         assert!(matches!(cli.command, Some(Command::Account(_))));
     }
 
     #[test]
     fn account_fund_requires_amount() {
-        assert!(
-            Cli::try_parse_from(["aptos-cli", "account", "fund", "--address", "0x1"]).is_err()
-        );
+        assert!(Cli::try_parse_from(["aptos-cli", "account", "fund", "--address", "0x1"]).is_err());
     }
 
     #[test]
@@ -751,14 +749,9 @@ mod tests {
 
     #[test]
     fn transaction_lookup_with_hash() {
-        let cli = Cli::try_parse_from([
-            "aptos-cli",
-            "transaction",
-            "lookup",
-            "--hash",
-            "0xaabbccdd",
-        ])
-        .unwrap();
+        let cli =
+            Cli::try_parse_from(["aptos-cli", "transaction", "lookup", "--hash", "0xaabbccdd"])
+                .unwrap();
         assert!(matches!(cli.command, Some(Command::Transaction(_))));
     }
 
