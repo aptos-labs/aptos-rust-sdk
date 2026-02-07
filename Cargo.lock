@@ -113,7 +113,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "aptos-repl"
+name = "aptos-cli"
 version = "0.1.0"
 dependencies = [
  "aes-gcm",

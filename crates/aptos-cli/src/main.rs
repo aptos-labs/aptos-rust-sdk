@@ -2,7 +2,7 @@
 //!
 //! This CLI wraps the Aptos Rust SDK to provide command-line access to
 //! account management, transfers, Move interactions, transaction operations,
-//! key management, network queries, and an interactive REPL with encrypted
+//! key management, network queries, and an interactive shell with encrypted
 //! credential storage.
 
 mod commands;
@@ -10,8 +10,8 @@ mod common;
 mod config;
 mod credentials;
 mod import;
+mod interactive;
 mod output;
-mod repl;
 
 use clap::Parser;
 use commands::{AccountCommand, InfoCommand, KeyCommand, MoveCommand, TransactionCommand};
@@ -19,7 +19,7 @@ use common::GlobalOpts;
 
 /// Aptos SDK CLI - Interact with the Aptos blockchain from the command line.
 #[derive(Parser, Debug)]
-#[command(name = "aptos-repl", version, about, long_about = None)]
+#[command(name = "aptos-cli", version, about, long_about = None)]
 pub struct Cli {
     #[command(flatten)]
     pub global: GlobalOpts,
@@ -50,8 +50,8 @@ pub enum Command {
     #[command(subcommand)]
     Info(InfoCommand),
 
-    /// Start interactive REPL with encrypted credential support
-    Repl,
+    /// Start interactive shell with encrypted credential support
+    Interactive,
 }
 
 #[tokio::main]
@@ -64,7 +64,7 @@ async fn main() -> anyhow::Result<()> {
         Some(Command::Move(cmd)) => cmd.run(&cli.global).await,
         Some(Command::Transaction(cmd)) => cmd.run(&cli.global).await,
         Some(Command::Info(cmd)) => cmd.run(&cli.global).await,
-        Some(Command::Repl) | None => repl::run_repl(cli.global).await,
+        Some(Command::Interactive) | None => interactive::run_interactive(cli.global).await,
     };
 
     if let Err(e) = result {
@@ -86,19 +86,19 @@ mod tests {
 
     #[test]
     fn no_subcommand_yields_none() {
-        let cli = Cli::try_parse_from(["aptos-repl"]).unwrap();
+        let cli = Cli::try_parse_from(["aptos-cli"]).unwrap();
         assert!(cli.command.is_none());
     }
 
     #[test]
-    fn repl_subcommand() {
-        let cli = Cli::try_parse_from(["aptos-repl", "repl"]).unwrap();
-        assert!(matches!(cli.command, Some(Command::Repl)));
+    fn interactive_subcommand() {
+        let cli = Cli::try_parse_from(["aptos-cli", "interactive"]).unwrap();
+        assert!(matches!(cli.command, Some(Command::Interactive)));
     }
 
     #[test]
     fn invalid_subcommand_fails() {
-        assert!(Cli::try_parse_from(["aptos-repl", "nonexistent"]).is_err());
+        assert!(Cli::try_parse_from(["aptos-cli", "nonexistent"]).is_err());
     }
 
     // ===================================================================
@@ -107,54 +107,54 @@ mod tests {
 
     #[test]
     fn network_flag_mainnet() {
-        let cli = Cli::try_parse_from(["aptos-repl", "--network", "mainnet"]).unwrap();
+        let cli = Cli::try_parse_from(["aptos-cli", "--network", "mainnet"]).unwrap();
         assert!(matches!(cli.global.network, common::NetworkArg::Mainnet));
     }
 
     #[test]
     fn network_flag_testnet() {
-        let cli = Cli::try_parse_from(["aptos-repl", "--network", "testnet", "repl"]).unwrap();
+        let cli = Cli::try_parse_from(["aptos-cli", "--network", "testnet", "interactive"]).unwrap();
         assert!(matches!(cli.global.network, common::NetworkArg::Testnet));
     }
 
     #[test]
     fn network_flag_devnet() {
-        let cli = Cli::try_parse_from(["aptos-repl", "--network", "devnet"]).unwrap();
+        let cli = Cli::try_parse_from(["aptos-cli", "--network", "devnet"]).unwrap();
         assert!(matches!(cli.global.network, common::NetworkArg::Devnet));
     }
 
     #[test]
     fn network_flag_local() {
-        let cli = Cli::try_parse_from(["aptos-repl", "--network", "local"]).unwrap();
+        let cli = Cli::try_parse_from(["aptos-cli", "--network", "local"]).unwrap();
         assert!(matches!(cli.global.network, common::NetworkArg::Local));
     }
 
     #[test]
     fn default_network_is_mainnet() {
-        let cli = Cli::try_parse_from(["aptos-repl"]).unwrap();
+        let cli = Cli::try_parse_from(["aptos-cli"]).unwrap();
         assert!(matches!(cli.global.network, common::NetworkArg::Mainnet));
     }
 
     #[test]
     fn invalid_network_fails() {
-        assert!(Cli::try_parse_from(["aptos-repl", "--network", "foobar"]).is_err());
+        assert!(Cli::try_parse_from(["aptos-cli", "--network", "foobar"]).is_err());
     }
 
     #[test]
     fn json_flag() {
-        let cli = Cli::try_parse_from(["aptos-repl", "--json", "repl"]).unwrap();
+        let cli = Cli::try_parse_from(["aptos-cli", "--json", "interactive"]).unwrap();
         assert!(cli.global.json);
     }
 
     #[test]
     fn json_flag_default_false() {
-        let cli = Cli::try_parse_from(["aptos-repl"]).unwrap();
+        let cli = Cli::try_parse_from(["aptos-cli"]).unwrap();
         assert!(!cli.global.json);
     }
 
     #[test]
     fn node_url_flag() {
-        let cli = Cli::try_parse_from(["aptos-repl", "--node-url", "https://custom.example.com"])
+        let cli = Cli::try_parse_from(["aptos-cli", "--node-url", "https://custom.example.com"])
             .unwrap();
         assert_eq!(
             cli.global.node_url,
@@ -164,26 +164,26 @@ mod tests {
 
     #[test]
     fn node_url_default_none() {
-        let cli = Cli::try_parse_from(["aptos-repl"]).unwrap();
+        let cli = Cli::try_parse_from(["aptos-cli"]).unwrap();
         assert!(cli.global.node_url.is_none());
     }
 
     #[test]
     fn api_key_flag() {
-        let cli = Cli::try_parse_from(["aptos-repl", "--api-key", "my-key", "repl"]).unwrap();
+        let cli = Cli::try_parse_from(["aptos-cli", "--api-key", "my-key", "interactive"]).unwrap();
         assert_eq!(cli.global.api_key, Some("my-key".to_string()));
     }
 
     #[test]
     fn api_key_default_none() {
-        let cli = Cli::try_parse_from(["aptos-repl"]).unwrap();
+        let cli = Cli::try_parse_from(["aptos-cli"]).unwrap();
         assert!(cli.global.api_key.is_none());
     }
 
     #[test]
     fn global_flags_with_subcommand() {
         let cli = Cli::try_parse_from([
-            "aptos-repl",
+            "aptos-cli",
             "--network",
             "testnet",
             "--json",
@@ -208,60 +208,60 @@ mod tests {
 
     #[test]
     fn account_create_defaults() {
-        let cli = Cli::try_parse_from(["aptos-repl", "account", "create"]).unwrap();
+        let cli = Cli::try_parse_from(["aptos-cli", "account", "create"]).unwrap();
         assert!(matches!(cli.command, Some(Command::Account(_))));
     }
 
     #[test]
     fn account_create_with_key_type() {
         let cli =
-            Cli::try_parse_from(["aptos-repl", "account", "create", "--key-type", "secp256k1"])
+            Cli::try_parse_from(["aptos-cli", "account", "create", "--key-type", "secp256k1"])
                 .unwrap();
         assert!(matches!(cli.command, Some(Command::Account(_))));
     }
 
     #[test]
     fn account_create_with_mnemonic() {
-        let cli = Cli::try_parse_from(["aptos-repl", "account", "create", "--mnemonic"]).unwrap();
+        let cli = Cli::try_parse_from(["aptos-cli", "account", "create", "--mnemonic"]).unwrap();
         assert!(matches!(cli.command, Some(Command::Account(_))));
     }
 
     #[test]
     fn account_balance_with_address() {
         let cli =
-            Cli::try_parse_from(["aptos-repl", "account", "balance", "--address", "0x1"]).unwrap();
+            Cli::try_parse_from(["aptos-cli", "account", "balance", "--address", "0x1"]).unwrap();
         assert!(matches!(cli.command, Some(Command::Account(_))));
     }
 
     #[test]
     fn account_balance_without_address_parses() {
-        // --address is now optional (auto-injected from active account in REPL)
-        let cli = Cli::try_parse_from(["aptos-repl", "account", "balance"]).unwrap();
+        // --address is now optional (auto-injected from active account in interactive mode)
+        let cli = Cli::try_parse_from(["aptos-cli", "account", "balance"]).unwrap();
         assert!(matches!(cli.command, Some(Command::Account(_))));
     }
 
     #[test]
     fn account_lookup_without_address_parses() {
-        let cli = Cli::try_parse_from(["aptos-repl", "account", "lookup"]).unwrap();
+        let cli = Cli::try_parse_from(["aptos-cli", "account", "lookup"]).unwrap();
         assert!(matches!(cli.command, Some(Command::Account(_))));
     }
 
     #[test]
     fn account_resources_without_address_parses() {
-        let cli = Cli::try_parse_from(["aptos-repl", "account", "resources"]).unwrap();
+        let cli = Cli::try_parse_from(["aptos-cli", "account", "resources"]).unwrap();
         assert!(matches!(cli.command, Some(Command::Account(_))));
     }
 
     #[test]
     fn account_resource_requires_resource_type() {
         // --resource-type is required even if --address is optional
-        assert!(Cli::try_parse_from(["aptos-repl", "account", "resource"]).is_err());
+        assert!(Cli::try_parse_from(["aptos-cli", "account", "resource"]).is_err());
     }
 
     #[test]
     fn account_resource_with_type_no_address() {
         let cli = Cli::try_parse_from([
-            "aptos-repl",
+            "aptos-cli",
             "account",
             "resource",
             "--resource-type",
@@ -273,14 +273,14 @@ mod tests {
 
     #[test]
     fn account_modules_without_address_parses() {
-        let cli = Cli::try_parse_from(["aptos-repl", "account", "modules"]).unwrap();
+        let cli = Cli::try_parse_from(["aptos-cli", "account", "modules"]).unwrap();
         assert!(matches!(cli.command, Some(Command::Account(_))));
     }
 
     #[test]
     fn account_fund_with_apt_amount() {
         let cli = Cli::try_parse_from([
-            "aptos-repl",
+            "aptos-cli",
             "account",
             "fund",
             "--address",
@@ -295,7 +295,7 @@ mod tests {
     #[test]
     fn account_fund_with_octas_amount() {
         let cli = Cli::try_parse_from([
-            "aptos-repl",
+            "aptos-cli",
             "account",
             "fund",
             "--address",
@@ -311,21 +311,21 @@ mod tests {
     fn account_fund_without_address_parses() {
         // --address is now optional (auto-injected)
         let cli =
-            Cli::try_parse_from(["aptos-repl", "account", "fund", "--amount", "100"]).unwrap();
+            Cli::try_parse_from(["aptos-cli", "account", "fund", "--amount", "100"]).unwrap();
         assert!(matches!(cli.command, Some(Command::Account(_))));
     }
 
     #[test]
     fn account_fund_requires_amount() {
         assert!(
-            Cli::try_parse_from(["aptos-repl", "account", "fund", "--address", "0x1"]).is_err()
+            Cli::try_parse_from(["aptos-cli", "account", "fund", "--address", "0x1"]).is_err()
         );
     }
 
     #[test]
     fn account_transfer_parses() {
         let cli = Cli::try_parse_from([
-            "aptos-repl",
+            "aptos-cli",
             "account",
             "transfer",
             "--private-key",
@@ -342,7 +342,7 @@ mod tests {
     #[test]
     fn account_transfer_with_coin_type() {
         let cli = Cli::try_parse_from([
-            "aptos-repl",
+            "aptos-cli",
             "account",
             "transfer",
             "--private-key",
@@ -362,7 +362,7 @@ mod tests {
     fn account_transfer_requires_private_key() {
         assert!(
             Cli::try_parse_from([
-                "aptos-repl",
+                "aptos-cli",
                 "account",
                 "transfer",
                 "--to",
@@ -378,7 +378,7 @@ mod tests {
     fn account_transfer_requires_to() {
         assert!(
             Cli::try_parse_from([
-                "aptos-repl",
+                "aptos-cli",
                 "account",
                 "transfer",
                 "--private-key",
@@ -394,7 +394,7 @@ mod tests {
     fn account_transfer_requires_amount() {
         assert!(
             Cli::try_parse_from([
-                "aptos-repl",
+                "aptos-cli",
                 "account",
                 "transfer",
                 "--private-key",
@@ -412,20 +412,20 @@ mod tests {
 
     #[test]
     fn key_generate_defaults() {
-        let cli = Cli::try_parse_from(["aptos-repl", "key", "generate"]).unwrap();
+        let cli = Cli::try_parse_from(["aptos-cli", "key", "generate"]).unwrap();
         assert!(matches!(cli.command, Some(Command::Key(_))));
     }
 
     #[test]
     fn key_generate_secp256k1() {
-        let cli = Cli::try_parse_from(["aptos-repl", "key", "generate", "--key-type", "secp256k1"])
+        let cli = Cli::try_parse_from(["aptos-cli", "key", "generate", "--key-type", "secp256k1"])
             .unwrap();
         assert!(matches!(cli.command, Some(Command::Key(_))));
     }
 
     #[test]
     fn key_generate_secp256r1() {
-        let cli = Cli::try_parse_from(["aptos-repl", "key", "generate", "--key-type", "secp256r1"])
+        let cli = Cli::try_parse_from(["aptos-cli", "key", "generate", "--key-type", "secp256r1"])
             .unwrap();
         assert!(matches!(cli.command, Some(Command::Key(_))));
     }
@@ -433,25 +433,25 @@ mod tests {
     #[test]
     fn key_generate_invalid_key_type() {
         assert!(
-            Cli::try_parse_from(["aptos-repl", "key", "generate", "--key-type", "rsa"]).is_err()
+            Cli::try_parse_from(["aptos-cli", "key", "generate", "--key-type", "rsa"]).is_err()
         );
     }
 
     #[test]
     fn key_generate_with_mnemonic() {
-        let cli = Cli::try_parse_from(["aptos-repl", "key", "generate", "--mnemonic"]).unwrap();
+        let cli = Cli::try_parse_from(["aptos-cli", "key", "generate", "--mnemonic"]).unwrap();
         assert!(matches!(cli.command, Some(Command::Key(_))));
     }
 
     #[test]
     fn key_from_mnemonic_requires_phrase() {
-        assert!(Cli::try_parse_from(["aptos-repl", "key", "from-mnemonic"]).is_err());
+        assert!(Cli::try_parse_from(["aptos-cli", "key", "from-mnemonic"]).is_err());
     }
 
     #[test]
     fn key_from_mnemonic_with_phrase() {
         let cli = Cli::try_parse_from([
-            "aptos-repl",
+            "aptos-cli",
             "key",
             "from-mnemonic",
             "--phrase",
@@ -464,7 +464,7 @@ mod tests {
     #[test]
     fn key_from_mnemonic_with_index() {
         let cli = Cli::try_parse_from([
-            "aptos-repl",
+            "aptos-cli",
             "key",
             "from-mnemonic",
             "--phrase",
@@ -478,12 +478,12 @@ mod tests {
 
     #[test]
     fn key_show_requires_private_key() {
-        assert!(Cli::try_parse_from(["aptos-repl", "key", "show"]).is_err());
+        assert!(Cli::try_parse_from(["aptos-cli", "key", "show"]).is_err());
     }
 
     #[test]
     fn key_show_with_private_key() {
-        let cli = Cli::try_parse_from(["aptos-repl", "key", "show", "--private-key", "0xdeadbeef"])
+        let cli = Cli::try_parse_from(["aptos-cli", "key", "show", "--private-key", "0xdeadbeef"])
             .unwrap();
         assert!(matches!(cli.command, Some(Command::Key(_))));
     }
@@ -491,7 +491,7 @@ mod tests {
     #[test]
     fn key_show_with_key_type() {
         let cli = Cli::try_parse_from([
-            "aptos-repl",
+            "aptos-cli",
             "key",
             "show",
             "--private-key",
@@ -509,19 +509,19 @@ mod tests {
 
     #[test]
     fn move_init_requires_name() {
-        assert!(Cli::try_parse_from(["aptos-repl", "move", "init"]).is_err());
+        assert!(Cli::try_parse_from(["aptos-cli", "move", "init"]).is_err());
     }
 
     #[test]
     fn move_init_with_name() {
-        let cli = Cli::try_parse_from(["aptos-repl", "move", "init", "--name", "my_pkg"]).unwrap();
+        let cli = Cli::try_parse_from(["aptos-cli", "move", "init", "--name", "my_pkg"]).unwrap();
         assert!(matches!(cli.command, Some(Command::Move(_))));
     }
 
     #[test]
     fn move_init_with_dir() {
         let cli = Cli::try_parse_from([
-            "aptos-repl",
+            "aptos-cli",
             "move",
             "init",
             "--name",
@@ -536,7 +536,7 @@ mod tests {
     #[test]
     fn move_init_with_named_address() {
         let cli = Cli::try_parse_from([
-            "aptos-repl",
+            "aptos-cli",
             "move",
             "init",
             "--name",
@@ -550,14 +550,14 @@ mod tests {
 
     #[test]
     fn move_compile_defaults() {
-        let cli = Cli::try_parse_from(["aptos-repl", "move", "compile"]).unwrap();
+        let cli = Cli::try_parse_from(["aptos-cli", "move", "compile"]).unwrap();
         assert!(matches!(cli.command, Some(Command::Move(_))));
     }
 
     #[test]
     fn move_compile_with_named_addresses() {
         let cli = Cli::try_parse_from([
-            "aptos-repl",
+            "aptos-cli",
             "move",
             "compile",
             "--named-addresses",
@@ -570,26 +570,26 @@ mod tests {
 
     #[test]
     fn move_test_defaults() {
-        let cli = Cli::try_parse_from(["aptos-repl", "move", "test"]).unwrap();
+        let cli = Cli::try_parse_from(["aptos-cli", "move", "test"]).unwrap();
         assert!(matches!(cli.command, Some(Command::Move(_))));
     }
 
     #[test]
     fn move_test_with_filter() {
-        let cli = Cli::try_parse_from(["aptos-repl", "move", "test", "--filter", "test_transfer"])
+        let cli = Cli::try_parse_from(["aptos-cli", "move", "test", "--filter", "test_transfer"])
             .unwrap();
         assert!(matches!(cli.command, Some(Command::Move(_))));
     }
 
     #[test]
     fn move_view_requires_function() {
-        assert!(Cli::try_parse_from(["aptos-repl", "move", "view"]).is_err());
+        assert!(Cli::try_parse_from(["aptos-cli", "move", "view"]).is_err());
     }
 
     #[test]
     fn move_view_with_function() {
         let cli = Cli::try_parse_from([
-            "aptos-repl",
+            "aptos-cli",
             "move",
             "view",
             "--function",
@@ -602,7 +602,7 @@ mod tests {
     #[test]
     fn move_view_with_type_args_and_args() {
         let cli = Cli::try_parse_from([
-            "aptos-repl",
+            "aptos-cli",
             "move",
             "view",
             "--function",
@@ -619,7 +619,7 @@ mod tests {
     #[test]
     fn move_run_requires_function() {
         assert!(
-            Cli::try_parse_from(["aptos-repl", "move", "run", "--private-key", "0xaa",]).is_err()
+            Cli::try_parse_from(["aptos-cli", "move", "run", "--private-key", "0xaa",]).is_err()
         );
     }
 
@@ -627,7 +627,7 @@ mod tests {
     fn move_run_requires_private_key() {
         assert!(
             Cli::try_parse_from([
-                "aptos-repl",
+                "aptos-cli",
                 "move",
                 "run",
                 "--function",
@@ -640,7 +640,7 @@ mod tests {
     #[test]
     fn move_run_with_all_args() {
         let cli = Cli::try_parse_from([
-            "aptos-repl",
+            "aptos-cli",
             "move",
             "run",
             "--function",
@@ -664,7 +664,7 @@ mod tests {
     #[test]
     fn move_publish_requires_private_key() {
         assert!(
-            Cli::try_parse_from(["aptos-repl", "move", "publish", "--package-dir", "/tmp",])
+            Cli::try_parse_from(["aptos-cli", "move", "publish", "--package-dir", "/tmp",])
                 .is_err()
         );
     }
@@ -672,7 +672,7 @@ mod tests {
     #[test]
     fn move_publish_requires_package_dir() {
         assert!(
-            Cli::try_parse_from(["aptos-repl", "move", "publish", "--private-key", "0xaa",])
+            Cli::try_parse_from(["aptos-cli", "move", "publish", "--private-key", "0xaa",])
                 .is_err()
         );
     }
@@ -680,7 +680,7 @@ mod tests {
     #[test]
     fn move_publish_parses() {
         let cli = Cli::try_parse_from([
-            "aptos-repl",
+            "aptos-cli",
             "move",
             "publish",
             "--private-key",
@@ -695,7 +695,7 @@ mod tests {
     #[test]
     fn move_build_publish_defaults() {
         let cli = Cli::try_parse_from([
-            "aptos-repl",
+            "aptos-cli",
             "move",
             "build-publish",
             "--private-key",
@@ -707,28 +707,28 @@ mod tests {
 
     #[test]
     fn move_build_publish_requires_private_key() {
-        assert!(Cli::try_parse_from(["aptos-repl", "move", "build-publish"]).is_err());
+        assert!(Cli::try_parse_from(["aptos-cli", "move", "build-publish"]).is_err());
     }
 
     #[test]
     fn move_inspect_requires_module() {
         assert!(
-            Cli::try_parse_from(["aptos-repl", "move", "inspect", "--address", "0x1",]).is_err()
+            Cli::try_parse_from(["aptos-cli", "move", "inspect", "--address", "0x1",]).is_err()
         );
     }
 
     #[test]
     fn move_inspect_without_address() {
-        // --address is optional (auto-injected in REPL)
+        // --address is optional (auto-injected in interactive mode)
         let cli =
-            Cli::try_parse_from(["aptos-repl", "move", "inspect", "--module", "coin"]).unwrap();
+            Cli::try_parse_from(["aptos-cli", "move", "inspect", "--module", "coin"]).unwrap();
         assert!(matches!(cli.command, Some(Command::Move(_))));
     }
 
     #[test]
     fn move_inspect_with_all_args() {
         let cli = Cli::try_parse_from([
-            "aptos-repl",
+            "aptos-cli",
             "move",
             "inspect",
             "--address",
@@ -746,13 +746,13 @@ mod tests {
 
     #[test]
     fn transaction_lookup_requires_hash() {
-        assert!(Cli::try_parse_from(["aptos-repl", "transaction", "lookup"]).is_err());
+        assert!(Cli::try_parse_from(["aptos-cli", "transaction", "lookup"]).is_err());
     }
 
     #[test]
     fn transaction_lookup_with_hash() {
         let cli = Cli::try_parse_from([
-            "aptos-repl",
+            "aptos-cli",
             "transaction",
             "lookup",
             "--hash",
@@ -765,16 +765,16 @@ mod tests {
     #[test]
     fn transaction_simulate_requires_function() {
         assert!(
-            Cli::try_parse_from(["aptos-repl", "transaction", "simulate", "--sender", "0x1",])
+            Cli::try_parse_from(["aptos-cli", "transaction", "simulate", "--sender", "0x1",])
                 .is_err()
         );
     }
 
     #[test]
     fn transaction_simulate_without_sender() {
-        // --sender is now optional (auto-injected from active account in REPL)
+        // --sender is now optional (auto-injected from active account in interactive mode)
         let cli = Cli::try_parse_from([
-            "aptos-repl",
+            "aptos-cli",
             "transaction",
             "simulate",
             "--function",
@@ -787,7 +787,7 @@ mod tests {
     #[test]
     fn transaction_simulate_with_all_args() {
         let cli = Cli::try_parse_from([
-            "aptos-repl",
+            "aptos-cli",
             "transaction",
             "simulate",
             "--function",
@@ -810,25 +810,25 @@ mod tests {
 
     #[test]
     fn info_ledger_parses() {
-        let cli = Cli::try_parse_from(["aptos-repl", "info", "ledger"]).unwrap();
+        let cli = Cli::try_parse_from(["aptos-cli", "info", "ledger"]).unwrap();
         assert!(matches!(cli.command, Some(Command::Info(_))));
     }
 
     #[test]
     fn info_gas_price_parses() {
-        let cli = Cli::try_parse_from(["aptos-repl", "info", "gas-price"]).unwrap();
+        let cli = Cli::try_parse_from(["aptos-cli", "info", "gas-price"]).unwrap();
         assert!(matches!(cli.command, Some(Command::Info(_))));
     }
 
     #[test]
     fn info_block_by_height() {
-        let cli = Cli::try_parse_from(["aptos-repl", "info", "block", "--height", "100"]).unwrap();
+        let cli = Cli::try_parse_from(["aptos-cli", "info", "block", "--height", "100"]).unwrap();
         assert!(matches!(cli.command, Some(Command::Info(_))));
     }
 
     #[test]
     fn info_block_by_version() {
-        let cli = Cli::try_parse_from(["aptos-repl", "info", "block", "--version", "500"]).unwrap();
+        let cli = Cli::try_parse_from(["aptos-cli", "info", "block", "--version", "500"]).unwrap();
         assert!(matches!(cli.command, Some(Command::Info(_))));
     }
 
@@ -836,7 +836,7 @@ mod tests {
     fn info_block_height_and_version_conflict() {
         assert!(
             Cli::try_parse_from([
-                "aptos-repl",
+                "aptos-cli",
                 "info",
                 "block",
                 "--height",
@@ -851,7 +851,7 @@ mod tests {
     #[test]
     fn info_block_with_transactions() {
         let cli = Cli::try_parse_from([
-            "aptos-repl",
+            "aptos-cli",
             "info",
             "block",
             "--height",
@@ -865,7 +865,7 @@ mod tests {
     #[test]
     fn info_block_no_height_or_version_still_parses() {
         // clap allows this; the runtime check catches it with a helpful error
-        let cli = Cli::try_parse_from(["aptos-repl", "info", "block"]).unwrap();
+        let cli = Cli::try_parse_from(["aptos-cli", "info", "block"]).unwrap();
         assert!(matches!(cli.command, Some(Command::Info(_))));
     }
 
@@ -876,7 +876,7 @@ mod tests {
     #[test]
     fn global_json_with_account_balance() {
         let cli = Cli::try_parse_from([
-            "aptos-repl",
+            "aptos-cli",
             "--json",
             "account",
             "balance",
@@ -891,7 +891,7 @@ mod tests {
     #[test]
     fn global_network_with_info_ledger() {
         let cli =
-            Cli::try_parse_from(["aptos-repl", "--network", "devnet", "info", "ledger"]).unwrap();
+            Cli::try_parse_from(["aptos-cli", "--network", "devnet", "info", "ledger"]).unwrap();
         assert!(matches!(cli.global.network, common::NetworkArg::Devnet));
     }
 
@@ -912,27 +912,27 @@ mod tests {
 
     #[test]
     fn unknown_flag_fails() {
-        assert!(Cli::try_parse_from(["aptos-repl", "--unknown-flag"]).is_err());
+        assert!(Cli::try_parse_from(["aptos-cli", "--unknown-flag"]).is_err());
     }
 
     #[test]
     fn account_create_invalid_key_type_fails() {
         assert!(
-            Cli::try_parse_from(["aptos-repl", "account", "create", "--key-type", "invalid",])
+            Cli::try_parse_from(["aptos-cli", "account", "create", "--key-type", "invalid",])
                 .is_err()
         );
     }
 
     #[test]
     fn move_run_no_args_at_all_fails() {
-        assert!(Cli::try_parse_from(["aptos-repl", "move", "run"]).is_err());
+        assert!(Cli::try_parse_from(["aptos-cli", "move", "run"]).is_err());
     }
 
     #[test]
     fn transaction_simulate_empty_type_args() {
         // --type-args with no values should parse as empty vec
         let cli = Cli::try_parse_from([
-            "aptos-repl",
+            "aptos-cli",
             "transaction",
             "simulate",
             "--function",

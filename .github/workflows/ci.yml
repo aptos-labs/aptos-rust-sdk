@@ -101,7 +101,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Clippy
-        run: cargo clippy -p aptos-repl --all-targets -- -D warnings
+        run: cargo clippy -p aptos-cli --all-targets -- -D warnings
 
   cli-test:
     name: CLI Test (${{ matrix.name }})
@@ -141,10 +141,10 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Build CLI
-        run: cargo build -p aptos-repl
+        run: cargo build -p aptos-cli
 
       - name: Test CLI
-        run: cargo test -p aptos-repl
+        run: cargo test -p aptos-cli
 
   cli-build-release:
     name: CLI Release Build (${{ matrix.name }})
@@ -179,7 +179,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Build CLI (cli profile)
-        run: cargo build -p aptos-repl --profile cli
+        run: cargo build -p aptos-cli --profile cli
 
   test-features:
     name: Test Feature Combinations

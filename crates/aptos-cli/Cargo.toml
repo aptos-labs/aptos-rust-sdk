@@ -1,5 +1,5 @@
 [package]
-name = "aptos-repl"
+name = "aptos-cli"
 version = "0.1.0"
 description = "A command-line interface for the Aptos blockchain, powered by the Aptos Rust SDK"
 authors.workspace = true
@@ -11,7 +11,7 @@ repository.workspace = true
 rust-version.workspace = true
 
 [[bin]]
-name = "aptos-repl"
+name = "aptos-cli"
 path = "src/main.rs"
 
 [dependencies]

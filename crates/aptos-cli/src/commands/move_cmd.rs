@@ -157,7 +157,7 @@ pub struct BuildPublishArgs {
 
 #[derive(Args, Debug)]
 pub struct InspectArgs {
-    /// Account address that owns the module (defaults to active account in REPL)
+    /// Account address that owns the module (defaults to active account in interactive mode)
     #[arg(long)]
     address: Option<String>,
 
@@ -451,11 +451,11 @@ module {named_address}::{name}_tests {{
         println!("  Next steps:");
         println!("    cd {}", target_dir.display());
         println!(
-            "    aptos-repl move compile --named-addresses {}=0x<YOUR_ADDRESS>",
+            "    aptos-cli move compile --named-addresses {}=0x<YOUR_ADDRESS>",
             args.named_address
         );
         println!(
-            "    aptos-repl move test --named-addresses {}=0x42",
+            "    aptos-cli move test --named-addresses {}=0x42",
             args.named_address
         );
     }
@@ -736,7 +736,7 @@ async fn cmd_publish(args: &PublishArgs, global: &GlobalOpts) -> Result<()> {
     if module_bytecodes.is_empty() {
         anyhow::bail!(
             "No .mv bytecode files found in {}. \
-             Run `aptos-repl move compile` first.",
+             Run `aptos-cli move compile` first.",
             modules_dir.display()
         );
     }

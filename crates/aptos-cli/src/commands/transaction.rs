@@ -29,7 +29,7 @@ pub struct SimulateArgs {
     #[arg(long)]
     function: String,
 
-    /// Sender address (defaults to active account in REPL)
+    /// Sender address (defaults to active account in interactive mode)
     #[arg(long)]
     sender: Option<String>,
 

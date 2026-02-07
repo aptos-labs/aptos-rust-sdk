@@ -15,7 +15,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
-  BIN_NAME: aptos-repl
+  BIN_NAME: aptos-cli
 
 permissions:
   contents: write
@@ -48,10 +48,10 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Clippy
-        run: cargo clippy -p aptos-repl --all-targets -- -D warnings
+        run: cargo clippy -p aptos-cli --all-targets -- -D warnings
 
       - name: Test
-        run: cargo test -p aptos-repl
+        run: cargo test -p aptos-cli
 
       - name: Extract version
         id: meta
@@ -149,13 +149,13 @@ jobs:
         shell: bash
         env:
           RUSTFLAGS: "-C target-cpu=generic -C target-feature=-sse4.2,-avx,-avx2"
-        run: cargo build -p aptos-repl --profile cli --target ${{ matrix.target }}
+        run: cargo build -p aptos-cli --profile cli --target ${{ matrix.target }}
 
       # Normal (platform-native) build
       - name: Build CLI
         if: matrix.generic != true
         shell: bash
-        run: cargo build -p aptos-repl --profile cli --target ${{ matrix.target }}
+        run: cargo build -p aptos-cli --profile cli --target ${{ matrix.target }}
 
       # Package
       - name: Package binary
@@ -262,7 +262,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: "Aptos REPL v${{ needs.preflight.outputs.version }}"
+          name: "Aptos CLI v${{ needs.preflight.outputs.version }}"
           tag_name: ${{ github.ref_name }}
           generate_release_notes: true
           body_path: release-body.md

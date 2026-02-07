@@ -2,7 +2,7 @@
 //!
 //! Provides default values for network, gas parameters, node URL, API key,
 //! and the default account alias. Values can be overridden per-session in the
-//! REPL and are automatically persisted when changed via the `config` command.
+//! interactive shell and are automatically persisted when changed via the `config` command.
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};

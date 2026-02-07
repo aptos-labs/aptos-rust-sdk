@@ -1,6 +1,6 @@
-//! Interactive REPL with encrypted credential support.
+//! Interactive shell with encrypted credential support.
 //!
-//! The REPL provides an interactive command loop where credentials are
+//! The interactive shell provides a command loop where credentials are
 //! decrypted once at session start and held in memory. Commands that need
 //! a signer can reference a stored credential by alias instead of passing
 //! a raw private key.
@@ -17,7 +17,7 @@ use crate::config::CliConfig;
 use crate::credentials::{self, Vault};
 use crate::output;
 
-/// Session state for the REPL.
+/// Session state for the interactive shell.
 struct Session {
     vault: Option<Vault>,
     global: GlobalOpts,
@@ -37,8 +37,8 @@ impl Session {
     }
 }
 
-/// Run the interactive REPL.
-pub async fn run_repl(mut global: GlobalOpts) -> Result<()> {
+/// Run the interactive shell.
+pub async fn run_interactive(mut global: GlobalOpts) -> Result<()> {
     // Load persistent config and apply defaults to global opts
     let config = CliConfig::load().unwrap_or_default();
     apply_config_defaults(&mut global, &config);
@@ -66,13 +66,13 @@ pub async fn run_repl(mut global: GlobalOpts) -> Result<()> {
     }
 
     println!();
-    print_repl_help();
+    print_help();
 
     let mut rl = DefaultEditor::new().context("failed to initialise line editor")?;
 
     // Try to load history
     let history_path =
-        dirs::home_dir().map(|h| h.join(".aptos").join("config").join("repl_history"));
+        dirs::home_dir().map(|h| h.join(".aptos").join("config").join("cli_history"));
     if let Some(ref hp) = history_path {
         let _ = rl.load_history(hp);
     }
@@ -190,7 +190,7 @@ fn print_banner() {
     );
     println!("    ╔══════════════════════════════════════════╗");
     println!("    ║                                          ║");
-    println!("    ║          Aptos SDK CLI  ·  REPL          ║");
+    println!("    ║            Aptos SDK CLI  ·  v0.1        ║");
     println!("    ║                                          ║");
     println!("    ╚══════════════════════════════════════════╝");
     let _ = crossterm::execute!(stdout, ResetColor, SetAttribute(Attribute::Reset));
@@ -265,7 +265,7 @@ async fn handle_line(line: &str, session: &mut Session) -> Result<ShouldContinue
 
     match cmd {
         "quit" | "exit" | "q" => return Ok(ShouldContinue::Quit),
-        "help" | "?" => print_repl_help(),
+        "help" | "?" => print_help(),
         "credential" | "cred" => handle_credential(args, session)?,
         "use" => handle_use(args, session)?,
         "whoami" => handle_whoami(session)?,
@@ -546,7 +546,7 @@ fn unlock_vault(session: &mut Session) -> Result<()> {
                 attempts += 1;
                 if attempts >= MAX_ATTEMPTS {
                     bail!(
-                        "Too many failed attempts ({MAX_ATTEMPTS}). Please restart the REPL to try again."
+                        "Too many failed attempts ({MAX_ATTEMPTS}). Please restart the CLI to try again."
                     );
                 }
                 // Exponential backoff: 1s, 2s, 4s, 8s...
@@ -1164,8 +1164,8 @@ fn print_config_help() {
 /// but an active account is set, we inject the stored credential. If a command
 /// needs `--address` or `--sender`, we auto-inject from the active account.
 async fn handle_sdk_command(cmd: &str, args: &[String], session: &mut Session) -> Result<()> {
-    // Build a clap-style argument vector: ["aptos-repl", <cmd>, ...args]
-    let mut argv: Vec<String> = vec!["aptos-repl".to_string(), cmd.to_string()];
+    // Build a clap-style argument vector: ["aptos-cli", <cmd>, ...args]
+    let mut argv: Vec<String> = vec!["aptos-cli".to_string(), cmd.to_string()];
     argv.extend_from_slice(args);
 
     // Inject credentials if needed
@@ -1279,8 +1279,8 @@ async fn dispatch_command(argv: &[String]) -> Result<()> {
         Some(crate::Command::Move(cmd)) => cmd.run(&cli.global).await,
         Some(crate::Command::Transaction(cmd)) => cmd.run(&cli.global).await,
         Some(crate::Command::Info(cmd)) => cmd.run(&cli.global).await,
-        Some(crate::Command::Repl) | None => {
-            output::print_dim("Already in REPL mode.");
+        Some(crate::Command::Interactive) | None => {
+            output::print_dim("Already in interactive mode.");
             Ok(())
         }
     }
@@ -1291,7 +1291,7 @@ async fn dispatch_command(argv: &[String]) -> Result<()> {
 // ---------------------------------------------------------------------------
 
 /// Returns `true` if the input line contains credential material that must
-/// never be persisted to the REPL history file.
+/// never be persisted to the CLI history file.
 pub(crate) fn contains_secret(line: &str) -> bool {
     let lower = line.to_ascii_lowercase();
 
@@ -1348,7 +1348,7 @@ pub(crate) fn validate_password_strength(password: &str) -> Result<()> {
 // Help
 // ---------------------------------------------------------------------------
 
-fn print_repl_help() {
+fn print_help() {
     let mut stdout = std::io::stdout();
 
     // Session commands
@@ -1408,7 +1408,7 @@ fn print_repl_help() {
     let _ = crossterm::execute!(stdout, ResetColor, SetAttribute(Attribute::Reset));
 
     print_help_row(&mut stdout, "help", "Show this help");
-    print_help_row(&mut stdout, "quit", "Exit the REPL");
+    print_help_row(&mut stdout, "quit", "Exit the shell");
 
     println!();
     let _ = crossterm::execute!(stdout, SetForegroundColor(Color::DarkGrey));

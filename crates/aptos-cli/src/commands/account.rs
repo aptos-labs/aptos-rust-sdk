@@ -40,7 +40,7 @@ pub struct CreateArgs {
 
 #[derive(Args, Debug)]
 pub struct FundArgs {
-    /// Address to fund (defaults to active account in REPL)
+    /// Address to fund (defaults to active account in interactive mode)
     #[arg(long)]
     address: Option<String>,
 
@@ -51,28 +51,28 @@ pub struct FundArgs {
 
 #[derive(Args, Debug)]
 pub struct BalanceArgs {
-    /// Account address (defaults to active account in REPL)
+    /// Account address (defaults to active account in interactive mode)
     #[arg(long)]
     address: Option<String>,
 }
 
 #[derive(Args, Debug)]
 pub struct LookupArgs {
-    /// Account address (defaults to active account in REPL)
+    /// Account address (defaults to active account in interactive mode)
     #[arg(long)]
     address: Option<String>,
 }
 
 #[derive(Args, Debug)]
 pub struct ResourcesArgs {
-    /// Account address (defaults to active account in REPL)
+    /// Account address (defaults to active account in interactive mode)
     #[arg(long)]
     address: Option<String>,
 }
 
 #[derive(Args, Debug)]
 pub struct ResourceArgs {
-    /// Account address (defaults to active account in REPL)
+    /// Account address (defaults to active account in interactive mode)
     #[arg(long)]
     address: Option<String>,
 
@@ -83,7 +83,7 @@ pub struct ResourceArgs {
 
 #[derive(Args, Debug)]
 pub struct ModulesArgs {
-    /// Account address (defaults to active account in REPL)
+    /// Account address (defaults to active account in interactive mode)
     #[arg(long)]
     address: Option<String>,
 }

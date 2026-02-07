@@ -1,12 +1,12 @@
-# Aptos REPL — Build & Compatibility Notes
+# Aptos CLI — Build & Compatibility Notes
 
 ## Build Profiles
 
 | Profile | Command | Use Case |
 |---------|---------|----------|
-| `dev` | `cargo build -p aptos-repl` | Local development (fast compile, large binary) |
-| `release` | `cargo build -p aptos-repl --release` | Standard release build |
-| `cli` | `cargo build -p aptos-repl --profile cli` | Size-optimized release (`opt-level=z`, fat LTO, `panic=abort`, stripped) |
+| `dev` | `cargo build -p aptos-cli` | Local development (fast compile, large binary) |
+| `release` | `cargo build -p aptos-cli --release` | Standard release build |
+| `cli` | `cargo build -p aptos-cli --profile cli` | Size-optimized release (`opt-level=z`, fat LTO, `panic=abort`, stripped) |
 
 The `cli` profile produces the smallest binary and is used for all CI release
 artifacts.
@@ -179,13 +179,13 @@ xcode-select --install
 
 ```bash
 # Standard optimized build (same as CI release artifacts)
-cargo build -p aptos-repl --profile cli
+cargo build -p aptos-cli --profile cli
 
 # Generic / no-SIMD build (Linux x86_64 only)
 RUSTFLAGS="-C target-cpu=generic -C target-feature=-sse4.2,-avx,-avx2" \
-  cargo build -p aptos-repl --profile cli
+  cargo build -p aptos-cli --profile cli
 
 # Cross-compile for a different target
 rustup target add aarch64-apple-darwin
-cargo build -p aptos-repl --profile cli --target aarch64-apple-darwin
+cargo build -p aptos-cli --profile cli --target aarch64-apple-darwin
 ```
