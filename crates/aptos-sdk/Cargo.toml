@@ -230,6 +230,10 @@ name = "aptos-codegen"
 path = "src/bin/codegen.rs"
 required-features = ["cli"]
 
+[lints]
+workspace = true
+
 [package.metadata.docs.rs]
 all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
+targets = ["x86_64-unknown-linux-gnu"]

@@ -226,7 +226,6 @@ pub enum AccountAuthenticator {
     /// Keyless (OIDC-based) authentication (variant 5).
     /// Uses ephemeral keys and ZK proofs for authentication.
     #[cfg(feature = "keyless")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "keyless")))]
     Keyless {
         /// The ephemeral public key bytes.
         public_key: Vec<u8>,
@@ -362,7 +361,6 @@ impl AccountAuthenticator {
     /// * `public_key` - The ephemeral public key bytes
     /// * `signature` - The BCS-serialized `KeylessSignature`
     #[cfg(feature = "keyless")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "keyless")))]
     pub fn keyless(public_key: Vec<u8>, signature: Vec<u8>) -> Self {
         Self::Keyless {
             public_key,

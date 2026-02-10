@@ -57,6 +57,9 @@ trybuild = "1.0.104"
 tokio = { version = "1.44.1", features = ["macros"] }
 url = { version = "2.5.4", features = ["serde"] }
 
+[workspace.lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(docsrs)'] }
+
 [profile.release]
 debug = false
 overflow-checks = true
