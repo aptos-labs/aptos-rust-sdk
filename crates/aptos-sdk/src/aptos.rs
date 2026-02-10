@@ -10,7 +10,8 @@ use crate::transaction::{
     RawTransaction, SignedTransaction, TransactionBuilder, TransactionPayload,
 };
 use crate::types::{AccountAddress, ChainId};
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::time::Duration;
 
 #[cfg(feature = "ed25519")]
@@ -54,7 +55,8 @@ pub struct Aptos {
     fullnode: Arc<FullnodeClient>,
     /// Resolved chain ID. Initialized from config; lazily fetched from node
     /// for custom networks where the chain ID is unknown (0).
-    chain_id: RwLock<ChainId>,
+    /// Stored as `AtomicU8` to avoid lock overhead for this single-byte value.
+    chain_id: AtomicU8,
     #[cfg(feature = "faucet")]
     faucet: Option<FaucetClient>,
     #[cfg(feature = "indexer")]
@@ -76,7 +78,7 @@ impl Aptos {
         #[cfg(feature = "indexer")]
         let indexer = IndexerClient::new(&config).ok();
 
-        let chain_id = RwLock::new(config.chain_id());
+        let chain_id = AtomicU8::new(config.chain_id().id());
 
         Ok(Self {
             config,
@@ -168,18 +170,8 @@ impl Aptos {
         let info = response.into_inner();
 
         // Update chain_id if it was unknown (custom network)
-        if self
-            .chain_id
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .id()
-            == 0
-            && info.chain_id > 0
-        {
-            *self
-                .chain_id
-                .write()
-                .unwrap_or_else(std::sync::PoisonError::into_inner) = ChainId::new(info.chain_id);
+        if self.chain_id.load(Ordering::Relaxed) == 0 && info.chain_id > 0 {
+            self.chain_id.store(info.chain_id, Ordering::Relaxed);
         }
 
         Ok(info)
@@ -193,14 +185,8 @@ impl Aptos {
     /// or any method that makes a request to the node (e.g., [`build_transaction`](Self::build_transaction),
     /// [`ledger_info`](Self::ledger_info)).
     ///
-    /// # Panics
-    ///
-    /// Panics if the internal `chain_id` lock is poisoned.
     pub fn chain_id(&self) -> ChainId {
-        *self
-            .chain_id
-            .read()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
+        ChainId::new(self.chain_id.load(Ordering::Relaxed))
     }
 
     /// Resolves the chain ID from the node if it is unknown.
@@ -218,28 +204,16 @@ impl Aptos {
     ///
     /// Returns an error if the HTTP request to fetch ledger info fails.
     ///
-    /// # Panics
-    ///
-    /// Panics if the internal `chain_id` lock is poisoned.
     pub async fn ensure_chain_id(&self) -> AptosResult<ChainId> {
-        {
-            let chain_id = self
-                .chain_id
-                .read()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            if chain_id.id() > 0 {
-                return Ok(*chain_id);
-            }
+        let id = self.chain_id.load(Ordering::Relaxed);
+        if id > 0 {
+            return Ok(ChainId::new(id));
         }
         // Chain ID is unknown; fetch from node
         let response = self.fullnode.get_ledger_info().await?;
         let info = response.into_inner();
-        let new_chain_id = ChainId::new(info.chain_id);
-        *self
-            .chain_id
-            .write()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) = new_chain_id;
-        Ok(new_chain_id)
+        self.chain_id.store(info.chain_id, Ordering::Relaxed);
+        Ok(ChainId::new(info.chain_id))
     }
 
     // === Account ===
@@ -496,7 +470,7 @@ impl Aptos {
         payload: TransactionPayload,
     ) -> AptosResult<AptosResponse<PendingTransaction>> {
         // First simulate
-        let raw_txn = self.build_transaction(account, payload.clone()).await?;
+        let raw_txn = self.build_transaction(account, payload).await?;
         let signed = crate::transaction::builder::sign_transaction(&raw_txn, account)?;
         let sim_response = self.fullnode.simulate_transaction(&signed).await?;
         let sim_result =
@@ -532,7 +506,7 @@ impl Aptos {
         timeout: Option<Duration>,
     ) -> AptosResult<AptosResponse<serde_json::Value>> {
         // First simulate
-        let raw_txn = self.build_transaction(account, payload.clone()).await?;
+        let raw_txn = self.build_transaction(account, payload).await?;
         let signed = crate::transaction::builder::sign_transaction(&raw_txn, account)?;
         let sim_response = self.fullnode.simulate_transaction(&signed).await?;
         let sim_result =

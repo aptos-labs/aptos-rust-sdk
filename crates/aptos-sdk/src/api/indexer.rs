@@ -167,7 +167,7 @@ impl IndexerClient {
         let url = self.indexer_url.clone();
         let retry_config = self.retry_config.clone();
 
-        let executor = RetryExecutor::new((*retry_config).clone());
+        let executor = RetryExecutor::from_shared(retry_config);
         executor
             .execute(|| {
                 let client = client.clone();
@@ -183,12 +183,18 @@ impl IndexerClient {
                         let graphql_response: GraphQLResponse<T> = response.json().await?;
 
                         if let Some(errors) = graphql_response.errors {
-                            let messages: Vec<String> =
-                                errors.iter().map(|e| e.message.clone()).collect();
+                            // Build error message directly without intermediate Vec
+                            let mut message = String::new();
+                            for (i, e) in errors.iter().enumerate() {
+                                if i > 0 {
+                                    message.push_str("; ");
+                                }
+                                message.push_str(&e.message);
+                            }
                             return Err(AptosError::Api {
                                 status_code: 400,
-                                message: messages.join("; "),
-                                error_code: Some("GRAPHQL_ERROR".to_string()),
+                                message,
+                                error_code: Some("GRAPHQL_ERROR".into()),
                                 vm_error_code: None,
                             });
                         }
