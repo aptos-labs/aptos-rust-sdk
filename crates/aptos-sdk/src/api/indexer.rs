@@ -38,6 +38,9 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use url::Url;
 
+/// Maximum indexer response size: 10 MB.
+const MAX_INDEXER_RESPONSE_SIZE: usize = 10 * 1024 * 1024;
+
 /// Client for the Aptos indexer GraphQL API.
 ///
 /// The indexer provides access to indexed blockchain data including
@@ -180,7 +183,21 @@ impl IndexerClient {
                     let response = client.post(url.as_str()).json(&request).send().await?;
 
                     if response.status().is_success() {
-                        let graphql_response: GraphQLResponse<T> = response.json().await?;
+                        // SECURITY: Read bytes first to enforce size limit before
+                        // deserializing, preventing OOM from malicious responses.
+                        let bytes = response.bytes().await?;
+                        if bytes.len() > MAX_INDEXER_RESPONSE_SIZE {
+                            return Err(AptosError::Api {
+                                status_code: 200,
+                                message: format!(
+                                    "indexer response too large: {} bytes",
+                                    bytes.len()
+                                ),
+                                error_code: Some("RESPONSE_TOO_LARGE".into()),
+                                vm_error_code: None,
+                            });
+                        }
+                        let graphql_response: GraphQLResponse<T> = serde_json::from_slice(&bytes)?;
 
                         if let Some(errors) = graphql_response.errors {
                             // Build error message directly without intermediate Vec

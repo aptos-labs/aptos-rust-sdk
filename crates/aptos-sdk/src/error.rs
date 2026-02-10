@@ -298,6 +298,16 @@ impl AptosError {
             }
         }
 
+        // SECURITY: Redact URLs with query parameters, which may contain API keys
+        // or other credentials not caught by keyword patterns above.
+        // e.g., reqwest errors include the request URL.
+        if lower.contains("http://") || lower.contains("https://") {
+            // Check if the URL has a query string (contains '?' after the scheme)
+            if lower.contains('?') {
+                return "[REDACTED: message contained URL with query parameters]".into();
+            }
+        }
+
         // Truncate if too long
         if cleaned.len() > MAX_ERROR_MESSAGE_LENGTH {
             format!(
