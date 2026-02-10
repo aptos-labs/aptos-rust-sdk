@@ -52,7 +52,13 @@ impl Mnemonic {
         rand::RngCore::fill_bytes(&mut rand::rngs::OsRng, &mut entropy);
 
         let mnemonic = bip39::Mnemonic::from_entropy(&entropy)
-            .map_err(|e| AptosError::InvalidMnemonic(e.to_string()))?;
+            .map_err(|e| AptosError::InvalidMnemonic(e.to_string()));
+
+        // SECURITY: Zeroize entropy before it goes out of scope to prevent
+        // key material from lingering in memory
+        zeroize::Zeroize::zeroize(&mut entropy);
+
+        let mnemonic = mnemonic?;
 
         Ok(Self {
             phrase: mnemonic.to_string(),
@@ -111,9 +117,15 @@ impl Mnemonic {
     /// Returns an error if key derivation fails or the derived key is invalid.
     #[cfg(feature = "ed25519")]
     pub fn derive_ed25519_key(&self, index: u32) -> AptosResult<crate::crypto::Ed25519PrivateKey> {
-        let seed = self.to_seed();
-        let key = derive_ed25519_from_seed(&seed, index)?;
-        crate::crypto::Ed25519PrivateKey::from_bytes(&key)
+        let mut seed = self.to_seed();
+        let result = derive_ed25519_from_seed(&seed, index);
+        // SECURITY: Zeroize seed after use
+        zeroize::Zeroize::zeroize(&mut seed);
+        let mut key = result?;
+        let private_key = crate::crypto::Ed25519PrivateKey::from_bytes(&key);
+        // SECURITY: Zeroize raw key bytes after creating the key object
+        zeroize::Zeroize::zeroize(&mut key);
+        private_key
     }
 }
 
@@ -160,7 +172,13 @@ fn derive_ed25519_from_seed(seed: &[u8], index: u32) -> AptosResult<[u8; 32]> {
 
         key.copy_from_slice(&result[..32]);
         chain_code.copy_from_slice(&result[32..]);
+
+        // SECURITY: Zeroize intermediate derivation data
+        zeroize::Zeroize::zeroize(&mut data);
     }
+
+    // SECURITY: Zeroize chain_code since we only return the key
+    zeroize::Zeroize::zeroize(&mut chain_code);
 
     Ok(key)
 }

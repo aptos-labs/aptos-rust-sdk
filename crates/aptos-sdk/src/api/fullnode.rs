@@ -19,6 +19,13 @@ const BCS_VIEW_CONTENT_TYPE: &str = "application/x-bcs";
 const JSON_CONTENT_TYPE: &str = "application/json";
 /// Default timeout for waiting for a transaction to be committed.
 const DEFAULT_TRANSACTION_WAIT_TIMEOUT_SECS: u64 = 30;
+/// Maximum size for error response bodies (8 KB).
+///
+/// # Security
+///
+/// This prevents memory exhaustion from malicious servers sending extremely
+/// large error response bodies.
+const MAX_ERROR_BODY_SIZE: usize = 8 * 1024;
 
 /// Client for the Aptos fullnode REST API.
 ///
@@ -529,6 +536,7 @@ impl FullnodeClient {
 
         let client = self.client.clone();
         let retry_config = self.retry_config.clone();
+        let max_response_size = self.config.pool_config().max_response_size;
 
         let executor = RetryExecutor::new((*retry_config).clone());
         executor
@@ -548,7 +556,11 @@ impl FullnodeClient {
                     // Check for errors before reading body
                     let status = response.status();
                     if !status.is_success() {
-                        let error_text = response.text().await.unwrap_or_default();
+                        // SECURITY: Truncate error body to prevent storing excessively
+                        // large error messages from malicious servers
+                        let error_text = Self::truncate_error_body(
+                            response.text().await.unwrap_or_default(),
+                        );
                         return Err(AptosError::Api {
                             status_code: status.as_u16(),
                             message: error_text,
@@ -557,8 +569,34 @@ impl FullnodeClient {
                         });
                     }
 
-                    // Read the raw BCS bytes
+                    // SECURITY: Check Content-Length before reading body to prevent
+                    // memory exhaustion from malicious or compromised servers
+                    if let Some(content_length) = response.content_length()
+                        && content_length > max_response_size as u64
+                    {
+                        return Err(AptosError::Api {
+                            status_code: status.as_u16(),
+                            message: format!(
+                                "response body too large: {content_length} bytes exceeds limit of {max_response_size} bytes"
+                            ),
+                            error_code: Some("RESPONSE_TOO_LARGE".to_string()),
+                            vm_error_code: None,
+                        });
+                    }
+
+                    // Read the raw BCS bytes and enforce size limit
                     let bytes = response.bytes().await?;
+                    if bytes.len() > max_response_size {
+                        return Err(AptosError::Api {
+                            status_code: status.as_u16(),
+                            message: format!(
+                                "response body too large: {} bytes exceeds limit of {max_response_size} bytes",
+                                bytes.len()
+                            ),
+                            error_code: Some("RESPONSE_TOO_LARGE".to_string()),
+                            vm_error_code: None,
+                        });
+                    }
                     Ok(AptosResponse::new(bytes.to_vec()))
                 }
             })
@@ -684,20 +722,43 @@ impl FullnodeClient {
             .await
     }
 
+    /// Truncates a string to the maximum error body size.
+    ///
+    /// # Security
+    ///
+    /// Prevents storing extremely large error messages from malicious servers.
+    fn truncate_error_body(body: String) -> String {
+        if body.len() > MAX_ERROR_BODY_SIZE {
+            // Find the last valid UTF-8 char boundary at or before the limit
+            let mut end = MAX_ERROR_BODY_SIZE;
+            while end > 0 && !body.is_char_boundary(end) {
+                end -= 1;
+            }
+            format!(
+                "{}... [truncated, total: {} bytes]",
+                &body[..end],
+                body.len()
+            )
+        } else {
+            body
+        }
+    }
+
     /// Handles an HTTP response without retry (for internal use).
     ///
     /// # Security
     ///
-    /// This method checks the Content-Length header against `max_response_size`
-    /// to prevent memory exhaustion from extremely large responses.
+    /// This method enforces `max_response_size` on the actual response body,
+    /// not just the Content-Length header, to prevent memory exhaustion even
+    /// when the server uses chunked transfer encoding.
     async fn handle_response_static<T: for<'de> serde::Deserialize<'de>>(
         response: reqwest::Response,
         max_response_size: usize,
     ) -> AptosResult<AptosResponse<T>> {
         let status = response.status();
 
-        // SECURITY: Check Content-Length to prevent memory exhaustion
-        // This protects against malicious servers sending extremely large responses
+        // SECURITY: Check Content-Length to reject obviously oversized responses early
+        // This is a fast pre-check; the actual body size is also verified below.
         if let Some(content_length) = response.content_length()
             && content_length > max_response_size as u64
         {
@@ -751,7 +812,22 @@ impl FullnodeClient {
             .and_then(|v| v.parse().ok());
 
         if status.is_success() {
-            let data: T = response.json().await?;
+            // SECURITY: Read body as bytes first to enforce size limit,
+            // then deserialize. This prevents memory exhaustion from chunked
+            // transfer encoding that bypasses the Content-Length pre-check.
+            let bytes = response.bytes().await?;
+            if bytes.len() > max_response_size {
+                return Err(AptosError::Api {
+                    status_code: status.as_u16(),
+                    message: format!(
+                        "response body too large: {} bytes exceeds limit of {max_response_size} bytes",
+                        bytes.len()
+                    ),
+                    error_code: Some("RESPONSE_TOO_LARGE".to_string()),
+                    vm_error_code: None,
+                });
+            }
+            let data: T = serde_json::from_slice(&bytes)?;
             Ok(AptosResponse {
                 data,
                 ledger_version,
@@ -766,7 +842,10 @@ impl FullnodeClient {
             // This allows callers to respect the server's rate limiting
             Err(AptosError::RateLimited { retry_after_secs })
         } else {
-            let body: serde_json::Value = response.json().await.unwrap_or_default();
+            // SECURITY: Truncate error body to prevent storing excessively
+            // large error messages from malicious servers
+            let error_text = Self::truncate_error_body(response.text().await.unwrap_or_default());
+            let body: serde_json::Value = serde_json::from_str(&error_text).unwrap_or_default();
             let message = body
                 .get("message")
                 .and_then(|v| v.as_str())
