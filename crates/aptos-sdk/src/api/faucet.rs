@@ -9,6 +9,9 @@ use serde::Deserialize;
 use std::sync::Arc;
 use url::Url;
 
+/// Maximum faucet response size: 1 MB (faucet responses are typically tiny).
+const MAX_FAUCET_RESPONSE_SIZE: usize = 1024 * 1024;
+
 /// Client for the Aptos faucet service.
 ///
 /// The faucet is only available on devnet and testnet. Requests are
@@ -143,7 +146,21 @@ impl FaucetClient {
                     let response = client.post(url).send().await?;
 
                     if response.status().is_success() {
-                        let faucet_response: FaucetResponse = response.json().await?;
+                        // SECURITY: Read bytes first to enforce size limit before
+                        // deserializing, preventing OOM from malicious responses.
+                        let bytes = response.bytes().await?;
+                        if bytes.len() > MAX_FAUCET_RESPONSE_SIZE {
+                            return Err(AptosError::Api {
+                                status_code: 200,
+                                message: format!(
+                                    "faucet response too large: {} bytes",
+                                    bytes.len()
+                                ),
+                                error_code: Some("RESPONSE_TOO_LARGE".into()),
+                                vm_error_code: None,
+                            });
+                        }
+                        let faucet_response: FaucetResponse = serde_json::from_slice(&bytes)?;
                         Ok(faucet_response.into_hashes())
                     } else {
                         let status = response.status();
