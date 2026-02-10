@@ -4,7 +4,6 @@ use crate::account::account::{Account, AuthenticationKey};
 use crate::crypto::{Ed25519PrivateKey, Ed25519PublicKey, KEYLESS_SCHEME};
 use crate::error::{AptosError, AptosResult};
 use crate::types::AccountAddress;
-use async_trait::async_trait;
 use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode, decode_header};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
@@ -209,22 +208,23 @@ impl ZkProof {
 }
 
 /// Service for obtaining pepper values.
-#[async_trait]
 pub trait PepperService: Send + Sync {
     /// Fetches the pepper for a JWT.
-    async fn get_pepper(&self, jwt: &str) -> AptosResult<Pepper>;
+    fn get_pepper(
+        &self,
+        jwt: &str,
+    ) -> impl std::future::Future<Output = AptosResult<Pepper>> + Send;
 }
 
 /// Service for generating zero-knowledge proofs.
-#[async_trait]
 pub trait ProverService: Send + Sync {
     /// Generates the proof for keyless authentication.
-    async fn generate_proof(
+    fn generate_proof(
         &self,
         jwt: &str,
         ephemeral_key: &EphemeralKeyPair,
         pepper: &Pepper,
-    ) -> AptosResult<ZkProof>;
+    ) -> impl std::future::Future<Output = AptosResult<ZkProof>> + Send;
 }
 
 /// HTTP pepper service client.
@@ -254,7 +254,6 @@ struct PepperResponse {
     pepper: String,
 }
 
-#[async_trait]
 impl PepperService for HttpPepperService {
     async fn get_pepper(&self, jwt: &str) -> AptosResult<Pepper> {
         let response = self
@@ -300,7 +299,6 @@ struct ProverResponse {
     proof: String,
 }
 
-#[async_trait]
 impl ProverService for HttpProverService {
     async fn generate_proof(
         &self,
@@ -372,8 +370,8 @@ impl KeylessAccount {
     pub async fn from_jwt(
         jwt: &str,
         ephemeral_key: EphemeralKeyPair,
-        pepper_service: &dyn PepperService,
-        prover_service: &dyn ProverService,
+        pepper_service: &(impl PepperService + ?Sized),
+        prover_service: &(impl ProverService + ?Sized),
     ) -> AptosResult<Self> {
         // First, decode without verification to get the issuer for JWKS lookup
         let unverified_claims = decode_claims_unverified(jwt)?;
@@ -440,8 +438,8 @@ impl KeylessAccount {
         jwt: &str,
         jwks: &JwkSet,
         ephemeral_key: EphemeralKeyPair,
-        pepper_service: &dyn PepperService,
-        prover_service: &dyn ProverService,
+        pepper_service: &(impl PepperService + ?Sized),
+        prover_service: &(impl ProverService + ?Sized),
     ) -> AptosResult<Self> {
         // Verify and decode the JWT using the provided JWKS
         let claims = decode_and_verify_jwt(jwt, jwks)?;
@@ -531,7 +529,7 @@ impl KeylessAccount {
     pub async fn refresh_proof(
         &mut self,
         jwt: &str,
-        prover_service: &dyn ProverService,
+        prover_service: &(impl ProverService + ?Sized),
     ) -> AptosResult<()> {
         // Fetch JWKS and verify JWT
         let client = reqwest::Client::builder()
@@ -559,7 +557,7 @@ impl KeylessAccount {
         &mut self,
         jwt: &str,
         jwks: &JwkSet,
-        prover_service: &dyn ProverService,
+        prover_service: &(impl ProverService + ?Sized),
     ) -> AptosResult<()> {
         let claims = decode_and_verify_jwt(jwt, jwks)?;
         let (issuer, audience, user_id, exp, nonce) = extract_claims(&claims)?;
@@ -612,8 +610,8 @@ impl KeylessAccount {
         nonce: String,
         exp: Option<SystemTime>,
         ephemeral_key: EphemeralKeyPair,
-        pepper_service: &dyn PepperService,
-        prover_service: &dyn ProverService,
+        pepper_service: &(impl PepperService + ?Sized),
+        prover_service: &(impl ProverService + ?Sized),
         jwt_for_services: &str,
     ) -> AptosResult<Self> {
         if nonce != ephemeral_key.nonce() {
@@ -906,7 +904,6 @@ mod tests {
         pepper: Pepper,
     }
 
-    #[async_trait]
     impl PepperService for StaticPepperService {
         async fn get_pepper(&self, _jwt: &str) -> AptosResult<Pepper> {
             Ok(self.pepper.clone())
@@ -917,7 +914,6 @@ mod tests {
         proof: ZkProof,
     }
 
-    #[async_trait]
     impl ProverService for StaticProverService {
         async fn generate_proof(
             &self,

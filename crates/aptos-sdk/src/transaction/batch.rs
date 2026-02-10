@@ -38,7 +38,6 @@ use crate::transaction::{
     builder::sign_transaction,
 };
 use crate::types::{AccountAddress, ChainId};
-use futures::future::join_all;
 use std::time::Duration;
 
 /// Result of a single transaction in a batch.
@@ -320,55 +319,65 @@ impl SignedTransactionBatch {
     /// Submits all transactions in parallel.
     ///
     /// Returns immediately after submission without waiting for confirmation.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a spawned transaction task panics.
     pub async fn submit_all(self, client: &FullnodeClient) -> Vec<BatchTransactionResult> {
-        let futures: Vec<_> = self
-            .transactions
-            .into_iter()
-            .enumerate()
-            .map(|(index, txn)| {
-                let client = client.clone();
-                async move {
-                    let result = client.submit_transaction(&txn).await;
-                    BatchTransactionResult {
-                        index,
-                        transaction: txn,
-                        result: result.map(|resp| BatchTransactionStatus::Pending {
-                            hash: resp.data.hash.to_string(),
-                        }),
-                    }
+        let mut set = tokio::task::JoinSet::new();
+        for (index, txn) in self.transactions.into_iter().enumerate() {
+            let client = client.clone();
+            set.spawn(async move {
+                let result = client.submit_transaction(&txn).await;
+                BatchTransactionResult {
+                    index,
+                    transaction: txn,
+                    result: result.map(|resp| BatchTransactionStatus::Pending {
+                        hash: resp.data.hash.to_string(),
+                    }),
                 }
-            })
-            .collect();
+            });
+        }
 
-        join_all(futures).await
+        let mut results = Vec::with_capacity(set.len());
+        while let Some(result) = set.join_next().await {
+            results.push(result.expect("batch submit task panicked"));
+        }
+        results.sort_by_key(|r| r.index);
+        results
     }
 
     /// Submits all transactions in parallel and waits for confirmation.
     ///
     /// Each transaction is submitted and then waited on independently.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a spawned transaction task panics.
     pub async fn submit_and_wait_all(
         self,
         client: &FullnodeClient,
         timeout: Option<Duration>,
     ) -> Vec<BatchTransactionResult> {
-        let futures: Vec<_> = self
-            .transactions
-            .into_iter()
-            .enumerate()
-            .map(|(index, txn)| {
-                let client = client.clone();
-                async move {
-                    let result = submit_and_wait_single(&client, &txn, timeout).await;
-                    BatchTransactionResult {
-                        index,
-                        transaction: txn,
-                        result,
-                    }
+        let mut set = tokio::task::JoinSet::new();
+        for (index, txn) in self.transactions.into_iter().enumerate() {
+            let client = client.clone();
+            set.spawn(async move {
+                let result = submit_and_wait_single(&client, &txn, timeout).await;
+                BatchTransactionResult {
+                    index,
+                    transaction: txn,
+                    result,
                 }
-            })
-            .collect();
+            });
+        }
 
-        join_all(futures).await
+        let mut results = Vec::with_capacity(set.len());
+        while let Some(result) = set.join_next().await {
+            results.push(result.expect("batch wait task panicked"));
+        }
+        results.sort_by_key(|r| r.index);
+        results
     }
 
     /// Submits transactions sequentially (one at a time).
