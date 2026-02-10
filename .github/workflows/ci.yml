@@ -78,6 +78,85 @@ jobs:
       - name: Run tests (all features)
         run: cargo test -p aptos-sdk --all-targets --all-features
 
+  test-linux-arm:
+    name: Test (Linux ARM64)
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build
+        run: cargo build -p aptos-sdk --all-targets
+
+      - name: Run tests
+        run: cargo test -p aptos-sdk --all-targets
+
+      - name: Run tests (all features)
+        run: cargo test -p aptos-sdk --all-targets --all-features
+
+  test-macos-intel:
+    name: Test (macOS x86)
+    runs-on: macos-15-intel
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build
+        run: cargo build -p aptos-sdk --all-targets
+
+      - name: Run tests
+        run: cargo test -p aptos-sdk --all-targets
+
+      - name: Run tests (all features)
+        run: cargo test -p aptos-sdk --all-targets --all-features
+
+  test-no-simd:
+    name: Test (Linux No SIMD - Docker Compatible)
+    runs-on: ubuntu-latest
+    env:
+      # Disable BLST assembly optimizations for portability
+      BLST_PORTABLE: "1"
+      # Target baseline x86-64 without AVX/AVX2 SIMD extensions.
+      # This simulates running in a Docker container on macOS ARM via
+      # QEMU x86 emulation, where advanced SIMD instructions are unavailable.
+      RUSTFLAGS: "-C target-cpu=x86-64"
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build (default features)
+        run: cargo build -p aptos-sdk --all-targets
+
+      - name: Run tests (default features)
+        run: cargo test -p aptos-sdk --all-targets
+
+      - name: Build (all features)
+        run: cargo build -p aptos-sdk --all-targets --all-features
+
+      - name: Run tests (all features)
+        run: cargo test -p aptos-sdk --all-targets --all-features
+
   test-features:
     name: Test Feature Combinations
     runs-on: ubuntu-latest
