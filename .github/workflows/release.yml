@@ -3,10 +3,20 @@ name: Release
 on:
   push:
     tags:
-      - 'v*.*.*'
-      - 'v*.*.*-*'
+      - 'sdk-v*.*.*'
+      - 'sdk-v*.*.*-*'
+      - 'macros-v*.*.*'
+      - 'macros-v*.*.*-*'
   workflow_dispatch:
     inputs:
+      crate:
+        description: 'Which crate to publish'
+        required: true
+        type: choice
+        options:
+          - aptos-sdk
+          - aptos-sdk-macros
+          - both
       dry_run:
         description: 'Dry run (do not actually publish)'
         required: false
@@ -17,6 +27,43 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # Determine which crates to publish based on the tag or manual input
+  resolve:
+    name: Resolve Crates
+    runs-on: ubuntu-latest
+    outputs:
+      publish_macros: ${{ steps.resolve.outputs.publish_macros }}
+      publish_sdk: ${{ steps.resolve.outputs.publish_sdk }}
+    steps:
+      - name: Resolve which crates to publish
+        id: resolve
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            case "${{ inputs.crate }}" in
+              aptos-sdk-macros)
+                echo "publish_macros=true" >> "$GITHUB_OUTPUT"
+                echo "publish_sdk=false" >> "$GITHUB_OUTPUT"
+                ;;
+              aptos-sdk)
+                echo "publish_macros=false" >> "$GITHUB_OUTPUT"
+                echo "publish_sdk=true" >> "$GITHUB_OUTPUT"
+                ;;
+              both)
+                echo "publish_macros=true" >> "$GITHUB_OUTPUT"
+                echo "publish_sdk=true" >> "$GITHUB_OUTPUT"
+                ;;
+            esac
+          else
+            TAG="${GITHUB_REF#refs/tags/}"
+            if [[ "$TAG" == macros-v* ]]; then
+              echo "publish_macros=true" >> "$GITHUB_OUTPUT"
+              echo "publish_sdk=false" >> "$GITHUB_OUTPUT"
+            elif [[ "$TAG" == sdk-v* ]]; then
+              echo "publish_macros=false" >> "$GITHUB_OUTPUT"
+              echo "publish_sdk=true" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
   verify:
     name: Verify Release
     runs-on: ubuntu-latest
@@ -46,11 +93,11 @@ jobs:
           RUSTDOCFLAGS: -D warnings
         run: cargo doc --no-deps --all-features
 
-  publish:
-    name: Publish to crates.io
+  publish-macros:
+    name: Publish aptos-sdk-macros
     runs-on: ubuntu-latest
-    needs: verify
-    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [resolve, verify]
+    if: needs.resolve.outputs.publish_macros == 'true'
     steps:
       - uses: actions/checkout@v6
       
@@ -62,12 +109,9 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
       
-      - name: Verify crates can be packaged
-        run: |
-          cargo package -p aptos-sdk-macros --locked
-          cargo package -p aptos-sdk --locked
+      - name: Verify crate can be packaged
+        run: cargo package -p aptos-sdk-macros --locked
       
-      # Publish macros crate first (aptos-sdk depends on it)
       - name: Publish aptos-sdk-macros (dry run)
         if: github.event_name == 'workflow_dispatch' && inputs.dry_run == true
         run: cargo publish -p aptos-sdk-macros --locked --dry-run
@@ -77,13 +121,36 @@ jobs:
         run: cargo publish -p aptos-sdk-macros --locked
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+  publish-sdk:
+    name: Publish aptos-sdk
+    runs-on: ubuntu-latest
+    needs: [resolve, verify, publish-macros]
+    # Run if SDK should be published, AND either macros wasn't needed or macros succeeded
+    if: |
+      always() &&
+      needs.resolve.outputs.publish_sdk == 'true' &&
+      needs.verify.result == 'success' &&
+      (needs.publish-macros.result == 'success' || needs.publish-macros.result == 'skipped')
+    steps:
+      - uses: actions/checkout@v6
       
-      # Wait for crates.io to index the macros crate (120s for reliability during high load)
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.90"
+      
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+      
+      # If macros was just published, wait for crates.io to index it
       - name: Wait for crates.io indexing
-        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.dry_run != true)
+        if: needs.publish-macros.result == 'success'
         run: sleep 120
       
-      # Publish main SDK crate
+      - name: Verify crate can be packaged
+        run: cargo package -p aptos-sdk --locked
+      
       - name: Publish aptos-sdk (dry run)
         if: github.event_name == 'workflow_dispatch' && inputs.dry_run == true
         run: cargo publish -p aptos-sdk --locked --dry-run
@@ -97,8 +164,11 @@ jobs:
   release-notes:
     name: Create Release Notes
     runs-on: ubuntu-latest
-    needs: publish
-    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [resolve, publish-macros, publish-sdk]
+    if: |
+      always() &&
+      github.event_name == 'push' &&
+      (needs.publish-macros.result == 'success' || needs.publish-sdk.result == 'success')
     permissions:
       contents: write
     steps:
@@ -114,4 +184,3 @@ jobs:
           prerelease: ${{ contains(github.ref, '-') }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
