@@ -280,7 +280,7 @@ impl FullnodeClient {
         let retry_config = self.retry_config.clone();
         let max_response_size = self.config.pool_config().max_response_size;
 
-        let executor = RetryExecutor::new((*retry_config).clone());
+        let executor = RetryExecutor::from_shared(retry_config);
         executor
             .execute(|| {
                 let client = client.clone();
@@ -411,7 +411,7 @@ impl FullnodeClient {
         let retry_config = self.retry_config.clone();
         let max_response_size = self.config.pool_config().max_response_size;
 
-        let executor = RetryExecutor::new((*retry_config).clone());
+        let executor = RetryExecutor::from_shared(retry_config);
         executor
             .execute(|| {
                 let client = client.clone();
@@ -471,7 +471,7 @@ impl FullnodeClient {
         let retry_config = self.retry_config.clone();
         let max_response_size = self.config.pool_config().max_response_size;
 
-        let executor = RetryExecutor::new((*retry_config).clone());
+        let executor = RetryExecutor::from_shared(retry_config);
         executor
             .execute(|| {
                 let client = client.clone();
@@ -521,11 +521,21 @@ impl FullnodeClient {
     ) -> AptosResult<AptosResponse<Vec<u8>>> {
         let url = self.build_url("view");
 
-        // Convert BCS args to hex strings for the JSON request body
-        // The Aptos API accepts hex-encoded BCS bytes in the arguments array
+        // Convert BCS args to hex strings for the JSON request body.
+        // The Aptos API accepts hex-encoded BCS bytes in the arguments array.
+        // Encode hex directly into a pre-sized buffer to avoid intermediate allocations.
         let hex_args: Vec<serde_json::Value> = args
             .iter()
-            .map(|bytes| serde_json::json!(format!("0x{}", hex::encode(bytes))))
+            .map(|bytes| {
+                use std::fmt::Write;
+                let mut s = String::with_capacity(2 + bytes.len() * 2);
+                s.push_str("0x");
+                for byte in bytes {
+                    // write! to a String is infallible
+                    let _ = write!(s, "{byte:02x}");
+                }
+                serde_json::Value::String(s)
+            })
             .collect();
 
         let body = serde_json::json!({
@@ -538,7 +548,7 @@ impl FullnodeClient {
         let retry_config = self.retry_config.clone();
         let max_response_size = self.config.pool_config().max_response_size;
 
-        let executor = RetryExecutor::new((*retry_config).clone());
+        let executor = RetryExecutor::from_shared(retry_config);
         executor
             .execute(|| {
                 let client = client.clone();
@@ -704,7 +714,7 @@ impl FullnodeClient {
         let retry_config = self.retry_config.clone();
         let max_response_size = self.config.pool_config().max_response_size;
 
-        let executor = RetryExecutor::new((*retry_config).clone());
+        let executor = RetryExecutor::from_shared(retry_config);
         executor
             .execute(|| {
                 let client = client.clone();

@@ -25,6 +25,7 @@
 use crate::error::{AptosError, AptosResult};
 use std::collections::HashSet;
 use std::future::Future;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::sleep;
 
@@ -254,12 +255,19 @@ impl RetryConfigBuilder {
 /// Executes an async operation with automatic retry.
 #[derive(Debug, Clone)]
 pub struct RetryExecutor {
-    config: RetryConfig,
+    config: Arc<RetryConfig>,
 }
 
 impl RetryExecutor {
     /// Creates a new retry executor with the given config.
     pub fn new(config: RetryConfig) -> Self {
+        Self {
+            config: Arc::new(config),
+        }
+    }
+
+    /// Creates a retry executor from a shared config, avoiding a clone.
+    pub fn from_shared(config: Arc<RetryConfig>) -> Self {
         Self { config }
     }
 

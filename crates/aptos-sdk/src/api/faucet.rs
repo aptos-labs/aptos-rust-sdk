@@ -134,7 +134,7 @@ impl FaucetClient {
         let client = self.client.clone();
         let retry_config = self.retry_config.clone();
 
-        let executor = RetryExecutor::new((*retry_config).clone());
+        let executor = RetryExecutor::from_shared(retry_config);
         executor
             .execute(|| {
                 let client = client.clone();
