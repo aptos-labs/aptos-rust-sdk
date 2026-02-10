@@ -1,6 +1,6 @@
 [package]
 name = "aptos-sdk"
-version = "0.3.1"
+version = "0.3.0"
 description = "A user-friendly, idiomatic Rust SDK for the Aptos blockchain"
 authors.workspace = true
 edition.workspace = true
