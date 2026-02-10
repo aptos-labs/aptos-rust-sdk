@@ -16,10 +16,10 @@ pub type AptosResult<T> = Result<T, AptosError>;
 ///
 /// # Security: Logging Errors
 ///
-/// **WARNING:** The [`Display`] implementation on this type may include sensitive
+/// **WARNING:** The `Display` implementation on this type may include sensitive
 /// information (e.g., partial key material, JWT tokens, or mnemonic phrases) in
 /// its output. When logging errors, always use [`sanitized_message()`](AptosError::sanitized_message)
-/// instead of [`to_string()`] or [`Display`]:
+/// instead of `to_string()` or `Display`:
 ///
 /// ```rust,ignore
 /// // WRONG - may leak sensitive data:
