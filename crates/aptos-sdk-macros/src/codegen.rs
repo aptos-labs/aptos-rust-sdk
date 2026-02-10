@@ -6,6 +6,38 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::Ident;
 
+/// Validates that a string is a valid Rust identifier before using it with `format_ident!`.
+///
+/// # Security
+///
+/// Prevents panics from `proc_macro2::Ident::new` when ABI contains names with
+/// invalid characters (e.g., `::`, newlines, Unicode).
+fn validate_rust_ident(name: &str) -> Result<(), String> {
+    if name.is_empty() {
+        return Err("identifier cannot be empty".to_string());
+    }
+    let first = name.chars().next().unwrap();
+    if !first.is_ascii_alphabetic() && first != '_' {
+        return Err(format!(
+            "identifier '{name}' must start with a letter or underscore"
+        ));
+    }
+    if !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+        return Err(format!(
+            "identifier '{name}' contains invalid characters (only ASCII alphanumeric and underscore allowed)"
+        ));
+    }
+    Ok(())
+}
+
+/// Safely creates a `format_ident!` from a string, returning a compile error if invalid.
+fn safe_format_ident(name: &str) -> Result<proc_macro2::Ident, TokenStream> {
+    if let Err(e) = validate_rust_ident(name) {
+        return Err(syn::Error::new(proc_macro2::Span::call_site(), e).to_compile_error());
+    }
+    Ok(format_ident!("{}", name))
+}
+
 /// Generates the contract implementation.
 pub fn generate_contract_impl(
     name: &Ident,
@@ -118,7 +150,12 @@ fn generate_structs(structs: &[MoveStructDef]) -> TokenStream {
 
 /// Generates a single struct definition.
 fn generate_struct(struct_def: &MoveStructDef) -> TokenStream {
-    let name = format_ident!("{}", to_pascal_case(&struct_def.name));
+    let pascal_name = to_pascal_case(&struct_def.name);
+    // SECURITY: Validate identifier before format_ident! to prevent panics on malformed ABI
+    let name = match safe_format_ident(&pascal_name) {
+        Ok(ident) => ident,
+        Err(err) => return err,
+    };
     let abilities = struct_def.abilities.join(", ");
     let doc = format!("Move struct with abilities: {}", abilities);
 
@@ -126,7 +163,12 @@ fn generate_struct(struct_def: &MoveStructDef) -> TokenStream {
         .fields
         .iter()
         .map(|f| {
-            let field_name = format_ident!("{}", to_snake_case(&f.name));
+            let snake_name = to_snake_case(&f.name);
+            // SECURITY: Validate field name before format_ident!
+            let field_name = match safe_format_ident(&snake_name) {
+                Ok(ident) => ident,
+                Err(err) => return err,
+            };
             let field_type = move_type_to_rust(&f.typ);
             quote! {
                 pub #field_name: #field_type
@@ -167,7 +209,12 @@ fn generate_entry_function(
     module: &str,
     source_info: Option<&MoveSourceInfo>,
 ) -> TokenStream {
-    let fn_name = format_ident!("{}", to_snake_case(&func.name));
+    let snake_fn = to_snake_case(&func.name);
+    // SECURITY: Validate function name before format_ident!
+    let fn_name = match safe_format_ident(&snake_fn) {
+        Ok(ident) => ident,
+        Err(err) => return err,
+    };
     let func_name_str = &func.name;
 
     // Get enriched param info
@@ -259,8 +306,18 @@ fn generate_view_function(
     module: &str,
     source_info: Option<&MoveSourceInfo>,
 ) -> TokenStream {
-    let fn_name = format_ident!("view_{}", to_snake_case(&func.name));
-    let fn_name_json = format_ident!("view_{}_json", to_snake_case(&func.name));
+    let snake_fn = to_snake_case(&func.name);
+    let view_name = format!("view_{snake_fn}");
+    let view_json_name = format!("view_{snake_fn}_json");
+    // SECURITY: Validate function names before format_ident!
+    let fn_name = match safe_format_ident(&view_name) {
+        Ok(ident) => ident,
+        Err(err) => return err,
+    };
+    let fn_name_json = match safe_format_ident(&view_json_name) {
+        Ok(ident) => ident,
+        Err(err) => return err,
+    };
     let func_name_str = &func.name;
 
     // Get enriched param info

@@ -48,9 +48,24 @@ pub struct MoveModuleInfo {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct MoveSourceParser;
 
+/// Maximum Move source file size for parsing (10 MB).
+///
+/// # Security
+///
+/// Prevents excessive memory usage when parsing very large or malicious input.
+const MAX_SOURCE_SIZE: usize = 10 * 1024 * 1024;
+
 impl MoveSourceParser {
     /// Parses Move source code and extracts module information.
+    ///
+    /// # Security
+    ///
+    /// Returns an empty `MoveModuleInfo` if the source exceeds [`MAX_SOURCE_SIZE`]
+    /// to prevent memory exhaustion from extremely large inputs.
     pub fn parse(source: &str) -> MoveModuleInfo {
+        if source.len() > MAX_SOURCE_SIZE {
+            return MoveModuleInfo::default();
+        }
         MoveModuleInfo {
             doc: Self::extract_leading_doc(source),
             functions: Self::parse_functions(source),

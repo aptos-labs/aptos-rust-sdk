@@ -136,6 +136,8 @@ impl IndexerClient {
     /// Returns an error if the URL cannot be parsed.
     pub fn with_url(url: &str) -> AptosResult<Self> {
         let indexer_url = Url::parse(url)?;
+        // SECURITY: Validate URL scheme to prevent SSRF via dangerous protocols
+        crate::config::validate_url_scheme(&indexer_url)?;
         let client = Client::new();
         Ok(Self {
             indexer_url,

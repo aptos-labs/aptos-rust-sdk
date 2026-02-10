@@ -13,6 +13,21 @@ pub type AptosResult<T> = Result<T, AptosError>;
 ///
 /// This enum covers all possible error conditions that can occur when
 /// interacting with the Aptos blockchain through this SDK.
+///
+/// # Security: Logging Errors
+///
+/// **WARNING:** The [`Display`] implementation on this type may include sensitive
+/// information (e.g., partial key material, JWT tokens, or mnemonic phrases) in
+/// its output. When logging errors, always use [`sanitized_message()`](AptosError::sanitized_message)
+/// instead of [`to_string()`] or [`Display`]:
+///
+/// ```rust,ignore
+/// // WRONG - may leak sensitive data:
+/// log::error!("Failed: {}", err);
+///
+/// // CORRECT - redacts sensitive patterns:
+/// log::error!("Failed: {}", err.sanitized_message());
+/// ```
 #[derive(Error, Debug)]
 pub enum AptosError {
     /// Error occurred during HTTP communication
@@ -157,6 +172,11 @@ pub enum AptosError {
 const MAX_ERROR_MESSAGE_LENGTH: usize = 1000;
 
 /// Patterns that might indicate sensitive information in error messages.
+///
+/// # Security
+///
+/// This list is used by [`AptosError::sanitized_message()`] to redact potentially
+/// sensitive content from error messages before logging. The check is case-insensitive.
 const SENSITIVE_PATTERNS: &[&str] = &[
     "private_key",
     "secret",
@@ -165,6 +185,14 @@ const SENSITIVE_PATTERNS: &[&str] = &[
     "seed",
     "bearer",
     "authorization",
+    "token",
+    "jwt",
+    "credential",
+    "api_key",
+    "apikey",
+    "access_token",
+    "refresh_token",
+    "pepper",
 ];
 
 impl AptosError {

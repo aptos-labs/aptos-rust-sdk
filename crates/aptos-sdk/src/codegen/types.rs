@@ -179,23 +179,14 @@ impl MoveTypeMapper {
 
         if !rust_type.needs_bcs {
             // Primitives that don't need special handling
-            return format!("aptos_bcs::to_bytes(&{var_name}).unwrap()");
+            return format!(
+                "aptos_bcs::to_bytes(&{var_name}).map_err(|e| AptosError::Bcs(e.to_string()))?"
+            );
         }
 
-        match move_type {
-            "address" => format!("aptos_bcs::to_bytes(&{var_name}).unwrap()"),
-            _ if move_type.starts_with("vector<u8>") => {
-                format!("aptos_bcs::to_bytes(&{var_name}).unwrap()")
-            }
-            _ if move_type.starts_with("vector<") => {
-                format!("aptos_bcs::to_bytes(&{var_name}).unwrap()")
-            }
-            "0x1::string::String" => format!("aptos_bcs::to_bytes(&{var_name}).unwrap()"),
-            _ if move_type.ends_with("::string::String") => {
-                format!("aptos_bcs::to_bytes(&{var_name}).unwrap()")
-            }
-            _ => format!("aptos_bcs::to_bytes(&{var_name}).unwrap()"),
-        }
+        // SECURITY: Use error propagation instead of .unwrap() to prevent
+        // panics in generated code if BCS serialization fails.
+        format!("aptos_bcs::to_bytes(&{var_name}).map_err(|e| AptosError::Bcs(e.to_string()))?")
     }
 
     /// Determines if a parameter should be excluded from the function signature.

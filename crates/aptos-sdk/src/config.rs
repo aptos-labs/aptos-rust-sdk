@@ -16,7 +16,10 @@ use url::Url;
 /// This prevents SSRF attacks via dangerous URL schemes like `file://`, `gopher://`, etc.
 /// For production use, HTTPS is strongly recommended. HTTP is allowed for localhost
 /// development only.
-fn validate_url_scheme(url: &Url) -> AptosResult<()> {
+/// # Errors
+///
+/// Returns [`AptosError::Config`] if the URL scheme is not `http` or `https`.
+pub fn validate_url_scheme(url: &Url) -> AptosResult<()> {
     match url.scheme() {
         "https" => Ok(()),
         "http" => {
@@ -60,8 +63,16 @@ pub struct PoolConfig {
     pub max_response_size: usize,
 }
 
-/// Default maximum response size: 100 MB
-const DEFAULT_MAX_RESPONSE_SIZE: usize = 100 * 1024 * 1024;
+/// Default maximum response size: 10 MB
+///
+/// # Security
+///
+/// This limit helps prevent memory exhaustion from malicious or compromised
+/// servers sending extremely large responses. The default of 10 MB is generous
+/// for normal Aptos API responses (typically under 1 MB). If you need to
+/// handle larger responses (e.g., bulk data exports), increase this via
+/// [`PoolConfigBuilder::max_response_size`].
+const DEFAULT_MAX_RESPONSE_SIZE: usize = 10 * 1024 * 1024;
 
 impl Default for PoolConfig {
     fn default() -> Self {
