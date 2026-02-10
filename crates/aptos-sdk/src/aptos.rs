@@ -168,8 +168,18 @@ impl Aptos {
         let info = response.into_inner();
 
         // Update chain_id if it was unknown (custom network)
-        if self.chain_id.read().expect("chain_id lock poisoned").id() == 0 && info.chain_id > 0 {
-            *self.chain_id.write().expect("chain_id lock poisoned") = ChainId::new(info.chain_id);
+        if self
+            .chain_id
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .id()
+            == 0
+            && info.chain_id > 0
+        {
+            *self
+                .chain_id
+                .write()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = ChainId::new(info.chain_id);
         }
 
         Ok(info)
@@ -187,7 +197,10 @@ impl Aptos {
     ///
     /// Panics if the internal `chain_id` lock is poisoned.
     pub fn chain_id(&self) -> ChainId {
-        *self.chain_id.read().expect("chain_id lock poisoned")
+        *self
+            .chain_id
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     /// Resolves the chain ID from the node if it is unknown.
@@ -210,7 +223,10 @@ impl Aptos {
     /// Panics if the internal `chain_id` lock is poisoned.
     pub async fn ensure_chain_id(&self) -> AptosResult<ChainId> {
         {
-            let chain_id = self.chain_id.read().expect("chain_id lock poisoned");
+            let chain_id = self
+                .chain_id
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             if chain_id.id() > 0 {
                 return Ok(*chain_id);
             }
@@ -219,7 +235,10 @@ impl Aptos {
         let response = self.fullnode.get_ledger_info().await?;
         let info = response.into_inner();
         let new_chain_id = ChainId::new(info.chain_id);
-        *self.chain_id.write().expect("chain_id lock poisoned") = new_chain_id;
+        *self
+            .chain_id
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = new_chain_id;
         Ok(new_chain_id)
     }
 

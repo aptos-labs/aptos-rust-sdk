@@ -112,7 +112,25 @@ pub fn aptos_contract_file(input: TokenStream) -> TokenStream {
 
     // Read the file content at compile time
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
-    let file_path = std::path::Path::new(&manifest_dir).join(&input.path);
+    let manifest_path = std::path::Path::new(&manifest_dir);
+    let file_path = manifest_path.join(&input.path);
+
+    // SECURITY: Verify the resolved path is under CARGO_MANIFEST_DIR to prevent
+    // path traversal attacks (e.g., "../../../../etc/passwd")
+    if let (Ok(canonical_manifest), Ok(canonical_file)) =
+        (manifest_path.canonicalize(), file_path.canonicalize())
+        && !canonical_file.starts_with(&canonical_manifest)
+    {
+        return syn::Error::new(
+            input.name.span(),
+            format!(
+                "ABI file path '{}' resolves outside the project directory",
+                input.path
+            ),
+        )
+        .to_compile_error()
+        .into();
+    }
 
     let abi_content = match std::fs::read_to_string(&file_path) {
         Ok(content) => content,

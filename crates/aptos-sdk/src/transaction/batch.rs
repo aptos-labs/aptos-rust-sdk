@@ -541,7 +541,10 @@ impl<'a> BatchOperations<'a> {
     /// Resolves the chain ID, fetching from the node if unknown.
     async fn resolve_chain_id(&self) -> AptosResult<ChainId> {
         {
-            let chain_id = self.chain_id.read().expect("chain_id lock poisoned");
+            let chain_id = self
+                .chain_id
+                .read()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             if chain_id.id() > 0 {
                 return Ok(*chain_id);
             }
@@ -550,7 +553,10 @@ impl<'a> BatchOperations<'a> {
         let response = self.client.get_ledger_info().await?;
         let info = response.into_inner();
         let new_chain_id = ChainId::new(info.chain_id);
-        *self.chain_id.write().expect("chain_id lock poisoned") = new_chain_id;
+        *self
+            .chain_id
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = new_chain_id;
         Ok(new_chain_id)
     }
 

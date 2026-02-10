@@ -67,9 +67,14 @@ async fn main() -> anyhow::Result<()> {
     println!("\n--- 6. Loading from Private Key ---");
 
     // Get the private key bytes and convert to hex
+    // WARNING: This prints the private key for demonstration purposes ONLY.
+    // NEVER print, log, or expose private keys in production code!
     let pk_bytes = random_account.private_key().to_bytes();
     let pk_hex = hex::encode(pk_bytes);
-    println!("Private key (hex): {}", pk_hex);
+    println!(
+        "[DEMO ONLY - NEVER DO THIS IN PRODUCTION] Private key (hex): {}",
+        pk_hex
+    );
 
     // Recreate account from private key hex
     let restored_account = Ed25519Account::from_private_key_hex(&pk_hex)?;
