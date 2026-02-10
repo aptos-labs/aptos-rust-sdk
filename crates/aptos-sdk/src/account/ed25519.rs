@@ -104,7 +104,6 @@ impl Ed25519Account {
     ///
     /// Returns an error if the mnemonic phrase is invalid or if key derivation fails.
     #[cfg(feature = "mnemonic")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "mnemonic")))]
     pub fn from_mnemonic(mnemonic: &str, index: u32) -> AptosResult<Self> {
         let mnemonic = Mnemonic::from_phrase(mnemonic)?;
         let private_key = mnemonic.derive_ed25519_key(index)?;
@@ -119,7 +118,6 @@ impl Ed25519Account {
     ///
     /// Returns an error if mnemonic generation or key derivation fails.
     #[cfg(feature = "mnemonic")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "mnemonic")))]
     pub fn generate_with_mnemonic() -> AptosResult<(Self, String)> {
         let mnemonic = Mnemonic::generate(24)?;
         let phrase = mnemonic.phrase().to_string();
@@ -264,7 +262,6 @@ impl Ed25519SingleKeyAccount {
     ///
     /// Returns an error if the mnemonic phrase is invalid or if key derivation fails.
     #[cfg(feature = "mnemonic")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "mnemonic")))]
     pub fn from_mnemonic(mnemonic: &str, index: u32) -> AptosResult<Self> {
         let mnemonic = Mnemonic::from_phrase(mnemonic)?;
         let private_key = mnemonic.derive_ed25519_key(index)?;

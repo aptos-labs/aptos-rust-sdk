@@ -216,23 +216,21 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: "1.90"
+      - name: Install Rust nightly (required for doc_auto_cfg and docs.rs parity)
+        uses: dtolnay/rust-toolchain@nightly
       
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
       
-      - name: Check documentation
+      - name: Check documentation (docs.rs parity)
         env:
-          RUSTDOCFLAGS: -D warnings
+          RUSTDOCFLAGS: --cfg docsrs -D warnings
         run: cargo doc -p aptos-sdk --no-deps --all-features
       
-      - name: Check examples documentation
+      - name: Check macros documentation
         env:
-          RUSTDOCFLAGS: -D warnings
-        run: cargo doc -p aptos-sdk --all-features --document-private-items
+          RUSTDOCFLAGS: --cfg docsrs -D warnings
+        run: cargo doc -p aptos-sdk-macros --no-deps --all-features
 
   # Deploy docs to GitHub Pages on main branch
   deploy-docs:
@@ -250,7 +248,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       
-      - name: Install Rust nightly (required for doc_cfg feature)
+      - name: Install Rust nightly (required for doc_auto_cfg feature)
         uses: dtolnay/rust-toolchain@nightly
       
       - name: Cache cargo

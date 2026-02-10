@@ -91,7 +91,6 @@ pub use types::{AccountAddress, ChainId, HashValue};
 
 // Re-export proc macros when the feature is enabled
 #[cfg(feature = "macros")]
-#[cfg_attr(docsrs, doc(cfg(feature = "macros")))]
 pub use aptos_sdk_macros::{MoveStruct, aptos_contract, aptos_contract_file};
 
 // Re-export aptos_bcs for use by the MoveStruct derive macro

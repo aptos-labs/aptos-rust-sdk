@@ -28,3 +28,11 @@ aptos-sdk = { workspace = true }
 tokio = { workspace = true, features = ["full", "test-util"] }
 trybuild = { workspace = true }
 
+[lints]
+workspace = true
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+targets = ["x86_64-unknown-linux-gnu"]
+
