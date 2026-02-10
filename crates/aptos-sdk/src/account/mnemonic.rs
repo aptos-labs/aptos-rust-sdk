@@ -88,24 +88,28 @@ impl Mnemonic {
     /// Derives the seed from this mnemonic.
     ///
     /// Uses an empty passphrase by default.
-    pub fn to_seed(&self) -> [u8; 64] {
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the mnemonic cannot be re-parsed (should not happen
+    /// since the phrase was validated during construction).
+    pub fn to_seed(&self) -> AptosResult<[u8; 64]> {
         self.to_seed_with_passphrase("")
     }
 
     /// Derives the seed from this mnemonic with a passphrase.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// This function will never panic in normal operation because the mnemonic
-    /// phrase is validated during construction (`from_phrase` or `generate`).
-    /// The internal `expect` is a defensive check that should be unreachable.
-    pub fn to_seed_with_passphrase(&self, passphrase: &str) -> [u8; 64] {
-        // SAFETY: The mnemonic phrase was validated during construction.
-        // This expect should never trigger in normal operation.
-        let mnemonic = bip39::Mnemonic::parse_normalized(&self.phrase)
-            .expect("internal error: mnemonic was validated during construction");
+    /// Returns an error if the mnemonic phrase cannot be re-parsed. This should
+    /// never happen because the phrase is validated during construction, but
+    /// returning an error is safer than panicking.
+    pub fn to_seed_with_passphrase(&self, passphrase: &str) -> AptosResult<[u8; 64]> {
+        let mnemonic = bip39::Mnemonic::parse_normalized(&self.phrase).map_err(|e| {
+            AptosError::InvalidMnemonic(format!("internal error: mnemonic re-parse failed: {e}"))
+        })?;
 
-        mnemonic.to_seed(passphrase)
+        Ok(mnemonic.to_seed(passphrase))
     }
 
     /// Derives an Ed25519 private key using the Aptos derivation path.
@@ -117,7 +121,7 @@ impl Mnemonic {
     /// Returns an error if key derivation fails or the derived key is invalid.
     #[cfg(feature = "ed25519")]
     pub fn derive_ed25519_key(&self, index: u32) -> AptosResult<crate::crypto::Ed25519PrivateKey> {
-        let mut seed = self.to_seed();
+        let mut seed = self.to_seed()?;
         let result = derive_ed25519_from_seed(&seed, index);
         // SECURITY: Zeroize seed after use
         zeroize::Zeroize::zeroize(&mut seed);
