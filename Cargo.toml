@@ -34,32 +34,30 @@ aptos-sdk-macros = { version = "0.1.0", path = "crates/aptos-sdk-macros" }
 
 # External crate dependencies.
 # Please do not add any test features here: they should be declared by the individual crate.
-anyhow = "1.0.97"
+anyhow = "1.0.101"
 arbitrary = { version = "1.4.1", features = ["derive"] }
 aptos-bcs = "0.1.4"
-bytes = { version = "1.10.1", features = ["serde"] }
-hex = { version = "0.4.3", features = ["serde"] }
+hex = "0.4.3"
 proc-macro2 = "1.0.94"
 proptest = "1.6.0"
 proptest-derive = "0.5.1"
 quote = "1.0.40"
-reqwest = { version = "0.13.2", features = [
-    "cookies",
-    "json",
-] }
-serde = { version = "1.0.219", features = ["derive", "rc"] }
+reqwest = { version = "0.13.2", features = ["json"] }
+serde = { version = "1.0.219", features = ["derive"] }
 serde_json = { version = "1.0.140", features = [
     "preserve_order",
     "arbitrary_precision",
 ] } # Note: arbitrary_precision is required to parse u256 in JSON
-thiserror = "2.0.12"
+thiserror = "2.0.17"
 trybuild = "1.0.104"
 tokio = { version = "1.44.1", features = ["macros"] }
-url = { version = "2.5.4", features = ["serde"] }
+url = "2.5.4"
 
 [profile.release]
 debug = false
 overflow-checks = true
+lto = "thin"
+codegen-units = 1
 
 # The performance build is not currently recommended
 # for production deployments. It has not been widely tested.
