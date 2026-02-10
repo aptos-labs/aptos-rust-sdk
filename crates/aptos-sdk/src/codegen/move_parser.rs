@@ -60,8 +60,8 @@ impl MoveSourceParser {
     ///
     /// # Security
     ///
-    /// Returns an empty `MoveModuleInfo` if the source exceeds [`MAX_SOURCE_SIZE`]
-    /// to prevent memory exhaustion from extremely large inputs.
+    /// Returns an empty `MoveModuleInfo` if the source exceeds `MAX_SOURCE_SIZE`
+    /// (10 MB) to prevent memory exhaustion from extremely large inputs.
     pub fn parse(source: &str) -> MoveModuleInfo {
         if source.len() > MAX_SOURCE_SIZE {
             return MoveModuleInfo::default();
