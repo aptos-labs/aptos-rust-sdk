@@ -141,7 +141,7 @@ impl MoveSourceParser {
         let mut info = MoveFunctionInfo::default();
         let mut consumed = 0;
 
-        // Look backwards for doc comments
+        // Look backwards for doc comments, collecting in reverse then reversing
         let mut doc_lines = Vec::new();
         let mut j = start;
         while j > 0 {
@@ -149,7 +149,7 @@ impl MoveSourceParser {
             let prev_line = lines[j].trim();
             if prev_line.starts_with("///") {
                 let doc_content = prev_line.strip_prefix("///").unwrap_or("").trim();
-                doc_lines.insert(0, doc_content.to_string());
+                doc_lines.push(doc_content.to_string());
             } else if prev_line.is_empty() || prev_line.starts_with("#[") {
                 // Skip empty lines and attributes
             } else {
@@ -158,6 +158,7 @@ impl MoveSourceParser {
         }
 
         if !doc_lines.is_empty() {
+            doc_lines.reverse();
             info.doc = Some(doc_lines.join("\n"));
         }
 
@@ -365,7 +366,7 @@ impl MoveSourceParser {
         let mut info = MoveStructInfo::default();
         let mut consumed = 0;
 
-        // Look backwards for doc comments
+        // Look backwards for doc comments, collecting in reverse then reversing
         let mut doc_lines = Vec::new();
         let mut j = start;
         while j > 0 {
@@ -373,7 +374,7 @@ impl MoveSourceParser {
             let prev_line = lines[j].trim();
             if prev_line.starts_with("///") {
                 let doc_content = prev_line.strip_prefix("///").unwrap_or("").trim();
-                doc_lines.insert(0, doc_content.to_string());
+                doc_lines.push(doc_content.to_string());
             } else if prev_line.is_empty() || prev_line.starts_with("#[") {
                 // Skip empty lines and attributes
             } else {
@@ -382,6 +383,7 @@ impl MoveSourceParser {
         }
 
         if !doc_lines.is_empty() {
+            doc_lines.reverse();
             info.doc = Some(doc_lines.join("\n"));
         }
 
