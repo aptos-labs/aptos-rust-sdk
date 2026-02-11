@@ -38,7 +38,7 @@ anyhow = "1.0.97"
 arbitrary = { version = "1.4.1", features = ["derive"] }
 aptos-bcs = "0.1.4"
 bytes = { version = "1.10.1", features = ["serde"] }
-hex = { version = "0.4.3", features = ["serde"] }
+const-hex = { version = "1.17.0", features = ["serde"] }
 proc-macro2 = "1.0.94"
 proptest = "1.6.0"
 proptest-derive = "0.5.1"

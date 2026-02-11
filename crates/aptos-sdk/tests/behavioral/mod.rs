@@ -183,7 +183,7 @@ mod account_tests {
     fn test_account_from_private_key_hex() {
         // Generate an account and get its private key
         let original = Ed25519Account::generate();
-        let _private_key_hex = hex::encode(original.public_key_bytes()); // This would need the actual private key
+        let _private_key_hex = const_hex::encode(&original.public_key_bytes()); // This would need the actual private key
 
         // For now, test that generation works consistently
         let account1 = Ed25519Account::generate();

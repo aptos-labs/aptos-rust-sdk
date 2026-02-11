@@ -56,7 +56,7 @@ aptos-bcs = { workspace = true }
 thiserror = { workspace = true }
 url = { workspace = true }
 anyhow = { workspace = true }
-hex = { workspace = true }
+const-hex = { workspace = true }
 bytes = { workspace = true }
 async-trait = "0.1"
 futures = "0.3"
