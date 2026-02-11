@@ -146,20 +146,13 @@ impl FaucetClient {
                     let response = client.post(url).send().await?;
 
                     if response.status().is_success() {
-                        // SECURITY: Read bytes first to enforce size limit before
-                        // deserializing, preventing OOM from malicious responses.
-                        let bytes = response.bytes().await?;
-                        if bytes.len() > MAX_FAUCET_RESPONSE_SIZE {
-                            return Err(AptosError::Api {
-                                status_code: 200,
-                                message: format!(
-                                    "faucet response too large: {} bytes",
-                                    bytes.len()
-                                ),
-                                error_code: Some("RESPONSE_TOO_LARGE".into()),
-                                vm_error_code: None,
-                            });
-                        }
+                        // SECURITY: Stream body with size limit to prevent OOM
+                        // from malicious responses (including chunked encoding).
+                        let bytes = crate::config::read_response_bounded(
+                            response,
+                            MAX_FAUCET_RESPONSE_SIZE,
+                        )
+                        .await?;
                         let faucet_response: FaucetResponse = serde_json::from_slice(&bytes)?;
                         Ok(faucet_response.into_hashes())
                     } else {
