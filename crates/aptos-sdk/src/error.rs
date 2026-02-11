@@ -308,11 +308,15 @@ impl AptosError {
             }
         }
 
-        // Truncate if too long
+        // Truncate if too long (find a valid UTF-8 boundary to avoid panic)
         if cleaned.len() > MAX_ERROR_MESSAGE_LENGTH {
+            let mut end = MAX_ERROR_MESSAGE_LENGTH;
+            while end > 0 && !cleaned.is_char_boundary(end) {
+                end -= 1;
+            }
             format!(
                 "{}... [truncated, total length: {}]",
-                &cleaned[..MAX_ERROR_MESSAGE_LENGTH],
+                &cleaned[..end],
                 cleaned.len()
             )
         } else {

@@ -183,20 +183,13 @@ impl IndexerClient {
                     let response = client.post(url.as_str()).json(&request).send().await?;
 
                     if response.status().is_success() {
-                        // SECURITY: Read bytes first to enforce size limit before
-                        // deserializing, preventing OOM from malicious responses.
-                        let bytes = response.bytes().await?;
-                        if bytes.len() > MAX_INDEXER_RESPONSE_SIZE {
-                            return Err(AptosError::Api {
-                                status_code: 200,
-                                message: format!(
-                                    "indexer response too large: {} bytes",
-                                    bytes.len()
-                                ),
-                                error_code: Some("RESPONSE_TOO_LARGE".into()),
-                                vm_error_code: None,
-                            });
-                        }
+                        // SECURITY: Stream body with size limit to prevent OOM
+                        // from malicious responses (including chunked encoding).
+                        let bytes = crate::config::read_response_bounded(
+                            response,
+                            MAX_INDEXER_RESPONSE_SIZE,
+                        )
+                        .await?;
                         let graphql_response: GraphQLResponse<T> = serde_json::from_slice(&bytes)?;
 
                         if let Some(errors) = graphql_response.errors {
