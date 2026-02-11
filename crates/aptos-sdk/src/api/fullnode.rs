@@ -523,7 +523,6 @@ impl FullnodeClient {
 
         // Convert BCS args to hex strings for the JSON request body.
         // The Aptos API accepts hex-encoded BCS bytes in the arguments array.
-        // Encode hex directly into a pre-sized buffer to avoid intermediate allocations.
         let hex_args: Vec<serde_json::Value> = args
             .iter()
             .map(|bytes| serde_json::json!(const_hex::encode_prefixed(bytes)))
