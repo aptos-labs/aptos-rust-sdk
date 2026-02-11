@@ -54,7 +54,7 @@ impl EphemeralKeyPair {
         let nonce = {
             let mut bytes = [0u8; 16];
             rand::rngs::OsRng.fill_bytes(&mut bytes);
-            hex::encode(bytes)
+            const_hex::encode(bytes)
         };
         Self {
             private_key,
@@ -166,13 +166,12 @@ impl Pepper {
     ///
     /// Returns an error if the hex string is invalid or cannot be decoded.
     pub fn from_hex(hex_str: &str) -> AptosResult<Self> {
-        let hex_str = hex_str.strip_prefix("0x").unwrap_or(hex_str);
-        Ok(Self(hex::decode(hex_str)?))
+        Ok(Self(const_hex::decode(hex_str)?))
     }
 
     /// Returns the pepper as hex.
     pub fn to_hex(&self) -> String {
-        format!("0x{}", hex::encode(&self.0))
+        const_hex::encode_prefixed(&self.0)
     }
 }
 
@@ -197,13 +196,12 @@ impl ZkProof {
     ///
     /// Returns an error if the hex string is invalid or cannot be decoded.
     pub fn from_hex(hex_str: &str) -> AptosResult<Self> {
-        let hex_str = hex_str.strip_prefix("0x").unwrap_or(hex_str);
-        Ok(Self(hex::decode(hex_str)?))
+        Ok(Self(const_hex::decode(hex_str)?))
     }
 
     /// Returns the proof as hex.
     pub fn to_hex(&self) -> String {
-        format!("0x{}", hex::encode(&self.0))
+        const_hex::encode_prefixed(&self.0)
     }
 }
 
@@ -316,9 +314,8 @@ impl ProverService for HttpProverService {
         Box::pin(async move {
             let request = ProverRequest {
                 jwt,
-                ephemeral_public_key: format!(
-                    "0x{}",
-                    hex::encode(ephemeral_key.public_key.to_bytes())
+                ephemeral_public_key: const_hex::encode_prefixed(
+                    ephemeral_key.public_key.to_bytes(),
                 ),
                 nonce: ephemeral_key.nonce(),
                 pepper: pepper.to_hex(),

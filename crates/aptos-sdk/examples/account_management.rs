@@ -68,7 +68,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Get the private key bytes and convert to hex
     let pk_bytes = random_account.private_key().to_bytes();
-    let pk_hex = hex::encode(pk_bytes);
+    let pk_hex = const_hex::encode(pk_bytes);
     println!("Private key (hex): {}", pk_hex);
 
     // Recreate account from private key hex

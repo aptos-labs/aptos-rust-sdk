@@ -781,7 +781,7 @@ impl<'a> ModuleGenerator<'a> {
                 format!("serde_json::json!({var_name}.to_string())")
             }
             _ if move_type.starts_with("vector<u8>") => {
-                format!("serde_json::json!(hex::encode({var_name}))")
+                format!("serde_json::json!(const_hex::encode({var_name}))")
             }
             "0x1::string::String" => format!("serde_json::json!({var_name})"),
             _ if move_type.ends_with("::string::String") => {

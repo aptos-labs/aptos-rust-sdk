@@ -46,7 +46,7 @@ pub trait PublicKey: Clone + Sized {
 
     /// Returns the public key as a hex string with 0x prefix.
     fn to_hex(&self) -> String {
-        format!("0x{}", hex::encode(self.to_bytes()))
+        const_hex::encode_prefixed(&self.to_bytes())
     }
 }
 
@@ -70,6 +70,6 @@ pub trait Signature: Clone + Sized {
 
     /// Returns the signature as a hex string with 0x prefix.
     fn to_hex(&self) -> String {
-        format!("0x{}", hex::encode(self.to_bytes()))
+        const_hex::encode_prefixed(&self.to_bytes())
     }
 }

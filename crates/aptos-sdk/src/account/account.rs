@@ -43,8 +43,7 @@ impl AuthenticationKey {
     /// - The hex string is invalid or cannot be decoded
     /// - The decoded bytes are not exactly 32 bytes long
     pub fn from_hex(hex_str: &str) -> AptosResult<Self> {
-        let hex_str = hex_str.strip_prefix("0x").unwrap_or(hex_str);
-        let bytes = hex::decode(hex_str)?;
+        let bytes = const_hex::decode(hex_str)?;
         Self::from_bytes(&bytes)
     }
 
@@ -60,7 +59,7 @@ impl AuthenticationKey {
 
     /// Returns the authentication key as a hex string.
     pub fn to_hex(&self) -> String {
-        format!("0x{}", hex::encode(self.0))
+        const_hex::encode_prefixed(&self.0)
     }
 
     /// Derives the account address from this authentication key.

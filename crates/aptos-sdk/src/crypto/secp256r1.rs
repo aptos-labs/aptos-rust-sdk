@@ -76,8 +76,7 @@ impl Secp256r1PrivateKey {
     /// Returns [`AptosError::Hex`] if the hex string is invalid.
     /// Returns [`AptosError::InvalidPrivateKey`] if the decoded bytes are not exactly 32 bytes or do not represent a valid Secp256r1 private key.
     pub fn from_hex(hex_str: &str) -> AptosResult<Self> {
-        let hex_str = hex_str.strip_prefix("0x").unwrap_or(hex_str);
-        let bytes = hex::decode(hex_str)?;
+        let bytes = const_hex::decode(hex_str)?;
         Self::from_bytes(&bytes)
     }
 
@@ -106,7 +105,7 @@ impl Secp256r1PrivateKey {
 
     /// Returns the private key as a hex string.
     pub fn to_hex(&self) -> String {
-        format!("0x{}", hex::encode(self.inner.to_bytes()))
+        const_hex::encode_prefixed(&self.inner.to_bytes())
     }
 
     /// Returns the private key in AIP-80 format.
@@ -182,8 +181,7 @@ impl Secp256r1PublicKey {
     /// Returns [`AptosError::Hex`] if the hex string is invalid.
     /// Returns [`AptosError::InvalidPublicKey`] if the decoded bytes do not represent a valid Secp256r1 compressed public key.
     pub fn from_hex(hex_str: &str) -> AptosResult<Self> {
-        let hex_str = hex_str.strip_prefix("0x").unwrap_or(hex_str);
-        let bytes = hex::decode(hex_str)?;
+        let bytes = const_hex::decode(hex_str)?;
         Self::from_bytes(&bytes)
     }
 
@@ -221,7 +219,7 @@ impl Secp256r1PublicKey {
 
     /// Returns the public key as a hex string (compressed format).
     pub fn to_hex(&self) -> String {
-        format!("0x{}", hex::encode(self.to_bytes()))
+        const_hex::encode_prefixed(&self.to_bytes())
     }
 
     /// Returns the public key in AIP-80 format (compressed).
@@ -369,8 +367,7 @@ impl Secp256r1Signature {
     /// Returns [`AptosError::Hex`] if the hex string is invalid.
     /// Returns [`AptosError::InvalidSignature`] if the decoded bytes are not exactly 64 bytes or do not represent a valid Secp256r1 signature.
     pub fn from_hex(hex_str: &str) -> AptosResult<Self> {
-        let hex_str = hex_str.strip_prefix("0x").unwrap_or(hex_str);
-        let bytes = hex::decode(hex_str)?;
+        let bytes = const_hex::decode(hex_str)?;
         Self::from_bytes(&bytes)
     }
 
@@ -381,7 +378,7 @@ impl Secp256r1Signature {
 
     /// Returns the signature as a hex string.
     pub fn to_hex(&self) -> String {
-        format!("0x{}", hex::encode(self.to_bytes()))
+        const_hex::encode_prefixed(&self.to_bytes())
     }
 }
 

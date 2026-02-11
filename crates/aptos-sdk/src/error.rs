@@ -33,7 +33,7 @@ pub enum AptosError {
 
     /// Error occurred during hex encoding/decoding
     #[error("Hex error: {0}")]
-    Hex(#[from] hex::FromHexError),
+    Hex(#[from] const_hex::FromHexError),
 
     /// Invalid account address
     #[error("Invalid address: {0}")]
