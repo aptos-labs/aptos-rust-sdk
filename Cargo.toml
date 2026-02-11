@@ -48,7 +48,7 @@ serde_json = { version = "1.0.140", features = [
     "preserve_order",
     "arbitrary_precision",
 ] } # Note: arbitrary_precision is required to parse u256 in JSON
-thiserror = "2.0.17"
+thiserror = "2.0.18"
 trybuild = "1.0.104"
 tokio = { version = "1.44.1", features = ["macros"] }
 url = "2.5.4"
@@ -57,7 +57,6 @@ url = "2.5.4"
 debug = false
 overflow-checks = true
 lto = "thin"
-codegen-units = 1
 
 # The performance build is not currently recommended
 # for production deployments. It has not been widely tested.
