@@ -85,20 +85,8 @@ impl HashValue {
             hex_str
         };
 
-        let hex_string = std::str::from_utf8(hex_str)
-            .map_err(|e| AptosError::Internal(format!("Invalid UTF-8 in hex string: {e}")))?;
-
-        if hex_string.len() != HASH_LENGTH * 2 {
-            return Err(AptosError::Internal(format!(
-                "Invalid hash length: expected {} hex characters, got {}",
-                HASH_LENGTH * 2,
-                hex_string.len()
-            )));
-        }
-
-        let bytes = hex::decode(hex_string)?;
         let mut hash = [0u8; HASH_LENGTH];
-        hash.copy_from_slice(&bytes);
+        const_hex::decode_to_slice(hex_str, &mut hash)?;
         Ok(Self(hash))
     }
 
@@ -133,7 +121,7 @@ impl HashValue {
 
     /// Returns the hash as a hex string with `0x` prefix.
     pub fn to_hex(&self) -> String {
-        format!("0x{}", hex::encode(self.0))
+        const_hex::encode_prefixed(&self.0)
     }
 
     /// Returns true if this is the zero hash.

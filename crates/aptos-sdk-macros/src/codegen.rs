@@ -388,7 +388,7 @@ fn view_arg_encoding(name: &Ident, move_type: &str) -> TokenStream {
             quote! { serde_json::json!(#name.to_string()) }
         }
         t if t.starts_with("vector<u8>") => {
-            quote! { serde_json::json!(hex::encode(&#name)) }
+            quote! { serde_json::json!(const_hex::encode(&#name)) }
         }
         _ => quote! { serde_json::json!(#name) },
     }

@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Upgraded `reqwest` to v0.13
+- Use `const-hex` crate instead of `hex`
 
 ### Removed
 - Unnecessary feature-flags

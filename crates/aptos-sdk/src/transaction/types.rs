@@ -522,7 +522,7 @@ mod tests {
         let bcs = aptos_bcs::to_bytes(&auth).unwrap();
 
         // Print for debugging
-        println!("Authenticator BCS bytes: {}", hex::encode(&bcs));
+        println!("Authenticator BCS bytes: {}", const_hex::encode(&bcs));
         println!("First byte (variant index): {}", bcs[0]);
         println!("Second byte (length prefix): {}", bcs[1]);
         println!("Third byte (first pubkey byte): {}", bcs[2]);
