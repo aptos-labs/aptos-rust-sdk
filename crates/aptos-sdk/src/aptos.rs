@@ -160,16 +160,15 @@ impl Aptos {
     ///
     /// Returns an error if the HTTP request fails, the API returns an error status code,
     /// or the response cannot be parsed.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the internal `chain_id` lock is poisoned (only possible if another thread
-    /// panicked while holding the lock).
     pub async fn ledger_info(&self) -> AptosResult<crate::api::response::LedgerInfo> {
         let response = self.fullnode.get_ledger_info().await?;
         let info = response.into_inner();
 
-        // Update chain_id if it was unknown (custom network)
+        // Update chain_id if it was unknown (custom network).
+        // NOTE: The load-then-store pattern has a benign TOCTOU race: multiple
+        // threads may concurrently see chain_id == 0 and all store the same
+        // value from the ledger info response. This is safe because they always
+        // store the identical chain_id value returned by the node.
         if self.chain_id.load(Ordering::Relaxed) == 0 && info.chain_id > 0 {
             self.chain_id.store(info.chain_id, Ordering::Relaxed);
         }

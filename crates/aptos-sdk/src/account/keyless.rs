@@ -136,9 +136,11 @@ impl OidcProvider {
     /// # Security
     ///
     /// For unknown issuers, the JWKS URL is constructed as `{issuer}/.well-known/jwks.json`.
-    /// Only HTTPS issuers are accepted to prevent SSRF via `http://`, `file://`, or other
-    /// dangerous URL schemes. Callers controlling issuer input should additionally validate
-    /// the host (e.g., block private IP ranges) if SSRF is a concern.
+    /// Non-HTTPS issuers are accepted at construction time but will produce an empty
+    /// JWKS URL, causing a clear error at JWKS fetch time. This prevents SSRF via
+    /// `http://`, `file://`, or other dangerous URL schemes without changing the
+    /// function signature. Callers controlling issuer input should additionally
+    /// validate the host (e.g., block private IP ranges) if SSRF is a concern.
     pub fn from_issuer(issuer: &str) -> Self {
         match issuer {
             "https://accounts.google.com" => OidcProvider::Google,
@@ -296,15 +298,12 @@ impl PepperService for HttpPepperService {
                 .await?
                 .error_for_status()?;
 
-            // SECURITY: Enforce response size limit before deserializing
-            let bytes = response.bytes().await?;
-            if bytes.len() > MAX_JWKS_RESPONSE_SIZE {
-                return Err(AptosError::InvalidJwt("pepper response too large".into()));
-            }
-            let payload: PepperResponse = serde_json::from_slice(&bytes)
-                .map_err(|e| {
-                    AptosError::InvalidJwt(format!("failed to parse pepper response: {e}"))
-                })?;
+            // SECURITY: Stream body with size limit to prevent OOM
+            let bytes =
+                crate::config::read_response_bounded(response, MAX_JWKS_RESPONSE_SIZE).await?;
+            let payload: PepperResponse = serde_json::from_slice(&bytes).map_err(|e| {
+                AptosError::InvalidJwt(format!("failed to parse pepper response: {e}"))
+            })?;
             Pepper::from_hex(&payload.pepper)
         })
     }
@@ -367,15 +366,12 @@ impl ProverService for HttpProverService {
                 .await?
                 .error_for_status()?;
 
-            // SECURITY: Enforce response size limit before deserializing
-            let bytes = response.bytes().await?;
-            if bytes.len() > MAX_JWKS_RESPONSE_SIZE {
-                return Err(AptosError::InvalidJwt("prover response too large".into()));
-            }
-            let payload: ProverResponse = serde_json::from_slice(&bytes)
-                .map_err(|e| {
-                    AptosError::InvalidJwt(format!("failed to parse prover response: {e}"))
-                })?;
+            // SECURITY: Stream body with size limit to prevent OOM
+            let bytes =
+                crate::config::read_response_bounded(response, MAX_JWKS_RESPONSE_SIZE).await?;
+            let payload: ProverResponse = serde_json::from_slice(&bytes).map_err(|e| {
+                AptosError::InvalidJwt(format!("failed to parse prover response: {e}"))
+            })?;
             ZkProof::from_hex(&payload.proof)
         })
     }
@@ -796,15 +792,9 @@ async fn fetch_jwks(client: &reqwest::Client, jwks_url: &str) -> AptosResult<Jwk
         )));
     }
 
-    // SECURITY: Read bytes first to enforce size limit, preventing OOM
-    // from a compromised or malicious JWKS endpoint.
-    let bytes = response.bytes().await?;
-    if bytes.len() > MAX_JWKS_RESPONSE_SIZE {
-        return Err(AptosError::InvalidJwt(format!(
-            "JWKS response too large: {} bytes",
-            bytes.len()
-        )));
-    }
+    // SECURITY: Stream body with size limit to prevent OOM from a
+    // compromised or malicious JWKS endpoint (including chunked encoding).
+    let bytes = crate::config::read_response_bounded(response, MAX_JWKS_RESPONSE_SIZE).await?;
     let jwks: JwkSet = serde_json::from_slice(&bytes)
         .map_err(|e| AptosError::InvalidJwt(format!("failed to parse JWKS: {e}")))?;
     Ok(jwks)

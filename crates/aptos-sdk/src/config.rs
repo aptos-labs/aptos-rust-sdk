@@ -14,8 +14,9 @@ use url::Url;
 /// # Security
 ///
 /// This prevents SSRF attacks via dangerous URL schemes like `file://`, `gopher://`, etc.
-/// For production use, HTTPS is strongly recommended. HTTP is allowed for localhost
-/// development only.
+/// For production use, HTTPS is strongly recommended. HTTP is permitted (e.g., for local
+/// development) but no host restrictions are enforced by this function.
+///
 /// # Errors
 ///
 /// Returns [`AptosError::Config`] if the URL scheme is not `http` or `https`.
@@ -23,14 +24,67 @@ pub fn validate_url_scheme(url: &Url) -> AptosResult<()> {
     match url.scheme() {
         "https" => Ok(()),
         "http" => {
-            // HTTP is allowed but only recommended for localhost development
-            // Log a warning in the future if we add logging
+            // HTTP is allowed for local development and testing
             Ok(())
         }
         scheme => Err(AptosError::Config(format!(
             "unsupported URL scheme '{scheme}': only 'http' and 'https' are allowed"
         ))),
     }
+}
+
+/// Reads a response body with an enforced size limit, aborting early if exceeded.
+///
+/// Unlike `response.bytes().await?` which buffers the entire response in memory
+/// before any size check, this function:
+/// 1. Pre-checks the `Content-Length` header (if present) to reject obviously
+///    oversized responses before reading any body data.
+/// 2. Reads the body incrementally via chunked streaming, aborting as soon as
+///    the accumulated size exceeds `max_size`.
+///
+/// This prevents memory exhaustion from malicious servers that send huge
+/// responses (including chunked transfer-encoding without `Content-Length`).
+///
+/// # Errors
+///
+/// Returns [`AptosError::Api`] with error code `RESPONSE_TOO_LARGE` if the
+/// response body exceeds `max_size` bytes.
+pub async fn read_response_bounded(
+    mut response: reqwest::Response,
+    max_size: usize,
+) -> AptosResult<Vec<u8>> {
+    // Pre-check Content-Length header for early rejection (avoids reading any body)
+    if let Some(content_length) = response.content_length()
+        && content_length > max_size as u64
+    {
+        return Err(AptosError::Api {
+            status_code: response.status().as_u16(),
+            message: format!(
+                "response too large: Content-Length {content_length} bytes exceeds limit of {max_size} bytes"
+            ),
+            error_code: Some("RESPONSE_TOO_LARGE".into()),
+            vm_error_code: None,
+        });
+    }
+
+    // Read body incrementally, aborting if accumulated size exceeds the limit.
+    // This protects against chunked transfer-encoding that bypasses Content-Length.
+    let mut body = Vec::with_capacity(std::cmp::min(max_size, 1024 * 1024));
+    while let Some(chunk) = response.chunk().await? {
+        if body.len() + chunk.len() > max_size {
+            return Err(AptosError::Api {
+                status_code: response.status().as_u16(),
+                message: format!(
+                    "response too large: exceeded limit of {max_size} bytes during streaming"
+                ),
+                error_code: Some("RESPONSE_TOO_LARGE".into()),
+                vm_error_code: None,
+            });
+        }
+        body.extend_from_slice(&chunk);
+    }
+
+    Ok(body)
 }
 
 /// Configuration for HTTP connection pooling.
@@ -54,7 +108,7 @@ pub struct PoolConfig {
     /// Default: true
     pub tcp_nodelay: bool,
     /// Maximum response body size in bytes.
-    /// Default: 100 MB (`104_857_600` bytes)
+    /// Default: 10 MB (`10_485_760` bytes)
     ///
     /// # Security
     ///
