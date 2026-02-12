@@ -48,6 +48,38 @@ use crate::error::{AptosError, AptosResult};
 use std::fs;
 use std::path::Path;
 
+/// Validates that a module name is a safe identifier (no path traversal or injection).
+///
+/// # Security
+///
+/// This prevents path traversal attacks where a malicious ABI could write files
+/// outside the intended output directory via names like `../../../tmp/evil`.
+fn validate_module_name(name: &str) -> AptosResult<()> {
+    if name.is_empty() {
+        return Err(AptosError::Config(
+            "module name cannot be empty".to_string(),
+        ));
+    }
+
+    // Must be a valid Rust identifier: starts with letter or underscore,
+    // contains only alphanumeric or underscore characters
+    let mut chars = name.chars();
+    let first = chars.next().unwrap(); // safe: name is non-empty
+    if !first.is_ascii_alphabetic() && first != '_' {
+        return Err(AptosError::Config(format!(
+            "invalid module name '{name}': must start with a letter or underscore"
+        )));
+    }
+
+    if !chars.all(|c| c.is_ascii_alphanumeric() || c == '_') {
+        return Err(AptosError::Config(format!(
+            "invalid module name '{name}': must contain only ASCII alphanumeric characters or underscores"
+        )));
+    }
+
+    Ok(())
+}
+
 /// Configuration for build-time code generation.
 #[derive(Debug, Clone)]
 pub struct BuildConfig {
@@ -156,6 +188,9 @@ pub fn generate_from_abi_with_config(
     let abi: MoveModuleABI = serde_json::from_str(&abi_content)
         .map_err(|e| AptosError::Config(format!("Failed to parse ABI JSON: {e}")))?;
 
+    // SECURITY: Validate module name to prevent path traversal
+    validate_module_name(&abi.name)?;
+
     // Generate code
     let generator = ModuleGenerator::new(&abi, config.generator_config);
     let code = generator.generate()?;
@@ -251,6 +286,9 @@ pub fn generate_from_abis_with_config(
             ))
         })?;
 
+        // SECURITY: Validate module name to prevent path traversal
+        validate_module_name(&abi.name)?;
+
         let generator = ModuleGenerator::new(&abi, config.generator_config.clone());
         let code = generator.generate()?;
 
@@ -323,6 +361,9 @@ pub fn generate_from_abi_with_source(
 
     let source_info = MoveSourceParser::parse(&source_content);
 
+    // SECURITY: Validate module name to prevent path traversal
+    validate_module_name(&abi.name)?;
+
     // Generate code
     let generator =
         ModuleGenerator::new(&abi, GeneratorConfig::default()).with_source_info(source_info);
@@ -359,6 +400,12 @@ fn generate_mod_file(module_names: &[String]) -> String {
     let _ = writeln!(&mut content);
 
     for name in module_names {
+        // SECURITY: Module names are validated by validate_module_name() before reaching here,
+        // but double-check they are safe identifiers to prevent code injection in mod.rs
+        debug_assert!(
+            !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_'),
+            "module name should have been validated"
+        );
         let _ = writeln!(&mut content, "pub mod {name};");
     }
     let _ = writeln!(&mut content);

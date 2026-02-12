@@ -14,20 +14,77 @@ use url::Url;
 /// # Security
 ///
 /// This prevents SSRF attacks via dangerous URL schemes like `file://`, `gopher://`, etc.
-/// For production use, HTTPS is strongly recommended. HTTP is allowed for localhost
-/// development only.
-fn validate_url_scheme(url: &Url) -> AptosResult<()> {
+/// For production use, HTTPS is strongly recommended. HTTP is permitted (e.g., for local
+/// development) but no host restrictions are enforced by this function.
+///
+/// # Errors
+///
+/// Returns [`AptosError::Config`] if the URL scheme is not `http` or `https`.
+pub fn validate_url_scheme(url: &Url) -> AptosResult<()> {
     match url.scheme() {
         "https" => Ok(()),
         "http" => {
-            // HTTP is allowed but only recommended for localhost development
-            // Log a warning in the future if we add logging
+            // HTTP is allowed for local development and testing
             Ok(())
         }
         scheme => Err(AptosError::Config(format!(
             "unsupported URL scheme '{scheme}': only 'http' and 'https' are allowed"
         ))),
     }
+}
+
+/// Reads a response body with an enforced size limit, aborting early if exceeded.
+///
+/// Unlike `response.bytes().await?` which buffers the entire response in memory
+/// before any size check, this function:
+/// 1. Pre-checks the `Content-Length` header (if present) to reject obviously
+///    oversized responses before reading any body data.
+/// 2. Reads the body incrementally via chunked streaming, aborting as soon as
+///    the accumulated size exceeds `max_size`.
+///
+/// This prevents memory exhaustion from malicious servers that send huge
+/// responses (including chunked transfer-encoding without `Content-Length`).
+///
+/// # Errors
+///
+/// Returns [`AptosError::Api`] with error code `RESPONSE_TOO_LARGE` if the
+/// response body exceeds `max_size` bytes.
+pub async fn read_response_bounded(
+    mut response: reqwest::Response,
+    max_size: usize,
+) -> AptosResult<Vec<u8>> {
+    // Pre-check Content-Length header for early rejection (avoids reading any body)
+    if let Some(content_length) = response.content_length()
+        && content_length > max_size as u64
+    {
+        return Err(AptosError::Api {
+            status_code: response.status().as_u16(),
+            message: format!(
+                "response too large: Content-Length {content_length} bytes exceeds limit of {max_size} bytes"
+            ),
+            error_code: Some("RESPONSE_TOO_LARGE".into()),
+            vm_error_code: None,
+        });
+    }
+
+    // Read body incrementally, aborting if accumulated size exceeds the limit.
+    // This protects against chunked transfer-encoding that bypasses Content-Length.
+    let mut body = Vec::with_capacity(std::cmp::min(max_size, 1024 * 1024));
+    while let Some(chunk) = response.chunk().await? {
+        if body.len() + chunk.len() > max_size {
+            return Err(AptosError::Api {
+                status_code: response.status().as_u16(),
+                message: format!(
+                    "response too large: exceeded limit of {max_size} bytes during streaming"
+                ),
+                error_code: Some("RESPONSE_TOO_LARGE".into()),
+                vm_error_code: None,
+            });
+        }
+        body.extend_from_slice(&chunk);
+    }
+
+    Ok(body)
 }
 
 /// Configuration for HTTP connection pooling.
@@ -51,7 +108,7 @@ pub struct PoolConfig {
     /// Default: true
     pub tcp_nodelay: bool,
     /// Maximum response body size in bytes.
-    /// Default: 100 MB (`104_857_600` bytes)
+    /// Default: 10 MB (`10_485_760` bytes)
     ///
     /// # Security
     ///
@@ -60,8 +117,16 @@ pub struct PoolConfig {
     pub max_response_size: usize,
 }
 
-/// Default maximum response size: 100 MB
-const DEFAULT_MAX_RESPONSE_SIZE: usize = 100 * 1024 * 1024;
+/// Default maximum response size: 10 MB
+///
+/// # Security
+///
+/// This limit helps prevent memory exhaustion from malicious or compromised
+/// servers sending extremely large responses. The default of 10 MB is generous
+/// for normal Aptos API responses (typically under 1 MB). If you need to
+/// handle larger responses (e.g., bulk data exports), increase this via
+/// [`PoolConfigBuilder::max_response_size`].
+const DEFAULT_MAX_RESPONSE_SIZE: usize = 10 * 1024 * 1024;
 
 impl Default for PoolConfig {
     fn default() -> Self {
@@ -810,5 +875,84 @@ mod tests {
         assert!(config.retry_config().max_retries > 0);
         assert!(config.pool_config().max_idle_total > 0);
         assert_eq!(config.chain_id().id(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_read_response_bounded_normal() {
+        use wiremock::{Mock, MockServer, ResponseTemplate, matchers::method};
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .respond_with(ResponseTemplate::new(200).set_body_string("hello world"))
+            .mount(&server)
+            .await;
+
+        let response = reqwest::get(server.uri()).await.unwrap();
+        let body = read_response_bounded(response, 1024).await.unwrap();
+        assert_eq!(body, b"hello world");
+    }
+
+    #[tokio::test]
+    async fn test_read_response_bounded_rejects_oversized_content_length() {
+        use wiremock::{Mock, MockServer, ResponseTemplate, matchers::method};
+        let server = MockServer::start().await;
+        // Send a body whose accurate Content-Length exceeds the limit.
+        // The function should reject based on Content-Length pre-check
+        // before streaming the full body.
+        let body = "x".repeat(200);
+        Mock::given(method("GET"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(body))
+            .mount(&server)
+            .await;
+
+        let response = reqwest::get(server.uri()).await.unwrap();
+        // Limit is 100 but body is 200 -- should be rejected via Content-Length pre-check
+        let result = read_response_bounded(response, 100).await;
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("response too large"));
+    }
+
+    #[tokio::test]
+    async fn test_read_response_bounded_rejects_oversized_body() {
+        use wiremock::{Mock, MockServer, ResponseTemplate, matchers::method};
+        let server = MockServer::start().await;
+        let large_body = "x".repeat(500);
+        Mock::given(method("GET"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(large_body))
+            .mount(&server)
+            .await;
+
+        let response = reqwest::get(server.uri()).await.unwrap();
+        let result = read_response_bounded(response, 100).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_read_response_bounded_exact_limit() {
+        use wiremock::{Mock, MockServer, ResponseTemplate, matchers::method};
+        let server = MockServer::start().await;
+        let body = "x".repeat(100);
+        Mock::given(method("GET"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(body.clone()))
+            .mount(&server)
+            .await;
+
+        let response = reqwest::get(server.uri()).await.unwrap();
+        let result = read_response_bounded(response, 100).await.unwrap();
+        assert_eq!(result.len(), 100);
+    }
+
+    #[tokio::test]
+    async fn test_read_response_bounded_empty() {
+        use wiremock::{Mock, MockServer, ResponseTemplate, matchers::method};
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .respond_with(ResponseTemplate::new(200))
+            .mount(&server)
+            .await;
+
+        let response = reqwest::get(server.uri()).await.unwrap();
+        let result = read_response_bounded(response, 1024).await.unwrap();
+        assert!(result.is_empty());
     }
 }

@@ -68,6 +68,8 @@ impl Ed25519PrivateKey {
         let mut key_bytes = [0u8; ED25519_PRIVATE_KEY_LENGTH];
         key_bytes.copy_from_slice(bytes);
         let signing_key = ed25519_dalek::SigningKey::from_bytes(&key_bytes);
+        // SECURITY: Zeroize the temporary buffer that held private key material
+        zeroize::Zeroize::zeroize(&mut key_bytes);
         Ok(Self { inner: signing_key })
     }
 

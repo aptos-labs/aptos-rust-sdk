@@ -6,6 +6,20 @@ use crate::codegen::types::{MoveTypeMapper, to_pascal_case, to_snake_case};
 use crate::error::{AptosError, AptosResult};
 use std::fmt::Write;
 
+/// Sanitizes an ABI-derived string for safe embedding in generated Rust code.
+///
+/// # Security
+///
+/// Prevents code injection via crafted ABI JSON by:
+/// - Replacing newlines (which could escape doc comments and inject code)
+/// - Escaping double quotes (which could break string literals)
+/// - Escaping backslashes (which could create escape sequences)
+fn sanitize_abi_string(s: &str) -> String {
+    s.replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace(['\n', '\r'], " ")
+}
+
 /// Configuration for code generation.
 #[derive(Debug, Clone)]
 #[allow(clippy::struct_excessive_bools)] // Config structs often have boolean options
@@ -234,7 +248,10 @@ impl<'a> ModuleGenerator<'a> {
             writeln!(
                 output,
                 "    pub const {}: &str = \"{}::{}::{}\";",
-                const_name, self.abi.address, self.abi.name, struct_def.name
+                const_name,
+                sanitize_abi_string(&self.abi.address),
+                sanitize_abi_string(&self.abi.name),
+                sanitize_abi_string(&struct_def.name)
             )?;
         }
         writeln!(output, "}}")?;
@@ -285,7 +302,8 @@ impl<'a> ModuleGenerator<'a> {
         writeln!(
             output,
             "    event_type.starts_with(\"{}::{}::\")",
-            self.abi.address, self.abi.name
+            sanitize_abi_string(&self.abi.address),
+            sanitize_abi_string(&self.abi.name)
         )?;
         writeln!(output, "}}")?;
         writeln!(output)
@@ -296,7 +314,8 @@ impl<'a> ModuleGenerator<'a> {
         writeln!(
             output,
             "//! Generated Rust bindings for `{}::{}`.",
-            self.abi.address, self.abi.name
+            sanitize_abi_string(&self.abi.address),
+            sanitize_abi_string(&self.abi.name)
         )?;
         writeln!(output, "//!")?;
         writeln!(
@@ -333,14 +352,14 @@ impl<'a> ModuleGenerator<'a> {
         writeln!(
             output,
             "pub const MODULE_ADDRESS: &str = \"{}\";",
-            self.abi.address
+            sanitize_abi_string(&self.abi.address)
         )?;
         writeln!(output)?;
         writeln!(output, "/// The module name.")?;
         writeln!(
             output,
             "pub const MODULE_NAME: &str = \"{}\";",
-            self.abi.name
+            sanitize_abi_string(&self.abi.name)
         )?;
         writeln!(output)
     }
@@ -373,14 +392,22 @@ impl<'a> ModuleGenerator<'a> {
         let rust_name = to_pascal_case(&struct_def.name);
 
         // Documentation
+        // SECURITY: Sanitize ABI-derived strings to prevent code injection via newlines
         writeln!(
             output,
             "/// Move struct: `{}::{}`",
-            self.abi.name, struct_def.name
+            sanitize_abi_string(&self.abi.name),
+            sanitize_abi_string(&struct_def.name)
         )?;
         if !struct_def.abilities.is_empty() {
+            let abilities = struct_def
+                .abilities
+                .iter()
+                .map(|a| sanitize_abi_string(a))
+                .collect::<Vec<_>>()
+                .join(", ");
             writeln!(output, "///")?;
-            writeln!(output, "/// Abilities: {}", struct_def.abilities.join(", "))?;
+            writeln!(output, "/// Abilities: {abilities}")?;
         }
 
         // Derive macros
@@ -431,12 +458,18 @@ impl<'a> ModuleGenerator<'a> {
         };
 
         if let Some(doc) = &rust_type.doc {
-            writeln!(output, "    /// {doc}")?;
+            // SECURITY: Sanitize doc strings derived from ABI to prevent code injection
+            writeln!(output, "    /// {}", sanitize_abi_string(doc))?;
         }
 
         // Add serde rename if field name differs
         if rust_name != field.name && !rust_name.starts_with("r#") {
-            writeln!(output, "    #[serde(rename = \"{}\")]", field.name)?;
+            // SECURITY: Escape field names to prevent breaking the serde attribute syntax
+            writeln!(
+                output,
+                "    #[serde(rename = \"{}\")]",
+                sanitize_abi_string(&field.name)
+            )?;
         }
 
         writeln!(output, "    pub {}: {},", rust_name, rust_type.path)
@@ -483,16 +516,18 @@ impl<'a> ModuleGenerator<'a> {
             .collect();
 
         // Documentation from source or generated
+        // SECURITY: Sanitize ABI-derived strings to prevent code injection via newlines
         if let Some(doc) = &enriched.doc {
             for line in doc.lines() {
-                writeln!(output, "/// {line}")?;
+                writeln!(output, "/// {}", sanitize_abi_string(line))?;
             }
             writeln!(output, "///")?;
         } else {
             writeln!(
                 output,
                 "/// Entry function: `{}::{}`",
-                self.abi.name, func.name
+                sanitize_abi_string(&self.abi.name),
+                sanitize_abi_string(&func.name)
             )?;
             writeln!(output, "///")?;
         }
@@ -505,16 +540,20 @@ impl<'a> ModuleGenerator<'a> {
                 writeln!(
                     output,
                     "/// * `{}` - {} (Move type: `{}`)",
-                    name, rust_type.path, move_type
+                    sanitize_abi_string(name),
+                    sanitize_abi_string(&rust_type.path),
+                    sanitize_abi_string(move_type)
                 )?;
             }
         }
         if !enriched.type_param_names.is_empty() {
-            writeln!(
-                output,
-                "/// * `type_args` - Type arguments: {}",
-                enriched.type_param_names.join(", ")
-            )?;
+            let type_params = enriched
+                .type_param_names
+                .iter()
+                .map(|s| sanitize_abi_string(s))
+                .collect::<Vec<_>>()
+                .join(", ");
+            writeln!(output, "/// * `type_args` - Type arguments: {type_params}")?;
         }
 
         // Function signature
@@ -535,11 +574,14 @@ impl<'a> ModuleGenerator<'a> {
         writeln!(output, ") -> AptosResult<TransactionPayload> {{")?;
 
         // Function body
+        // SECURITY: Sanitize ABI-derived values embedded in string literals
         writeln!(output, "    let function_id = format!(")?;
         writeln!(
             output,
             "        \"{}::{}::{}\",",
-            self.abi.address, self.abi.name, func.name
+            sanitize_abi_string(&self.abi.address),
+            sanitize_abi_string(&self.abi.name),
+            sanitize_abi_string(&func.name)
         )?;
         writeln!(output, "    );")?;
         writeln!(output)?;
@@ -673,16 +715,18 @@ impl<'a> ModuleGenerator<'a> {
         };
 
         // Documentation from source or generated
+        // SECURITY: Sanitize ABI-derived strings to prevent code injection via newlines
         if let Some(doc) = &enriched.doc {
             for line in doc.lines() {
-                writeln!(output, "/// {line}")?;
+                writeln!(output, "/// {}", sanitize_abi_string(line))?;
             }
             writeln!(output, "///")?;
         } else {
             writeln!(
                 output,
                 "/// View function: `{}::{}`",
-                self.abi.name, func.name
+                sanitize_abi_string(&self.abi.name),
+                sanitize_abi_string(&func.name)
             )?;
             writeln!(output, "///")?;
         }
@@ -695,22 +739,26 @@ impl<'a> ModuleGenerator<'a> {
                 writeln!(
                     output,
                     "/// * `{}` - {} (Move type: `{}`)",
-                    name, rust_type.path, move_type
+                    sanitize_abi_string(name),
+                    sanitize_abi_string(&rust_type.path),
+                    sanitize_abi_string(move_type)
                 )?;
             }
         }
         if !enriched.type_param_names.is_empty() {
-            writeln!(
-                output,
-                "/// * `type_args` - Type arguments: {}",
-                enriched.type_param_names.join(", ")
-            )?;
+            let type_params = enriched
+                .type_param_names
+                .iter()
+                .map(|s| sanitize_abi_string(s))
+                .collect::<Vec<_>>()
+                .join(", ");
+            writeln!(output, "/// * `type_args` - Type arguments: {type_params}")?;
         }
         if !func.returns.is_empty() {
             writeln!(output, "///")?;
             writeln!(output, "/// # Returns")?;
             writeln!(output, "///")?;
-            writeln!(output, "/// `{return_type}`")?;
+            writeln!(output, "/// `{}`", sanitize_abi_string(&return_type))?;
         }
 
         // Function signature
@@ -734,11 +782,14 @@ impl<'a> ModuleGenerator<'a> {
         writeln!(output, ") -> AptosResult<Vec<serde_json::Value>> {{")?;
 
         // Function body
+        // SECURITY: Sanitize ABI-derived values embedded in string literals
         writeln!(output, "    let function_id = format!(")?;
         writeln!(
             output,
             "        \"{}::{}::{}\",",
-            self.abi.address, self.abi.name, func.name
+            sanitize_abi_string(&self.abi.address),
+            sanitize_abi_string(&self.abi.name),
+            sanitize_abi_string(&func.name)
         )?;
         writeln!(output, "    );")?;
         writeln!(output)?;

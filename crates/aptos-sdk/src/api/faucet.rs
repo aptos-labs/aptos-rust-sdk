@@ -9,6 +9,9 @@ use serde::Deserialize;
 use std::sync::Arc;
 use url::Url;
 
+/// Maximum faucet response size: 1 MB (faucet responses are typically tiny).
+const MAX_FAUCET_RESPONSE_SIZE: usize = 1024 * 1024;
+
 /// Client for the Aptos faucet service.
 ///
 /// The faucet is only available on devnet and testnet. Requests are
@@ -103,6 +106,8 @@ impl FaucetClient {
     /// Returns an error if the URL cannot be parsed.
     pub fn with_url(url: &str) -> AptosResult<Self> {
         let faucet_url = Url::parse(url)?;
+        // SECURITY: Validate URL scheme to prevent SSRF via dangerous protocols
+        crate::config::validate_url_scheme(&faucet_url)?;
         let client = Client::new();
         Ok(Self {
             faucet_url,
@@ -132,7 +137,7 @@ impl FaucetClient {
         let client = self.client.clone();
         let retry_config = self.retry_config.clone();
 
-        let executor = RetryExecutor::new((*retry_config).clone());
+        let executor = RetryExecutor::from_shared(retry_config);
         executor
             .execute(|| {
                 let client = client.clone();
@@ -141,7 +146,14 @@ impl FaucetClient {
                     let response = client.post(url).send().await?;
 
                     if response.status().is_success() {
-                        let faucet_response: FaucetResponse = response.json().await?;
+                        // SECURITY: Stream body with size limit to prevent OOM
+                        // from malicious responses (including chunked encoding).
+                        let bytes = crate::config::read_response_bounded(
+                            response,
+                            MAX_FAUCET_RESPONSE_SIZE,
+                        )
+                        .await?;
+                        let faucet_response: FaucetResponse = serde_json::from_slice(&bytes)?;
                         Ok(faucet_response.into_hashes())
                     } else {
                         let status = response.status();

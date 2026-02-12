@@ -132,22 +132,57 @@ impl OidcProvider {
     }
 
     /// Infers a provider from an issuer URL.
+    ///
+    /// # Security
+    ///
+    /// For unknown issuers, the JWKS URL is constructed as `{issuer}/.well-known/jwks.json`.
+    /// Non-HTTPS issuers are accepted at construction time but will produce an empty
+    /// JWKS URL, causing a clear error at JWKS fetch time. This prevents SSRF via
+    /// `http://`, `file://`, or other dangerous URL schemes without changing the
+    /// function signature. Callers controlling issuer input should additionally
+    /// validate the host (e.g., block private IP ranges) if SSRF is a concern.
     pub fn from_issuer(issuer: &str) -> Self {
         match issuer {
             "https://accounts.google.com" => OidcProvider::Google,
             "https://appleid.apple.com" => OidcProvider::Apple,
             "https://login.microsoftonline.com/common/v2.0" => OidcProvider::Microsoft,
-            _ => OidcProvider::Custom {
-                issuer: issuer.to_string(),
-                jwks_url: format!("{issuer}/.well-known/jwks.json"),
-            },
+            _ => {
+                // SECURITY: Only accept HTTPS issuers to prevent SSRF attacks.
+                // A malicious JWT could set `iss` to an internal URL (e.g.,
+                // http://169.254.169.254/) causing the SDK to make requests to
+                // attacker-chosen endpoints when fetching JWKS.
+                let jwks_url = if issuer.starts_with("https://") {
+                    format!("{issuer}/.well-known/jwks.json")
+                } else {
+                    // Non-HTTPS issuers get an invalid JWKS URL that will fail
+                    // at fetch time with a clear error rather than making requests
+                    // to potentially dangerous endpoints.
+                    String::new()
+                };
+                OidcProvider::Custom {
+                    issuer: issuer.to_string(),
+                    jwks_url,
+                }
+            }
         }
     }
 }
 
 /// Pepper bytes used in keyless address derivation.
-#[derive(Clone, Debug, PartialEq, Eq)]
+///
+/// # Security
+///
+/// The pepper is secret material used to derive keyless account addresses.
+/// It is automatically zeroized when dropped to prevent key material from
+/// lingering in memory.
+#[derive(Clone, PartialEq, Eq, zeroize::Zeroize, zeroize::ZeroizeOnDrop)]
 pub struct Pepper(Vec<u8>);
+
+impl std::fmt::Debug for Pepper {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Pepper(REDACTED)")
+    }
+}
 
 impl Pepper {
     /// Creates a new pepper from raw bytes.
@@ -269,7 +304,12 @@ impl PepperService for HttpPepperService {
                 .await?
                 .error_for_status()?;
 
-            let payload: PepperResponse = response.json().await?;
+            // SECURITY: Stream body with size limit to prevent OOM
+            let bytes =
+                crate::config::read_response_bounded(response, MAX_JWKS_RESPONSE_SIZE).await?;
+            let payload: PepperResponse = serde_json::from_slice(&bytes).map_err(|e| {
+                AptosError::InvalidJwt(format!("failed to parse pepper response: {e}"))
+            })?;
             Pepper::from_hex(&payload.pepper)
         })
     }
@@ -332,7 +372,12 @@ impl ProverService for HttpProverService {
                 .await?
                 .error_for_status()?;
 
-            let payload: ProverResponse = response.json().await?;
+            // SECURITY: Stream body with size limit to prevent OOM
+            let bytes =
+                crate::config::read_response_bounded(response, MAX_JWKS_RESPONSE_SIZE).await?;
+            let payload: ProverResponse = serde_json::from_slice(&bytes).map_err(|e| {
+                AptosError::InvalidJwt(format!("failed to parse prover response: {e}"))
+            })?;
             ZkProof::from_hex(&payload.proof)
         })
     }
@@ -718,6 +763,9 @@ impl AudClaim {
 /// Default timeout for JWKS fetch requests (10 seconds).
 const JWKS_FETCH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 
+/// Maximum JWKS response size: 1 MB (JWKS payloads are typically under 10 KB).
+const MAX_JWKS_RESPONSE_SIZE: usize = 1024 * 1024;
+
 /// Fetches the JWKS (JSON Web Key Set) from an OIDC provider.
 ///
 /// # Errors
@@ -728,6 +776,18 @@ const JWKS_FETCH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(1
 /// - The JWKS endpoint returns a non-success status code
 /// - The response cannot be parsed as valid JWKS JSON
 async fn fetch_jwks(client: &reqwest::Client, jwks_url: &str) -> AptosResult<JwkSet> {
+    // SECURITY: Validate the JWKS URL scheme to prevent SSRF.
+    // The issuer comes from an untrusted JWT, so the derived JWKS URL could
+    // point to internal services (e.g., cloud metadata endpoints).
+    let parsed_url = Url::parse(jwks_url)
+        .map_err(|e| AptosError::InvalidJwt(format!("invalid JWKS URL: {e}")))?;
+    if parsed_url.scheme() != "https" {
+        return Err(AptosError::InvalidJwt(format!(
+            "JWKS URL must use HTTPS scheme, got: {}",
+            parsed_url.scheme()
+        )));
+    }
+
     // Note: timeout is configured on the client, not per-request
     let response = client.get(jwks_url).send().await?;
 
@@ -738,7 +798,11 @@ async fn fetch_jwks(client: &reqwest::Client, jwks_url: &str) -> AptosResult<Jwk
         )));
     }
 
-    let jwks: JwkSet = response.json().await?;
+    // SECURITY: Stream body with size limit to prevent OOM from a
+    // compromised or malicious JWKS endpoint (including chunked encoding).
+    let bytes = crate::config::read_response_bounded(response, MAX_JWKS_RESPONSE_SIZE).await?;
+    let jwks: JwkSet = serde_json::from_slice(&bytes)
+        .map_err(|e| AptosError::InvalidJwt(format!("failed to parse JWKS: {e}")))?;
     Ok(jwks)
 }
 

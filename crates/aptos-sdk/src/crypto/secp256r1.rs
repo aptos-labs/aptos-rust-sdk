@@ -5,14 +5,15 @@
 //!
 //! # Security: Signature Malleability
 //!
-//! This implementation uses the `p256` crate which produces normalized (low-S)
-//! ECDSA signatures by default. This prevents signature malleability attacks
-//! where an attacker could create an alternative valid signature `(r, -s mod n)`
-//! for the same message.
+//! This implementation enforces **low-S only** signatures to match the Aptos
+//! blockchain's on-chain verification, which rejects high-S signatures to
+//! prevent signature malleability attacks.
 //!
-//! When parsing external signatures via [`Secp256r1Signature::from_bytes`], the
-//! `p256` crate accepts both low-S and high-S signatures. If strict low-S
-//! enforcement is required, callers should normalize or reject high-S signatures.
+//! - **Signing** always produces low-S signatures (the `p256` crate normalizes
+//!   by default).
+//! - **Parsing** (`from_bytes`, `from_hex`) rejects high-S signatures.
+//! - **Verification** also rejects high-S signatures as a defense-in-depth
+//!   measure.
 
 use crate::crypto::traits::{PublicKey, Signature, Signer, Verifier};
 use crate::error::{AptosError, AptosResult};
@@ -123,17 +124,28 @@ impl Secp256r1PrivateKey {
         }
     }
 
-    /// Signs a message (pre-hashed with SHA256) and returns the signature.
+    /// Signs a message (pre-hashed with SHA256) and returns a low-S signature.
+    ///
+    /// The signature is normalized to low-S form to match Aptos on-chain
+    /// verification requirements.
     pub fn sign(&self, message: &[u8]) -> Secp256r1Signature {
         let hash = crate::crypto::sha2_256(message);
         let signature: P256Signature = self.inner.sign(&hash);
-        Secp256r1Signature { inner: signature }
+        // SECURITY: Normalize to low-S to match Aptos on-chain verification.
+        // The p256 crate does not guarantee low-S output from signing.
+        let normalized = signature.normalize_s().unwrap_or(signature);
+        Secp256r1Signature { inner: normalized }
     }
 
-    /// Signs a pre-hashed message directly.
+    /// Signs a pre-hashed message directly and returns a low-S signature.
+    ///
+    /// The signature is normalized to low-S form to match Aptos on-chain
+    /// verification requirements.
     pub fn sign_prehashed(&self, hash: &[u8; 32]) -> Secp256r1Signature {
         let signature: P256Signature = self.inner.sign(hash);
-        Secp256r1Signature { inner: signature }
+        // SECURITY: Normalize to low-S to match Aptos on-chain verification.
+        let normalized = signature.normalize_s().unwrap_or(signature);
+        Secp256r1Signature { inner: normalized }
     }
 }
 
@@ -233,10 +245,21 @@ impl Secp256r1PublicKey {
 
     /// Verifies a signature against a message.
     ///
+    /// # Security
+    ///
+    /// Rejects high-S signatures before verification, matching Aptos on-chain
+    /// behavior. This is a defense-in-depth check; signatures created through
+    /// this SDK's `from_bytes` are already guaranteed to be low-S.
+    ///
     /// # Errors
     ///
-    /// Returns [`AptosError::SignatureVerificationFailed`] if the signature is invalid or does not match the message.
+    /// Returns [`AptosError::SignatureVerificationFailed`] if the signature has
+    /// a high-S value, is invalid, or does not match the message.
     pub fn verify(&self, message: &[u8], signature: &Secp256r1Signature) -> AptosResult<()> {
+        // SECURITY: Reject high-S signatures (matches aptos-core behavior)
+        if signature.inner.normalize_s().is_some() {
+            return Err(AptosError::SignatureVerificationFailed);
+        }
         let hash = crate::crypto::sha2_256(message);
         self.inner
             .verify(&hash, &signature.inner)
@@ -245,14 +268,24 @@ impl Secp256r1PublicKey {
 
     /// Verifies a signature against a pre-hashed message.
     ///
+    /// # Security
+    ///
+    /// Rejects high-S signatures before verification, matching Aptos on-chain
+    /// behavior.
+    ///
     /// # Errors
     ///
-    /// Returns [`AptosError::SignatureVerificationFailed`] if the signature is invalid or does not match the hash.
+    /// Returns [`AptosError::SignatureVerificationFailed`] if the signature has
+    /// a high-S value, is invalid, or does not match the hash.
     pub fn verify_prehashed(
         &self,
         hash: &[u8; 32],
         signature: &Secp256r1Signature,
     ) -> AptosResult<()> {
+        // SECURITY: Reject high-S signatures (matches aptos-core behavior)
+        if signature.inner.normalize_s().is_some() {
+            return Err(AptosError::SignatureVerificationFailed);
+        }
         self.inner
             .verify(hash, &signature.inner)
             .map_err(|_| AptosError::SignatureVerificationFailed)
@@ -344,11 +377,18 @@ pub struct Secp256r1Signature {
 impl Secp256r1Signature {
     /// Creates a signature from raw bytes (64 bytes, r || s).
     ///
+    /// # Security
+    ///
+    /// Rejects high-S signatures to match Aptos on-chain verification behavior.
+    /// The Aptos VM only accepts low-S (canonical) ECDSA signatures to prevent
+    /// signature malleability attacks.
+    ///
     /// # Errors
     ///
     /// Returns [`AptosError::InvalidSignature`] if:
     /// - The byte slice length is not exactly 64 bytes
     /// - The bytes do not represent a valid Secp256r1 signature
+    /// - The signature has a high-S value (not canonical)
     pub fn from_bytes(bytes: &[u8]) -> AptosResult<Self> {
         if bytes.len() != SECP256R1_SIGNATURE_LENGTH {
             return Err(AptosError::InvalidSignature(format!(
@@ -359,6 +399,15 @@ impl Secp256r1Signature {
         }
         let signature = P256Signature::from_slice(bytes)
             .map_err(|e| AptosError::InvalidSignature(e.to_string()))?;
+        // SECURITY: Reject high-S signatures. Aptos on-chain verification only
+        // accepts low-S (canonical) signatures to prevent malleability.
+        // normalize_s() returns Some(_) if the signature was high-S.
+        if signature.normalize_s().is_some() {
+            return Err(AptosError::InvalidSignature(
+                "high-S signature rejected: Aptos requires low-S (canonical) ECDSA signatures"
+                    .into(),
+            ));
+        }
         Ok(Self { inner: signature })
     }
 
@@ -534,6 +583,58 @@ mod tests {
         let bytes = vec![0u8; 16]; // Wrong length
         let result = Secp256r1Signature::from_bytes(&bytes);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_high_s_signature_rejected() {
+        use p256::elliptic_curve::ops::Neg;
+
+        // Sign a message (produces low-S after normalization)
+        let private_key = Secp256r1PrivateKey::generate();
+        let signature = private_key.sign(b"test message");
+
+        // Construct high-S by negating the S component: S' = n - S
+        let low_s_sig = P256Signature::from_slice(&signature.to_bytes()).unwrap();
+        let (r, s) = low_s_sig.split_scalars();
+        let neg_s = s.neg();
+        let high_s_sig = P256Signature::from_scalars(r, neg_s).unwrap();
+        // Confirm it really is high-S (normalize_s returns Some for high-S)
+        assert!(
+            high_s_sig.normalize_s().is_some(),
+            "constructed signature should be high-S"
+        );
+        let high_s_bytes = high_s_sig.to_bytes();
+
+        // from_bytes should reject high-S
+        let result = Secp256r1Signature::from_bytes(&high_s_bytes);
+        assert!(result.is_err(), "high-S signature should be rejected");
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("high-S signature rejected"),
+            "error message should mention high-S rejection"
+        );
+
+        // Verify should also reject high-S (defense-in-depth via inner field)
+        let sig_with_high_s = Secp256r1Signature { inner: high_s_sig };
+        let public_key = private_key.public_key();
+        let result = public_key.verify(b"test message", &sig_with_high_s);
+        assert!(result.is_err(), "verify should reject high-S signature");
+    }
+
+    #[test]
+    fn test_signing_always_produces_low_s() {
+        // Run multiple iterations to increase confidence
+        for _ in 0..20 {
+            let private_key = Secp256r1PrivateKey::generate();
+            let signature = private_key.sign(b"test low-s");
+            // normalize_s returns None if already low-S
+            assert!(
+                signature.inner.normalize_s().is_none(),
+                "signing must always produce low-S signatures"
+            );
+        }
     }
 
     #[test]

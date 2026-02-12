@@ -529,29 +529,27 @@ impl BatchSummary {
 #[allow(missing_debug_implementations)] // Contains references that may not implement Debug
 pub struct BatchOperations<'a> {
     client: &'a FullnodeClient,
-    chain_id: &'a std::sync::RwLock<ChainId>,
+    chain_id: &'a std::sync::atomic::AtomicU8,
 }
 
 impl<'a> BatchOperations<'a> {
     /// Creates a new batch operations helper.
-    pub fn new(client: &'a FullnodeClient, chain_id: &'a std::sync::RwLock<ChainId>) -> Self {
+    pub fn new(client: &'a FullnodeClient, chain_id: &'a std::sync::atomic::AtomicU8) -> Self {
         Self { client, chain_id }
     }
 
     /// Resolves the chain ID, fetching from the node if unknown.
     async fn resolve_chain_id(&self) -> AptosResult<ChainId> {
-        {
-            let chain_id = self.chain_id.read().expect("chain_id lock poisoned");
-            if chain_id.id() > 0 {
-                return Ok(*chain_id);
-            }
+        let id = self.chain_id.load(std::sync::atomic::Ordering::Relaxed);
+        if id > 0 {
+            return Ok(ChainId::new(id));
         }
         // Chain ID is unknown; fetch from node
         let response = self.client.get_ledger_info().await?;
         let info = response.into_inner();
-        let new_chain_id = ChainId::new(info.chain_id);
-        *self.chain_id.write().expect("chain_id lock poisoned") = new_chain_id;
-        Ok(new_chain_id)
+        self.chain_id
+            .store(info.chain_id, std::sync::atomic::Ordering::Relaxed);
+        Ok(ChainId::new(info.chain_id))
     }
 
     /// Builds a batch of transactions for an account.

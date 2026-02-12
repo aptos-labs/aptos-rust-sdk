@@ -114,5 +114,5 @@ The SDK follows a client-centric design with `Aptos` as the main entry point:
 
 - Unit tests are co-located with source code or in `src/tests/` directories
 - E2E tests require running Aptos localnet (`aptos node run-localnet`)
-- Behavioral specification tests in `specifications/tests/rust/`
+- Behavioral tests in `crates/aptos-sdk/tests/behavioral/`
 - Property-based testing with `proptest` for crypto components (via `fuzzing` feature)

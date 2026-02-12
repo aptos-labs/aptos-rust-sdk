@@ -13,6 +13,21 @@ pub type AptosResult<T> = Result<T, AptosError>;
 ///
 /// This enum covers all possible error conditions that can occur when
 /// interacting with the Aptos blockchain through this SDK.
+///
+/// # Security: Logging Errors
+///
+/// **WARNING:** The `Display` implementation on this type may include sensitive
+/// information (e.g., partial key material, JWT tokens, or mnemonic phrases) in
+/// its output. When logging errors, always use [`sanitized_message()`](AptosError::sanitized_message)
+/// instead of `to_string()` or `Display`:
+///
+/// ```rust,ignore
+/// // WRONG - may leak sensitive data:
+/// log::error!("Failed: {}", err);
+///
+/// // CORRECT - redacts sensitive patterns:
+/// log::error!("Failed: {}", err.sanitized_message());
+/// ```
 #[derive(Error, Debug)]
 pub enum AptosError {
     /// Error occurred during HTTP communication
@@ -157,6 +172,11 @@ pub enum AptosError {
 const MAX_ERROR_MESSAGE_LENGTH: usize = 1000;
 
 /// Patterns that might indicate sensitive information in error messages.
+///
+/// # Security
+///
+/// This list is used by [`AptosError::sanitized_message()`] to redact potentially
+/// sensitive content from error messages before logging. The check is case-insensitive.
 const SENSITIVE_PATTERNS: &[&str] = &[
     "private_key",
     "secret",
@@ -165,6 +185,14 @@ const SENSITIVE_PATTERNS: &[&str] = &[
     "seed",
     "bearer",
     "authorization",
+    "token",
+    "jwt",
+    "credential",
+    "api_key",
+    "apikey",
+    "access_token",
+    "refresh_token",
+    "pepper",
 ];
 
 impl AptosError {
@@ -270,11 +298,36 @@ impl AptosError {
             }
         }
 
-        // Truncate if too long
+        // SECURITY: Redact URLs with query parameters, which may contain API keys
+        // or other credentials not caught by keyword patterns above.
+        // e.g., reqwest errors include the request URL.
+        // Only redact when '?' appears within a URL token (after the scheme),
+        // not just anywhere in the message.
+        for scheme in ["http://", "https://"] {
+            if let Some(scheme_pos) = lower.find(scheme) {
+                // Look for '?' after the scheme, within the URL token
+                // (URLs end at whitespace or common delimiters)
+                let url_start = scheme_pos;
+                let url_rest = &lower[url_start..];
+                let url_end = url_rest
+                    .find(|c: char| c.is_whitespace() || c == '>' || c == '"' || c == '\'')
+                    .unwrap_or(url_rest.len());
+                let url_token = &url_rest[..url_end];
+                if url_token.contains('?') {
+                    return "[REDACTED: message contained URL with query parameters]".into();
+                }
+            }
+        }
+
+        // Truncate if too long (find a valid UTF-8 boundary to avoid panic)
         if cleaned.len() > MAX_ERROR_MESSAGE_LENGTH {
+            let mut end = MAX_ERROR_MESSAGE_LENGTH;
+            while end > 0 && !cleaned.is_char_boundary(end) {
+                end -= 1;
+            }
             format!(
                 "{}... [truncated, total length: {}]",
-                &cleaned[..MAX_ERROR_MESSAGE_LENGTH],
+                &cleaned[..end],
                 cleaned.len()
             )
         } else {
