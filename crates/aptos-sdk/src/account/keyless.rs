@@ -175,8 +175,14 @@ impl OidcProvider {
 /// The pepper is secret material used to derive keyless account addresses.
 /// It is automatically zeroized when dropped to prevent key material from
 /// lingering in memory.
-#[derive(Clone, Debug, PartialEq, Eq, zeroize::Zeroize, zeroize::ZeroizeOnDrop)]
+#[derive(Clone, PartialEq, Eq, zeroize::Zeroize, zeroize::ZeroizeOnDrop)]
 pub struct Pepper(Vec<u8>);
+
+impl std::fmt::Debug for Pepper {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Pepper(REDACTED)")
+    }
+}
 
 impl Pepper {
     /// Creates a new pepper from raw bytes.

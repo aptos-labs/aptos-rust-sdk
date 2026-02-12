@@ -248,7 +248,10 @@ impl<'a> ModuleGenerator<'a> {
             writeln!(
                 output,
                 "    pub const {}: &str = \"{}::{}::{}\";",
-                const_name, self.abi.address, self.abi.name, struct_def.name
+                const_name,
+                sanitize_abi_string(&self.abi.address),
+                sanitize_abi_string(&self.abi.name),
+                sanitize_abi_string(&struct_def.name)
             )?;
         }
         writeln!(output, "}}")?;
@@ -299,7 +302,8 @@ impl<'a> ModuleGenerator<'a> {
         writeln!(
             output,
             "    event_type.starts_with(\"{}::{}::\")",
-            self.abi.address, self.abi.name
+            sanitize_abi_string(&self.abi.address),
+            sanitize_abi_string(&self.abi.name)
         )?;
         writeln!(output, "}}")?;
         writeln!(output)
@@ -310,7 +314,8 @@ impl<'a> ModuleGenerator<'a> {
         writeln!(
             output,
             "//! Generated Rust bindings for `{}::{}`.",
-            self.abi.address, self.abi.name
+            sanitize_abi_string(&self.abi.address),
+            sanitize_abi_string(&self.abi.name)
         )?;
         writeln!(output, "//!")?;
         writeln!(
@@ -347,14 +352,14 @@ impl<'a> ModuleGenerator<'a> {
         writeln!(
             output,
             "pub const MODULE_ADDRESS: &str = \"{}\";",
-            self.abi.address
+            sanitize_abi_string(&self.abi.address)
         )?;
         writeln!(output)?;
         writeln!(output, "/// The module name.")?;
         writeln!(
             output,
             "pub const MODULE_NAME: &str = \"{}\";",
-            self.abi.name
+            sanitize_abi_string(&self.abi.name)
         )?;
         writeln!(output)
     }
@@ -569,11 +574,14 @@ impl<'a> ModuleGenerator<'a> {
         writeln!(output, ") -> AptosResult<TransactionPayload> {{")?;
 
         // Function body
+        // SECURITY: Sanitize ABI-derived values embedded in string literals
         writeln!(output, "    let function_id = format!(")?;
         writeln!(
             output,
             "        \"{}::{}::{}\",",
-            self.abi.address, self.abi.name, func.name
+            sanitize_abi_string(&self.abi.address),
+            sanitize_abi_string(&self.abi.name),
+            sanitize_abi_string(&func.name)
         )?;
         writeln!(output, "    );")?;
         writeln!(output)?;
@@ -774,11 +782,14 @@ impl<'a> ModuleGenerator<'a> {
         writeln!(output, ") -> AptosResult<Vec<serde_json::Value>> {{")?;
 
         // Function body
+        // SECURITY: Sanitize ABI-derived values embedded in string literals
         writeln!(output, "    let function_id = format!(")?;
         writeln!(
             output,
             "        \"{}::{}::{}\",",
-            self.abi.address, self.abi.name, func.name
+            sanitize_abi_string(&self.abi.address),
+            sanitize_abi_string(&self.abi.name),
+            sanitize_abi_string(&func.name)
         )?;
         writeln!(output, "    );")?;
         writeln!(output)?;
