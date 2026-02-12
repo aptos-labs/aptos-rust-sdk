@@ -57,6 +57,7 @@ thiserror = { workspace = true }
 url = { workspace = true }
 anyhow = { workspace = true }
 hex = { workspace = true }
+futures = "0.3"
 
 # Hashing (always needed)
 sha2 = "0.10"
