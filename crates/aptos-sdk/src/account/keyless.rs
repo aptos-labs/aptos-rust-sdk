@@ -258,8 +258,7 @@ impl PepperService for HttpPepperService {
     fn get_pepper(
         &self,
         jwt: &str,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = AptosResult<Pepper>> + Send + '_>>
-    {
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = AptosResult<Pepper>> + Send + '_>> {
         let jwt = jwt.to_owned();
         Box::pin(async move {
             let response = self
@@ -921,9 +920,8 @@ mod tests {
         fn get_pepper(
             &self,
             _jwt: &str,
-        ) -> std::pin::Pin<
-            Box<dyn std::future::Future<Output = AptosResult<Pepper>> + Send + '_>,
-        > {
+        ) -> std::pin::Pin<Box<dyn std::future::Future<Output = AptosResult<Pepper>> + Send + '_>>
+        {
             Box::pin(async move { Ok(self.pepper.clone()) })
         }
     }
@@ -938,9 +936,8 @@ mod tests {
             _jwt: &'a str,
             _ephemeral_key: &'a EphemeralKeyPair,
             _pepper: &'a Pepper,
-        ) -> std::pin::Pin<
-            Box<dyn std::future::Future<Output = AptosResult<ZkProof>> + Send + 'a>,
-        > {
+        ) -> std::pin::Pin<Box<dyn std::future::Future<Output = AptosResult<ZkProof>> + Send + 'a>>
+        {
             Box::pin(async move { Ok(self.proof.clone()) })
         }
     }
