@@ -4,7 +4,6 @@ use crate::account::account::{Account, AuthenticationKey};
 use crate::crypto::{Ed25519PrivateKey, Ed25519PublicKey, KEYLESS_SCHEME};
 use crate::error::{AptosError, AptosResult};
 use crate::types::AccountAddress;
-use async_trait::async_trait;
 use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode, decode_header};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
@@ -207,22 +206,23 @@ impl ZkProof {
 }
 
 /// Service for obtaining pepper values.
-#[async_trait]
 pub trait PepperService: Send + Sync {
     /// Fetches the pepper for a JWT.
-    async fn get_pepper(&self, jwt: &str) -> AptosResult<Pepper>;
+    fn get_pepper(
+        &self,
+        jwt: &str,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = AptosResult<Pepper>> + Send + '_>>;
 }
 
 /// Service for generating zero-knowledge proofs.
-#[async_trait]
 pub trait ProverService: Send + Sync {
     /// Generates the proof for keyless authentication.
-    async fn generate_proof(
-        &self,
-        jwt: &str,
-        ephemeral_key: &EphemeralKeyPair,
-        pepper: &Pepper,
-    ) -> AptosResult<ZkProof>;
+    fn generate_proof<'a>(
+        &'a self,
+        jwt: &'a str,
+        ephemeral_key: &'a EphemeralKeyPair,
+        pepper: &'a Pepper,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = AptosResult<ZkProof>> + Send + 'a>>;
 }
 
 /// HTTP pepper service client.
@@ -252,19 +252,24 @@ struct PepperResponse {
     pepper: String,
 }
 
-#[async_trait]
 impl PepperService for HttpPepperService {
-    async fn get_pepper(&self, jwt: &str) -> AptosResult<Pepper> {
-        let response = self
-            .client
-            .post(self.url.clone())
-            .json(&PepperRequest { jwt })
-            .send()
-            .await?
-            .error_for_status()?;
+    fn get_pepper(
+        &self,
+        jwt: &str,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = AptosResult<Pepper>> + Send + '_>> {
+        let jwt = jwt.to_owned();
+        Box::pin(async move {
+            let response = self
+                .client
+                .post(self.url.clone())
+                .json(&PepperRequest { jwt: &jwt })
+                .send()
+                .await?
+                .error_for_status()?;
 
-        let payload: PepperResponse = response.json().await?;
-        Pepper::from_hex(&payload.pepper)
+            let payload: PepperResponse = response.json().await?;
+            Pepper::from_hex(&payload.pepper)
+        })
     }
 }
 
@@ -298,31 +303,35 @@ struct ProverResponse {
     proof: String,
 }
 
-#[async_trait]
 impl ProverService for HttpProverService {
-    async fn generate_proof(
-        &self,
-        jwt: &str,
-        ephemeral_key: &EphemeralKeyPair,
-        pepper: &Pepper,
-    ) -> AptosResult<ZkProof> {
-        let request = ProverRequest {
-            jwt,
-            ephemeral_public_key: const_hex::encode_prefixed(ephemeral_key.public_key.to_bytes()),
-            nonce: ephemeral_key.nonce(),
-            pepper: pepper.to_hex(),
-        };
+    fn generate_proof<'a>(
+        &'a self,
+        jwt: &'a str,
+        ephemeral_key: &'a EphemeralKeyPair,
+        pepper: &'a Pepper,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = AptosResult<ZkProof>> + Send + 'a>>
+    {
+        Box::pin(async move {
+            let request = ProverRequest {
+                jwt,
+                ephemeral_public_key: const_hex::encode_prefixed(
+                    ephemeral_key.public_key.to_bytes(),
+                ),
+                nonce: ephemeral_key.nonce(),
+                pepper: pepper.to_hex(),
+            };
 
-        let response = self
-            .client
-            .post(self.url.clone())
-            .json(&request)
-            .send()
-            .await?
-            .error_for_status()?;
+            let response = self
+                .client
+                .post(self.url.clone())
+                .json(&request)
+                .send()
+                .await?
+                .error_for_status()?;
 
-        let payload: ProverResponse = response.json().await?;
-        ZkProof::from_hex(&payload.proof)
+            let payload: ProverResponse = response.json().await?;
+            ZkProof::from_hex(&payload.proof)
+        })
     }
 }
 
@@ -904,10 +913,13 @@ mod tests {
         pepper: Pepper,
     }
 
-    #[async_trait]
     impl PepperService for StaticPepperService {
-        async fn get_pepper(&self, _jwt: &str) -> AptosResult<Pepper> {
-            Ok(self.pepper.clone())
+        fn get_pepper(
+            &self,
+            _jwt: &str,
+        ) -> std::pin::Pin<Box<dyn std::future::Future<Output = AptosResult<Pepper>> + Send + '_>>
+        {
+            Box::pin(async move { Ok(self.pepper.clone()) })
         }
     }
 
@@ -915,15 +927,15 @@ mod tests {
         proof: ZkProof,
     }
 
-    #[async_trait]
     impl ProverService for StaticProverService {
-        async fn generate_proof(
-            &self,
-            _jwt: &str,
-            _ephemeral_key: &EphemeralKeyPair,
-            _pepper: &Pepper,
-        ) -> AptosResult<ZkProof> {
-            Ok(self.proof.clone())
+        fn generate_proof<'a>(
+            &'a self,
+            _jwt: &'a str,
+            _ephemeral_key: &'a EphemeralKeyPair,
+            _pepper: &'a Pepper,
+        ) -> std::pin::Pin<Box<dyn std::future::Future<Output = AptosResult<ZkProof>> + Send + 'a>>
+        {
+            Box::pin(async move { Ok(self.proof.clone()) })
         }
     }
 

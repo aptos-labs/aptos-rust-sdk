@@ -702,7 +702,6 @@ impl Aptos {
             })
             .collect();
 
-        // Wait for all transactions in parallel
         let results = futures::future::join_all(wait_futures).await;
         for result in results {
             result?;

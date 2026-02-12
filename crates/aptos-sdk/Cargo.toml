@@ -18,7 +18,7 @@ default = ["ed25519", "secp256k1", "secp256r1", "indexer", "faucet", "mnemonic"]
 full = ["ed25519", "secp256k1", "secp256r1", "bls", "keyless", "indexer", "faucet", "mnemonic"]
 
 # Cryptographic signature schemes
-ed25519 = ["dep:ed25519-dalek", "dep:rand_core"]
+ed25519 = ["dep:ed25519-dalek"]
 secp256k1 = ["dep:k256"]
 secp256r1 = ["dep:p256"]
 bls = ["dep:blst"]
@@ -30,7 +30,7 @@ mnemonic = ["dep:bip39", "dep:hmac"]
 keyless = ["dep:jsonwebtoken", "ed25519", "secp256r1"]
 
 # API clients
-indexer = ["dep:graphql_client"]
+indexer = []
 faucet = []
 
 # Testing utilities
@@ -57,8 +57,6 @@ thiserror = { workspace = true }
 url = { workspace = true }
 anyhow = { workspace = true }
 const-hex = { workspace = true }
-bytes = { workspace = true }
-async-trait = "0.1"
 futures = "0.3"
 
 # Hashing (always needed)
@@ -70,7 +68,6 @@ urlencoding = "2.1"
 
 # Randomness - use 0.8 to be compatible with ed25519-dalek and k256
 rand = "0.8"
-rand_core = { version = "0.6", optional = true }
 
 # Zeroize for secure key handling
 zeroize = { version = "1.8", features = ["derive"] }
@@ -88,8 +85,7 @@ blst = { version = "0.3", optional = true }
 # Optional keyless dependencies
 jsonwebtoken = { version = "10.3", features = ["aws_lc_rs"], optional = true }
 
-# Optional indexer dependencies
-graphql_client = { version = "0.14", optional = true }
+# (indexer feature uses raw GraphQL queries via reqwest, no extra dep needed)
 
 # Optional testing dependencies
 arbitrary = { workspace = true, optional = true }
@@ -104,11 +100,8 @@ aptos-sdk-macros = { workspace = true, optional = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full", "test-util"] }
-proptest = { workspace = true }
-proptest-derive = { workspace = true }
 tempfile = "3.14"
 wiremock = "0.6"
-tracing-test = "0.2"
 
 [[example]]
 name = "account_management"
