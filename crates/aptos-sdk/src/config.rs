@@ -876,4 +876,83 @@ mod tests {
         assert!(config.pool_config().max_idle_total > 0);
         assert_eq!(config.chain_id().id(), 2);
     }
+
+    #[tokio::test]
+    async fn test_read_response_bounded_normal() {
+        use wiremock::{Mock, MockServer, ResponseTemplate, matchers::method};
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .respond_with(ResponseTemplate::new(200).set_body_string("hello world"))
+            .mount(&server)
+            .await;
+
+        let response = reqwest::get(server.uri()).await.unwrap();
+        let body = read_response_bounded(response, 1024).await.unwrap();
+        assert_eq!(body, b"hello world");
+    }
+
+    #[tokio::test]
+    async fn test_read_response_bounded_rejects_oversized_content_length() {
+        use wiremock::{Mock, MockServer, ResponseTemplate, matchers::method};
+        let server = MockServer::start().await;
+        // Send a body whose accurate Content-Length exceeds the limit.
+        // The function should reject based on Content-Length pre-check
+        // before streaming the full body.
+        let body = "x".repeat(200);
+        Mock::given(method("GET"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(body))
+            .mount(&server)
+            .await;
+
+        let response = reqwest::get(server.uri()).await.unwrap();
+        // Limit is 100 but body is 200 -- should be rejected via Content-Length pre-check
+        let result = read_response_bounded(response, 100).await;
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("response too large"));
+    }
+
+    #[tokio::test]
+    async fn test_read_response_bounded_rejects_oversized_body() {
+        use wiremock::{Mock, MockServer, ResponseTemplate, matchers::method};
+        let server = MockServer::start().await;
+        let large_body = "x".repeat(500);
+        Mock::given(method("GET"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(large_body))
+            .mount(&server)
+            .await;
+
+        let response = reqwest::get(server.uri()).await.unwrap();
+        let result = read_response_bounded(response, 100).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_read_response_bounded_exact_limit() {
+        use wiremock::{Mock, MockServer, ResponseTemplate, matchers::method};
+        let server = MockServer::start().await;
+        let body = "x".repeat(100);
+        Mock::given(method("GET"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(body.clone()))
+            .mount(&server)
+            .await;
+
+        let response = reqwest::get(server.uri()).await.unwrap();
+        let result = read_response_bounded(response, 100).await.unwrap();
+        assert_eq!(result.len(), 100);
+    }
+
+    #[tokio::test]
+    async fn test_read_response_bounded_empty() {
+        use wiremock::{Mock, MockServer, ResponseTemplate, matchers::method};
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .respond_with(ResponseTemplate::new(200))
+            .mount(&server)
+            .await;
+
+        let response = reqwest::get(server.uri()).await.unwrap();
+        let result = read_response_bounded(response, 1024).await.unwrap();
+        assert!(result.is_empty());
+    }
 }
