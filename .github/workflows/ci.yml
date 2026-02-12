@@ -242,6 +242,7 @@ jobs:
       contents: read
       pages: write
       id-token: write
+      actions: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -265,6 +266,8 @@ jobs:
       
       - name: Setup Pages
         uses: actions/configure-pages@v5
+        with:
+          enablement: true
       
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v4
