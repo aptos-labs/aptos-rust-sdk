@@ -174,7 +174,12 @@ impl fmt::Debug for AnyPublicKey {
 
 impl fmt::Display for AnyPublicKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}:{}", self.variant, const_hex::encode_prefixed(&self.bytes))
+        write!(
+            f,
+            "{:?}:{}",
+            self.variant,
+            const_hex::encode_prefixed(&self.bytes)
+        )
     }
 }
 
