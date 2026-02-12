@@ -414,11 +414,11 @@ mod transaction_tests {
         println!("BCS bytes ({} total):", bcs_bytes.len());
         println!(
             "First 100 bytes: {}",
-            hex::encode(&bcs_bytes[..100.min(bcs_bytes.len())])
+            const_hex::encode(&bcs_bytes[..100.min(bcs_bytes.len())])
         );
         println!(
             "Last 100 bytes: {}",
-            hex::encode(&bcs_bytes[bcs_bytes.len().saturating_sub(100)..])
+            const_hex::encode(&bcs_bytes[bcs_bytes.len().saturating_sub(100)..])
         );
         println!(
             "Authenticator variant (byte at offset {}): {}",

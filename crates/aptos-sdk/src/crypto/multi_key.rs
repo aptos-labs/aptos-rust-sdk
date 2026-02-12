@@ -165,16 +165,21 @@ impl fmt::Debug for AnyPublicKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "AnyPublicKey({:?}, 0x{})",
+            "AnyPublicKey({:?}, {})",
             self.variant,
-            hex::encode(&self.bytes)
+            const_hex::encode_prefixed(&self.bytes)
         )
     }
 }
 
 impl fmt::Display for AnyPublicKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}:0x{}", self.variant, hex::encode(&self.bytes))
+        write!(
+            f,
+            "{:?}:{}",
+            self.variant,
+            const_hex::encode_prefixed(&self.bytes)
+        )
     }
 }
 
@@ -506,7 +511,7 @@ impl fmt::Debug for MultiKeyPublicKey {
 
 impl fmt::Display for MultiKeyPublicKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "0x{}", hex::encode(self.to_bytes()))
+        f.write_str(&const_hex::encode_prefixed(self.to_bytes()))
     }
 }
 
@@ -729,7 +734,7 @@ impl fmt::Debug for MultiKeySignature {
 
 impl fmt::Display for MultiKeySignature {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "0x{}", hex::encode(self.to_bytes()))
+        f.write_str(&const_hex::encode_prefixed(self.to_bytes()))
     }
 }
 

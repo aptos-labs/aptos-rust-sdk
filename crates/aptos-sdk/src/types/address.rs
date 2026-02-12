@@ -126,7 +126,7 @@ impl AccountAddress {
 
         // Zero-pad to full length
         let padded = format!("{hex_string:0>64}");
-        let bytes = hex::decode(&padded)?;
+        let bytes = const_hex::decode(&padded)?;
 
         let mut address = [0u8; ADDRESS_LENGTH];
         address.copy_from_slice(&bytes);
@@ -176,14 +176,14 @@ impl AccountAddress {
     /// This always returns the LONG format regardless of whether the address is special.
     /// For example, `0x1` becomes `0x0000000000000000000000000000000000000000000000000000000000000001`.
     pub fn to_long_string(&self) -> String {
-        format!("0x{}", hex::encode(self.0))
+        const_hex::encode_prefixed(&self.0)
     }
 
     /// Returns a short hex string, trimming leading zeros.
     ///
     /// For example, `0x0000...0001` becomes `0x1`.
     pub fn to_short_string(&self) -> String {
-        let hex = hex::encode(self.0);
+        let hex = const_hex::encode(&self.0);
         let trimmed = hex.trim_start_matches('0');
         if trimmed.is_empty() {
             "0x0".to_string()

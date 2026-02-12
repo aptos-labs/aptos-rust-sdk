@@ -236,7 +236,7 @@ impl fmt::Debug for MultiEd25519PublicKey {
 
 impl fmt::Display for MultiEd25519PublicKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "0x{}", hex::encode(self.to_bytes()))
+        f.write_str(&const_hex::encode_prefixed(self.to_bytes()))
     }
 }
 
@@ -246,7 +246,7 @@ impl Serialize for MultiEd25519PublicKey {
         S: serde::Serializer,
     {
         if serializer.is_human_readable() {
-            serializer.serialize_str(&format!("0x{}", hex::encode(self.to_bytes())))
+            serializer.serialize_str(&const_hex::encode_prefixed(self.to_bytes()))
         } else {
             serializer.serialize_bytes(&self.to_bytes())
         }
@@ -259,9 +259,7 @@ impl<'de> Deserialize<'de> for MultiEd25519PublicKey {
         D: serde::Deserializer<'de>,
     {
         if deserializer.is_human_readable() {
-            let s = String::deserialize(deserializer)?;
-            let s = s.strip_prefix("0x").unwrap_or(&s);
-            let bytes = hex::decode(s).map_err(serde::de::Error::custom)?;
+            let bytes: Vec<u8> = const_hex::deserialize(deserializer)?;
             Self::from_bytes(&bytes).map_err(serde::de::Error::custom)
         } else {
             let bytes = Vec::<u8>::deserialize(deserializer)?;
@@ -458,7 +456,7 @@ impl fmt::Debug for MultiEd25519Signature {
 
 impl fmt::Display for MultiEd25519Signature {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "0x{}", hex::encode(self.to_bytes()))
+        f.write_str(&const_hex::encode_prefixed(self.to_bytes()))
     }
 }
 
@@ -468,7 +466,7 @@ impl Serialize for MultiEd25519Signature {
         S: serde::Serializer,
     {
         if serializer.is_human_readable() {
-            serializer.serialize_str(&format!("0x{}", hex::encode(self.to_bytes())))
+            serializer.serialize_str(&const_hex::encode_prefixed(self.to_bytes()))
         } else {
             serializer.serialize_bytes(&self.to_bytes())
         }
@@ -481,9 +479,7 @@ impl<'de> Deserialize<'de> for MultiEd25519Signature {
         D: serde::Deserializer<'de>,
     {
         if deserializer.is_human_readable() {
-            let s = String::deserialize(deserializer)?;
-            let s = s.strip_prefix("0x").unwrap_or(&s);
-            let bytes = hex::decode(s).map_err(serde::de::Error::custom)?;
+            let bytes: Vec<u8> = const_hex::deserialize(deserializer)?;
             Self::from_bytes(&bytes).map_err(serde::de::Error::custom)
         } else {
             let bytes = Vec::<u8>::deserialize(deserializer)?;

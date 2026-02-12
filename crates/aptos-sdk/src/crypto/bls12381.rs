@@ -95,8 +95,7 @@ impl Bls12381PrivateKey {
     ///
     /// Returns an error if hex decoding fails or if the resulting bytes are invalid.
     pub fn from_hex(hex_str: &str) -> AptosResult<Self> {
-        let hex_str = hex_str.strip_prefix("0x").unwrap_or(hex_str);
-        let bytes = hex::decode(hex_str)?;
+        let bytes = const_hex::decode(hex_str)?;
         Self::from_bytes(&bytes)
     }
 
@@ -107,7 +106,7 @@ impl Bls12381PrivateKey {
 
     /// Returns the private key as a hex string.
     pub fn to_hex(&self) -> String {
-        format!("0x{}", hex::encode(self.inner.to_bytes()))
+        const_hex::encode_prefixed(&self.inner.to_bytes())
     }
 
     /// Returns the corresponding public key.
@@ -184,8 +183,7 @@ impl Bls12381PublicKey {
     ///
     /// Returns an error if hex decoding fails or if the resulting bytes are invalid.
     pub fn from_hex(hex_str: &str) -> AptosResult<Self> {
-        let hex_str = hex_str.strip_prefix("0x").unwrap_or(hex_str);
-        let bytes = hex::decode(hex_str)?;
+        let bytes = const_hex::decode(hex_str)?;
         Self::from_bytes(&bytes)
     }
 
@@ -196,7 +194,7 @@ impl Bls12381PublicKey {
 
     /// Returns the public key as a hex string.
     pub fn to_hex(&self) -> String {
-        format!("0x{}", hex::encode(self.inner.compress()))
+        const_hex::encode_prefixed(&self.inner.compress())
     }
 
     /// Verifies a signature against a message.
@@ -342,8 +340,7 @@ impl Bls12381Signature {
     ///
     /// Returns an error if hex decoding fails or if the resulting bytes are invalid.
     pub fn from_hex(hex_str: &str) -> AptosResult<Self> {
-        let hex_str = hex_str.strip_prefix("0x").unwrap_or(hex_str);
-        let bytes = hex::decode(hex_str)?;
+        let bytes = const_hex::decode(hex_str)?;
         Self::from_bytes(&bytes)
     }
 
@@ -354,7 +351,7 @@ impl Bls12381Signature {
 
     /// Returns the signature as a hex string.
     pub fn to_hex(&self) -> String {
-        format!("0x{}", hex::encode(self.inner.compress()))
+        const_hex::encode_prefixed(&self.inner.compress())
     }
 }
 
@@ -474,8 +471,7 @@ impl Bls12381ProofOfPossession {
     ///
     /// Returns an error if hex decoding fails or if the resulting bytes are invalid.
     pub fn from_hex(hex_str: &str) -> AptosResult<Self> {
-        let hex_str = hex_str.strip_prefix("0x").unwrap_or(hex_str);
-        let bytes = hex::decode(hex_str)?;
+        let bytes = const_hex::decode(hex_str)?;
         Self::from_bytes(&bytes)
     }
 
@@ -486,7 +482,7 @@ impl Bls12381ProofOfPossession {
 
     /// Returns the proof of possession as a hex string.
     pub fn to_hex(&self) -> String {
-        format!("0x{}", hex::encode(self.inner.compress()))
+        const_hex::encode_prefixed(&self.inner.compress())
     }
 
     /// Verifies this proof of possession against a public key.

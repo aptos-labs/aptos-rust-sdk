@@ -37,7 +37,7 @@ aptos-sdk-macros = { version = "0.1.0", path = "crates/aptos-sdk-macros" }
 anyhow = "1.0.101"
 arbitrary = { version = "1.4.1", features = ["derive"] }
 aptos-bcs = "0.1.4"
-hex = "0.4.3"
+const-hex = { version = "1.17.0", features = ["serde"] }
 proc-macro2 = "1.0.94"
 proptest = "1.6.0"
 proptest-derive = "0.5.1"
