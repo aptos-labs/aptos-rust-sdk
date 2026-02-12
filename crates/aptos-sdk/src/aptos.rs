@@ -671,10 +671,6 @@ impl Aptos {
     /// Returns an error if the faucet feature is not enabled, the faucet request fails
     /// (e.g., rate limiting 429, server error 500), waiting for transaction confirmation
     /// times out, or any HTTP/API errors occur.
-    ///
-    /// # Panics
-    ///
-    /// Panics if a spawned transaction wait task panics.
     #[cfg(feature = "faucet")]
     pub async fn fund_account(
         &self,
@@ -698,17 +694,17 @@ impl Aptos {
             .collect();
 
         // Wait for all faucet transactions to be confirmed in parallel
-        let mut set = tokio::task::JoinSet::new();
-        for hash in hashes {
-            let fullnode = self.fullnode.clone();
-            set.spawn(async move {
-                fullnode
-                    .wait_for_transaction(&hash, Some(Duration::from_secs(60)))
-                    .await
-            });
-        }
-        while let Some(result) = set.join_next().await {
-            result.expect("fund_account wait task panicked")?;
+        let wait_futures: Vec<_> = hashes
+            .iter()
+            .map(|hash| {
+                self.fullnode
+                    .wait_for_transaction(hash, Some(Duration::from_secs(60)))
+            })
+            .collect();
+
+        let results = futures::future::join_all(wait_futures).await;
+        for result in results {
+            result?;
         }
 
         Ok(txn_hashes)
