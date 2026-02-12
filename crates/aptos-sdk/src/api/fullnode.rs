@@ -556,13 +556,18 @@ impl FullnodeClient {
                     // Check for errors before reading body
                     let status = response.status();
                     if !status.is_success() {
-                        // SECURITY: Truncate error body to prevent storing excessively
-                        // large error messages from malicious servers
-                        let error_text =
-                            Self::truncate_error_body(response.text().await.unwrap_or_default());
+                        // SECURITY: Bound error body reads to prevent OOM from
+                        // malicious servers sending huge error responses.
+                        let error_bytes =
+                            crate::config::read_response_bounded(response, MAX_ERROR_BODY_SIZE)
+                                .await
+                                .ok();
+                        let error_text = error_bytes
+                            .and_then(|b| String::from_utf8(b).ok())
+                            .unwrap_or_default();
                         return Err(AptosError::Api {
                             status_code: status.as_u16(),
-                            message: error_text,
+                            message: Self::truncate_error_body(error_text),
                             error_code: None,
                             vm_error_code: None,
                         });
@@ -790,9 +795,15 @@ impl FullnodeClient {
             // This allows callers to respect the server's rate limiting
             Err(AptosError::RateLimited { retry_after_secs })
         } else {
-            // SECURITY: Truncate error body to prevent storing excessively
-            // large error messages from malicious servers
-            let error_text = Self::truncate_error_body(response.text().await.unwrap_or_default());
+            // SECURITY: Bound error body reads to prevent OOM from malicious
+            // servers sending huge error responses (including chunked encoding).
+            let error_bytes = crate::config::read_response_bounded(response, MAX_ERROR_BODY_SIZE)
+                .await
+                .ok();
+            let error_text = error_bytes
+                .and_then(|b| String::from_utf8(b).ok())
+                .unwrap_or_default();
+            let error_text = Self::truncate_error_body(error_text);
             let body: serde_json::Value = serde_json::from_str(&error_text).unwrap_or_default();
             let message = body
                 .get("message")

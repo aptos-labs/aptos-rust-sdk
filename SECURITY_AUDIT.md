@@ -3,7 +3,7 @@
 **Date:** 2026-02-09
 **Scope:** Full SDK (`aptos-sdk` v0.3.0, `aptos-sdk-macros` v0.1.0)
 **Method:** 3-pass audit (automated surface scan, deep manual review, design-level assessment)
-**Status:** All findings remediated (21 of 22 fixed; F-21 deferred as large effort)
+**Status:** All findings remediated (21 of 22 fixed; F-21 deferred as large effort). Response body reads now use incremental streaming with size limits (`read_response_bounded`) to prevent OOM from chunked transfer-encoding.
 
 ---
 
@@ -353,7 +353,7 @@ The SDK operates with the following trust boundaries:
 
 ### 3b. Missing Hardening
 
-1. **Response body streaming** -- All response reads load full bodies into memory. No streaming with incremental size checks. (Addresses F-02, F-03, F-17)
+1. **Response body streaming** -- All response reads now use `read_response_bounded()` which pre-checks `Content-Length` and reads incrementally via `response.chunk()`, aborting early if the size limit is exceeded. Error body reads are also bounded. (Addresses F-02, F-03, F-17)
 2. **Constant-time operations** -- Signature verification delegates to underlying crates (ed25519-dalek, k256, p256) which use constant-time comparison. The SDK itself does not perform any custom constant-time operations, which is correct.
 3. **Fuzz testing** -- Infrastructure exists but is unused (F-21).
 4. **Side-channel resistance** -- Signing operations use library implementations with side-channel resistance. Non-security-critical operations (address parsing, ABI processing) are not constant-time, which is acceptable.

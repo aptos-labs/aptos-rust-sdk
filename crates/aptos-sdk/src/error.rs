@@ -301,10 +301,21 @@ impl AptosError {
         // SECURITY: Redact URLs with query parameters, which may contain API keys
         // or other credentials not caught by keyword patterns above.
         // e.g., reqwest errors include the request URL.
-        if lower.contains("http://") || lower.contains("https://") {
-            // Check if the URL has a query string (contains '?' after the scheme)
-            if lower.contains('?') {
-                return "[REDACTED: message contained URL with query parameters]".into();
+        // Only redact when '?' appears within a URL token (after the scheme),
+        // not just anywhere in the message.
+        for scheme in ["http://", "https://"] {
+            if let Some(scheme_pos) = lower.find(scheme) {
+                // Look for '?' after the scheme, within the URL token
+                // (URLs end at whitespace or common delimiters)
+                let url_start = scheme_pos;
+                let url_rest = &lower[url_start..];
+                let url_end = url_rest
+                    .find(|c: char| c.is_whitespace() || c == '>' || c == '"' || c == '\'')
+                    .unwrap_or(url_rest.len());
+                let url_token = &url_rest[..url_end];
+                if url_token.contains('?') {
+                    return "[REDACTED: message contained URL with query parameters]".into();
+                }
             }
         }
 
