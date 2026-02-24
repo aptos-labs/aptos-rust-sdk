@@ -98,5 +98,10 @@ pub use aptos_sdk_macros::{MoveStruct, aptos_contract, aptos_contract_file};
 #[doc(hidden)]
 pub use aptos_bcs;
 
+// Re-export const_hex for use by generated code (codegen and proc macros)
+// This allows downstream users to use generated code without adding const-hex as a dependency
+#[doc(hidden)]
+pub use const_hex;
+
 #[cfg(test)]
 mod tests;

@@ -75,8 +75,8 @@ impl HashValue {
     ///
     /// # Errors
     ///
-    /// Returns an error if the hex string contains invalid UTF-8, is not exactly 64 hex
-    /// characters (excluding the optional `0x` prefix), or contains invalid hex characters.
+    /// Returns an error if the hex string is not exactly 64 hex characters
+    /// (excluding the optional `0x` prefix) or contains invalid hex characters.
     pub fn from_hex<T: AsRef<[u8]>>(hex_str: T) -> AptosResult<Self> {
         let hex_str = hex_str.as_ref();
         let hex_str = if hex_str.starts_with(b"0x") || hex_str.starts_with(b"0X") {
