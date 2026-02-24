@@ -30,12 +30,78 @@ fn validate_rust_ident(name: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// Safely creates a `format_ident!` from a string, returning a compile error if invalid.
+/// Returns true if `name` is a Rust keyword that would panic in `Ident::new`.
+fn is_rust_keyword(name: &str) -> bool {
+    matches!(
+        name,
+        "as" | "break"
+            | "const"
+            | "continue"
+            | "crate"
+            | "else"
+            | "enum"
+            | "extern"
+            | "false"
+            | "fn"
+            | "for"
+            | "if"
+            | "impl"
+            | "in"
+            | "let"
+            | "loop"
+            | "match"
+            | "mod"
+            | "move"
+            | "mut"
+            | "pub"
+            | "ref"
+            | "return"
+            | "self"
+            | "Self"
+            | "static"
+            | "struct"
+            | "super"
+            | "trait"
+            | "true"
+            | "type"
+            | "unsafe"
+            | "use"
+            | "where"
+            | "while"
+            | "async"
+            | "await"
+            | "dyn"
+            | "abstract"
+            | "become"
+            | "box"
+            | "do"
+            | "final"
+            | "macro"
+            | "override"
+            | "priv"
+            | "try"
+            | "typeof"
+            | "unsized"
+            | "virtual"
+            | "yield"
+    )
+}
+
+/// Safely creates an `Ident` from a string, returning a compile error if invalid.
+///
+/// Uses raw identifiers (`r#name`) for Rust keywords to avoid panics.
 fn safe_format_ident(name: &str) -> Result<proc_macro2::Ident, TokenStream> {
     if let Err(e) = validate_rust_ident(name) {
         return Err(syn::Error::new(proc_macro2::Span::call_site(), e).to_compile_error());
     }
-    Ok(format_ident!("{}", name))
+    if is_rust_keyword(name) {
+        Ok(proc_macro2::Ident::new_raw(
+            name,
+            proc_macro2::Span::call_site(),
+        ))
+    } else {
+        Ok(format_ident!("{}", name))
+    }
 }
 
 /// Generates the contract implementation.
