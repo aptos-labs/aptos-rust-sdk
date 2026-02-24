@@ -116,11 +116,32 @@ pub fn aptos_contract_file(input: TokenStream) -> TokenStream {
     let file_path = manifest_path.join(&input.path);
 
     // SECURITY: Verify the resolved path is under CARGO_MANIFEST_DIR to prevent
-    // path traversal attacks (e.g., "../../../../etc/passwd")
-    if let (Ok(canonical_manifest), Ok(canonical_file)) =
-        (manifest_path.canonicalize(), file_path.canonicalize())
-        && !canonical_file.starts_with(&canonical_manifest)
-    {
+    // path traversal attacks (e.g., "../../../../etc/passwd").
+    // Canonicalization failures are treated as errors to ensure this check
+    // is never silently skipped.
+    let canonical_manifest = match manifest_path.canonicalize() {
+        Ok(p) => p,
+        Err(e) => {
+            return syn::Error::new(
+                input.name.span(),
+                format!("Failed to resolve project directory: {e}"),
+            )
+            .to_compile_error()
+            .into();
+        }
+    };
+    let canonical_file = match file_path.canonicalize() {
+        Ok(p) => p,
+        Err(e) => {
+            return syn::Error::new(
+                input.name.span(),
+                format!("Failed to resolve ABI file path '{}': {e}", input.path),
+            )
+            .to_compile_error()
+            .into();
+        }
+    };
+    if !canonical_file.starts_with(&canonical_manifest) {
         return syn::Error::new(
             input.name.span(),
             format!(
