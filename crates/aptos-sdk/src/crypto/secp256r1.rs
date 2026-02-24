@@ -9,8 +9,8 @@
 //! blockchain's on-chain verification, which rejects high-S signatures to
 //! prevent signature malleability attacks.
 //!
-//! - **Signing** always produces low-S signatures (the `p256` crate normalizes
-//!   by default).
+//! - **Signing** always produces low-S signatures (normalized by this SDK,
+//!   independent of the `p256` crate's default behavior).
 //! - **Parsing** (`from_bytes`, `from_hex`) rejects high-S signatures.
 //! - **Verification** also rejects high-S signatures as a defense-in-depth
 //!   measure.

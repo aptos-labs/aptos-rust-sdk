@@ -48,12 +48,57 @@ use crate::error::{AptosError, AptosResult};
 use std::fs;
 use std::path::Path;
 
-/// Validates that a module name is a safe identifier (no path traversal or injection).
+/// Returns true if `name` is a Rust keyword that cannot be used as a module name.
+fn is_rust_keyword(name: &str) -> bool {
+    matches!(
+        name,
+        "as" | "break"
+            | "const"
+            | "continue"
+            | "crate"
+            | "else"
+            | "enum"
+            | "extern"
+            | "false"
+            | "fn"
+            | "for"
+            | "if"
+            | "impl"
+            | "in"
+            | "let"
+            | "loop"
+            | "match"
+            | "mod"
+            | "move"
+            | "mut"
+            | "pub"
+            | "ref"
+            | "return"
+            | "self"
+            | "Self"
+            | "static"
+            | "struct"
+            | "super"
+            | "trait"
+            | "true"
+            | "type"
+            | "unsafe"
+            | "use"
+            | "where"
+            | "while"
+            | "async"
+            | "await"
+            | "dyn"
+    )
+}
+
+/// Validates that a module name is a safe Rust identifier (no path traversal, injection, or keywords).
 ///
 /// # Security
 ///
-/// This prevents path traversal attacks where a malicious ABI could write files
-/// outside the intended output directory via names like `../../../tmp/evil`.
+/// This prevents:
+/// - Path traversal attacks via names like `../../../tmp/evil`
+/// - Invalid `pub mod` declarations in generated mod.rs (e.g., `pub mod fn;`)
 fn validate_module_name(name: &str) -> AptosResult<()> {
     if name.is_empty() {
         return Err(AptosError::Config(
@@ -74,6 +119,12 @@ fn validate_module_name(name: &str) -> AptosResult<()> {
     if !chars.all(|c| c.is_ascii_alphanumeric() || c == '_') {
         return Err(AptosError::Config(format!(
             "invalid module name '{name}': must contain only ASCII alphanumeric characters or underscores"
+        )));
+    }
+
+    if is_rust_keyword(name) {
+        return Err(AptosError::Config(format!(
+            "invalid module name '{name}': Rust keywords cannot be used as module names"
         )));
     }
 

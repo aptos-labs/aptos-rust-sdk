@@ -71,7 +71,7 @@ pub async fn read_response_bounded(
     // This protects against chunked transfer-encoding that bypasses Content-Length.
     let mut body = Vec::with_capacity(std::cmp::min(max_size, 1024 * 1024));
     while let Some(chunk) = response.chunk().await? {
-        if body.len() + chunk.len() > max_size {
+        if body.len().saturating_add(chunk.len()) > max_size {
             return Err(AptosError::Api {
                 status_code: response.status().as_u16(),
                 message: format!(
