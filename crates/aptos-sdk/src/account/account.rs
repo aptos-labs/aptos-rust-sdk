@@ -59,7 +59,7 @@ impl AuthenticationKey {
 
     /// Returns the authentication key as a hex string.
     pub fn to_hex(&self) -> String {
-        const_hex::encode_prefixed(&self.0)
+        const_hex::encode_prefixed(self.0)
     }
 
     /// Derives the account address from this authentication key.

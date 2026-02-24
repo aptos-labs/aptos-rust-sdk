@@ -107,7 +107,7 @@ impl Secp256k1PrivateKey {
 
     /// Returns the private key as a hex string.
     pub fn to_hex(&self) -> String {
-        const_hex::encode_prefixed(&self.inner.to_bytes())
+        const_hex::encode_prefixed(self.inner.to_bytes())
     }
 
     /// Returns the private key in AIP-80 format.
@@ -220,7 +220,7 @@ impl Secp256k1PublicKey {
 
     /// Returns the public key as a hex string (compressed format).
     pub fn to_hex(&self) -> String {
-        const_hex::encode_prefixed(&self.to_bytes())
+        const_hex::encode_prefixed(self.to_bytes())
     }
 
     /// Returns the public key in AIP-80 format (compressed).
@@ -380,7 +380,7 @@ impl Secp256k1Signature {
 
     /// Returns the signature as a hex string.
     pub fn to_hex(&self) -> String {
-        const_hex::encode_prefixed(&self.to_bytes())
+        const_hex::encode_prefixed(self.to_bytes())
     }
 }
 

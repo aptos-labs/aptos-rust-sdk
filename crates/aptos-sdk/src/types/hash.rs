@@ -121,7 +121,7 @@ impl HashValue {
 
     /// Returns the hash as a hex string with `0x` prefix.
     pub fn to_hex(&self) -> String {
-        const_hex::encode_prefixed(&self.0)
+        const_hex::encode_prefixed(self.0)
     }
 
     /// Returns true if this is the zero hash.

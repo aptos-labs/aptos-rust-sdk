@@ -120,7 +120,7 @@ impl Ed25519PrivateKey {
 
     /// Returns the private key as a hex string.
     pub fn to_hex(&self) -> String {
-        const_hex::encode_prefixed(&self.inner.to_bytes())
+        const_hex::encode_prefixed(self.inner.to_bytes())
     }
 
     /// Returns the private key in AIP-80 format.
@@ -253,7 +253,7 @@ impl Ed25519PublicKey {
 
     /// Returns the public key as a hex string.
     pub fn to_hex(&self) -> String {
-        const_hex::encode_prefixed(&self.inner.to_bytes())
+        const_hex::encode_prefixed(self.inner.to_bytes())
     }
 
     /// Returns the public key in AIP-80 format.
@@ -392,7 +392,7 @@ impl Ed25519Signature {
 
     /// Returns the signature as a hex string.
     pub fn to_hex(&self) -> String {
-        const_hex::encode_prefixed(&self.inner.to_bytes())
+        const_hex::encode_prefixed(self.inner.to_bytes())
     }
 }
 
