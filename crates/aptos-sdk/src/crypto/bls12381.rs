@@ -106,7 +106,7 @@ impl Bls12381PrivateKey {
 
     /// Returns the private key as a hex string.
     pub fn to_hex(&self) -> String {
-        const_hex::encode_prefixed(&self.inner.to_bytes())
+        const_hex::encode_prefixed(self.inner.to_bytes())
     }
 
     /// Returns the corresponding public key.
@@ -194,7 +194,7 @@ impl Bls12381PublicKey {
 
     /// Returns the public key as a hex string.
     pub fn to_hex(&self) -> String {
-        const_hex::encode_prefixed(&self.inner.compress())
+        const_hex::encode_prefixed(self.inner.compress())
     }
 
     /// Verifies a signature against a message.
@@ -351,7 +351,7 @@ impl Bls12381Signature {
 
     /// Returns the signature as a hex string.
     pub fn to_hex(&self) -> String {
-        const_hex::encode_prefixed(&self.inner.compress())
+        const_hex::encode_prefixed(self.inner.compress())
     }
 }
 
@@ -482,7 +482,7 @@ impl Bls12381ProofOfPossession {
 
     /// Returns the proof of possession as a hex string.
     pub fn to_hex(&self) -> String {
-        const_hex::encode_prefixed(&self.inner.compress())
+        const_hex::encode_prefixed(self.inner.compress())
     }
 
     /// Verifies this proof of possession against a public key.
