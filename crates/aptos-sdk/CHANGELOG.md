@@ -34,7 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 - Unnecessary feature-flags
-- `async-trait` and unused `futures` dependencies
+- `async-trait` dependency
 
 ## [0.1.0] - 2026-01-06
 
@@ -111,5 +111,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Minimum Supported Rust Version (MSRV): 1.90
 
 [0.4.0]: https://github.com/aptos-labs/aptos-rust-sdk/releases/tag/sdk-v0.4.0
-[0.1.0]: https://github.com/aptos-labs/aptos-rust-sdk/releases/tag/v0.1.0
+[0.1.0]: https://github.com/aptos-labs/aptos-rust-sdk/releases/tag/sdk-v0.1.0
 
