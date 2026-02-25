@@ -7,12 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+## [0.4.0] - 2026-02-25
+
+### Security
+- Comprehensive security audit remediating 21 findings across the SDK
+- Second-pass audit fixes across crypto, keyless, and API client modules
+- Enforced low-S normalization for ECDSA (secp256k1/secp256r1) signatures to match aptos-core
+- Hardened keyless account JWT verification
+- Improved input validation across API clients and codegen
+
 ### Changed
-- Upgraded `reqwest` to v0.13
-- Use `const-hex` crate instead of `hex`
+- Upgraded `reqwest` from v0.12 to v0.13
+- Replaced `hex` crate with `const-hex` for improved performance
+- Removed `async-trait` dependency in favor of native async trait support
+- Audited and cleaned up dependency tree
+- Bumped `keccak` from 0.1.5 to 0.1.6
+- Improved dependency feature selection for reduced compile times
+- Configured `docs.rs` metadata for release builds
+
+### Fixed
+- Resolved rustdoc warnings breaking CI documentation check
+- Fixed clippy `needless_borrows_for_generic_args` warnings
+
+### Performance
+- Reduced allocations and lock overhead in hot paths
 
 ### Removed
 - Unnecessary feature-flags
+- `async-trait` and unused `futures` dependencies
 
 ## [0.1.0] - 2026-01-06
 
@@ -88,5 +110,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - This SDK is independent of `aptos-core` for faster compilation
 - Minimum Supported Rust Version (MSRV): 1.90
 
+[0.4.0]: https://github.com/aptos-labs/aptos-rust-sdk/releases/tag/sdk-v0.4.0
 [0.1.0]: https://github.com/aptos-labs/aptos-rust-sdk/releases/tag/v0.1.0
 
