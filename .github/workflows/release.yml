@@ -170,7 +170,7 @@ jobs:
       - name: Verify aptos-sdk-macros dependency is available
         if: needs.publish-macros.result == 'skipped'
         run: |
-          MACROS_VERSION=$(grep 'aptos-sdk-macros' Cargo.toml | head -1 | sed 's/.*version = "\([^"]*\)".*/\1/')
+          MACROS_VERSION=$(grep 'aptos-sdk-macros.*version' Cargo.toml | head -1 | sed 's/.*version = "\([^"]*\)".*/\1/')
           echo "Checking that aptos-sdk-macros ${MACROS_VERSION} exists on crates.io..."
           if ! curl -sf -H "User-Agent: aptos-rust-sdk-ci" \
             "https://crates.io/api/v1/crates/aptos-sdk-macros/${MACROS_VERSION}" > /dev/null 2>&1; then
