@@ -6,6 +6,7 @@ use crate::api::response::{
 use crate::config::AptosConfig;
 use crate::error::{AptosError, AptosResult};
 use crate::retry::{RetryConfig, RetryExecutor};
+use crate::transaction::simulation::SimulateQueryOptions;
 use crate::transaction::types::SignedTransaction;
 use crate::types::{AccountAddress, HashValue};
 use reqwest::Client;
@@ -397,6 +398,10 @@ impl FullnodeClient {
 
     /// Simulates a transaction.
     ///
+    /// Optionally pass [`SimulateQueryOptions`] to request gas estimation behavior
+    /// (e.g. `estimate_gas_unit_price`, `estimate_max_gas_amount`) as query
+    /// parameters to the `/transactions/simulate` endpoint.
+    ///
     /// # Errors
     ///
     /// Returns an error if the transaction cannot be serialized to BCS, the HTTP request fails,
@@ -404,8 +409,21 @@ impl FullnodeClient {
     pub async fn simulate_transaction(
         &self,
         signed_txn: &SignedTransaction,
+        options: impl Into<Option<SimulateQueryOptions>>,
     ) -> AptosResult<AptosResponse<Vec<serde_json::Value>>> {
-        let url = self.build_url("transactions/simulate");
+        let mut url = self.build_url("transactions/simulate");
+        if let Some(opts) = options.into() {
+            let mut pairs = url.query_pairs_mut();
+            if opts.estimate_gas_unit_price {
+                pairs.append_pair("estimate_gas_unit_price", "true");
+            }
+            if opts.estimate_max_gas_amount {
+                pairs.append_pair("estimate_max_gas_amount", "true");
+            }
+            if opts.estimate_prioritized_gas_unit_price {
+                pairs.append_pair("estimate_prioritized_gas_unit_price", "true");
+            }
+        }
         let bcs_bytes = signed_txn.to_bcs()?;
         let client = self.client.clone();
         let retry_config = self.retry_config.clone();
@@ -841,6 +859,10 @@ impl FullnodeClient {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::transaction::simulation::SimulateQueryOptions;
+    use crate::transaction::types::{RawTransaction, SignedTransaction};
+    use crate::transaction::authenticator::{Ed25519PublicKey, Ed25519Signature, TransactionAuthenticator};
+    use crate::types::ChainId;
     use wiremock::{
         Mock, MockServer, ResponseTemplate,
         matchers::{method, path, path_regex},
@@ -858,6 +880,45 @@ mod tests {
         let url = format!("{}/v1", server.uri());
         let config = AptosConfig::custom(&url).unwrap().without_retry();
         FullnodeClient::new(config).unwrap()
+    }
+
+    /// Creates a minimal SignedTransaction for use in simulate_transaction tests.
+    fn create_minimal_signed_transaction() -> SignedTransaction {
+        use crate::transaction::payload::{EntryFunction, TransactionPayload};
+
+        let raw = RawTransaction::new(
+            AccountAddress::ONE,
+            0,
+            TransactionPayload::EntryFunction(
+                EntryFunction::apt_transfer(AccountAddress::ONE, 0).unwrap(),
+            ),
+            100_000,
+            100,
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs()
+                .saturating_add(600),
+            ChainId::testnet(),
+        );
+        let auth = TransactionAuthenticator::Ed25519 {
+            public_key: Ed25519PublicKey([0u8; 32]),
+            signature: Ed25519Signature([0u8; 64]),
+        };
+        SignedTransaction::new(raw, auth)
+    }
+
+    fn simulate_response_json() -> serde_json::Value {
+        serde_json::json!([{
+            "success": true,
+            "vm_status": "Executed successfully",
+            "gas_used": "100",
+            "max_gas_amount": "200000",
+            "gas_unit_price": "100",
+            "hash": "0x1",
+            "changes": [],
+            "events": []
+        }])
     }
 
     #[tokio::test]
@@ -1206,5 +1267,150 @@ mod tests {
             .unwrap();
 
         assert_eq!(result.data.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_simulate_transaction_with_estimate_gas_unit_price() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/v1/transactions/simulate"))
+            .and(|req: &wiremock::Request| {
+                req.url
+                    .query()
+                    .map_or(false, |q| q.contains("estimate_gas_unit_price=true"))
+            })
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(simulate_response_json()),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server);
+        let signed = create_minimal_signed_transaction();
+        let opts = SimulateQueryOptions::new().estimate_gas_unit_price(true);
+        let result = client
+            .simulate_transaction(&signed, Some(opts))
+            .await
+            .unwrap();
+        assert!(!result.data.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_simulate_transaction_with_estimate_max_gas_amount() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/v1/transactions/simulate"))
+            .and(|req: &wiremock::Request| {
+                req.url
+                    .query()
+                    .map_or(false, |q| q.contains("estimate_max_gas_amount=true"))
+            })
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(simulate_response_json()),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server);
+        let signed = create_minimal_signed_transaction();
+        let opts = SimulateQueryOptions::new().estimate_max_gas_amount(true);
+        let result = client
+            .simulate_transaction(&signed, Some(opts))
+            .await
+            .unwrap();
+        assert!(!result.data.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_simulate_transaction_with_estimate_prioritized_gas_unit_price() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/v1/transactions/simulate"))
+            .and(|req: &wiremock::Request| {
+                req.url.query().map_or(false, |q| {
+                    q.contains("estimate_prioritized_gas_unit_price=true")
+                })
+            })
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(simulate_response_json()),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server);
+        let signed = create_minimal_signed_transaction();
+        let opts = SimulateQueryOptions::new().estimate_prioritized_gas_unit_price(true);
+        let result = client
+            .simulate_transaction(&signed, Some(opts))
+            .await
+            .unwrap();
+        assert!(!result.data.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_simulate_transaction_with_all_options() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/v1/transactions/simulate"))
+            .and(|req: &wiremock::Request| {
+                req.url.query().map_or(false, |q| {
+                    q.contains("estimate_gas_unit_price=true")
+                        && q.contains("estimate_max_gas_amount=true")
+                        && q.contains("estimate_prioritized_gas_unit_price=true")
+                })
+            })
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(simulate_response_json()),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server);
+        let signed = create_minimal_signed_transaction();
+        let opts = SimulateQueryOptions::new()
+            .estimate_gas_unit_price(true)
+            .estimate_max_gas_amount(true)
+            .estimate_prioritized_gas_unit_price(true);
+        let result = client
+            .simulate_transaction(&signed, Some(opts))
+            .await
+            .unwrap();
+        assert!(!result.data.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_simulate_transaction_without_options() {
+        let server = MockServer::start().await;
+
+        // Mock must NOT match if query contains any of the simulate options (so we use path only and expect no query param)
+        Mock::given(method("POST"))
+            .and(path("/v1/transactions/simulate"))
+            .and(|req: &wiremock::Request| {
+                // URL must not contain the simulate query params when options is None
+                req.url.query().map_or(true, |q| {
+                    !q.contains("estimate_gas_unit_price=")
+                        && !q.contains("estimate_max_gas_amount=")
+                        && !q.contains("estimate_prioritized_gas_unit_price=")
+                })
+            })
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(simulate_response_json()),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server);
+        let signed = create_minimal_signed_transaction();
+        let result = client.simulate_transaction(&signed, None).await.unwrap();
+        assert!(!result.data.is_empty());
     }
 }

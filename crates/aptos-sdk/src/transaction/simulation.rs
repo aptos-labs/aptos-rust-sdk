@@ -11,6 +11,12 @@
 //! - **Debug transactions** by examining execution details
 //! - **Validate payloads** before committing to transactions
 //!
+//! Multi-agent and fee-payer transactions can be simulated without collecting
+//! signatures first: use [`Aptos::simulate_multi_agent`] and
+//! [`Aptos::simulate_fee_payer`] with a raw multi-agent or fee-payer transaction.
+//! These use [`SimulateQueryOptions`] when you need gas estimation query parameters
+//! (e.g. `estimate_gas_unit_price`, `estimate_max_gas_amount`) on the simulate endpoint.
+//!
 //! # Example
 //!
 //! ```rust,ignore
@@ -19,7 +25,7 @@
 //! let aptos = Aptos::testnet()?;
 //!
 //! // Simulate a transaction
-//! let result = aptos.simulate_payload(&account, payload).await?;
+//! let result = aptos.simulate(&account, payload).await?;
 //!
 //! if result.success() {
 //!     println!("Transaction will succeed!");
@@ -485,6 +491,52 @@ impl VmErrorCategory {
     }
 }
 
+/// Query options for the fullnode `/transactions/simulate` endpoint.
+///
+/// These options are passed as query parameters to the simulate API.
+/// When set to `true`, the node may override transaction gas fields or use
+/// estimated values for simulation (see Aptos API docs).
+#[derive(Debug, Clone, Default)]
+pub struct SimulateQueryOptions {
+    /// When true, the gas unit price in the transaction may be ignored and the
+    /// estimated gas unit price used instead.
+    pub estimate_gas_unit_price: bool,
+    /// When true, the max gas amount in the transaction may be ignored and the
+    /// maximum possible gas used instead.
+    pub estimate_max_gas_amount: bool,
+    /// When true, use a higher prioritized gas unit price for simulation.
+    pub estimate_prioritized_gas_unit_price: bool,
+}
+
+impl SimulateQueryOptions {
+    /// Creates new simulate query options (all false).
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Requests the node to estimate gas unit price for simulation.
+    #[must_use]
+    pub fn estimate_gas_unit_price(mut self, value: bool) -> Self {
+        self.estimate_gas_unit_price = value;
+        self
+    }
+
+    /// Requests the node to estimate max gas amount for simulation.
+    #[must_use]
+    pub fn estimate_max_gas_amount(mut self, value: bool) -> Self {
+        self.estimate_max_gas_amount = value;
+        self
+    }
+
+    /// Requests the node to use prioritized gas unit price for simulation.
+    #[must_use]
+    pub fn estimate_prioritized_gas_unit_price(mut self, value: bool) -> Self {
+        self.estimate_prioritized_gas_unit_price = value;
+        self
+    }
+}
+
 /// Options for simulation.
 #[derive(Debug, Clone, Default)]
 pub struct SimulationOptions {
@@ -661,6 +713,60 @@ mod tests {
         let result = SimulationResult::from_json(json).unwrap();
         assert_eq!(result.changes().len(), 1);
         assert!(result.changes()[0].is_write());
+    }
+
+    #[test]
+    fn test_simulate_query_options_default() {
+        let opts = SimulateQueryOptions::default();
+        assert!(!opts.estimate_gas_unit_price);
+        assert!(!opts.estimate_max_gas_amount);
+        assert!(!opts.estimate_prioritized_gas_unit_price);
+    }
+
+    #[test]
+    fn test_simulate_query_options_builder() {
+        let opts = SimulateQueryOptions::new()
+            .estimate_gas_unit_price(true)
+            .estimate_max_gas_amount(true)
+            .estimate_prioritized_gas_unit_price(false);
+        assert!(opts.estimate_gas_unit_price);
+        assert!(opts.estimate_max_gas_amount);
+        assert!(!opts.estimate_prioritized_gas_unit_price);
+    }
+
+    #[test]
+    fn test_simulate_query_options_estimate_gas_unit_price() {
+        let opts = SimulateQueryOptions::new().estimate_gas_unit_price(true);
+        assert!(opts.estimate_gas_unit_price);
+        assert!(!opts.estimate_max_gas_amount);
+        assert!(!opts.estimate_prioritized_gas_unit_price);
+    }
+
+    #[test]
+    fn test_simulate_query_options_estimate_max_gas_amount() {
+        let opts = SimulateQueryOptions::new().estimate_max_gas_amount(true);
+        assert!(!opts.estimate_gas_unit_price);
+        assert!(opts.estimate_max_gas_amount);
+        assert!(!opts.estimate_prioritized_gas_unit_price);
+    }
+
+    #[test]
+    fn test_simulate_query_options_estimate_prioritized_gas_unit_price() {
+        let opts = SimulateQueryOptions::new().estimate_prioritized_gas_unit_price(true);
+        assert!(!opts.estimate_gas_unit_price);
+        assert!(!opts.estimate_max_gas_amount);
+        assert!(opts.estimate_prioritized_gas_unit_price);
+    }
+
+    #[test]
+    fn test_simulate_query_options_all_true() {
+        let opts = SimulateQueryOptions::new()
+            .estimate_gas_unit_price(true)
+            .estimate_max_gas_amount(true)
+            .estimate_prioritized_gas_unit_price(true);
+        assert!(opts.estimate_gas_unit_price);
+        assert!(opts.estimate_max_gas_amount);
+        assert!(opts.estimate_prioritized_gas_unit_price);
     }
 
     #[test]

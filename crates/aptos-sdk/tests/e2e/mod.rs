@@ -753,6 +753,121 @@ mod multi_signer_tests {
             }
         }
     }
+
+    /// Simulate a multi-agent transaction (no signatures) then sign and submit.
+    #[tokio::test]
+    #[ignore]
+    async fn e2e_simulate_multi_agent_then_submit() {
+        let config = get_test_config();
+        let aptos = Aptos::new(config).expect("failed to create client");
+
+        let sender = aptos
+            .create_funded_account(200_000_000)
+            .await
+            .expect("failed to create sender");
+        let secondary = aptos
+            .create_funded_account(100_000_000)
+            .await
+            .expect("failed to create secondary");
+
+        let payload =
+            EntryFunction::apt_transfer(Ed25519Account::generate().address(), 1000).unwrap();
+        let sender_seq = aptos
+            .get_sequence_number(sender.address())
+            .await
+            .unwrap_or(0);
+        let chain_id = aptos.ensure_chain_id().await.expect("failed to resolve chain id");
+
+        let raw_txn = TransactionBuilder::new()
+            .sender(sender.address())
+            .sequence_number(sender_seq)
+            .payload(payload.into())
+            .chain_id(chain_id)
+            .max_gas_amount(100_000)
+            .gas_unit_price(100)
+            .build()
+            .expect("failed to build");
+
+        let multi_agent_txn = MultiAgentRawTransaction {
+            raw_txn,
+            secondary_signer_addresses: vec![secondary.address()],
+        };
+
+        // Simulate first (no signatures required)
+        let sim_result = aptos
+            .simulate_multi_agent(&multi_agent_txn, None)
+            .await
+            .expect("simulate_multi_agent should succeed");
+        println!(
+            "Simulation success: {}, gas_used: {}",
+            sim_result.success(),
+            sim_result.gas_used()
+        );
+
+        // Then sign and submit
+        let secondary_ref: &dyn Account = &secondary;
+        let signed = sign_multi_agent_transaction(&multi_agent_txn, &sender, &[secondary_ref])
+            .expect("failed to sign");
+        let _ = aptos.submit_and_wait(&signed, None).await;
+    }
+
+    /// Simulate a fee-payer transaction (no signatures) then sign and submit.
+    #[tokio::test]
+    #[ignore]
+    async fn e2e_simulate_fee_payer_then_submit() {
+        let config = get_test_config();
+        let aptos = Aptos::new(config).expect("failed to create client");
+
+        let sender = aptos
+            .create_funded_account(1_000)
+            .await
+            .expect("failed to create sender");
+        let fee_payer = aptos
+            .create_funded_account(500_000_000)
+            .await
+            .expect("failed to create fee payer");
+        let recipient = Ed25519Account::generate();
+
+        let payload = EntryFunction::apt_transfer(recipient.address(), 500).unwrap();
+        let sender_seq = aptos
+            .get_sequence_number(sender.address())
+            .await
+            .unwrap_or(0);
+        let chain_id = aptos.ensure_chain_id().await.expect("failed to resolve chain id");
+
+        let raw_txn = TransactionBuilder::new()
+            .sender(sender.address())
+            .sequence_number(sender_seq)
+            .payload(payload.into())
+            .chain_id(chain_id)
+            .max_gas_amount(100_000)
+            .gas_unit_price(100)
+            .build()
+            .expect("failed to build");
+
+        let fee_payer_txn = FeePayerRawTransaction {
+            raw_txn,
+            secondary_signer_addresses: vec![],
+            fee_payer_address: fee_payer.address(),
+        };
+
+        // Simulate first (no signatures required)
+        let sim_result = aptos
+            .simulate_fee_payer(&fee_payer_txn, None)
+            .await
+            .expect("simulate_fee_payer should succeed");
+        println!(
+            "Simulation success: {}, gas_used: {}",
+            sim_result.success(),
+            sim_result.gas_used()
+        );
+
+        // Then sign and submit
+        let signed =
+            sign_fee_payer_transaction(&fee_payer_txn, &sender, &[], &fee_payer)
+                .expect("failed to sign");
+        let _ = aptos.submit_and_wait(&signed, None).await;
+    }
 }
 
 // =============================================================================
