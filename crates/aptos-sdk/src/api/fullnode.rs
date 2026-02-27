@@ -859,9 +859,11 @@ impl FullnodeClient {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::transaction::authenticator::{
+        Ed25519PublicKey, Ed25519Signature, TransactionAuthenticator,
+    };
     use crate::transaction::simulation::SimulateQueryOptions;
     use crate::transaction::types::{RawTransaction, SignedTransaction};
-    use crate::transaction::authenticator::{Ed25519PublicKey, Ed25519Signature, TransactionAuthenticator};
     use crate::types::ChainId;
     use wiremock::{
         Mock, MockServer, ResponseTemplate,
@@ -882,7 +884,7 @@ mod tests {
         FullnodeClient::new(config).unwrap()
     }
 
-    /// Creates a minimal SignedTransaction for use in simulate_transaction tests.
+    /// Creates a minimal `SignedTransaction` for use in `simulate_transaction` tests.
     fn create_minimal_signed_transaction() -> SignedTransaction {
         use crate::transaction::payload::{EntryFunction, TransactionPayload};
 
@@ -1278,11 +1280,9 @@ mod tests {
             .and(|req: &wiremock::Request| {
                 req.url
                     .query()
-                    .map_or(false, |q| q.contains("estimate_gas_unit_price=true"))
+                    .is_some_and(|q| q.contains("estimate_gas_unit_price=true"))
             })
-            .respond_with(
-                ResponseTemplate::new(200).set_body_json(simulate_response_json()),
-            )
+            .respond_with(ResponseTemplate::new(200).set_body_json(simulate_response_json()))
             .expect(1)
             .mount(&server)
             .await;
@@ -1306,11 +1306,9 @@ mod tests {
             .and(|req: &wiremock::Request| {
                 req.url
                     .query()
-                    .map_or(false, |q| q.contains("estimate_max_gas_amount=true"))
+                    .is_some_and(|q| q.contains("estimate_max_gas_amount=true"))
             })
-            .respond_with(
-                ResponseTemplate::new(200).set_body_json(simulate_response_json()),
-            )
+            .respond_with(ResponseTemplate::new(200).set_body_json(simulate_response_json()))
             .expect(1)
             .mount(&server)
             .await;
@@ -1332,13 +1330,11 @@ mod tests {
         Mock::given(method("POST"))
             .and(path("/v1/transactions/simulate"))
             .and(|req: &wiremock::Request| {
-                req.url.query().map_or(false, |q| {
-                    q.contains("estimate_prioritized_gas_unit_price=true")
-                })
+                req.url
+                    .query()
+                    .is_some_and(|q| q.contains("estimate_prioritized_gas_unit_price=true"))
             })
-            .respond_with(
-                ResponseTemplate::new(200).set_body_json(simulate_response_json()),
-            )
+            .respond_with(ResponseTemplate::new(200).set_body_json(simulate_response_json()))
             .expect(1)
             .mount(&server)
             .await;
@@ -1360,15 +1356,13 @@ mod tests {
         Mock::given(method("POST"))
             .and(path("/v1/transactions/simulate"))
             .and(|req: &wiremock::Request| {
-                req.url.query().map_or(false, |q| {
+                req.url.query().is_some_and(|q| {
                     q.contains("estimate_gas_unit_price=true")
                         && q.contains("estimate_max_gas_amount=true")
                         && q.contains("estimate_prioritized_gas_unit_price=true")
                 })
             })
-            .respond_with(
-                ResponseTemplate::new(200).set_body_json(simulate_response_json()),
-            )
+            .respond_with(ResponseTemplate::new(200).set_body_json(simulate_response_json()))
             .expect(1)
             .mount(&server)
             .await;
@@ -1395,15 +1389,13 @@ mod tests {
             .and(path("/v1/transactions/simulate"))
             .and(|req: &wiremock::Request| {
                 // URL must not contain the simulate query params when options is None
-                req.url.query().map_or(true, |q| {
+                req.url.query().is_none_or(|q| {
                     !q.contains("estimate_gas_unit_price=")
                         && !q.contains("estimate_max_gas_amount=")
                         && !q.contains("estimate_prioritized_gas_unit_price=")
                 })
             })
-            .respond_with(
-                ResponseTemplate::new(200).set_body_json(simulate_response_json()),
-            )
+            .respond_with(ResponseTemplate::new(200).set_body_json(simulate_response_json()))
             .expect(1)
             .mount(&server)
             .await;

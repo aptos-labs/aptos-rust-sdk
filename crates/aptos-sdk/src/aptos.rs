@@ -7,9 +7,9 @@ use crate::api::{AptosResponse, FullnodeClient, PendingTransaction};
 use crate::config::AptosConfig;
 use crate::error::{AptosError, AptosResult};
 use crate::transaction::{
-    build_simulation_signed_fee_payer, build_simulation_signed_multi_agent,
     FeePayerRawTransaction, MultiAgentRawTransaction, RawTransaction, SignedTransaction,
     SimulateQueryOptions, SimulationResult, TransactionBuilder, TransactionPayload,
+    build_simulation_signed_fee_payer, build_simulation_signed_multi_agent,
 };
 use crate::types::{AccountAddress, ChainId};
 use std::sync::Arc;
@@ -413,10 +413,7 @@ impl Aptos {
         &self,
         signed_txn: &SignedTransaction,
     ) -> AptosResult<SimulationResult> {
-        let response = self
-            .fullnode
-            .simulate_transaction(signed_txn, None)
-            .await?;
+        let response = self.fullnode.simulate_transaction(signed_txn, None).await?;
         SimulationResult::from_response(response.into_inner())
     }
 
@@ -444,7 +441,7 @@ impl Aptos {
     /// Simulates a multi-agent transaction without requiring real signatures.
     ///
     /// Builds a simulation-only signed transaction (using
-    /// [`AccountAuthenticator::NoAccountAuthenticator`]) and sends it to the
+    /// [`crate::transaction::authenticator::AccountAuthenticator::NoAccountAuthenticator`]) and sends it to the
     /// simulate endpoint. Use this to check outcome and gas before collecting
     /// signatures from sender and secondary signers.
     ///
@@ -476,7 +473,7 @@ impl Aptos {
     /// Simulates a fee-payer (sponsored) transaction without requiring real signatures.
     ///
     /// Builds a simulation-only signed transaction (using
-    /// [`AccountAuthenticator::NoAccountAuthenticator`]) and sends it to the
+    /// [`crate::transaction::authenticator::AccountAuthenticator::NoAccountAuthenticator`]) and sends it to the
     /// simulate endpoint. Use this to check outcome and gas before collecting
     /// signatures from sender, secondary signers, and fee payer.
     ///
@@ -1218,18 +1215,20 @@ mod tests {
             .and(|req: &wiremock::Request| {
                 req.url
                     .query()
-                    .map_or(false, |q| q.contains("estimate_gas_unit_price=true"))
+                    .is_some_and(|q| q.contains("estimate_gas_unit_price=true"))
             })
-            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([{
-                "success": true,
-                "vm_status": "Executed successfully",
-                "gas_used": "1500",
-                "max_gas_amount": "200000",
-                "gas_unit_price": "100",
-                "hash": "0xabc",
-                "changes": [],
-                "events": []
-            }])))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!([{
+                    "success": true,
+                    "vm_status": "Executed successfully",
+                    "gas_used": "1500",
+                    "max_gas_amount": "200000",
+                    "gas_unit_price": "100",
+                    "hash": "0xabc",
+                    "changes": [],
+                    "events": []
+                }])),
+            )
             .expect(1)
             .mount(&server)
             .await;

@@ -12,8 +12,8 @@
 //! - **Validate payloads** before committing to transactions
 //!
 //! Multi-agent and fee-payer transactions can be simulated without collecting
-//! signatures first: use [`Aptos::simulate_multi_agent`] and
-//! [`Aptos::simulate_fee_payer`] with a raw multi-agent or fee-payer transaction.
+//! signatures first: use [`crate::Aptos::simulate_multi_agent`] and
+//! [`crate::Aptos::simulate_fee_payer`] with a raw multi-agent or fee-payer transaction.
 //! These use [`SimulateQueryOptions`] when you need gas estimation query parameters
 //! (e.g. `estimate_gas_unit_price`, `estimate_max_gas_amount`) on the simulate endpoint.
 //!

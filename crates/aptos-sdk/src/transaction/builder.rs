@@ -677,8 +677,7 @@ mod tests {
             .unwrap();
 
         let secondary_addr = AccountAddress::from_hex("0x456").unwrap();
-        let multi_agent =
-            MultiAgentRawTransaction::new(raw_txn.clone(), vec![secondary_addr.clone()]);
+        let multi_agent = MultiAgentRawTransaction::new(raw_txn.clone(), vec![secondary_addr]);
 
         let signed = build_simulation_signed_multi_agent(&multi_agent);
         assert_eq!(signed.sender(), AccountAddress::ONE);
@@ -690,7 +689,10 @@ mod tests {
                 secondary_signer_addresses,
                 secondary_signers,
             } => {
-                assert!(matches!(sender, AccountAuthenticator::NoAccountAuthenticator));
+                assert!(matches!(
+                    sender,
+                    AccountAuthenticator::NoAccountAuthenticator
+                ));
                 assert_eq!(secondary_signer_addresses.len(), 1);
                 assert_eq!(secondary_signer_addresses[0], secondary_addr);
                 assert_eq!(secondary_signers.len(), 1);
@@ -718,8 +720,7 @@ mod tests {
             .unwrap();
 
         let fee_payer_addr = AccountAddress::from_hex("0x789").unwrap();
-        let fee_payer_txn =
-            FeePayerRawTransaction::new_simple(raw_txn.clone(), fee_payer_addr.clone());
+        let fee_payer_txn = FeePayerRawTransaction::new_simple(raw_txn.clone(), fee_payer_addr);
 
         let signed = build_simulation_signed_fee_payer(&fee_payer_txn);
         assert_eq!(signed.sender(), AccountAddress::ONE);
@@ -732,7 +733,10 @@ mod tests {
                 fee_payer_signer,
                 ..
             } => {
-                assert!(matches!(sender, AccountAuthenticator::NoAccountAuthenticator));
+                assert!(matches!(
+                    sender,
+                    AccountAuthenticator::NoAccountAuthenticator
+                ));
                 assert_eq!(*fee_payer_address, fee_payer_addr);
                 assert!(matches!(
                     fee_payer_signer,
