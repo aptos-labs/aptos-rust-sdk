@@ -95,8 +95,8 @@ pub use batch::{
     SignedTransactionBatch, TransactionBatchBuilder,
 };
 pub use builder::{
-    build_simulation_signed_fee_payer, build_simulation_signed_multi_agent, sign_transaction,
-    TransactionBuilder,
+    TransactionBuilder, build_simulation_signed_fee_payer, build_simulation_signed_multi_agent,
+    sign_transaction,
 };
 pub use input::{
     InputEntryFunctionData, InputEntryFunctionDataBuilder, IntoMoveArg, MoveI128, MoveI256,
@@ -104,7 +104,7 @@ pub use input::{
 };
 pub use payload::{EntryFunction, Script, ScriptArgument, TransactionPayload};
 pub use simulation::{
-    SimulatedEvent, SimulateQueryOptions, SimulationOptions, SimulationResult, StateChange,
+    SimulateQueryOptions, SimulatedEvent, SimulationOptions, SimulationResult, StateChange,
     VmError, VmErrorCategory,
 };
 pub use sponsored::{PartiallySigned, Sponsor, SponsoredTransactionBuilder, sponsor_transaction};

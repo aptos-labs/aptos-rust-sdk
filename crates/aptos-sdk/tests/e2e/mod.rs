@@ -965,7 +965,10 @@ mod multi_signer_tests {
             .get_sequence_number(sender.address())
             .await
             .unwrap_or(0);
-        let chain_id = aptos.ensure_chain_id().await.expect("failed to resolve chain id");
+        let chain_id = aptos
+            .ensure_chain_id()
+            .await
+            .expect("failed to resolve chain id");
 
         let raw_txn = TransactionBuilder::new()
             .sender(sender.address())
@@ -1022,7 +1025,10 @@ mod multi_signer_tests {
             .get_sequence_number(sender.address())
             .await
             .unwrap_or(0);
-        let chain_id = aptos.ensure_chain_id().await.expect("failed to resolve chain id");
+        let chain_id = aptos
+            .ensure_chain_id()
+            .await
+            .expect("failed to resolve chain id");
 
         let raw_txn = TransactionBuilder::new()
             .sender(sender.address())
@@ -1052,9 +1058,8 @@ mod multi_signer_tests {
         );
 
         // Then sign and submit
-        let signed =
-            sign_fee_payer_transaction(&fee_payer_txn, &sender, &[], &fee_payer)
-                .expect("failed to sign");
+        let signed = sign_fee_payer_transaction(&fee_payer_txn, &sender, &[], &fee_payer)
+            .expect("failed to sign");
         let _ = aptos.submit_and_wait(&signed, None).await;
     }
 }
