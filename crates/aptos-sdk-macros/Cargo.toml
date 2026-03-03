@@ -24,7 +24,9 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 
 [dev-dependencies]
-aptos-sdk = { workspace = true }
+# Path-only dep: stripped from published crate (breaks circular publish dependency).
+# The macros crate only needs aptos-sdk for trybuild compile tests during local dev.
+aptos-sdk = { path = "../aptos-sdk" }
 tokio = { workspace = true, features = ["full", "test-util"] }
 trybuild = { workspace = true }
 
