@@ -673,17 +673,11 @@ mod multi_signer_tests {
             .expect("failed to sign");
 
         // Submit
-        let result = aptos.submit_and_wait(&signed, None).await;
-
-        // This may or may not work depending on localnet support for fee payer
-        match result {
-            Ok(r) => {
-                println!("Fee payer transaction result: {:?}", r.data);
-            }
-            Err(e) => {
-                println!("Fee payer transaction failed (may not be supported): {}", e);
-            }
-        }
+        let result = aptos
+            .submit_and_wait(&signed, None)
+            .await
+            .expect("submit_and_wait should succeed");
+        println!("Fee payer transaction result: {:?}", result.data);
     }
 
     #[tokio::test]
@@ -742,16 +736,11 @@ mod multi_signer_tests {
             .expect("failed to sign");
 
         // Submit
-        let result = aptos.submit_and_wait(&signed, None).await;
-
-        match result {
-            Ok(r) => {
-                println!("Multi-agent transaction result: {:?}", r.data);
-            }
-            Err(e) => {
-                println!("Multi-agent transaction error: {}", e);
-            }
-        }
+        let result = aptos
+            .submit_and_wait(&signed, None)
+            .await
+            .expect("submit_and_wait should succeed");
+        println!("Multi-agent transaction result: {:?}", result.data);
     }
 
     /// Simulate a multi-agent transaction (no signatures) then sign and submit.
@@ -811,7 +800,10 @@ mod multi_signer_tests {
         let secondary_ref: &dyn Account = &secondary;
         let signed = sign_multi_agent_transaction(&multi_agent_txn, &sender, &[secondary_ref])
             .expect("failed to sign");
-        let _ = aptos.submit_and_wait(&signed, None).await;
+        aptos
+            .submit_and_wait(&signed, None)
+            .await
+            .expect("submit_and_wait should succeed");
     }
 
     /// Simulate a fee-payer transaction (no signatures) then sign and submit.
@@ -871,7 +863,10 @@ mod multi_signer_tests {
         // Then sign and submit
         let signed = sign_fee_payer_transaction(&fee_payer_txn, &sender, &[], &fee_payer)
             .expect("failed to sign");
-        let _ = aptos.submit_and_wait(&signed, None).await;
+        aptos
+            .submit_and_wait(&signed, None)
+            .await
+            .expect("submit_and_wait should succeed");
     }
 }
 
@@ -948,18 +943,12 @@ mod multi_key_e2e_tests {
             sign_transaction(&raw_txn, &multi_key_account).expect("failed to sign with multi-key");
 
         // Submit
-        let result = aptos.submit_and_wait(&signed, None).await;
-
-        match result {
-            Ok(r) => {
-                let success = r.data.get("success").and_then(|v| v.as_bool());
-                println!("Multi-key transaction success: {:?}", success);
-            }
-            Err(e) => {
-                // Multi-key might not be supported on all networks
-                println!("Multi-key transaction error (may not be supported): {}", e);
-            }
-        }
+        let result = aptos
+            .submit_and_wait(&signed, None)
+            .await
+            .expect("submit_and_wait should succeed");
+        let success = result.data.get("success").and_then(|v| v.as_bool());
+        println!("Multi-key transaction success: {:?}", success);
     }
 }
 

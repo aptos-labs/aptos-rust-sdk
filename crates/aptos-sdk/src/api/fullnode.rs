@@ -398,7 +398,23 @@ impl FullnodeClient {
 
     /// Simulates a transaction.
     ///
-    /// Optionally pass [`SimulateQueryOptions`] to request gas estimation behavior
+    /// Delegates to [`simulate_transaction_with_options`](Self::simulate_transaction_with_options) with `None` for options.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the transaction cannot be serialized to BCS, the HTTP request fails,
+    /// the API returns an error status code, or the response cannot be parsed as JSON.
+    pub async fn simulate_transaction(
+        &self,
+        signed_txn: &SignedTransaction,
+    ) -> AptosResult<AptosResponse<Vec<serde_json::Value>>> {
+        self.simulate_transaction_with_options(signed_txn, None as Option<SimulateQueryOptions>)
+            .await
+    }
+
+    /// Simulates a transaction with optional query parameters.
+    ///
+    /// Pass [`SimulateQueryOptions`] to request gas estimation behavior
     /// (e.g. `estimate_gas_unit_price`, `estimate_max_gas_amount`) as query
     /// parameters to the `/transactions/simulate` endpoint.
     ///
@@ -406,7 +422,7 @@ impl FullnodeClient {
     ///
     /// Returns an error if the transaction cannot be serialized to BCS, the HTTP request fails,
     /// the API returns an error status code, or the response cannot be parsed as JSON.
-    pub async fn simulate_transaction(
+    pub async fn simulate_transaction_with_options(
         &self,
         signed_txn: &SignedTransaction,
         options: impl Into<Option<SimulateQueryOptions>>,
@@ -1291,7 +1307,7 @@ mod tests {
         let signed = create_minimal_signed_transaction();
         let opts = SimulateQueryOptions::new().estimate_gas_unit_price(true);
         let result = client
-            .simulate_transaction(&signed, Some(opts))
+            .simulate_transaction_with_options(&signed, opts)
             .await
             .unwrap();
         assert!(!result.data.is_empty());
@@ -1317,7 +1333,7 @@ mod tests {
         let signed = create_minimal_signed_transaction();
         let opts = SimulateQueryOptions::new().estimate_max_gas_amount(true);
         let result = client
-            .simulate_transaction(&signed, Some(opts))
+            .simulate_transaction_with_options(&signed, opts)
             .await
             .unwrap();
         assert!(!result.data.is_empty());
@@ -1343,7 +1359,7 @@ mod tests {
         let signed = create_minimal_signed_transaction();
         let opts = SimulateQueryOptions::new().estimate_prioritized_gas_unit_price(true);
         let result = client
-            .simulate_transaction(&signed, Some(opts))
+            .simulate_transaction_with_options(&signed, opts)
             .await
             .unwrap();
         assert!(!result.data.is_empty());
@@ -1374,7 +1390,7 @@ mod tests {
             .estimate_max_gas_amount(true)
             .estimate_prioritized_gas_unit_price(true);
         let result = client
-            .simulate_transaction(&signed, Some(opts))
+            .simulate_transaction_with_options(&signed, opts)
             .await
             .unwrap();
         assert!(!result.data.is_empty());
@@ -1402,7 +1418,7 @@ mod tests {
 
         let client = create_mock_client(&server);
         let signed = create_minimal_signed_transaction();
-        let result = client.simulate_transaction(&signed, None).await.unwrap();
+        let result = client.simulate_transaction(&signed).await.unwrap();
         assert!(!result.data.is_empty());
     }
 }

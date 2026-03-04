@@ -366,7 +366,7 @@ impl Aptos {
         &self,
         signed_txn: &SignedTransaction,
     ) -> AptosResult<AptosResponse<Vec<serde_json::Value>>> {
-        self.fullnode.simulate_transaction(signed_txn, None).await
+        self.fullnode.simulate_transaction(signed_txn).await
     }
 
     /// Simulates a transaction and returns a parsed result.
@@ -397,7 +397,7 @@ impl Aptos {
     ) -> AptosResult<crate::transaction::SimulationResult> {
         let raw_txn = self.build_transaction(account, payload).await?;
         let signed = crate::transaction::builder::sign_transaction(&raw_txn, account)?;
-        let response = self.fullnode.simulate_transaction(&signed, None).await?;
+        let response = self.fullnode.simulate_transaction(&signed).await?;
         crate::transaction::SimulationResult::from_response(response.into_inner())
     }
 
@@ -413,7 +413,7 @@ impl Aptos {
         &self,
         signed_txn: &SignedTransaction,
     ) -> AptosResult<SimulationResult> {
-        let response = self.fullnode.simulate_transaction(signed_txn, None).await?;
+        let response = self.fullnode.simulate_transaction(signed_txn).await?;
         SimulationResult::from_response(response.into_inner())
     }
 
@@ -433,7 +433,7 @@ impl Aptos {
     ) -> AptosResult<SimulationResult> {
         let response = self
             .fullnode
-            .simulate_transaction(signed_txn, Some(options))
+            .simulate_transaction_with_options(signed_txn, Some(options))
             .await?;
         SimulationResult::from_response(response.into_inner())
     }
@@ -561,7 +561,7 @@ impl Aptos {
         // First simulate
         let raw_txn = self.build_transaction(account, payload).await?;
         let signed = crate::transaction::builder::sign_transaction(&raw_txn, account)?;
-        let sim_response = self.fullnode.simulate_transaction(&signed, None).await?;
+        let sim_response = self.fullnode.simulate_transaction(&signed).await?;
         let sim_result =
             crate::transaction::SimulationResult::from_response(sim_response.into_inner())?;
 
@@ -597,7 +597,7 @@ impl Aptos {
         // First simulate
         let raw_txn = self.build_transaction(account, payload).await?;
         let signed = crate::transaction::builder::sign_transaction(&raw_txn, account)?;
-        let sim_response = self.fullnode.simulate_transaction(&signed, None).await?;
+        let sim_response = self.fullnode.simulate_transaction(&signed).await?;
         let sim_result =
             crate::transaction::SimulationResult::from_response(sim_response.into_inner())?;
 
