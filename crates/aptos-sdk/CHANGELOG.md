@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [unreleased]
 
 ### Added
+- `FullnodeClient::simulate_transaction_with_options` — simulate with optional query parameters (`estimate_max_gas_amount`, `estimate_gas_unit_price`, `estimate_prioritized_gas_unit_price`). Existing `simulate_transaction` is unchanged (single-arg) and delegates to the new method with `None` for backward compatibility.
 - `WebAuthnAccount` for on-chain `secp256r1` transaction signing. Wraps a
   `Secp256r1PrivateKey` and emits the on-chain `AnySignature::WebAuthn`
   envelope (synthetic `PartialAuthenticatorAssertionResponse` carrying

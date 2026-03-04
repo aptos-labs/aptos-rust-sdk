@@ -1000,7 +1000,10 @@ mod multi_signer_tests {
         let secondary_ref: &dyn Account = &secondary;
         let signed = sign_multi_agent_transaction(&multi_agent_txn, &sender, &[secondary_ref])
             .expect("failed to sign");
-        let _ = aptos.submit_and_wait(&signed, None).await;
+        aptos
+            .submit_and_wait(&signed, None)
+            .await
+            .expect("submit_and_wait should succeed");
     }
 
     /// Simulate a fee-payer transaction (no signatures) then sign and submit.
@@ -1060,7 +1063,10 @@ mod multi_signer_tests {
         // Then sign and submit
         let signed = sign_fee_payer_transaction(&fee_payer_txn, &sender, &[], &fee_payer)
             .expect("failed to sign");
-        let _ = aptos.submit_and_wait(&signed, None).await;
+        aptos
+            .submit_and_wait(&signed, None)
+            .await
+            .expect("submit_and_wait should succeed");
     }
 }
 
