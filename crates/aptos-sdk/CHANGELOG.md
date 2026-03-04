@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+## [0.4.1] - 2026-03-04
+
+### Changed
+- Upgraded `aws-lc-sys` from 0.37.1 to 0.38.0 (pinned as direct dependency)
+- Upgraded `aws-lc-rs` from 1.16.0 to 1.16.1
+
 ## [0.4.0] - 2026-02-25
 
 ### Security
