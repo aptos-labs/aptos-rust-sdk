@@ -24,8 +24,8 @@ cargo build --release                          # Release build
 ### Testing
 
 ```bash
-cargo test -p aptos-sdk                # Run unit tests (lib)
-cargo test -p aptos-sdk --lib          # Same: run lib unit tests only
+cargo test -p aptos-sdk                # Run all tests (lib, integration, doc)
+cargo test -p aptos-sdk --lib          # Run lib unit tests only
 cargo test -p aptos-sdk --all-features # Test with all features
 cargo test -p aptos-sdk --features "e2e" -- --ignored  # E2E tests (requires localnet)
 ```
