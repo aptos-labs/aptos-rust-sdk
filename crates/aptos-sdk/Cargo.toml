@@ -1,6 +1,6 @@
 [package]
 name = "aptos-sdk"
-version = "0.4.0"
+version = "0.4.1"
 description = "A user-friendly, idiomatic Rust SDK for the Aptos blockchain"
 authors.workspace = true
 edition.workspace = true
@@ -53,6 +53,7 @@ serde = { workspace = true }
 serde_bytes = "0.11"
 serde_json = { workspace = true }
 aptos-bcs = { workspace = true }
+aws-lc-sys = { workspace = true }
 thiserror = { workspace = true }
 url = { workspace = true }
 anyhow = { workspace = true }

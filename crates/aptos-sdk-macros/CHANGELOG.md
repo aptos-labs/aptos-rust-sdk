@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+## [0.2.1] - 2026-03-04
+
+### Changed
+- Patch version bump to align with `aptos-sdk` 0.4.1 release
+
 ## [0.2.0] - 2026-02-25
 
 ### Security
