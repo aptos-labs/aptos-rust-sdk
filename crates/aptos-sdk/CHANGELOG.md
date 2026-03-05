@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+### Changed
+- Increased default max gas amount from 200,000 to 2,000,000 (10x)
+
 ## [0.4.1] - 2026-03-04
 
 ### Changed
