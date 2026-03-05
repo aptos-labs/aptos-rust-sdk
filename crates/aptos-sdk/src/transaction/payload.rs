@@ -72,26 +72,43 @@ impl Script {
 }
 
 /// An argument to a script.
+///
+/// Variant order must match [ScriptTransactionArgumentVariants] for BCS compatibility with the
+/// chain and TS SDK. See: <https://github.com/aptos-labs/aptos-core/blob/main/third_party/move/move-core/types/src/transaction_argument.rs>
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ScriptArgument {
-    /// A u8 value.
+    /// A u8 value (variant 0).
     U8(u8),
-    /// A u16 value.
-    U16(u16),
-    /// A u32 value.
-    U32(u32),
-    /// A u64 value.
+    /// A u64 value (variant 1).
     U64(u64),
-    /// A u128 value.
+    /// A u128 value (variant 2).
     U128(u128),
-    /// A u256 value (as bytes).
-    U256([u8; 32]),
-    /// An address value.
+    /// An address value (variant 3).
     Address(crate::types::AccountAddress),
-    /// A vector of u8 (bytes).
+    /// A vector of u8 / bytes (variant 4).
     U8Vector(#[serde(with = "serde_bytes")] Vec<u8>),
-    /// A boolean value.
+    /// A boolean value (variant 5).
     Bool(bool),
+    /// A u16 value (variant 6).
+    U16(u16),
+    /// A u32 value (variant 7).
+    U32(u32),
+    /// A u256 value as 32 bytes (variant 8).
+    U256([u8; 32]),
+    /// Pre-serialized BCS bytes (variant 9). Use for types not directly representable as other variants.
+    Serialized(#[serde(with = "serde_bytes")] Vec<u8>),
+    /// An i8 value (variant 10).
+    I8(i8),
+    /// An i16 value (variant 11).
+    I16(i16),
+    /// An i32 value (variant 12).
+    I32(i32),
+    /// An i64 value (variant 13).
+    I64(i64),
+    /// An i128 value (variant 14).
+    I128(i128),
+    /// An i256 value as 32 bytes (variant 15).
+    I256([u8; 32]),
 }
 
 /// An entry function call payload.
@@ -311,26 +328,30 @@ mod tests {
     #[test]
     fn test_script_argument_variants() {
         let u8_arg = ScriptArgument::U8(255);
-        let u16_arg = ScriptArgument::U16(65535);
-        let u32_arg = ScriptArgument::U32(4_294_967_295);
         let u64_arg = ScriptArgument::U64(18_446_744_073_709_551_615);
         let u128_arg = ScriptArgument::U128(340_282_366_920_938_463_463_374_607_431_768_211_455);
-        let bool_arg = ScriptArgument::Bool(true);
         let addr_arg = ScriptArgument::Address(AccountAddress::ONE);
         let bytes_arg = ScriptArgument::U8Vector(vec![1, 2, 3]);
+        let bool_arg = ScriptArgument::Bool(true);
+        let u16_arg = ScriptArgument::U16(65535);
+        let u32_arg = ScriptArgument::U32(4_294_967_295);
         let u256_arg = ScriptArgument::U256([0xff; 32]);
+        let serialized_arg = ScriptArgument::Serialized(vec![1, 2, 3]);
+        let i64_arg = ScriptArgument::I64(-1i64);
 
-        // Test BCS serialization roundtrip
+        // Test BCS serialization roundtrip (order matches enum declaration)
         let args = vec![
             u8_arg.clone(),
-            u16_arg.clone(),
-            u32_arg.clone(),
             u64_arg.clone(),
             u128_arg.clone(),
-            bool_arg.clone(),
             addr_arg.clone(),
             bytes_arg.clone(),
+            bool_arg.clone(),
+            u16_arg.clone(),
+            u32_arg.clone(),
             u256_arg.clone(),
+            serialized_arg.clone(),
+            i64_arg.clone(),
         ];
 
         for arg in args {
