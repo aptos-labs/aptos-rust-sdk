@@ -73,7 +73,7 @@ impl Script {
 
 /// An argument to a script.
 ///
-/// Variant order must match [`ScriptTransactionArgumentVariants`] for BCS compatibility with the
+/// Variant order must match the chain's `ScriptTransactionArgumentVariants` for BCS compatibility with the
 /// chain and TS SDK. See: <https://github.com/aptos-labs/aptos-core/blob/main/third_party/move/move-core/types/src/transaction_argument.rs>
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ScriptArgument {
