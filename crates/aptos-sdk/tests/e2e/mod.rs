@@ -743,12 +743,16 @@ mod ledger_tests {
 // Multi-Signer Tests
 // =============================================================================
 
+/// Bytecode for the two-signer transfer script (main(sender, secondary, recipient, amount)).
+const TWO_SIGNER_TRANSFER_SCRIPT: &[u8] =
+    include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/e2e/scripts/script.mv"));
+
 #[cfg(all(feature = "ed25519", feature = "faucet"))]
 mod multi_signer_tests {
     use super::*;
     use aptos_sdk::account::{Account, Ed25519Account};
     use aptos_sdk::transaction::{
-        EntryFunction, TransactionBuilder,
+        EntryFunction, Script, ScriptArgument, TransactionBuilder, TransactionPayload,
         builder::{sign_fee_payer_transaction, sign_multi_agent_transaction},
         types::{FeePayerRawTransaction, MultiAgentRawTransaction},
     };
@@ -874,16 +878,17 @@ mod multi_signer_tests {
             .await
             .expect("failed to create secondary");
 
-        // Use a multi-agent-aware system entry point: aptos_account::transfer takes one
-        // signer + a recipient address + amount. We instead use 0x1::coin::transfer
-        // with a CoinType to keep the surface small. Even for a single-signer payload,
-        // adding a secondary signer is rejected on devnet as "incorrect number of
-        // secondary signers", so this test verifies the SDK *signing* path produces
-        // a transaction that *parses* on the node. We accept either an Ok response
-        // (success=true with new style nodes) or an explicit per-payload validation
-        // error from the node.
-        let payload =
-            EntryFunction::apt_transfer(Ed25519Account::generate().address(), 1000).unwrap();
+        // Two-signer script: VM expects sender + secondary (matches multi-agent tx).
+        let recipient = Ed25519Account::generate().address();
+        let amount = 1000u64;
+        let payload = TransactionPayload::Script(Script::new(
+            TWO_SIGNER_TRANSFER_SCRIPT.to_vec(),
+            vec![],
+            vec![
+                ScriptArgument::Address(recipient),
+                ScriptArgument::U64(amount),
+            ],
+        ));
 
         let sender_seq = aptos
             .get_sequence_number(sender.address())
@@ -897,7 +902,7 @@ mod multi_signer_tests {
         let raw_txn = TransactionBuilder::new()
             .sender(sender.address())
             .sequence_number(sender_seq)
-            .payload(payload.into())
+            .payload(payload)
             .chain_id(chain_id)
             .max_gas_amount(2_000_000)
             .gas_unit_price(100)
@@ -917,30 +922,20 @@ mod multi_signer_tests {
         let bytes = signed.to_bcs().expect("BCS serialization should succeed");
         assert!(!bytes.is_empty());
 
-        // Submission may fail (the payload only takes a single signer), but the
-        // failure must be a deterministic VM/validation error, not a panic or
-        // network-level error. We assert that we either get a successful submission
-        // *or* a structured API error indicating signer-count mismatch.
-        match aptos.submit_and_wait(&signed, None).await {
-            Ok(r) => {
-                let success = r.data.get("success").and_then(serde_json::Value::as_bool);
-                assert!(
-                    success.is_some(),
-                    "transaction result must contain a `success` field"
-                );
-            }
-            Err(e) => {
-                let msg = e.to_string().to_lowercase();
-                assert!(
-                    msg.contains("signer")
-                        || msg.contains("validation")
-                        || msg.contains("auth")
-                        || msg.contains("argument"),
-                    "expected a validation-level error for multi-agent on a single-signer \
-                     payload, got: {e}"
-                );
-            }
-        }
+        let result = aptos
+            .submit_and_wait(&signed, None)
+            .await
+            .expect("submit_and_wait should succeed");
+        let success = result
+            .data
+            .get("success")
+            .and_then(serde_json::Value::as_bool);
+        assert_eq!(
+            success,
+            Some(true),
+            "multi-agent two-signer transfer should succeed: {:?}",
+            result.data
+        );
     }
 
     /// Simulate a multi-agent transaction (no signatures) then sign and submit.
@@ -959,8 +954,18 @@ mod multi_signer_tests {
             .await
             .expect("failed to create secondary");
 
-        let payload =
-            EntryFunction::apt_transfer(Ed25519Account::generate().address(), 1000).unwrap();
+        // Use a two-signer script so the VM expects 2 signers (matches multi-agent tx).
+        let recipient = Ed25519Account::generate().address();
+        let amount = 1000u64;
+        let payload = TransactionPayload::Script(Script::new(
+            TWO_SIGNER_TRANSFER_SCRIPT.to_vec(),
+            vec![],
+            vec![
+                ScriptArgument::Address(recipient),
+                ScriptArgument::U64(amount),
+            ],
+        ));
+
         let sender_seq = aptos
             .get_sequence_number(sender.address())
             .await
@@ -973,7 +978,7 @@ mod multi_signer_tests {
         let raw_txn = TransactionBuilder::new()
             .sender(sender.address())
             .sequence_number(sender_seq)
-            .payload(payload.into())
+            .payload(payload)
             .chain_id(chain_id)
             .max_gas_amount(100_000)
             .gas_unit_price(100)

@@ -20,19 +20,25 @@
 //! # Example
 //!
 //! ```rust,ignore
-//! use aptos_sdk::transaction::simulation::SimulationResult;
+//! use aptos_sdk::{Aptos, AptosConfig};
+//! use aptos_sdk::account::{Account, Ed25519Account};
 //!
-//! let aptos = Aptos::testnet()?;
+//! # async fn run() -> aptos_sdk::error::AptosResult<()> {
+//! let aptos = Aptos::new(AptosConfig::testnet())?;
+//! let account = Ed25519Account::generate();
+//! let payload = aptos_sdk::transaction::EntryFunction::apt_transfer(
+//!     Ed25519Account::generate().address(),
+//!     1_000_000,
+//! )?.into();
 //!
-//! // Simulate a transaction
 //! let result = aptos.simulate(&account, payload).await?;
-//!
 //! if result.success() {
-//!     println!("Transaction will succeed!");
 //!     println!("Estimated gas: {}", result.gas_used());
 //! } else {
-//!     println!("Transaction will fail: {}", result.vm_status());
+//!     println!("Would fail: {}", result.vm_status());
 //! }
+//! # Ok(())
+//! # }
 //! ```
 
 use crate::error::{AptosError, AptosResult};
@@ -496,7 +502,7 @@ impl VmErrorCategory {
 /// These options are passed as query parameters to the simulate API.
 /// When set to `true`, the node may override transaction gas fields or use
 /// estimated values for simulation (see Aptos API docs).
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Copy, Default, Eq, PartialEq)]
 pub struct SimulateQueryOptions {
     /// When true, the gas unit price in the transaction may be ignored and the
     /// estimated gas unit price used instead.
