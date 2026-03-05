@@ -607,12 +607,16 @@ mod ledger_tests {
 // Multi-Signer Tests
 // =============================================================================
 
+/// Bytecode for the two-signer transfer script (main(sender, secondary, recipient, amount)).
+const TWO_SIGNER_TRANSFER_SCRIPT: &[u8] =
+    include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/e2e/scripts/script.mv"));
+
 #[cfg(all(feature = "ed25519", feature = "faucet"))]
 mod multi_signer_tests {
     use super::*;
     use aptos_sdk::account::{Account, Ed25519Account};
     use aptos_sdk::transaction::{
-        EntryFunction, TransactionBuilder,
+        EntryFunction, Script, ScriptArgument, TransactionBuilder, TransactionPayload,
         builder::{sign_fee_payer_transaction, sign_multi_agent_transaction},
         types::{FeePayerRawTransaction, MultiAgentRawTransaction},
     };
@@ -701,10 +705,17 @@ mod multi_signer_tests {
         println!("Sender: {}", sender.address());
         println!("Secondary: {}", secondary.address());
 
-        // Note: Most simple transactions don't need multi-agent
-        // This is just demonstrating the signing flow
-        let payload =
-            EntryFunction::apt_transfer(Ed25519Account::generate().address(), 1000).unwrap();
+        // Use a two-signer script so the VM expects 2 signers (matches multi-agent tx).
+        let recipient = Ed25519Account::generate().address();
+        let amount = 1000u64;
+        let payload = TransactionPayload::Script(Script::new(
+            TWO_SIGNER_TRANSFER_SCRIPT.to_vec(),
+            vec![],
+            vec![
+                ScriptArgument::Address(recipient),
+                ScriptArgument::U64(amount),
+            ],
+        ));
 
         let sender_seq = aptos
             .get_sequence_number(sender.address())
@@ -718,7 +729,7 @@ mod multi_signer_tests {
         let raw_txn = TransactionBuilder::new()
             .sender(sender.address())
             .sequence_number(sender_seq)
-            .payload(payload.into())
+            .payload(payload)
             .chain_id(chain_id)
             .max_gas_amount(100_000)
             .gas_unit_price(100)
@@ -759,8 +770,18 @@ mod multi_signer_tests {
             .await
             .expect("failed to create secondary");
 
-        let payload =
-            EntryFunction::apt_transfer(Ed25519Account::generate().address(), 1000).unwrap();
+        // Use a two-signer script so the VM expects 2 signers (matches multi-agent tx).
+        let recipient = Ed25519Account::generate().address();
+        let amount = 1000u64;
+        let payload = TransactionPayload::Script(Script::new(
+            TWO_SIGNER_TRANSFER_SCRIPT.to_vec(),
+            vec![],
+            vec![
+                ScriptArgument::Address(recipient),
+                ScriptArgument::U64(amount),
+            ],
+        ));
+
         let sender_seq = aptos
             .get_sequence_number(sender.address())
             .await
@@ -773,7 +794,7 @@ mod multi_signer_tests {
         let raw_txn = TransactionBuilder::new()
             .sender(sender.address())
             .sequence_number(sender_seq)
-            .payload(payload.into())
+            .payload(payload)
             .chain_id(chain_id)
             .max_gas_amount(100_000)
             .gas_unit_price(100)
