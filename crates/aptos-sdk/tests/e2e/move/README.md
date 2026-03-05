@@ -5,7 +5,7 @@ Two independent Move script projects used by e2e tests. Each project has its own
 | Project | Script | Bytecode file | E2E usage |
 |---------|--------|---------------|-----------|
 | `one_signer_transfer/` | Single-signer transfer | `one_signer_transfer.mv` | `e2e_script_transfer` (runtime read; skip if missing) |
-| `two_signer_transfer/` | Two-signer transfer | `two_signer_transfer.mv` | `e2e_multi_agent_transaction`, `e2e_simulate_multi_agent_then_submit` (include_bytes) |
+| `two_signer_transfer/` | Two-signer transfer | `two_signer_transfer.mv` | `e2e_multi_agent_transaction`, `e2e_simulate_multi_agent_then_submit` (runtime read) |
 
 ## Compiling
 
