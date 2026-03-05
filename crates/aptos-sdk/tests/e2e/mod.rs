@@ -34,6 +34,12 @@
 //! - **transaction_tests**: Transaction building, signing, submission
 //! - **multi_signer_tests**: Multi-agent and fee payer transactions
 //! - **state_tests**: Resource and state queries
+//!
+//! Script bytecode is loaded from each move project: two-signer from
+//! `tests/e2e/move/two_signer_transfer/two_signer_transfer.mv`, single-signer from
+//! `tests/e2e/move/one_signer_transfer/one_signer_transfer.mv`. If a .mv file is
+//! missing, the corresponding test fails (panic with compile instructions). Run the
+//! compile command inside each project directory: `aptos move compile-script --package-dir <project> --output-file <project>.mv`.
 
 use aptos_sdk::{Aptos, AptosConfig};
 use std::env;
@@ -384,7 +390,80 @@ mod view_tests {
 mod transaction_tests {
     use super::*;
     use aptos_sdk::account::Ed25519Account;
-    use aptos_sdk::transaction::{EntryFunction, builder::sign_transaction};
+    use aptos_sdk::transaction::{
+        EntryFunction, Script, ScriptArgument, TransactionBuilder, TransactionPayload,
+        builder::sign_transaction,
+    };
+
+    #[tokio::test]
+    #[ignore]
+    async fn e2e_script_transfer() {
+        let script_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/e2e/move/one_signer_transfer/one_signer_transfer.mv");
+        let bytecode = std::fs::read(&script_path).expect(
+            "one_signer_transfer.mv not found; run inside tests/e2e/move/one_signer_transfer/: \
+             aptos move compile-script --package-dir one_signer_transfer --output-file one_signer_transfer.mv",
+        );
+
+        let config = get_test_config();
+        let aptos = Aptos::new(config).expect("failed to create client");
+
+        let sender = aptos
+            .create_funded_account(100_000_000)
+            .await
+            .expect("failed to create sender");
+
+        let recipient = Ed25519Account::generate().address();
+        let amount = 50_000u64;
+
+        let payload = TransactionPayload::Script(Script::new(
+            bytecode,
+            vec![],
+            vec![
+                ScriptArgument::Address(recipient),
+                ScriptArgument::U64(amount),
+            ],
+        ));
+
+        let sender_seq = aptos
+            .get_sequence_number(sender.address())
+            .await
+            .expect("failed to get sequence number");
+        let chain_id = aptos
+            .ensure_chain_id()
+            .await
+            .expect("failed to resolve chain id");
+
+        let raw_txn = TransactionBuilder::new()
+            .sender(sender.address())
+            .sequence_number(sender_seq)
+            .payload(payload)
+            .chain_id(chain_id)
+            .max_gas_amount(100_000)
+            .gas_unit_price(100)
+            .build()
+            .expect("failed to build");
+
+        let signed = sign_transaction(&raw_txn, &sender).expect("failed to sign");
+
+        let _result = aptos
+            .submit_and_wait(&signed, None)
+            .await
+            .expect("submit_and_wait should succeed");
+
+        wait_for_finality().await;
+
+        let balance = aptos
+            .get_balance(recipient)
+            .await
+            .expect("failed to get recipient balance");
+        assert!(
+            balance >= amount,
+            "recipient balance {} should be >= amount {}",
+            balance,
+            amount
+        );
+    }
 
     #[tokio::test]
     #[ignore]
@@ -607,10 +686,6 @@ mod ledger_tests {
 // Multi-Signer Tests
 // =============================================================================
 
-/// Bytecode for the two-signer transfer script (main(sender, secondary, recipient, amount)).
-const TWO_SIGNER_TRANSFER_SCRIPT: &[u8] =
-    include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/e2e/scripts/script.mv"));
-
 #[cfg(all(feature = "ed25519", feature = "faucet"))]
 mod multi_signer_tests {
     use super::*;
@@ -687,6 +762,13 @@ mod multi_signer_tests {
     #[tokio::test]
     #[ignore]
     async fn e2e_multi_agent_transaction() {
+        let script_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/e2e/move/two_signer_transfer/two_signer_transfer.mv");
+        let two_signer_bytecode = std::fs::read(&script_path).expect(
+            "two_signer_transfer.mv not found; run inside tests/e2e/move/two_signer_transfer/: \
+             aptos move compile-script --package-dir two_signer_transfer --output-file two_signer_transfer.mv",
+        );
+
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
 
@@ -709,7 +791,7 @@ mod multi_signer_tests {
         let recipient = Ed25519Account::generate().address();
         let amount = 1000u64;
         let payload = TransactionPayload::Script(Script::new(
-            TWO_SIGNER_TRANSFER_SCRIPT.to_vec(),
+            two_signer_bytecode,
             vec![],
             vec![
                 ScriptArgument::Address(recipient),
@@ -758,6 +840,13 @@ mod multi_signer_tests {
     #[tokio::test]
     #[ignore]
     async fn e2e_simulate_multi_agent_then_submit() {
+        let script_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/e2e/move/two_signer_transfer/two_signer_transfer.mv");
+        let two_signer_bytecode = std::fs::read(&script_path).expect(
+            "two_signer_transfer.mv not found; run inside tests/e2e/move/two_signer_transfer/: \
+             aptos move compile-script --package-dir two_signer_transfer --output-file two_signer_transfer.mv",
+        );
+
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
 
@@ -774,7 +863,7 @@ mod multi_signer_tests {
         let recipient = Ed25519Account::generate().address();
         let amount = 1000u64;
         let payload = TransactionPayload::Script(Script::new(
-            TWO_SIGNER_TRANSFER_SCRIPT.to_vec(),
+            two_signer_bytecode,
             vec![],
             vec![
                 ScriptArgument::Address(recipient),

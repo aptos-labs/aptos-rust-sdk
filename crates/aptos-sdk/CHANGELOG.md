@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - `FullnodeClient::simulate_transaction` — restored to a single-argument API `(signed_txn)`; use `simulate_transaction_with_options` when passing options.
 
+### Fixed
+- **Script payload BCS** — Reordered `ScriptArgument` enum variants to match chain/TS SDK (`ScriptTransactionArgumentVariants`), and added `Serialized` plus signed-integer variants (`I8`–`I256`). Script transactions now serialize correctly and can be submitted successfully.
+
 ## [0.4.1] - 2026-03-04
 
 ### Changed
