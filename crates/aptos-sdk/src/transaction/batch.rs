@@ -151,7 +151,7 @@ impl TransactionBatchBuilder {
             starting_sequence_number: None,
             chain_id: None,
             gas_unit_price: 100,
-            max_gas_amount: 200_000,
+            max_gas_amount: 2_000_000,
             expiration_secs: 600,
             payloads: Vec::new(),
         }

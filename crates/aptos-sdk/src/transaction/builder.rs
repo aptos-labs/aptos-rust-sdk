@@ -11,7 +11,7 @@ use crate::types::{AccountAddress, ChainId};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Default maximum gas amount.
-pub const DEFAULT_MAX_GAS_AMOUNT: u64 = 200_000;
+pub const DEFAULT_MAX_GAS_AMOUNT: u64 = 2_000_000;
 /// Default gas unit price in octas.
 pub const DEFAULT_GAS_UNIT_PRICE: u64 = 100;
 /// Default transaction expiration time in seconds.
