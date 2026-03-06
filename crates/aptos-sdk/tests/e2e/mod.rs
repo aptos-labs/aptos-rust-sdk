@@ -499,7 +499,7 @@ mod transaction_tests {
             .join("tests/e2e/move/one_signer_transfer/one_signer_transfer.mv");
         let bytecode = std::fs::read(&script_path).expect(
             "one_signer_transfer.mv not found; run inside tests/e2e/move/one_signer_transfer/: \
-             aptos move compile-script --package-dir one_signer_transfer --output-file one_signer_transfer.mv",
+             aptos move compile-script --output-file one_signer_transfer.mv",
         );
 
         let config = get_test_config();
