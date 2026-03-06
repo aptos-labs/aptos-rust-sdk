@@ -766,7 +766,7 @@ mod multi_signer_tests {
             .join("tests/e2e/move/two_signer_transfer/two_signer_transfer.mv");
         let two_signer_bytecode = std::fs::read(&script_path).expect(
             "two_signer_transfer.mv not found; run inside tests/e2e/move/two_signer_transfer/: \
-             aptos move compile-script --package-dir two_signer_transfer --output-file two_signer_transfer.mv",
+             aptos move compile-script --output-file two_signer_transfer.mv",
         );
 
         let config = get_test_config();
