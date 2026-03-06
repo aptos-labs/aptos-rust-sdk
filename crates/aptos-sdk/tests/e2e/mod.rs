@@ -39,7 +39,7 @@
 //! `tests/e2e/move/two_signer_transfer/two_signer_transfer.mv`, single-signer from
 //! `tests/e2e/move/one_signer_transfer/one_signer_transfer.mv`. If a .mv file is
 //! missing, the corresponding test fails (panic with compile instructions). Run the
-//! compile command inside each project directory: `aptos move compile-script --package-dir <project> --output-file <project>.mv`.
+//! compile command inside each project directory: `aptos move compile-script --output-file <project>.mv`.
 
 use aptos_sdk::{Aptos, AptosConfig};
 use std::env;
@@ -402,7 +402,7 @@ mod transaction_tests {
             .join("tests/e2e/move/one_signer_transfer/one_signer_transfer.mv");
         let bytecode = std::fs::read(&script_path).expect(
             "one_signer_transfer.mv not found; run inside tests/e2e/move/one_signer_transfer/: \
-             aptos move compile-script --package-dir one_signer_transfer --output-file one_signer_transfer.mv",
+             aptos move compile-script --output-file one_signer_transfer.mv",
         );
 
         let config = get_test_config();
