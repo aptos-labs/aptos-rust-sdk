@@ -472,7 +472,7 @@ mod transaction_tests {
         let aptos = Aptos::new(config).expect("failed to create client");
 
         let sender = aptos
-            .create_funded_account(100_000_000)
+            .create_funded_account(500_000_000)
             .await
             .expect("failed to create account");
 
@@ -525,7 +525,7 @@ mod transaction_tests {
         let aptos = Aptos::new(config).expect("failed to create client");
 
         let account = aptos
-            .create_funded_account(100_000_000)
+            .create_funded_account(500_000_000)
             .await
             .expect("failed to create account");
 
@@ -569,7 +569,7 @@ mod transaction_tests {
         let aptos = Aptos::new(config).expect("failed to create client");
 
         let sender = aptos
-            .create_funded_account(100_000_000)
+            .create_funded_account(500_000_000)
             .await
             .expect("failed to create account");
 
