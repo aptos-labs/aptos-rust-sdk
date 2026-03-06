@@ -1,0 +1,8 @@
+[package]
+name = "TwoSignerTransfer"
+version = "0.0.1"
+
+[addresses]
+
+[dependencies]
+AptosFramework = { git = "https://github.com/aptos-labs/aptos-framework.git", subdir = "aptos-framework", rev = "mainnet" }

@@ -388,6 +388,70 @@ pub fn sign_fee_payer_transaction<A: Account>(
     ))
 }
 
+/// Builds a signed transaction for simulation only (multi-agent).
+///
+/// Uses [`AccountAuthenticator::NoAccountAuthenticator`] for all signers so that
+/// the transaction can be sent to the simulate endpoint without real signatures.
+/// Use this to simulate a multi-agent transaction before collecting signatures.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// let multi_agent = MultiAgentRawTransaction::new(raw_txn, secondary_addresses);
+/// let signed = build_simulation_signed_multi_agent(&multi_agent);
+/// let result = aptos.simulate_signed(&signed).await?;
+/// ```
+pub fn build_simulation_signed_multi_agent(
+    multi_agent: &MultiAgentRawTransaction,
+) -> SignedTransaction {
+    let sender_auth = AccountAuthenticator::no_account_authenticator();
+    let secondary_auths: Vec<AccountAuthenticator> = multi_agent
+        .secondary_signer_addresses
+        .iter()
+        .map(|_| AccountAuthenticator::no_account_authenticator())
+        .collect();
+    let authenticator = TransactionAuthenticator::multi_agent(
+        sender_auth,
+        multi_agent.secondary_signer_addresses.clone(),
+        secondary_auths,
+    );
+    SignedTransaction::new(multi_agent.raw_txn.clone(), authenticator)
+}
+
+/// Builds a signed transaction for simulation only (fee-payer / sponsored).
+///
+/// Uses [`AccountAuthenticator::NoAccountAuthenticator`] for all signers (sender,
+/// secondary signers, and fee payer) so that the transaction can be sent to the
+/// simulate endpoint without real signatures. Use this to simulate a fee-payer
+/// transaction before collecting signatures.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// let fee_payer_txn = FeePayerRawTransaction::new_simple(raw_txn, fee_payer_address);
+/// let signed = build_simulation_signed_fee_payer(&fee_payer_txn);
+/// let result = aptos.simulate_signed(&signed).await?;
+/// ```
+pub fn build_simulation_signed_fee_payer(
+    fee_payer_txn: &FeePayerRawTransaction,
+) -> SignedTransaction {
+    let sender_auth = AccountAuthenticator::no_account_authenticator();
+    let secondary_auths: Vec<AccountAuthenticator> = fee_payer_txn
+        .secondary_signer_addresses
+        .iter()
+        .map(|_| AccountAuthenticator::no_account_authenticator())
+        .collect();
+    let fee_payer_auth = AccountAuthenticator::no_account_authenticator();
+    let authenticator = TransactionAuthenticator::fee_payer(
+        sender_auth,
+        fee_payer_txn.secondary_signer_addresses.clone(),
+        secondary_auths,
+        fee_payer_txn.fee_payer_address,
+        fee_payer_auth,
+    );
+    SignedTransaction::new(fee_payer_txn.raw_txn.clone(), authenticator)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -596,6 +660,91 @@ mod tests {
 
         let signed = sign_fee_payer_transaction(&fee_payer_txn, &sender, &[], &fee_payer).unwrap();
         assert_eq!(signed.sender(), sender.address());
+    }
+
+    #[test]
+    fn test_build_simulation_signed_multi_agent() {
+        use crate::transaction::authenticator::{AccountAuthenticator, TransactionAuthenticator};
+
+        let recipient = AccountAddress::from_hex("0x123").unwrap();
+        let payload = EntryFunction::apt_transfer(recipient, 1000).unwrap();
+        let raw_txn = TransactionBuilder::new()
+            .sender(AccountAddress::ONE)
+            .sequence_number(0)
+            .payload(payload.into())
+            .chain_id(ChainId::testnet())
+            .build()
+            .unwrap();
+
+        let secondary_addr = AccountAddress::from_hex("0x456").unwrap();
+        let multi_agent = MultiAgentRawTransaction::new(raw_txn.clone(), vec![secondary_addr]);
+
+        let signed = build_simulation_signed_multi_agent(&multi_agent);
+        assert_eq!(signed.sender(), AccountAddress::ONE);
+        assert!(signed.to_bcs().is_ok());
+
+        match &signed.authenticator {
+            TransactionAuthenticator::MultiAgent {
+                sender,
+                secondary_signer_addresses,
+                secondary_signers,
+            } => {
+                assert!(matches!(
+                    sender,
+                    AccountAuthenticator::NoAccountAuthenticator
+                ));
+                assert_eq!(secondary_signer_addresses.len(), 1);
+                assert_eq!(secondary_signer_addresses[0], secondary_addr);
+                assert_eq!(secondary_signers.len(), 1);
+                assert!(matches!(
+                    &secondary_signers[0],
+                    AccountAuthenticator::NoAccountAuthenticator
+                ));
+            }
+            _ => panic!("expected MultiAgent authenticator"),
+        }
+    }
+
+    #[test]
+    fn test_build_simulation_signed_fee_payer() {
+        use crate::transaction::authenticator::{AccountAuthenticator, TransactionAuthenticator};
+
+        let recipient = AccountAddress::from_hex("0x123").unwrap();
+        let payload = EntryFunction::apt_transfer(recipient, 1000).unwrap();
+        let raw_txn = TransactionBuilder::new()
+            .sender(AccountAddress::ONE)
+            .sequence_number(0)
+            .payload(payload.into())
+            .chain_id(ChainId::testnet())
+            .build()
+            .unwrap();
+
+        let fee_payer_addr = AccountAddress::from_hex("0x789").unwrap();
+        let fee_payer_txn = FeePayerRawTransaction::new_simple(raw_txn.clone(), fee_payer_addr);
+
+        let signed = build_simulation_signed_fee_payer(&fee_payer_txn);
+        assert_eq!(signed.sender(), AccountAddress::ONE);
+        assert!(signed.to_bcs().is_ok());
+
+        match &signed.authenticator {
+            TransactionAuthenticator::FeePayer {
+                sender,
+                fee_payer_address,
+                fee_payer_signer,
+                ..
+            } => {
+                assert!(matches!(
+                    sender,
+                    AccountAuthenticator::NoAccountAuthenticator
+                ));
+                assert_eq!(*fee_payer_address, fee_payer_addr);
+                assert!(matches!(
+                    fee_payer_signer,
+                    AccountAuthenticator::NoAccountAuthenticator
+                ));
+            }
+            _ => panic!("expected FeePayer authenticator"),
+        }
     }
 
     #[test]

@@ -7,8 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+### Added
+- `FullnodeClient::simulate_transaction_with_options` — simulate with optional query parameters (`estimate_max_gas_amount`, `estimate_gas_unit_price`, `estimate_prioritized_gas_unit_price`). Existing `simulate_transaction` is unchanged (single-arg) and delegates to the new method with `None` for backward compatibility.
+
 ### Changed
+- `FullnodeClient::simulate_transaction` — restored to a single-argument API `(signed_txn)`; use `simulate_transaction_with_options` when passing options.
 - Increased default max gas amount from 200,000 to 2,000,000 (10x)
+
+### Fixed
+- **Script payload BCS** — Reordered `ScriptArgument` enum variants to match chain/TS SDK (`ScriptTransactionArgumentVariants`), and added `Serialized` plus signed-integer variants (`I8`–`I256`). Script transactions now serialize correctly and can be submitted successfully.
+
+
 
 ## [0.4.1] - 2026-03-04
 
