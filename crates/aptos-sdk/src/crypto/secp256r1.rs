@@ -294,13 +294,12 @@ impl Secp256r1PublicKey {
     /// Uses the `SingleKey` authentication scheme (`scheme_id` = 2):
     /// `auth_key = SHA3-256(BCS(AnyPublicKey::Secp256r1) || 0x02)`
     ///
-    /// Where `BCS(AnyPublicKey::Secp256r1)` = `0x02 || ULEB128(65) || uncompressed_public_key`
+    /// Where `BCS(AnyPublicKey::Secp256r1)` = `0x02 || ULEB128(65) || uncompressed_public_key` (matches aptos-core `serde_bytes` and TS SDK).
     pub fn to_address(&self) -> crate::types::AccountAddress {
-        // BCS format: variant_byte || ULEB128(length) || uncompressed_public_key
         let uncompressed = self.to_uncompressed_bytes();
         let mut bcs_bytes = Vec::with_capacity(1 + 1 + uncompressed.len());
         bcs_bytes.push(0x02); // Secp256r1 variant
-        bcs_bytes.push(65); // ULEB128(65) = 65 (since 65 < 128)
+        bcs_bytes.push(0x41); // ULEB128(65)
         bcs_bytes.extend_from_slice(&uncompressed);
         crate::crypto::derive_address(&bcs_bytes, crate::crypto::SINGLE_KEY_SCHEME)
     }

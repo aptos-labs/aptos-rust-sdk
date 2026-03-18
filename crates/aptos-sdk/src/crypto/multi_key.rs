@@ -17,6 +17,42 @@ const _: () = assert!(MAX_NUM_OF_KEYS <= u8::MAX as usize);
 /// Minimum threshold (at least 1 signature required).
 pub const MIN_THRESHOLD: u8 = 1;
 
+/// Encodes `len` as BCS ULEB128 (matches aptos-core `serde_bytes` / TS `serializeBytes`).
+fn uleb128_encode(len: usize) -> Vec<u8> {
+    let mut v = Vec::new();
+    let mut n = len;
+    loop {
+        #[allow(clippy::cast_possible_truncation)]
+        let byte = (n & 0x7F) as u8;
+        n >>= 7;
+        if n == 0 {
+            v.push(byte);
+            break;
+        }
+        v.push(byte | 0x80);
+    }
+    v
+}
+
+/// Decodes ULEB128 at `bytes[offset..]`, advances `offset`, returns length or None.
+fn uleb128_decode(bytes: &[u8], offset: &mut usize) -> Option<usize> {
+    let mut result: usize = 0;
+    let mut shift = 0;
+    while *offset < bytes.len() {
+        let byte = bytes[*offset];
+        *offset += 1;
+        result |= (byte as usize & 0x7F) << shift;
+        if byte & 0x80 == 0 {
+            return Some(result);
+        }
+        shift += 7;
+        if shift > 63 {
+            return None;
+        }
+    }
+    None
+}
+
 /// Supported signature schemes for multi-key.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[repr(u8)]
@@ -52,6 +88,28 @@ impl AnyPublicKeyVariant {
     /// Get the byte representation.
     pub fn as_byte(&self) -> u8 {
         *self as u8
+    }
+
+    /// Expected public key payload length in bytes (after variant + ULEB128).
+    /// Returns `None` for variable-length variants (e.g. Keyless).
+    pub fn public_key_len(self) -> Option<usize> {
+        match self {
+            Self::Ed25519 => Some(32),
+            Self::Secp256k1 => Some(65),
+            Self::Secp256r1 => Some(65),
+            Self::Keyless => None,
+        }
+    }
+
+    /// Expected signature payload length in bytes (after variant + ULEB128).
+    /// Returns `None` for variable-length variants.
+    pub fn signature_len(self) -> Option<usize> {
+        match self {
+            Self::Ed25519 => Some(64),
+            Self::Secp256k1 => Some(64),
+            Self::Secp256r1 => Some(64),
+            Self::Keyless => None,
+        }
     }
 }
 
@@ -99,14 +157,13 @@ impl AnyPublicKey {
         }
     }
 
-    /// Serializes to BCS format: `variant_byte` || ULEB128(length) || bytes
+    /// Serializes to BCS format matching aptos-core and TS SDK: `variant_byte` || ULEB128(len) || key bytes.
     ///
-    /// This is the correct BCS serialization format for `AnyPublicKey` used
-    /// in authentication key derivation: `SHA3-256(BCS(AnyPublicKey) || scheme_id)`
+    /// aptos-core `SerializeKey` uses `serde_bytes::Bytes` → ULEB128(length)+bytes; TS SDK uses
+    /// `serializeBytes()` for the inner key → same. Used for auth key derivation and transaction payloads.
     pub fn to_bcs_bytes(&self) -> Vec<u8> {
-        let mut result = Vec::with_capacity(1 + 1 + self.bytes.len());
+        let mut result = Vec::with_capacity(2 + self.bytes.len());
         result.push(self.variant.as_byte());
-        // BCS uses ULEB128 for vector lengths
         result.extend(uleb128_encode(self.bytes.len()));
         result.extend_from_slice(&self.bytes);
         result
@@ -225,52 +282,14 @@ impl AnySignature {
         }
     }
 
-    /// Serializes to BCS format: `variant_byte` || ULEB128(length) || bytes
+    /// Serializes to BCS format matching aptos-core and TS SDK: `variant_byte` || ULEB128(len) || signature bytes.
     pub fn to_bcs_bytes(&self) -> Vec<u8> {
-        let mut result = Vec::with_capacity(1 + 1 + self.bytes.len());
+        let mut result = Vec::with_capacity(2 + self.bytes.len());
         result.push(self.variant.as_byte());
-        // BCS uses ULEB128 for vector lengths
         result.extend(uleb128_encode(self.bytes.len()));
         result.extend_from_slice(&self.bytes);
         result
     }
-}
-
-/// Encodes a value as `ULEB128` (unsigned `LEB128`).
-/// BCS uses `ULEB128` for encoding vector/sequence lengths.
-/// For typical sizes (< 128), this returns a single byte.
-#[allow(clippy::cast_possible_truncation)] // value & 0x7F is always <= 127
-#[inline]
-fn uleb128_encode(mut value: usize) -> Vec<u8> {
-    // Pre-allocate for common case: values < 128 need 1 byte, < 16384 need 2 bytes
-    let mut result = Vec::with_capacity(if value < 128 { 1 } else { 2 });
-    loop {
-        let byte = (value & 0x7F) as u8;
-        value >>= 7;
-        if value == 0 {
-            result.push(byte);
-            break;
-        }
-        result.push(byte | 0x80);
-    }
-    result
-}
-
-/// Decodes a `ULEB128` value from bytes, returning `(value, bytes_consumed)`.
-fn uleb128_decode(bytes: &[u8]) -> Option<(usize, usize)> {
-    let mut result: usize = 0;
-    let mut shift = 0;
-    for (i, &byte) in bytes.iter().enumerate() {
-        result |= ((byte & 0x7F) as usize) << shift;
-        if byte & 0x80 == 0 {
-            return Some((result, i + 1));
-        }
-        shift += 7;
-        if shift >= 64 {
-            return None; // Overflow
-        }
-    }
-    None
 }
 
 impl fmt::Debug for AnySignature {
@@ -384,7 +403,7 @@ impl MultiKeyPublicKey {
         bytes
     }
 
-    /// Creates from bytes.
+    /// Creates from bytes (BCS format matching aptos-core/TS: variant || ULEB128(len) || key bytes per key).
     ///
     /// # Errors
     ///
@@ -392,14 +411,9 @@ impl MultiKeyPublicKey {
     /// - The bytes are empty
     /// - The number of keys is invalid (0 or > 32)
     /// - The bytes are too short for the expected structure
-    /// - Any public key variant byte is invalid
-    /// - Any public key length or data is invalid
+    /// - Any public key variant byte is invalid or variable-length (Keyless)
     /// - The threshold is invalid
     pub fn from_bytes(bytes: &[u8]) -> AptosResult<Self> {
-        // SECURITY: Limit individual key size to prevent DoS via large allocations
-        // Largest supported key is uncompressed secp256k1/secp256r1 at 65 bytes
-        const MAX_KEY_SIZE: usize = 128;
-
         if bytes.is_empty() {
             return Err(AptosError::InvalidPublicKey("empty bytes".into()));
         }
@@ -422,17 +436,15 @@ impl MultiKeyPublicKey {
             let variant = AnyPublicKeyVariant::from_byte(bytes[offset])?;
             offset += 1;
 
-            // Decode ULEB128 length
-            let (len, len_bytes) = uleb128_decode(&bytes[offset..]).ok_or_else(|| {
-                AptosError::InvalidPublicKey("invalid ULEB128 length encoding".into())
+            let len = uleb128_decode(bytes, &mut offset).ok_or_else(|| {
+                AptosError::InvalidPublicKey("invalid ULEB128 length for public key".into())
             })?;
-            offset += len_bytes;
 
-            if len > MAX_KEY_SIZE {
-                return Err(AptosError::InvalidPublicKey(format!(
-                    "key size {len} exceeds maximum {MAX_KEY_SIZE}"
-                )));
-            }
+            variant.public_key_len().filter(|&expected| expected == len).ok_or_else(|| {
+                AptosError::InvalidPublicKey(
+                    "variable-length public key (Keyless) or length mismatch".into(),
+                )
+            })?;
 
             if offset + len > bytes.len() {
                 return Err(AptosError::InvalidPublicKey(
@@ -608,16 +620,17 @@ impl MultiKeySignature {
         (self.bitmap[byte_index] >> bit_index) & 1 == 1
     }
 
-    /// Serializes to bytes.
+    /// Serializes to bytes in BCS-compatible format matching aptos-core.
     ///
-    /// Format: `num_signatures` || `sig1_bcs` || `sig2_bcs` || ... || bitmap (4 bytes)
+    /// Format: `num_signatures` (1 byte) || `sig1_bcs` || `sig2_bcs` || ... || ULEB128(4) || bitmap (4 bytes).
+    /// The bitmap is serialized as in aptos-core's `BitVec` (`serde_bytes`): ULEB128(length) + bytes.
     #[allow(clippy::cast_possible_truncation)] // signatures.len() <= MAX_NUM_OF_KEYS (32)
     pub fn to_bytes(&self) -> Vec<u8> {
-        // Pre-allocate: 1 byte num_sigs + estimated sig size (avg ~66 bytes per sig) + 4 bytes bitmap
-        let estimated_size = 5 + self.signatures.len() * 68;
+        const BITMAP_LEN: usize = 4;
+        let estimated_size = 6 + self.signatures.len() * 68; // +1 for ULEB128(4)
         let mut bytes = Vec::with_capacity(estimated_size);
 
-        // Number of signatures (validated in new())
+        // Number of signatures (same as BCS Vec length for n ≤ 127)
         bytes.push(self.signatures.len() as u8);
 
         // Each signature in BCS format (ordered by index)
@@ -625,29 +638,30 @@ impl MultiKeySignature {
             bytes.extend(sig.to_bcs_bytes());
         }
 
-        // Bitmap (4 bytes)
+        // Bitmap as BitVec: ULEB128(length) + bytes (aptos-core aptos_bitvec::BitVec uses serde_bytes)
+        bytes.push(BITMAP_LEN as u8); // ULEB128(4) = 0x04
         bytes.extend_from_slice(&self.bitmap);
 
         bytes
     }
 
-    /// Creates from bytes.
+    /// Creates from bytes (BCS-compatible format matching aptos-core).
+    ///
+    /// Expects: `num_signatures` (1 byte) || sigs... || ULEB128(4) || bitmap (4 bytes).
     ///
     /// # Errors
     ///
     /// Returns [`AptosError::InvalidSignature`] if:
-    /// - The bytes are too short (less than 5 bytes for `num_sigs` + bitmap)
+    /// - The bytes are too short (less than 6 bytes for `num_sigs` + ULEB128(4) + bitmap)
     /// - The number of signatures is invalid (0 or > 32)
+    /// - The bitmap length byte is not 4
     /// - The bitmap doesn't match the number of signatures
+    /// - Any signature variant is variable-length (Keyless) or invalid
     /// - The bytes are too short for the expected structure
-    /// - Any signature variant byte is invalid
-    /// - Any signature length or data is invalid
     pub fn from_bytes(bytes: &[u8]) -> AptosResult<Self> {
-        // SECURITY: Limit individual signature size to prevent DoS via large allocations
-        // Largest supported signature is ~72 bytes for ECDSA DER format
-        const MAX_SIGNATURE_SIZE: usize = 128;
-
-        if bytes.len() < 5 {
+        const BITMAP_LEN: usize = 4;
+        let min_len = 1 + BITMAP_LEN + 1; // num_sigs + bitmap + ULEB128(4)
+        if bytes.len() < min_len {
             return Err(AptosError::InvalidSignature("bytes too short".into()));
         }
 
@@ -658,12 +672,21 @@ impl MultiKeySignature {
             )));
         }
 
-        // Read bitmap from the end
-        let bitmap_start = bytes.len() - 4;
+        // Bitmap at the end: ULEB128(4) + 4 bytes (aptos-core BitVec)
+        let bitmap_len_byte = bytes[bytes.len() - 5];
+        #[allow(clippy::cast_possible_truncation)]
+        if bitmap_len_byte != BITMAP_LEN as u8 {
+            return Err(AptosError::InvalidSignature(format!(
+                "invalid bitmap length: expected ULEB128(4), got {bitmap_len_byte}"
+            )));
+        }
+        // Signatures end before ULEB128(4) + bitmap; bitmap is the last 4 bytes
+        let bitmap_start = bytes.len() - BITMAP_LEN; // first byte of bitmap
+        let sigs_end = bytes.len() - 5; // first byte of ULEB128(4), signatures must end before this
         let mut bitmap = [0u8; 4];
         bitmap.copy_from_slice(&bytes[bitmap_start..]);
 
-        // Parse signatures
+        // Parse signatures (fixed length per variant, no ULEB128)
         let mut offset = 1;
         let mut signatures = Vec::with_capacity(num_sigs);
 
@@ -685,27 +708,24 @@ impl MultiKeySignature {
         }
 
         for &index in &signer_indices {
-            if offset >= bitmap_start {
+            if offset >= sigs_end {
                 return Err(AptosError::InvalidSignature("bytes too short".into()));
             }
 
             let variant = AnyPublicKeyVariant::from_byte(bytes[offset])?;
             offset += 1;
 
-            // Decode ULEB128 length
-            let (len, len_bytes) =
-                uleb128_decode(&bytes[offset..bitmap_start]).ok_or_else(|| {
-                    AptosError::InvalidSignature("invalid ULEB128 length encoding".into())
-                })?;
-            offset += len_bytes;
+            let len = uleb128_decode(bytes, &mut offset).ok_or_else(|| {
+                AptosError::InvalidSignature("invalid ULEB128 length for signature".into())
+            })?;
 
-            if len > MAX_SIGNATURE_SIZE {
-                return Err(AptosError::InvalidSignature(format!(
-                    "signature size {len} exceeds maximum {MAX_SIGNATURE_SIZE}"
-                )));
-            }
+            variant.signature_len().filter(|&expected| expected == len).ok_or_else(|| {
+                AptosError::InvalidSignature(
+                    "variable-length signature (Keyless) or length mismatch".into(),
+                )
+            })?;
 
-            if offset + len > bitmap_start {
+            if offset + len > sigs_end {
                 return Err(AptosError::InvalidSignature(
                     "bytes too short for signature".into(),
                 ));
@@ -785,11 +805,11 @@ mod tests {
         let pk = AnyPublicKey::new(AnyPublicKeyVariant::Ed25519, vec![0xaa; 32]);
         let bcs = pk.to_bcs_bytes();
 
-        // Format: variant_byte || ULEB128(length) || bytes
+        // Format matching aptos-core (serde_bytes) and TS SDK (serializeBytes): variant || ULEB128(len) || bytes
         assert_eq!(bcs[0], 0); // Ed25519 variant
-        assert_eq!(bcs[1], 32); // ULEB128(32) = 0x20 (since 32 < 128)
+        assert_eq!(bcs[1], 0x20); // ULEB128(32)
         assert_eq!(bcs[2], 0xaa); // first byte of key
-        assert_eq!(bcs.len(), 1 + 1 + 32); // variant + length + bytes
+        assert_eq!(bcs.len(), 1 + 1 + 32); // variant + ULEB128(32) + bytes
     }
 
     #[test]
@@ -812,11 +832,11 @@ mod tests {
         let sig = AnySignature::new(AnyPublicKeyVariant::Ed25519, vec![0xdd; 64]);
         let bcs = sig.to_bcs_bytes();
 
-        // Format: variant_byte || ULEB128(length) || bytes
+        // Format matching aptos-core (serde_bytes) and TS SDK (serializeBytes): variant || ULEB128(len) || bytes
         assert_eq!(bcs[0], 0); // Ed25519 variant
-        assert_eq!(bcs[1], 64); // ULEB128(64) = 0x40 (since 64 < 128)
+        assert_eq!(bcs[1], 0x40); // ULEB128(64)
         assert_eq!(bcs[2], 0xdd); // first byte of signature
-        assert_eq!(bcs.len(), 1 + 1 + 64); // variant + length + bytes
+        assert_eq!(bcs.len(), 1 + 1 + 64); // variant + ULEB128(64) + bytes
     }
 
     #[test]

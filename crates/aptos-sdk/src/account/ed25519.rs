@@ -196,7 +196,7 @@ impl fmt::Debug for Ed25519Account {
 /// auth_key = SHA3-256(BCS(AnyPublicKey::Ed25519) || 0x02)
 /// ```
 ///
-/// Where `BCS(AnyPublicKey::Ed25519) = 0x00 || ULEB128(32) || public_key_bytes`
+/// Where `BCS(AnyPublicKey::Ed25519) = 0x00 || ULEB128(32) || public_key_bytes` (matches aptos-core `SerializeKey`/`serde_bytes` and TS SDK `serializeBytes`).
 ///
 /// # Example
 ///
@@ -289,25 +289,24 @@ impl Ed25519SingleKeyAccount {
     }
 
     /// Derives the address for an Ed25519 public key using `SingleKey` scheme.
+    /// BCS format matching aptos-core (`serde_bytes`) and TS SDK: variant || ULEB128(32) || bytes.
     fn derive_address(public_key: &Ed25519PublicKey) -> AccountAddress {
-        // BCS format: variant_byte || ULEB128(length) || public_key_bytes
         let pk_bytes = public_key.to_bytes();
         let mut bcs_bytes = Vec::with_capacity(1 + 1 + pk_bytes.len());
         bcs_bytes.push(0x00); // Ed25519 variant
-        bcs_bytes.push(32); // ULEB128(32) = 32 (since 32 < 128)
+        bcs_bytes.push(0x20); // ULEB128(32)
         bcs_bytes.extend_from_slice(&pk_bytes);
         let auth_key = derive_authentication_key(&bcs_bytes, SINGLE_KEY_SCHEME);
         AccountAddress::new(auth_key)
     }
 
     /// Returns the BCS-serialized public key bytes for `SingleKey` authenticator.
-    ///
-    /// Format: `0x00 || ULEB128(32) || public_key_bytes`
+    /// Format matching aptos-core and TS SDK: variant || ULEB128(32) || bytes.
     fn bcs_public_key_bytes(&self) -> Vec<u8> {
         let pk_bytes = self.public_key.to_bytes();
         let mut bcs_bytes = Vec::with_capacity(1 + 1 + pk_bytes.len());
         bcs_bytes.push(0x00); // Ed25519 variant
-        bcs_bytes.push(32); // ULEB128(32) = 32
+        bcs_bytes.push(0x20); // ULEB128(32)
         bcs_bytes.extend_from_slice(&pk_bytes);
         bcs_bytes
     }
@@ -325,11 +324,17 @@ impl Account for Ed25519SingleKeyAccount {
     }
 
     fn sign(&self, message: &[u8]) -> AptosResult<Vec<u8>> {
-        Ok(self.private_key.sign(message).to_bytes().to_vec())
+        // BCS of AnySignature::Ed25519 = variant || ULEB128(64) || 64 bytes (aptos-core serde_bytes / TS serializeBytes)
+        let sig = self.private_key.sign(message).to_bytes();
+        let mut out = Vec::with_capacity(1 + 1 + sig.len());
+        out.push(0x00); // Ed25519 variant
+        out.push(0x40); // ULEB128(64)
+        out.extend_from_slice(&sig);
+        Ok(out)
     }
 
     fn public_key_bytes(&self) -> Vec<u8> {
-        // Return BCS-serialized AnyPublicKey::Ed25519 format
+        // BCS-serialized AnyPublicKey::Ed25519 = variant || ULEB128(32) || 32 bytes
         self.bcs_public_key_bytes()
     }
 
@@ -535,10 +540,10 @@ mod tests {
     fn test_single_key_public_key_bytes() {
         let account = Ed25519SingleKeyAccount::generate();
         let bytes = account.public_key_bytes();
-        // BCS format: variant (1) + length (1) + pubkey (32) = 34 bytes
+        // BCS format matching aptos-core/TS: variant (1) + ULEB128(32) (1) + pubkey (32) = 34 bytes
         assert_eq!(bytes.len(), 34);
         assert_eq!(bytes[0], 0x00); // Ed25519 variant
-        assert_eq!(bytes[1], 32); // ULEB128(32)
+        assert_eq!(bytes[1], 0x20); // ULEB128(32)
     }
 
     #[test]
@@ -552,7 +557,10 @@ mod tests {
         let account = Ed25519SingleKeyAccount::generate();
         let message = b"test message";
         let sig_bytes = account.sign(message).unwrap();
-        assert_eq!(sig_bytes.len(), 64);
+        // BCS of AnySignature::Ed25519 = variant (1) + ULEB128(64) (1) + 64 bytes = 66 bytes
+        assert_eq!(sig_bytes.len(), 66);
+        assert_eq!(sig_bytes[0], 0x00); // Ed25519 variant
+        assert_eq!(sig_bytes[1], 0x40); // ULEB128(64)
     }
 
     #[test]
