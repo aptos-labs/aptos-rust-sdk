@@ -176,15 +176,17 @@ MultiEd25519Signature {
 
 ### MultiKey Signature Format
 
-Matches aptos-core `MultiKeyAuthenticator.signature_bytes()` = BCS((signatures, signatures_bitmap)).
-aptos-core uses `aptos_bitvec::BitVec` with `serde_bytes` for the inner `Vec<u8>`, so the bitmap is
-ULEB128(length) + bytes (for 4-byte bitmap: ULEB128(4) + 4 bytes).
-
 ```
 MultiKeyAuthenticator {
-  public_keys: MultiKey { ... }
-  signatures: Vec<AnySignature>   // BCS: ULEB128(n) + sig0 + sig1 + ...
-  signatures_bitmap: BitVec       // BCS: ULEB128(4) + 4 bytes (serde_bytes)
+  public_keys: MultiKey {
+    public_keys: Vec<AnyPublicKey>
+    signatures_required: u8
+  }
+  signatures: Vec<AnySignature>  // Ordered by key index
+  signatures_bitmap: BitVec {
+    num_bits: u16 (little-endian)
+    bytes: Vec<u8>  // Packed bits, bit 0 = MSB of first byte
+  }
 }
 ```
 

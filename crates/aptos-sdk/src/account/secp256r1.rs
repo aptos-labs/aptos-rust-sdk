@@ -98,33 +98,23 @@ impl Account for Secp256r1Account {
     }
 
     fn authentication_key(&self) -> AuthenticationKey {
-        // BCS format matching aptos-core (serde_bytes) and TS SDK: variant || ULEB128(65) || bytes
+        // Use correct BCS format: variant_byte || ULEB128(length) || uncompressed_public_key
         let uncompressed = self.public_key.to_uncompressed_bytes();
         let mut bcs_bytes = Vec::with_capacity(1 + 1 + uncompressed.len());
         bcs_bytes.push(0x02); // Secp256r1 variant
-        bcs_bytes.push(0x41); // ULEB128(65)
+        bcs_bytes.push(65); // ULEB128(65) = 65
         bcs_bytes.extend_from_slice(&uncompressed);
         let key = derive_authentication_key(&bcs_bytes, SINGLE_KEY_SCHEME);
         AuthenticationKey::new(key)
     }
 
     fn sign(&self, message: &[u8]) -> crate::error::AptosResult<Vec<u8>> {
-        // BCS of AnySignature::Secp256r1 = variant || ULEB128(64) || 64 bytes
-        let sig = self.private_key.sign(message).to_bytes();
-        let mut out = Vec::with_capacity(1 + 1 + sig.len());
-        out.push(0x02);
-        out.push(0x40); // ULEB128(64)
-        out.extend_from_slice(&sig);
-        Ok(out)
+        Ok(self.private_key.sign(message).to_bytes().to_vec())
     }
 
     fn public_key_bytes(&self) -> Vec<u8> {
-        // BCS-serialized AnyPublicKey::Secp256r1 = variant || ULEB128(65) || 65 bytes
-        let mut out = Vec::with_capacity(1 + 1 + 65);
-        out.push(0x02);
-        out.push(0x41); // ULEB128(65)
-        out.extend(self.public_key.to_uncompressed_bytes());
-        out
+        // Return uncompressed format (65 bytes) as required by Aptos protocol
+        self.public_key.to_uncompressed_bytes()
     }
 
     fn signature_scheme(&self) -> u8 {
@@ -175,16 +165,12 @@ mod tests {
         let account = Secp256r1Account::generate();
         let message = b"test message";
 
-        // Test Account trait methods (BCS = variant || ULEB128(len) || bytes)
+        // Test Account trait methods
         let sig_bytes = account.sign(message).unwrap();
-        assert_eq!(sig_bytes.len(), 66); // variant (1) + ULEB128(64) (1) + signature (64)
-        assert_eq!(sig_bytes[0], 0x02); // Secp256r1 variant
-        assert_eq!(sig_bytes[1], 0x40); // ULEB128(64)
+        assert_eq!(sig_bytes.len(), 64); // P-256 signature is 64 bytes
 
         let pub_key_bytes = account.public_key_bytes();
-        assert_eq!(pub_key_bytes.len(), 67); // variant (1) + ULEB128(65) (1) + pubkey (65)
-        assert_eq!(pub_key_bytes[0], 0x02);
-        assert_eq!(pub_key_bytes[1], 0x41); // ULEB128(65)
+        assert_eq!(pub_key_bytes.len(), 65); // Uncompressed P-256 pubkey is 65 bytes (required by Aptos protocol)
 
         assert!(!account.authentication_key().as_bytes().is_empty());
     }

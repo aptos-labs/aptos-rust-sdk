@@ -849,7 +849,6 @@ mod auth_key_tests {
 
     /// Test that Ed25519 SingleKey auth key derivation is:
     /// SHA3-256(BCS(AnyPublicKey::Ed25519) || 0x02)
-    /// BCS format matches aptos-core (serde_bytes) and TS SDK: variant || ULEB128(32) || pubkey_bytes.
     #[test]
     fn test_ed25519_single_key_auth_key_derivation() {
         // Create a deterministic key for testing
@@ -860,7 +859,7 @@ mod auth_key_tests {
         let pk_bytes = public_key.to_bytes();
         let mut bcs_any_pubkey = Vec::with_capacity(1 + 1 + pk_bytes.len());
         bcs_any_pubkey.push(0x00); // Ed25519 variant
-        bcs_any_pubkey.push(0x20); // ULEB128(32)
+        bcs_any_pubkey.push(32); // ULEB128(32)
         bcs_any_pubkey.extend_from_slice(&pk_bytes);
 
         let expected_auth_key = derive_authentication_key(&bcs_any_pubkey, SINGLE_KEY_SCHEME);
@@ -921,7 +920,7 @@ mod auth_key_tests {
         // Build BCS(AnyPublicKey::Secp256k1) = 0x01 || ULEB128(65) || uncompressed_pubkey
         let mut bcs_any_pubkey = Vec::with_capacity(1 + 1 + uncompressed.len());
         bcs_any_pubkey.push(0x01); // Secp256k1 variant
-        bcs_any_pubkey.push(0x41); // ULEB128(65)
+        bcs_any_pubkey.push(65); // ULEB128(65)
         bcs_any_pubkey.extend_from_slice(&uncompressed);
 
         let expected_auth_key = derive_authentication_key(&bcs_any_pubkey, SINGLE_KEY_SCHEME);
@@ -957,7 +956,7 @@ mod auth_key_tests {
         // Build BCS(AnyPublicKey::Secp256r1) = 0x02 || ULEB128(65) || uncompressed_pubkey
         let mut bcs_any_pubkey = Vec::with_capacity(1 + 1 + uncompressed.len());
         bcs_any_pubkey.push(0x02); // Secp256r1 variant
-        bcs_any_pubkey.push(0x41); // ULEB128(65)
+        bcs_any_pubkey.push(65); // ULEB128(65)
         bcs_any_pubkey.extend_from_slice(&uncompressed);
 
         let expected_auth_key = derive_authentication_key(&bcs_any_pubkey, SINGLE_KEY_SCHEME);

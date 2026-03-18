@@ -94,33 +94,23 @@ impl Account for Secp256k1Account {
     }
 
     fn authentication_key(&self) -> AuthenticationKey {
-        // BCS format matching aptos-core (serde_bytes) and TS SDK: variant || ULEB128(65) || bytes
+        // Use correct BCS format: variant_byte || ULEB128(length) || uncompressed_public_key
         let uncompressed = self.public_key.to_uncompressed_bytes();
         let mut bcs_bytes = Vec::with_capacity(1 + 1 + uncompressed.len());
         bcs_bytes.push(0x01); // Secp256k1 variant
-        bcs_bytes.push(0x41); // ULEB128(65)
+        bcs_bytes.push(65); // ULEB128(65) = 65
         bcs_bytes.extend_from_slice(&uncompressed);
         let key = derive_authentication_key(&bcs_bytes, SINGLE_KEY_SCHEME);
         AuthenticationKey::new(key)
     }
 
     fn sign(&self, message: &[u8]) -> crate::error::AptosResult<Vec<u8>> {
-        // BCS of AnySignature::Secp256k1 = variant || ULEB128(64) || 64 bytes
-        let sig = self.private_key.sign(message).to_bytes();
-        let mut out = Vec::with_capacity(1 + 1 + sig.len());
-        out.push(0x01);
-        out.push(0x40); // ULEB128(64)
-        out.extend_from_slice(&sig);
-        Ok(out)
+        Ok(self.private_key.sign(message).to_bytes().to_vec())
     }
 
     fn public_key_bytes(&self) -> Vec<u8> {
-        // BCS-serialized AnyPublicKey::Secp256k1 = variant || ULEB128(65) || 65 bytes
-        let mut out = Vec::with_capacity(1 + 1 + 65);
-        out.push(0x01);
-        out.push(0x41); // ULEB128(65)
-        out.extend(self.public_key.to_uncompressed_bytes());
-        out
+        // Return uncompressed format (65 bytes) as required by Aptos protocol
+        self.public_key.to_uncompressed_bytes()
     }
 
     fn signature_scheme(&self) -> u8 {
@@ -193,10 +183,7 @@ mod tests {
     fn test_public_key_bytes() {
         let account = Secp256k1Account::generate();
         let bytes = account.public_key_bytes();
-        // BCS: variant (1) + ULEB128(65) (1) + uncompressed pubkey (65) = 67 bytes
-        assert_eq!(bytes.len(), 67);
-        assert_eq!(bytes[0], 0x01); // Secp256k1 variant
-        assert_eq!(bytes[1], 0x41); // ULEB128(65)
+        assert_eq!(bytes.len(), 65); // Uncompressed public key (required by Aptos protocol)
     }
 
     #[test]
@@ -210,10 +197,7 @@ mod tests {
         let account = Secp256k1Account::generate();
         let message = b"test message";
         let sig_bytes = account.sign(message).unwrap();
-        // BCS of AnySignature::Secp256k1 = variant (1) + ULEB128(64) (1) + 64 bytes = 66 bytes
-        assert_eq!(sig_bytes.len(), 66);
-        assert_eq!(sig_bytes[0], 0x01);
-        assert_eq!(sig_bytes[1], 0x40); // ULEB128(64)
+        assert_eq!(sig_bytes.len(), 64);
     }
 
     #[test]
