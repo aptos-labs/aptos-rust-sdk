@@ -82,8 +82,8 @@ start_localnet() {
     pkill -f "aptos node" 2>/dev/null || true
     sleep 2
     
-    # Start localnet in background
-    aptos node run-localnet --with-faucet --force-restart > /tmp/localnet.log 2>&1 &
+    # Start localnet in background (with indexer API for full test coverage)
+    aptos node run-localnet --with-faucet --with-indexer-api --force-restart > /tmp/localnet.log 2>&1 &
     LOCALNET_PID=$!
     
     echo "Localnet PID: $LOCALNET_PID"
@@ -118,6 +118,24 @@ start_localnet() {
         sleep 2
         elapsed=$((elapsed + 2))
     done
+
+    # Wait for indexer API (non-fatal if unavailable)
+    echo "Waiting for indexer API..."
+    elapsed=0
+    while [[ $elapsed -lt 120 ]]; do
+        if curl -s -X POST http://127.0.0.1:8090/v1/graphql \
+            -H "Content-Type: application/json" \
+            -d '{"query":"{ processor_status { processor } }"}' 2>/dev/null | grep -q "processor_status"; then
+            echo -e "${GREEN}✓ Indexer API is ready${NC}"
+            export APTOS_LOCAL_INDEXER_URL="http://127.0.0.1:8090/v1/graphql"
+            break
+        fi
+        sleep 2
+        elapsed=$((elapsed + 2))
+    done
+    if [[ $elapsed -ge 120 ]]; then
+        echo -e "${YELLOW}⚠ Indexer API not available (indexer tests will be skipped)${NC}"
+    fi
 }
 
 # Run E2E tests
@@ -128,6 +146,8 @@ run_tests() {
     
     export APTOS_LOCAL_NODE_URL="http://127.0.0.1:8080/v1"
     export APTOS_LOCAL_FAUCET_URL="http://127.0.0.1:8081"
+    # APTOS_LOCAL_INDEXER_URL is set during start_localnet if indexer is available
+    export APTOS_LOCAL_INDEXER_URL="${APTOS_LOCAL_INDEXER_URL:-}"
     
     local test_cmd="cargo test -p aptos-sdk --features 'e2e,full' -- --ignored"
     

@@ -36,8 +36,9 @@ ignored = true
 skip-clean = true
 verbose = false
 output-dir = "target/coverage"
-# Longer timeout for E2E tests
-timeout = "300s"
+out = ["Xml", "Html"]
+# Longer timeout for E2E tests (increased for indexer tests)
+timeout = "600s"
 
 # All tests profile - everything including E2E
 [all]
