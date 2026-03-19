@@ -38,6 +38,10 @@ flags:
     paths:
       - crates/aptos-sdk/src/
     carryforward: true
+  e2e:
+    paths:
+      - crates/aptos-sdk/src/
+    carryforward: true
 
 # Ignore certain paths from coverage
 ignore:

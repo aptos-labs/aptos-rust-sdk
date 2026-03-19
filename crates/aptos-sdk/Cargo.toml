@@ -37,7 +37,7 @@ faucet = []
 fuzzing = ["dep:arbitrary", "dep:proptest", "dep:proptest-derive"]
 
 # E2E testing (requires running localnet)
-e2e = ["ed25519", "secp256k1", "faucet"]
+e2e = ["ed25519", "secp256k1", "secp256r1", "faucet", "indexer"]
 
 # CLI for code generation
 cli = ["dep:clap"]

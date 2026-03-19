@@ -448,11 +448,7 @@ mod tests {
         let account = super::super::MultiKeyAccount::new(keys, 2).unwrap();
         let any_account: AnyAccount = account.into();
 
-        if let AnyAccount::MultiKey(_) = any_account {
-            // Success
-        } else {
-            panic!("Expected MultiKey account");
-        }
+        assert!(matches!(any_account, AnyAccount::MultiKey(_)));
     }
 
     #[cfg(feature = "ed25519")]
