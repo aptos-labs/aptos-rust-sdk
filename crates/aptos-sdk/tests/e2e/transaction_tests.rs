@@ -36,11 +36,14 @@ async fn e2e_build_sign_submit_transaction() {
         "Last 100 bytes: {}",
         const_hex::encode(&bcs_bytes[bcs_bytes.len().saturating_sub(100)..])
     );
-    println!(
-        "Authenticator variant (byte at offset {}): {}",
-        bcs_bytes.len() - 97,
-        bcs_bytes.get(bcs_bytes.len() - 97).unwrap_or(&0)
-    );
+    if bcs_bytes.len() >= 97 {
+        let offset = bcs_bytes.len() - 97;
+        println!(
+            "Authenticator variant (byte at offset {}): {}",
+            offset,
+            bcs_bytes.get(offset).unwrap_or(&0)
+        );
+    }
 
     // Submit
     let result = aptos

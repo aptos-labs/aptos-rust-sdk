@@ -17,16 +17,14 @@ async fn e2e_get_account_resource() {
     let resource = aptos
         .fullnode()
         .get_account_resource(account.address(), "0x1::account::Account")
-        .await;
+        .await
+        .expect("failed to get account resource");
 
-    match resource {
-        Ok(r) => {
-            println!("Account resource: {:?}", r.data);
-        }
-        Err(e) => {
-            println!("Failed to get resource: {}", e);
-        }
-    }
+    assert!(
+        resource.data.typ.contains("Account"),
+        "resource type should contain 'Account'"
+    );
+    println!("Account resource: {:?}", resource.data);
 }
 
 #[tokio::test]
@@ -49,14 +47,12 @@ async fn e2e_get_coin_store_resource() {
             account.address(),
             "0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>",
         )
-        .await;
+        .await
+        .expect("failed to get CoinStore resource");
 
-    match resource {
-        Ok(r) => {
-            println!("CoinStore resource: {:?}", r.data);
-        }
-        Err(e) => {
-            println!("Failed to get CoinStore: {}", e);
-        }
-    }
+    assert!(
+        resource.data.typ.contains("CoinStore"),
+        "resource type should contain 'CoinStore'"
+    );
+    println!("CoinStore resource: {:?}", resource.data);
 }

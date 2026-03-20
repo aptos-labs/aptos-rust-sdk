@@ -77,7 +77,9 @@ jobs:
               break
             fi
             if [ "$i" -eq 60 ]; then
-              echo "Indexer API failed to start within 120s (non-fatal, indexer tests will be skipped)"
+              echo "Indexer API failed to start within 120s"
+              cat "${{ runner.temp }}/localnet.log"
+              exit 1
             fi
             sleep 2
           done

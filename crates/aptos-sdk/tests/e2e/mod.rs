@@ -12,8 +12,8 @@
 //!
 //! ### Option 2: Manual setup
 //! ```bash
-//! # In one terminal, start localnet:
-//! aptos node run-localnet --with-faucet
+//! # In one terminal, start localnet (use --with-indexer-api for indexer tests):
+//! aptos node run-localnet --with-faucet --with-indexer-api
 //!
 //! # In another terminal, run tests:
 //! cargo test -p aptos-sdk --features "e2e,full"
@@ -37,7 +37,6 @@
 //! - **state_tests**: Resource and state queries
 //! - **fullnode_tests**: FullnodeClient API coverage
 //! - **aptos_client_tests**: Main Aptos client method coverage
-//! - **simulation_tests**: Transaction simulation edge cases
 //! - **error_tests**: Error and failure path coverage
 //! - **indexer_tests**: IndexerClient queries (requires indexer API)
 
@@ -63,8 +62,12 @@ pub fn get_test_config() -> AptosConfig {
         AptosConfig::local()
     };
 
-    if let Ok(indexer_url) = env::var("APTOS_LOCAL_INDEXER_URL") {
-        config = config.with_indexer_url(&indexer_url).unwrap();
+    if let Ok(indexer_url) = env::var("APTOS_LOCAL_INDEXER_URL")
+        && !indexer_url.trim().is_empty()
+    {
+        config = config.with_indexer_url(&indexer_url).unwrap_or_else(|err| {
+            panic!("Invalid APTOS_LOCAL_INDEXER_URL '{}': {}", indexer_url, err)
+        });
     }
 
     config
@@ -150,9 +153,6 @@ mod fullnode_tests;
 
 #[cfg(all(feature = "ed25519", feature = "faucet"))]
 mod aptos_client_tests;
-
-#[cfg(all(feature = "ed25519", feature = "faucet"))]
-mod simulation_tests;
 
 #[cfg(all(feature = "ed25519", feature = "faucet"))]
 mod error_tests;

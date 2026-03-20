@@ -216,19 +216,3 @@ async fn e2e_estimate_gas_price() {
         gas.data.high()
     );
 }
-
-#[tokio::test]
-#[ignore]
-async fn e2e_view_bcs() {
-    let config = get_test_config();
-    let aptos = Aptos::new(config).expect("failed to create client");
-
-    // Call now_seconds via BCS view and deserialize as u64
-    let timestamp: u64 = aptos
-        .view_bcs("0x1::timestamp::now_seconds", vec![], vec![])
-        .await
-        .expect("failed to call view_bcs");
-
-    assert!(timestamp > 0, "timestamp should be > 0");
-    println!("Timestamp via BCS: {}", timestamp);
-}

@@ -147,7 +147,9 @@ run_tests() {
     export APTOS_LOCAL_NODE_URL="http://127.0.0.1:8080/v1"
     export APTOS_LOCAL_FAUCET_URL="http://127.0.0.1:8081"
     # APTOS_LOCAL_INDEXER_URL is set during start_localnet if indexer is available
-    export APTOS_LOCAL_INDEXER_URL="${APTOS_LOCAL_INDEXER_URL:-}"
+    if [[ -n "${APTOS_LOCAL_INDEXER_URL:-}" ]]; then
+        export APTOS_LOCAL_INDEXER_URL
+    fi
     
     local test_cmd="cargo test -p aptos-sdk --features 'e2e,full' -- --ignored"
     
