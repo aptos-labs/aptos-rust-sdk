@@ -5,8 +5,9 @@
 //! (Ed25519, Secp256k1, Secp256r1, etc.).
 
 use crate::error::{AptosError, AptosResult};
+use serde::de::{SeqAccess, Visitor};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::fmt;
+use std::{borrow::Cow, fmt, marker::PhantomData};
 
 /// Maximum number of keys in a multi-key account.
 pub const MAX_NUM_OF_KEYS: usize = 32;
@@ -53,10 +54,99 @@ impl AnyPublicKeyVariant {
     pub fn as_byte(&self) -> u8 {
         *self as u8
     }
+
+    fn public_key_len(self) -> Option<usize> {
+        match self {
+            Self::Ed25519 => Some(32),
+            Self::Secp256k1 => Some(65),
+            Self::Secp256r1 => Some(65),
+            Self::Keyless => None,
+        }
+    }
+
+    fn signature_len(self) -> Option<usize> {
+        match self {
+            Self::Ed25519 => Some(64),
+            Self::Secp256k1 => Some(64),
+            Self::Secp256r1 => Some(64),
+            Self::Keyless => None,
+        }
+    }
+}
+
+fn deserialize_bounded_vec<'de, D, T>(
+    deserializer: D,
+    item_label: &'static str,
+) -> Result<Vec<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    struct BoundedVecVisitor<T> {
+        item_label: &'static str,
+        _marker: PhantomData<T>,
+    }
+
+    impl<'de, T> Visitor<'de> for BoundedVecVisitor<T>
+    where
+        T: Deserialize<'de>,
+    {
+        type Value = Vec<T>;
+
+        fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(f, "at most {} {}", MAX_NUM_OF_KEYS, self.item_label)
+        }
+
+        fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+        where
+            A: SeqAccess<'de>,
+        {
+            let size_hint = seq.size_hint();
+            if let Some(len) = size_hint {
+                if len > MAX_NUM_OF_KEYS {
+                    return Err(serde::de::Error::custom(format!(
+                        "multi-key supports at most {} {}, got {}",
+                        MAX_NUM_OF_KEYS, self.item_label, len
+                    )));
+                }
+            }
+
+            let mut items = Vec::with_capacity(size_hint.unwrap_or(0).min(MAX_NUM_OF_KEYS));
+            while let Some(item) = seq.next_element()? {
+                if items.len() == MAX_NUM_OF_KEYS {
+                    return Err(serde::de::Error::custom(format!(
+                        "multi-key supports at most {} {}",
+                        MAX_NUM_OF_KEYS, self.item_label
+                    )));
+                }
+                items.push(item);
+            }
+            Ok(items)
+        }
+    }
+
+    deserializer.deserialize_seq(BoundedVecVisitor {
+        item_label,
+        _marker: PhantomData,
+    })
+}
+
+fn deserialize_public_keys<'de, D>(deserializer: D) -> Result<Vec<AnyPublicKey>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    deserialize_bounded_vec(deserializer, "public keys")
+}
+
+fn deserialize_signatures<'de, D>(deserializer: D) -> Result<Vec<AnySignature>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    deserialize_bounded_vec(deserializer, "signatures")
 }
 
 /// A public key that can be any supported signature scheme.
-#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Serialize)]
 pub struct AnyPublicKey {
     /// The signature scheme variant.
     pub variant: AnyPublicKeyVariant,
@@ -167,6 +257,36 @@ impl AnyPublicKey {
     }
 }
 
+impl<'de> Deserialize<'de> for AnyPublicKey {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        struct AnyPublicKeyWire<'a> {
+            variant: AnyPublicKeyVariant,
+            #[serde(borrow)]
+            #[serde(with = "serde_bytes")]
+            bytes: Cow<'a, [u8]>,
+        }
+
+        let wire = AnyPublicKeyWire::deserialize(deserializer)?;
+        let expected = wire.variant.public_key_len().ok_or_else(|| {
+            serde::de::Error::custom("Keyless public keys are not supported in AnyPublicKey")
+        })?;
+        if wire.bytes.len() != expected {
+            return Err(serde::de::Error::custom(format!(
+                "invalid public key length for {:?}: expected {} bytes, got {}",
+                wire.variant,
+                expected,
+                wire.bytes.len()
+            )));
+        }
+
+        Ok(Self {
+            variant: wire.variant,
+            bytes: wire.bytes.into_owned(),
+        })
+    }
+}
+
 impl fmt::Debug for AnyPublicKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
@@ -190,7 +310,7 @@ impl fmt::Display for AnyPublicKey {
 }
 
 /// A signature that can be any supported signature scheme.
-#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Serialize)]
 pub struct AnySignature {
     /// The signature scheme variant.
     pub variant: AnyPublicKeyVariant,
@@ -251,6 +371,36 @@ impl AnySignature {
     }
 }
 
+impl<'de> Deserialize<'de> for AnySignature {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        struct AnySignatureWire<'a> {
+            variant: AnyPublicKeyVariant,
+            #[serde(borrow)]
+            #[serde(with = "serde_bytes")]
+            bytes: Cow<'a, [u8]>,
+        }
+
+        let wire = AnySignatureWire::deserialize(deserializer)?;
+        let expected = wire.variant.signature_len().ok_or_else(|| {
+            serde::de::Error::custom("Keyless signatures are not supported in AnySignature")
+        })?;
+        if wire.bytes.len() != expected {
+            return Err(serde::de::Error::custom(format!(
+                "invalid signature length for {:?}: expected {} bytes, got {}",
+                wire.variant,
+                expected,
+                wire.bytes.len()
+            )));
+        }
+
+        Ok(Self {
+            variant: wire.variant,
+            bytes: wire.bytes.into_owned(),
+        })
+    }
+}
+
 impl fmt::Debug for AnySignature {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
@@ -293,6 +443,7 @@ impl<'de> Deserialize<'de> for MultiKeyPublicKey {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         #[derive(Deserialize)]
         struct MultiKeyPublicKeyWire {
+            #[serde(deserialize_with = "deserialize_public_keys")]
             public_keys: Vec<AnyPublicKey>,
             signatures_required: u8,
         }
@@ -482,6 +633,7 @@ impl<'de> Deserialize<'de> for MultiKeySignature {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         #[derive(Deserialize)]
         struct MultiKeySignatureWire {
+            #[serde(deserialize_with = "deserialize_signatures")]
             signatures: Vec<AnySignature>,
             #[serde(with = "serde_bytes")]
             signatures_bitmap: Vec<u8>,
@@ -695,6 +847,20 @@ mod tests {
     }
 
     #[test]
+    fn test_any_public_key_from_bcs_bytes_rejects_invalid_length() {
+        let pk = AnyPublicKey::new(AnyPublicKeyVariant::Ed25519, vec![0xaa; 31]);
+        let bytes = pk.to_bcs_bytes();
+        assert!(AnyPublicKey::from_bcs_bytes(&bytes).is_err());
+    }
+
+    #[test]
+    fn test_any_public_key_from_bcs_bytes_rejects_keyless() {
+        let pk = AnyPublicKey::new(AnyPublicKeyVariant::Keyless, vec![]);
+        let bytes = pk.to_bcs_bytes();
+        assert!(AnyPublicKey::from_bcs_bytes(&bytes).is_err());
+    }
+
+    #[test]
     fn test_any_public_key_debug() {
         let pk = AnyPublicKey::new(AnyPublicKeyVariant::Secp256k1, vec![0xbb; 33]);
         let debug = format!("{pk:?}");
@@ -719,6 +885,36 @@ mod tests {
         assert_eq!(bcs[1], 64); // ULEB128(64) = 0x40 (since 64 < 128)
         assert_eq!(bcs[2], 0xdd); // first byte of signature
         assert_eq!(bcs.len(), 1 + 1 + 64); // variant + length + bytes
+    }
+
+    #[test]
+    fn test_any_signature_from_bcs_bytes_rejects_invalid_length() {
+        let sig = AnySignature::new(AnyPublicKeyVariant::Ed25519, vec![0xdd; 63]);
+        let bytes = sig.to_bcs_bytes();
+        assert!(AnySignature::from_bcs_bytes(&bytes).is_err());
+    }
+
+    #[test]
+    fn test_any_signature_from_bcs_bytes_rejects_keyless() {
+        let sig = AnySignature::new(AnyPublicKeyVariant::Keyless, vec![]);
+        let bytes = sig.to_bcs_bytes();
+        assert!(AnySignature::from_bcs_bytes(&bytes).is_err());
+    }
+
+    #[test]
+    fn test_any_public_key_json_roundtrip() {
+        let pk = AnyPublicKey::new(AnyPublicKeyVariant::Ed25519, vec![0x11; 32]);
+        let json = serde_json::to_string(&pk).unwrap();
+        let restored: AnyPublicKey = serde_json::from_str(&json).unwrap();
+        assert_eq!(pk, restored);
+    }
+
+    #[test]
+    fn test_any_signature_json_roundtrip() {
+        let sig = AnySignature::new(AnyPublicKeyVariant::Ed25519, vec![0x22; 64]);
+        let json = serde_json::to_string(&sig).unwrap();
+        let restored: AnySignature = serde_json::from_str(&json).unwrap();
+        assert_eq!(sig, restored);
     }
 
     #[test]
@@ -788,6 +984,116 @@ mod tests {
 
         assert!(debug.contains("MultiKeySignature"));
         assert!(display.starts_with("0x"));
+    }
+
+    #[test]
+    fn test_deserialize_bounded_vec_rejects_large_size_hint_before_elements() {
+        #[derive(Debug)]
+        struct Bomb;
+
+        impl<'de> Deserialize<'de> for Bomb {
+            fn deserialize<D: Deserializer<'de>>(_deserializer: D) -> Result<Self, D::Error> {
+                panic!("Bomb should not be deserialized");
+            }
+        }
+
+        fn deserialize_bombs<'de, D>(deserializer: D) -> Result<Vec<Bomb>, D::Error>
+        where
+            D: Deserializer<'de>,
+        {
+            deserialize_bounded_vec(deserializer, "bombs")
+        }
+
+        #[allow(dead_code)]
+        #[derive(Deserialize)]
+        struct Wire {
+            #[serde(deserialize_with = "deserialize_bombs")]
+            bombs: Vec<Bomb>,
+        }
+
+        let bytes = aptos_bcs::to_bytes(&vec![0u8; MAX_NUM_OF_KEYS + 1]).unwrap();
+        let result: Result<Wire, _> = aptos_bcs::from_bytes(&bytes);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_multi_key_public_key_from_bytes_rejects_too_many_keys() {
+        #[derive(Serialize)]
+        struct Wire<'a> {
+            public_keys: &'a [AnyPublicKey],
+            signatures_required: u8,
+        }
+
+        let public_keys: Vec<_> = (0..=MAX_NUM_OF_KEYS)
+            .map(|_| AnyPublicKey::new(AnyPublicKeyVariant::Ed25519, vec![0x11; 32]))
+            .collect();
+        let bytes = aptos_bcs::to_bytes(&Wire {
+            public_keys: &public_keys,
+            signatures_required: 1,
+        })
+        .unwrap();
+
+        assert!(MultiKeyPublicKey::from_bytes(&bytes).is_err());
+    }
+
+    #[test]
+    fn test_multi_key_public_key_from_bytes_rejects_keyless_key() {
+        #[derive(Serialize)]
+        struct Wire<'a> {
+            public_keys: &'a [AnyPublicKey],
+            signatures_required: u8,
+        }
+
+        let public_keys = vec![AnyPublicKey::new(AnyPublicKeyVariant::Keyless, vec![])];
+        let bytes = aptos_bcs::to_bytes(&Wire {
+            public_keys: &public_keys,
+            signatures_required: 1,
+        })
+        .unwrap();
+
+        assert!(MultiKeyPublicKey::from_bytes(&bytes).is_err());
+    }
+
+    #[test]
+    fn test_multi_key_signature_from_bytes_rejects_too_many_signatures() {
+        #[derive(Serialize)]
+        struct Wire<'a> {
+            signatures: Vec<&'a AnySignature>,
+            #[serde(with = "serde_bytes")]
+            signatures_bitmap: &'a [u8],
+        }
+
+        let signatures: Vec<_> = (0..=MAX_NUM_OF_KEYS)
+            .map(|_| AnySignature::new(AnyPublicKeyVariant::Ed25519, vec![0x22; 64]))
+            .collect();
+        let bitmap = [0xff; 4];
+        let bytes = aptos_bcs::to_bytes(&Wire {
+            signatures: signatures.iter().collect(),
+            signatures_bitmap: &bitmap,
+        })
+        .unwrap();
+
+        assert!(MultiKeySignature::from_bytes(&bytes).is_err());
+    }
+
+    #[test]
+    fn test_multi_key_signature_from_bytes_rejects_keyless_signature() {
+        #[derive(Serialize)]
+        struct Wire<'a> {
+            signatures: Vec<&'a AnySignature>,
+            #[serde(with = "serde_bytes")]
+            signatures_bitmap: &'a [u8],
+        }
+
+        let signatures = vec![AnySignature::new(AnyPublicKeyVariant::Keyless, vec![])];
+        let bitmap = [0x80, 0x00, 0x00, 0x00];
+        let bytes = aptos_bcs::to_bytes(&Wire {
+            signatures: signatures.iter().collect(),
+            signatures_bitmap: &bitmap,
+        })
+        .unwrap();
+
+        assert!(MultiKeySignature::from_bytes(&bytes).is_err());
     }
 
     #[test]

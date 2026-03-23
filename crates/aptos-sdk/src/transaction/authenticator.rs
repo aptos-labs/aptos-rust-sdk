@@ -959,6 +959,31 @@ mod tests {
     }
 
     #[test]
+    fn test_multi_key_authenticator_bcs_rejects_keyless_public_key() {
+        let auth = AccountAuthenticator::MultiKey {
+            authenticator: MultiKeyAuthenticator::new(
+                MultiKeyPublicKey::new(
+                    vec![AnyPublicKey::new(
+                        crate::crypto::AnyPublicKeyVariant::Keyless,
+                        vec![],
+                    )],
+                    1,
+                )
+                .unwrap(),
+                MultiKeySignature::new(vec![(
+                    0,
+                    AnySignature::new(crate::crypto::AnyPublicKeyVariant::Ed25519, vec![0x66; 64]),
+                )])
+                .unwrap(),
+            ),
+        };
+
+        let serialized = aptos_bcs::to_bytes(&auth).unwrap();
+        let result: Result<AccountAuthenticator, _> = aptos_bcs::from_bytes(&serialized);
+        assert!(result.is_err());
+    }
+
+    #[test]
     fn test_multi_ed25519_authenticator_bcs_roundtrip() {
         let auth = AccountAuthenticator::MultiEd25519 {
             public_key: vec![0xcc; 64],

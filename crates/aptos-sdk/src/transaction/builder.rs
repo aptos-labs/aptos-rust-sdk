@@ -673,6 +673,59 @@ mod tests {
         let signed =
             sign_multi_agent_transaction(&multi_agent, &sender, &secondary_signers).unwrap();
         assert_eq!(signed.sender(), sender.address());
+        signed.verify_signature().unwrap();
+    }
+
+    #[cfg(feature = "ed25519")]
+    #[test]
+    fn test_multi_agent_verify_signature_rejects_secondary_signer_length_mismatch() {
+        use crate::account::{Account, Ed25519Account};
+        use crate::transaction::authenticator::{AccountAuthenticator, TransactionAuthenticator};
+
+        let sender = Ed25519Account::generate();
+        let secondary = Ed25519Account::generate();
+        let recipient = AccountAddress::from_hex("0x123").unwrap();
+        let payload = EntryFunction::apt_transfer(recipient, 1000).unwrap();
+
+        let raw_txn = TransactionBuilder::new()
+            .sender(sender.address())
+            .sequence_number(0)
+            .payload(payload.into())
+            .chain_id(ChainId::testnet())
+            .build()
+            .unwrap();
+
+        let multi_agent = MultiAgentRawTransaction {
+            raw_txn,
+            secondary_signer_addresses: vec![secondary.address()],
+        };
+
+        let secondary_signers: Vec<&dyn Account> = vec![&secondary];
+        let signed =
+            sign_multi_agent_transaction(&multi_agent, &sender, &secondary_signers).unwrap();
+        signed.verify_signature().unwrap();
+
+        let mut missing_secondary_signer = signed.clone();
+        if let TransactionAuthenticator::MultiAgent {
+            secondary_signers, ..
+        } = &mut missing_secondary_signer.authenticator
+        {
+            secondary_signers.clear();
+        } else {
+            panic!("expected MultiAgent authenticator");
+        }
+        assert!(missing_secondary_signer.verify_signature().is_err());
+
+        let mut extra_secondary_signer = signed;
+        if let TransactionAuthenticator::MultiAgent {
+            secondary_signers, ..
+        } = &mut extra_secondary_signer.authenticator
+        {
+            secondary_signers.push(AccountAuthenticator::NoAccountAuthenticator);
+        } else {
+            panic!("expected MultiAgent authenticator");
+        }
+        assert!(extra_secondary_signer.verify_signature().is_err());
     }
 
     #[cfg(feature = "ed25519")]
@@ -701,6 +754,66 @@ mod tests {
 
         let signed = sign_fee_payer_transaction(&fee_payer_txn, &sender, &[], &fee_payer).unwrap();
         assert_eq!(signed.sender(), sender.address());
+        signed.verify_signature().unwrap();
+    }
+
+    #[cfg(feature = "ed25519")]
+    #[test]
+    fn test_fee_payer_verify_signature_rejects_secondary_signer_length_mismatch() {
+        use crate::account::{Account, Ed25519Account};
+        use crate::transaction::authenticator::{AccountAuthenticator, TransactionAuthenticator};
+
+        let sender = Ed25519Account::generate();
+        let secondary = Ed25519Account::generate();
+        let fee_payer = Ed25519Account::generate();
+        let recipient = AccountAddress::from_hex("0x123").unwrap();
+        let payload = EntryFunction::apt_transfer(recipient, 1000).unwrap();
+
+        let raw_txn = TransactionBuilder::new()
+            .sender(sender.address())
+            .sequence_number(0)
+            .payload(payload.into())
+            .chain_id(ChainId::testnet())
+            .build()
+            .unwrap();
+
+        let fee_payer_txn = FeePayerRawTransaction {
+            raw_txn,
+            secondary_signer_addresses: vec![secondary.address()],
+            fee_payer_address: fee_payer.address(),
+        };
+
+        let secondary_signers: Vec<&dyn Account> = vec![&secondary];
+        let signed = sign_fee_payer_transaction(
+            &fee_payer_txn,
+            &sender,
+            &secondary_signers,
+            &fee_payer,
+        )
+        .unwrap();
+        signed.verify_signature().unwrap();
+
+        let mut missing_secondary_signer = signed.clone();
+        if let TransactionAuthenticator::FeePayer {
+            secondary_signers, ..
+        } = &mut missing_secondary_signer.authenticator
+        {
+            secondary_signers.clear();
+        } else {
+            panic!("expected FeePayer authenticator");
+        }
+        assert!(missing_secondary_signer.verify_signature().is_err());
+
+        let mut extra_secondary_signer = signed;
+        if let TransactionAuthenticator::FeePayer {
+            secondary_signers, ..
+        } = &mut extra_secondary_signer.authenticator
+        {
+            secondary_signers.push(AccountAuthenticator::NoAccountAuthenticator);
+        } else {
+            panic!("expected FeePayer authenticator");
+        }
+        assert!(extra_secondary_signer.verify_signature().is_err());
     }
 
     #[test]

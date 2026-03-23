@@ -343,6 +343,12 @@ impl SignedTransaction {
                 secondary_signer_addresses,
                 secondary_signers,
             } => {
+                if secondary_signer_addresses.len() != secondary_signers.len() {
+                    return Err(crate::error::AptosError::InvalidSignature(
+                        "secondary signer count does not match secondary signer addresses"
+                            .into(),
+                    ));
+                }
                 let signing_message = MultiAgentRawTransaction::new(
                     self.raw_txn.clone(),
                     secondary_signer_addresses.clone(),
@@ -374,6 +380,12 @@ impl SignedTransaction {
                 fee_payer_address,
                 fee_payer_signer,
             } => {
+                if secondary_signer_addresses.len() != secondary_signers.len() {
+                    return Err(crate::error::AptosError::InvalidSignature(
+                        "secondary signer count does not match secondary signer addresses"
+                            .into(),
+                    ));
+                }
                 let signing_message = FeePayerRawTransaction::new(
                     self.raw_txn.clone(),
                     secondary_signer_addresses.clone(),
