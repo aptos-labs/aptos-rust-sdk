@@ -324,11 +324,6 @@ impl IndexerClient {
                     limit: $limit
                 ) {
                     transaction_version
-                    coin_activities {
-                        activity_type
-                        amount
-                        coin_type
-                    }
                 }
             }
         ";
@@ -349,9 +344,45 @@ pub struct FungibleAssetBalance {
     /// The asset type.
     pub asset_type: String,
     /// The balance amount.
+    #[serde(deserialize_with = "deserialize_string_or_number")]
     pub amount: String,
     /// Asset metadata.
     pub metadata: Option<FungibleAssetMetadata>,
+}
+
+/// Deserializes a value that may be a string or a number into a String.
+///
+/// The Aptos indexer sometimes returns numeric fields as integers and sometimes
+/// as strings depending on the version. This handles both cases.
+fn deserialize_string_or_number<'de, D>(deserializer: D) -> Result<String, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de;
+
+    struct StringOrNumber;
+
+    impl de::Visitor<'_> for StringOrNumber {
+        type Value = String;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            formatter.write_str("a string or number")
+        }
+
+        fn visit_str<E: de::Error>(self, v: &str) -> Result<String, E> {
+            Ok(v.to_string())
+        }
+
+        fn visit_u64<E: de::Error>(self, v: u64) -> Result<String, E> {
+            Ok(v.to_string())
+        }
+
+        fn visit_i64<E: de::Error>(self, v: i64) -> Result<String, E> {
+            Ok(v.to_string())
+        }
+    }
+
+    deserializer.deserialize_any(StringOrNumber)
 }
 
 /// Fungible asset metadata from the indexer.
@@ -401,7 +432,8 @@ pub struct CollectionData {
 pub struct Transaction {
     /// Transaction version.
     pub transaction_version: String,
-    /// Coin activities in this transaction.
+    /// Coin activities in this transaction (may be empty if not queried).
+    #[serde(default)]
     pub coin_activities: Vec<CoinActivity>,
 }
 
@@ -411,9 +443,52 @@ pub struct CoinActivity {
     /// Activity type.
     pub activity_type: String,
     /// Amount.
+    #[serde(default, deserialize_with = "deserialize_optional_string_or_number")]
     pub amount: Option<String>,
     /// Coin type.
     pub coin_type: String,
+}
+
+/// Deserializes an optional value that may be a string, number, or null into `Option<String>`.
+fn deserialize_optional_string_or_number<'de, D>(
+    deserializer: D,
+) -> Result<Option<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de;
+
+    struct OptionalStringOrNumber;
+
+    impl de::Visitor<'_> for OptionalStringOrNumber {
+        type Value = Option<String>;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            formatter.write_str("a string, number, or null")
+        }
+
+        fn visit_none<E: de::Error>(self) -> Result<Option<String>, E> {
+            Ok(None)
+        }
+
+        fn visit_unit<E: de::Error>(self) -> Result<Option<String>, E> {
+            Ok(None)
+        }
+
+        fn visit_str<E: de::Error>(self, v: &str) -> Result<Option<String>, E> {
+            Ok(Some(v.to_string()))
+        }
+
+        fn visit_u64<E: de::Error>(self, v: u64) -> Result<Option<String>, E> {
+            Ok(Some(v.to_string()))
+        }
+
+        fn visit_i64<E: de::Error>(self, v: i64) -> Result<Option<String>, E> {
+            Ok(Some(v.to_string()))
+        }
+    }
+
+    deserializer.deserialize_any(OptionalStringOrNumber)
 }
 
 /// Pagination parameters for indexer queries.
@@ -491,6 +566,7 @@ pub struct CoinBalance {
     /// Coin type.
     pub coin_type: String,
     /// Balance amount.
+    #[serde(deserialize_with = "deserialize_string_or_number")]
     pub amount: String,
 }
 
@@ -630,11 +706,6 @@ impl IndexerClient {
                     offset: $offset
                 ) {
                     transaction_version
-                    coin_activities {
-                        activity_type
-                        amount
-                        coin_type
-                    }
                 }
                 account_transactions_aggregate(
                     where: { account_address: { _eq: $address } }
