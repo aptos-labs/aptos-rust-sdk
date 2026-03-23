@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - `FullnodeClient::simulate_transaction_with_options` — simulate with optional query parameters (`estimate_max_gas_amount`, `estimate_gas_unit_price`, `estimate_prioritized_gas_unit_price`). Existing `simulate_transaction` is unchanged (single-arg) and delegates to the new method with `None` for backward compatibility.
+- `Aptos::simulate_signed_with_options`, plus option-aware multi-signer simulation (`Aptos::simulate_multi_agent`, `Aptos::simulate_fee_payer`) for consistent high-level simulation APIs while preserving no-options usage.
+- `build_simulation_signed_multi_agent` and `build_simulation_signed_fee_payer` for constructing simulation-only signed transactions using `NoAccountAuthenticator` placeholders.
 - `WebAuthnAccount` for on-chain `secp256r1` transaction signing. Wraps a
   `Secp256r1PrivateKey` and emits the on-chain `AnySignature::WebAuthn`
   envelope (synthetic `PartialAuthenticatorAssertionResponse` carrying
@@ -74,6 +76,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Secp256k1PublicKey::from_bytes` and `Secp256r1PublicKey::from_bytes`
   now also accept the 64-byte raw `(X || Y)` encoding (in addition to
   the SEC1 compressed/uncompressed forms).
+- Published crate excludes precompiled Move bytecode under `tests/e2e/move/**/*.mv`.
 
 ### Deprecated
 - `Secp256r1Account` for on-chain transaction signing. The on-chain
@@ -132,6 +135,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   on-wire fixes above means every account type the SDK can sign for
   (Ed25519, Ed25519SingleKey, Secp256k1, MultiEd25519, MultiKey, WebAuthn)
   now successfully submits transactions on devnet.
+- **Script payload BCS** — Reordered `ScriptArgument` enum variants to match chain/TS SDK (`ScriptTransactionArgumentVariants`), and added `Serialized` plus signed-integer variants (`I8`–`I256`). Script transactions now serialize correctly and can be submitted successfully.
+- `SignedTransaction::verify_signature` now rejects `MultiAgent` / `FeePayer` authenticators when `secondary_signer_addresses.len() != secondary_signers.len()` (previous `zip` truncation could hide missing or extra signers).
+- no-default-features feature-combination compatibility: verification/parsing paths are now correctly gated so `ed25519`-disabled builds do not reference unavailable Ed25519 types.
 
 ### Security
 - New 2026-05 security review (`SECURITY_REVIEW_2026-05.md`) confirms
@@ -143,6 +149,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   alignment improves domain separation from other ECDSA-over-SHA-256
   protocols; `Aptos::simulate` no longer routes private-key material
   through the gas-estimation path).
+- Hardened MultiKey decoding: `MultiKeyPublicKey`, `MultiKeySignature`, `AnyPublicKey`, and `AnySignature` now enforce bounded element counts and exact key/signature length checks during deserialization to reduce memory-amplification DoS risk.
+- Hardened authenticator address checks: multi-agent and fee-payer verification now enforces sender, secondary signer, and fee payer derived-address consistency.
+- Keyless variants continue to be rejected from MultiKey-only decoding paths (`AnyPublicKey` / `AnySignature`) where they are not valid inputs.
 - Patched five RUSTSEC advisories surfaced by `cargo audit`:
   - `aws-lc-sys < 0.39.0`: RUSTSEC-2026-0044 (X.509 name-constraints
     bypass via wildcard / Unicode CN) and RUSTSEC-2026-0048 (CRL
@@ -152,9 +161,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     constraints accepted for wildcard certificates), and
     RUSTSEC-2026-0104 (reachable panic in CRL parsing). Bumped to
     0.103.13.
-
-### Fixed
-- **Script payload BCS** — Reordered `ScriptArgument` enum variants to match chain/TS SDK (`ScriptTransactionArgumentVariants`), and added `Serialized` plus signed-integer variants (`I8`–`I256`). Script transactions now serialize correctly and can be submitted successfully.
 
 ## [0.4.1] - 2026-03-04
 
@@ -266,4 +272,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 [0.4.0]: https://github.com/aptos-labs/aptos-rust-sdk/releases/tag/sdk-v0.4.0
 [0.1.0]: https://github.com/aptos-labs/aptos-rust-sdk/releases/tag/sdk-v0.1.0
-
