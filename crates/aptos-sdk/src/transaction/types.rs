@@ -298,6 +298,7 @@ impl SignedTransaction {
     /// derived sender address does not match the raw transaction sender.
     pub fn verify_signature(&self) -> AptosResult<()> {
         match &self.authenticator {
+            #[cfg(feature = "ed25519")]
             TransactionAuthenticator::Ed25519 {
                 public_key,
                 signature,
@@ -313,6 +314,11 @@ impl SignedTransaction {
                 }
                 Ok(())
             }
+            #[cfg(not(feature = "ed25519"))]
+            TransactionAuthenticator::Ed25519 { .. } => Err(
+                crate::error::AptosError::FeatureNotEnabled("Ed25519 verification".into()),
+            ),
+            #[cfg(feature = "ed25519")]
             TransactionAuthenticator::MultiEd25519 {
                 public_key,
                 signature,
@@ -328,6 +334,10 @@ impl SignedTransaction {
                 }
                 Ok(())
             }
+            #[cfg(not(feature = "ed25519"))]
+            TransactionAuthenticator::MultiEd25519 { .. } => Err(
+                crate::error::AptosError::FeatureNotEnabled("MultiEd25519 verification".into()),
+            ),
             TransactionAuthenticator::SingleSender { sender } => {
                 let signing_message = self.raw_txn.signing_message()?;
                 sender.verify(&signing_message)?;
@@ -345,8 +355,7 @@ impl SignedTransaction {
             } => {
                 if secondary_signer_addresses.len() != secondary_signers.len() {
                     return Err(crate::error::AptosError::InvalidSignature(
-                        "secondary signer count does not match secondary signer addresses"
-                            .into(),
+                        "secondary signer count does not match secondary signer addresses".into(),
                     ));
                 }
                 let signing_message = MultiAgentRawTransaction::new(
@@ -382,8 +391,7 @@ impl SignedTransaction {
             } => {
                 if secondary_signer_addresses.len() != secondary_signers.len() {
                     return Err(crate::error::AptosError::InvalidSignature(
-                        "secondary signer count does not match secondary signer addresses"
-                            .into(),
+                        "secondary signer count does not match secondary signer addresses".into(),
                     ));
                 }
                 let signing_message = FeePayerRawTransaction::new(

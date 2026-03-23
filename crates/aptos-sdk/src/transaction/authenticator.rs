@@ -414,6 +414,7 @@ impl AccountAuthenticator {
     /// Returns an error if the authenticator does not verify for the message.
     pub fn verify(&self, message: &[u8]) -> crate::error::AptosResult<()> {
         match self {
+            #[cfg(feature = "ed25519")]
             Self::Ed25519 {
                 public_key,
                 signature,
@@ -422,6 +423,11 @@ impl AccountAuthenticator {
                 let signature = crate::crypto::Ed25519Signature::from_bytes(&signature.0)?;
                 public_key.verify(message, &signature)
             }
+            #[cfg(not(feature = "ed25519"))]
+            Self::Ed25519 { .. } => Err(crate::error::AptosError::FeatureNotEnabled(
+                "Ed25519 verification".into(),
+            )),
+            #[cfg(feature = "ed25519")]
             Self::MultiEd25519 {
                 public_key,
                 signature,
@@ -430,6 +436,10 @@ impl AccountAuthenticator {
                 let signature = crate::crypto::MultiEd25519Signature::from_bytes(signature)?;
                 public_key.verify(message, &signature)
             }
+            #[cfg(not(feature = "ed25519"))]
+            Self::MultiEd25519 { .. } => Err(crate::error::AptosError::FeatureNotEnabled(
+                "MultiEd25519 verification".into(),
+            )),
             Self::SingleKey { authenticator } => authenticator.verify(message),
             Self::MultiKey { authenticator } => authenticator.verify(message),
             Self::NoAccountAuthenticator => Err(crate::error::AptosError::InvalidSignature(
@@ -449,14 +459,24 @@ impl AccountAuthenticator {
     /// Returns an error if the contained public key bytes cannot be parsed.
     pub fn derived_address(&self) -> crate::error::AptosResult<AccountAddress> {
         match self {
+            #[cfg(feature = "ed25519")]
             Self::Ed25519 { public_key, .. } => {
                 let public_key = crate::crypto::Ed25519PublicKey::from_bytes(&public_key.0)?;
                 Ok(public_key.to_address())
             }
+            #[cfg(not(feature = "ed25519"))]
+            Self::Ed25519 { .. } => Err(crate::error::AptosError::FeatureNotEnabled(
+                "Ed25519 address derivation".into(),
+            )),
+            #[cfg(feature = "ed25519")]
             Self::MultiEd25519 { public_key, .. } => {
                 let public_key = crate::crypto::MultiEd25519PublicKey::from_bytes(public_key)?;
                 Ok(public_key.to_address())
             }
+            #[cfg(not(feature = "ed25519"))]
+            Self::MultiEd25519 { .. } => Err(crate::error::AptosError::FeatureNotEnabled(
+                "MultiEd25519 address derivation".into(),
+            )),
             Self::SingleKey { authenticator } => Ok(AccountAddress::new(
                 crate::crypto::derive_authentication_key(
                     &authenticator.public_key.to_bcs_bytes(),

@@ -102,13 +102,13 @@ where
             A: SeqAccess<'de>,
         {
             let size_hint = seq.size_hint();
-            if let Some(len) = size_hint {
-                if len > MAX_NUM_OF_KEYS {
-                    return Err(serde::de::Error::custom(format!(
-                        "multi-key supports at most {} {}, got {}",
-                        MAX_NUM_OF_KEYS, self.item_label, len
-                    )));
-                }
+            if let Some(len) = size_hint
+                && len > MAX_NUM_OF_KEYS
+            {
+                return Err(serde::de::Error::custom(format!(
+                    "multi-key supports at most {} {}, got {}",
+                    MAX_NUM_OF_KEYS, self.item_label, len
+                )));
             }
 
             let mut items = Vec::with_capacity(size_hint.unwrap_or(0).min(MAX_NUM_OF_KEYS));
