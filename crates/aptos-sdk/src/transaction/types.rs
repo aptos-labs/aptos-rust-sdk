@@ -597,6 +597,21 @@ mod tests {
         )
     }
 
+    #[cfg(feature = "ed25519")]
+    fn create_transfer_raw_transaction(sender: AccountAddress) -> RawTransaction {
+        RawTransaction::new(
+            sender,
+            0,
+            EntryFunction::apt_transfer(AccountAddress::from_hex("0x2").unwrap(), 1)
+                .unwrap()
+                .into(),
+            100_000,
+            100,
+            1_000_000_000,
+            ChainId::testnet(),
+        )
+    }
+
     #[test]
     fn test_raw_transaction_signing_message() {
         let txn = create_test_raw_transaction();
@@ -785,132 +800,156 @@ mod tests {
     #[test]
     fn test_verify_signature_ed25519_sender_mismatch() {
         use crate::account::Ed25519Account;
+        use crate::error::AptosError;
         use crate::transaction::builder::sign_transaction;
 
-        let sender = Ed25519Account::generate();
-        let raw_txn = RawTransaction::new(
-            sender.address(),
-            0,
-            EntryFunction::apt_transfer(AccountAddress::from_hex("0x2").unwrap(), 1)
-                .unwrap()
-                .into(),
-            100_000,
-            100,
-            1_000_000_000,
-            ChainId::testnet(),
+        let signer = Ed25519Account::generate();
+        let claimed_sender = Ed25519Account::generate();
+        let raw_txn = create_transfer_raw_transaction(claimed_sender.address());
+        let signed_txn = sign_transaction(&raw_txn, &signer).unwrap();
+        let err = signed_txn.verify_signature().unwrap_err();
+        assert!(
+            matches!(err, AptosError::InvalidSignature(msg) if msg.contains("sender does not match"))
         );
-
-        let mut signed = sign_transaction(&raw_txn, &sender).unwrap();
-        signed.verify_signature().unwrap();
-
-        signed.raw_txn.sender = AccountAddress::THREE;
-        assert!(signed.verify_signature().is_err());
     }
 
     #[cfg(feature = "ed25519")]
     #[test]
-    fn test_verify_signature_multi_ed25519_success_and_sender_mismatch() {
+    fn test_verify_signature_multi_ed25519_sender_mismatch() {
+        use crate::account::Ed25519Account;
         use crate::account::MultiEd25519Account;
         use crate::crypto::Ed25519PrivateKey;
+        use crate::error::AptosError;
         use crate::transaction::builder::sign_transaction;
 
-        let account = MultiEd25519Account::new(
+        let signer = MultiEd25519Account::new(
             vec![Ed25519PrivateKey::generate(), Ed25519PrivateKey::generate()],
             2,
         )
         .unwrap();
-        let raw_txn = RawTransaction::new(
-            account.address(),
-            0,
-            EntryFunction::apt_transfer(AccountAddress::from_hex("0x2").unwrap(), 1)
-                .unwrap()
-                .into(),
-            100_000,
-            100,
-            1_000_000_000,
-            ChainId::testnet(),
+        let claimed_sender = Ed25519Account::generate();
+        let raw_txn = create_transfer_raw_transaction(claimed_sender.address());
+        let signed_txn = sign_transaction(&raw_txn, &signer).unwrap();
+        let err = signed_txn.verify_signature().unwrap_err();
+        assert!(
+            matches!(err, AptosError::InvalidSignature(msg) if msg.contains("sender does not match"))
         );
-
-        let mut signed = sign_transaction(&raw_txn, &account).unwrap();
-        signed.verify_signature().unwrap();
-
-        signed.raw_txn.sender = AccountAddress::THREE;
-        assert!(signed.verify_signature().is_err());
     }
 
     #[cfg(feature = "ed25519")]
     #[test]
     fn test_verify_signature_single_sender_sender_mismatch() {
         use crate::account::Ed25519SingleKeyAccount;
+        use crate::error::AptosError;
         use crate::transaction::builder::sign_transaction;
 
-        let sender = Ed25519SingleKeyAccount::generate();
-        let raw_txn = RawTransaction::new(
-            sender.address(),
-            0,
-            EntryFunction::apt_transfer(AccountAddress::from_hex("0x2").unwrap(), 1)
-                .unwrap()
-                .into(),
-            100_000,
-            100,
-            1_000_000_000,
-            ChainId::testnet(),
+        let signer = Ed25519SingleKeyAccount::generate();
+        let claimed_sender = Ed25519SingleKeyAccount::generate();
+        let raw_txn = create_transfer_raw_transaction(claimed_sender.address());
+        let signed_txn = sign_transaction(&raw_txn, &signer).unwrap();
+        let err = signed_txn.verify_signature().unwrap_err();
+        assert!(
+            matches!(err, AptosError::InvalidSignature(msg) if msg.contains("sender does not match"))
         );
-
-        let mut signed = sign_transaction(&raw_txn, &sender).unwrap();
-        signed.verify_signature().unwrap();
-
-        signed.raw_txn.sender = AccountAddress::THREE;
-        assert!(signed.verify_signature().is_err());
     }
 
     #[cfg(feature = "ed25519")]
     #[test]
-    fn test_verify_signature_multi_agent_sender_and_secondary_mismatch() {
+    fn test_verify_signature_multi_agent_sender_mismatch() {
         use crate::account::{Account, Ed25519Account};
-        use crate::transaction::authenticator::TransactionAuthenticator;
+        use crate::error::AptosError;
         use crate::transaction::builder::sign_multi_agent_transaction;
 
-        let sender = Ed25519Account::generate();
+        let signer = Ed25519Account::generate();
+        let claimed_sender = Ed25519Account::generate();
         let secondary = Ed25519Account::generate();
-        let raw_txn = RawTransaction::new(
-            sender.address(),
-            0,
-            EntryFunction::apt_transfer(AccountAddress::from_hex("0x2").unwrap(), 1)
-                .unwrap()
-                .into(),
-            100_000,
-            100,
-            1_000_000_000,
-            ChainId::testnet(),
-        );
+        let raw_txn = create_transfer_raw_transaction(claimed_sender.address());
 
         let multi_agent = MultiAgentRawTransaction::new(raw_txn, vec![secondary.address()]);
         let secondary_refs: Vec<&dyn Account> = vec![&secondary];
-        let signed = sign_multi_agent_transaction(&multi_agent, &sender, &secondary_refs).unwrap();
-        signed.verify_signature().unwrap();
-
-        let mut sender_mismatch = signed.clone();
-        sender_mismatch.raw_txn.sender = AccountAddress::THREE;
-        assert!(sender_mismatch.verify_signature().is_err());
-
-        let mut secondary_mismatch = signed;
-        if let TransactionAuthenticator::MultiAgent {
-            secondary_signer_addresses,
-            ..
-        } = &mut secondary_mismatch.authenticator
-        {
-            secondary_signer_addresses[0] = AccountAddress::THREE;
-        } else {
-            panic!("expected MultiAgent authenticator");
-        }
-        assert!(secondary_mismatch.verify_signature().is_err());
+        let signed_txn =
+            sign_multi_agent_transaction(&multi_agent, &signer, &secondary_refs).unwrap();
+        let err = signed_txn.verify_signature().unwrap_err();
+        assert!(
+            matches!(err, AptosError::InvalidSignature(msg) if msg.contains("sender does not match"))
+        );
     }
 
     #[cfg(feature = "ed25519")]
     #[test]
-    fn test_verify_signature_fee_payer_sender_secondary_and_fee_payer_mismatch() {
+    fn test_verify_signature_multi_agent_secondary_address_mismatch() {
         use crate::account::{Account, Ed25519Account};
+        use crate::error::AptosError;
+        use crate::transaction::builder::sign_multi_agent_transaction;
+
+        let sender = Ed25519Account::generate();
+        let expected_secondary = Ed25519Account::generate();
+        let wrong_secondary = Ed25519Account::generate();
+        let raw_txn = create_transfer_raw_transaction(sender.address());
+        let multi_agent =
+            MultiAgentRawTransaction::new(raw_txn, vec![expected_secondary.address()]);
+        let secondary_refs: Vec<&dyn Account> = vec![&wrong_secondary];
+        let signed = sign_multi_agent_transaction(&multi_agent, &sender, &secondary_refs).unwrap();
+        let err = signed.verify_signature().unwrap_err();
+        assert!(matches!(err, AptosError::InvalidSignature(msg) if msg
+            .contains("secondary signer address does not match")));
+    }
+
+    #[cfg(feature = "ed25519")]
+    #[test]
+    fn test_verify_signature_fee_payer_sender_mismatch() {
+        use crate::account::{Account, Ed25519Account};
+        use crate::error::AptosError;
+        use crate::transaction::builder::sign_fee_payer_transaction;
+
+        let signer = Ed25519Account::generate();
+        let claimed_sender = Ed25519Account::generate();
+        let secondary = Ed25519Account::generate();
+        let fee_payer = Ed25519Account::generate();
+        let raw_txn = create_transfer_raw_transaction(claimed_sender.address());
+        let fee_payer_txn =
+            FeePayerRawTransaction::new(raw_txn, vec![secondary.address()], fee_payer.address());
+        let secondary_refs: Vec<&dyn Account> = vec![&secondary];
+        let signed_txn =
+            sign_fee_payer_transaction(&fee_payer_txn, &signer, &secondary_refs, &fee_payer)
+                .unwrap();
+        let err = signed_txn.verify_signature().unwrap_err();
+        assert!(
+            matches!(err, AptosError::InvalidSignature(msg) if msg.contains("sender does not match"))
+        );
+    }
+
+    #[cfg(feature = "ed25519")]
+    #[test]
+    fn test_verify_signature_fee_payer_secondary_address_mismatch() {
+        use crate::account::{Account, Ed25519Account};
+        use crate::error::AptosError;
+        use crate::transaction::builder::sign_fee_payer_transaction;
+
+        let sender = Ed25519Account::generate();
+        let expected_secondary = Ed25519Account::generate();
+        let wrong_secondary = Ed25519Account::generate();
+        let fee_payer = Ed25519Account::generate();
+        let raw_txn = create_transfer_raw_transaction(sender.address());
+        let fee_payer_txn = FeePayerRawTransaction::new(
+            raw_txn,
+            vec![expected_secondary.address()],
+            fee_payer.address(),
+        );
+        let secondary_refs: Vec<&dyn Account> = vec![&wrong_secondary];
+        let signed =
+            sign_fee_payer_transaction(&fee_payer_txn, &sender, &secondary_refs, &fee_payer)
+                .unwrap();
+        let err = signed.verify_signature().unwrap_err();
+        assert!(matches!(err, AptosError::InvalidSignature(msg) if msg
+            .contains("secondary signer address does not match")));
+    }
+
+    #[cfg(feature = "ed25519")]
+    #[test]
+    fn test_verify_signature_fee_payer_address_mismatch() {
+        use crate::account::{Account, Ed25519Account};
+        use crate::error::AptosError;
         use crate::transaction::authenticator::{AccountAuthenticator, TransactionAuthenticator};
         use crate::transaction::builder::sign_fee_payer_transaction;
 
@@ -918,46 +957,16 @@ mod tests {
         let secondary = Ed25519Account::generate();
         let fee_payer = Ed25519Account::generate();
         let impostor_fee_payer = Ed25519Account::generate();
-
-        let raw_txn = RawTransaction::new(
-            sender.address(),
-            0,
-            EntryFunction::apt_transfer(AccountAddress::from_hex("0x2").unwrap(), 1)
-                .unwrap()
-                .into(),
-            100_000,
-            100,
-            1_000_000_000,
-            ChainId::testnet(),
-        );
+        let raw_txn = create_transfer_raw_transaction(sender.address());
         let fee_payer_txn =
             FeePayerRawTransaction::new(raw_txn, vec![secondary.address()], fee_payer.address());
         let secondary_refs: Vec<&dyn Account> = vec![&secondary];
-
-        let signed =
+        let mut signed =
             sign_fee_payer_transaction(&fee_payer_txn, &sender, &secondary_refs, &fee_payer)
                 .unwrap();
-        signed.verify_signature().unwrap();
 
-        let mut sender_mismatch = signed.clone();
-        sender_mismatch.raw_txn.sender = AccountAddress::THREE;
-        assert!(sender_mismatch.verify_signature().is_err());
-
-        let mut secondary_mismatch = signed.clone();
-        if let TransactionAuthenticator::FeePayer {
-            secondary_signer_addresses,
-            ..
-        } = &mut secondary_mismatch.authenticator
-        {
-            secondary_signer_addresses[0] = AccountAddress::THREE;
-        } else {
-            panic!("expected FeePayer authenticator");
-        }
-        assert!(secondary_mismatch.verify_signature().is_err());
-
-        let mut fee_payer_mismatch = signed;
         let signing_message = FeePayerRawTransaction::new(
-            fee_payer_mismatch.raw_txn.clone(),
+            signed.raw_txn.clone(),
             vec![secondary.address()],
             fee_payer.address(),
         )
@@ -969,13 +978,16 @@ mod tests {
         );
         if let TransactionAuthenticator::FeePayer {
             fee_payer_signer, ..
-        } = &mut fee_payer_mismatch.authenticator
+        } = &mut signed.authenticator
         {
             *fee_payer_signer = impostor_auth;
         } else {
             panic!("expected FeePayer authenticator");
         }
-        assert!(fee_payer_mismatch.verify_signature().is_err());
+        let err = signed.verify_signature().unwrap_err();
+        assert!(
+            matches!(err, AptosError::InvalidSignature(msg) if msg.contains("fee payer address"))
+        );
     }
 
     fn create_test_orderless_transaction() -> RawTransactionOrderless {
