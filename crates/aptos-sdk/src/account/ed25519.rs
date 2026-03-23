@@ -15,7 +15,7 @@
 use crate::account::Mnemonic;
 use crate::account::account::{Account, AuthenticationKey};
 use crate::crypto::{
-    ED25519_SCHEME, Ed25519PrivateKey, Ed25519PublicKey, SINGLE_KEY_SCHEME,
+    AnySignature, ED25519_SCHEME, Ed25519PrivateKey, Ed25519PublicKey, SINGLE_KEY_SCHEME,
     derive_authentication_key,
 };
 use crate::error::AptosResult;
@@ -325,7 +325,8 @@ impl Account for Ed25519SingleKeyAccount {
     }
 
     fn sign(&self, message: &[u8]) -> AptosResult<Vec<u8>> {
-        Ok(self.private_key.sign(message).to_bytes().to_vec())
+        let signature = AnySignature::ed25519(&self.private_key.sign(message));
+        Ok(signature.to_bcs_bytes())
     }
 
     fn public_key_bytes(&self) -> Vec<u8> {
@@ -552,7 +553,10 @@ mod tests {
         let account = Ed25519SingleKeyAccount::generate();
         let message = b"test message";
         let sig_bytes = account.sign(message).unwrap();
-        assert_eq!(sig_bytes.len(), 64);
+        // BCS(AnySignature::Ed25519) = variant (1) + len (1) + signature (64)
+        assert_eq!(sig_bytes.len(), 66);
+        assert_eq!(sig_bytes[0], 0x00);
+        assert_eq!(sig_bytes[1], 0x40);
     }
 
     #[test]

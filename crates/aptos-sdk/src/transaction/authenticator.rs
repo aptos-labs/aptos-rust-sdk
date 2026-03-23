@@ -1,5 +1,8 @@
 //! Transaction authenticators.
 
+use crate::crypto::{
+    AnyPublicKey, AnySignature, MultiKeyPublicKey, MultiKeySignature,
+};
 use crate::types::AccountAddress;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -209,17 +212,13 @@ pub enum AccountAuthenticator {
     },
     /// Single-key authentication (ed25519, secp256k1 and secp256r1) (variant 2).
     SingleKey {
-        /// The public key (BCS-serialized `AnyPublicKey`).
-        public_key: Vec<u8>,
-        /// The signature (BCS-serialized `AnySignature`).
-        signature: Vec<u8>,
+        /// The typed single-key authenticator payload.
+        authenticator: SingleKeyAuthenticator,
     },
     /// Multi-key authentication (mixed signature types) (variant 3).
     MultiKey {
-        /// The public key.
-        public_key: Vec<u8>,
-        /// The signature.
-        signature: Vec<u8>,
+        /// The typed multi-key authenticator payload.
+        authenticator: MultiKeyAuthenticator,
     },
     /// No account authenticator used for simulation only (variant 4).
     NoAccountAuthenticator,
@@ -232,6 +231,44 @@ pub enum AccountAuthenticator {
         /// The BCS-serialized `KeylessSignature` containing ephemeral signature and ZK proof.
         signature: Vec<u8>,
     },
+}
+
+/// Typed payload for `AccountAuthenticator::SingleKey`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SingleKeyAuthenticator {
+    /// The any-key public key.
+    pub public_key: AnyPublicKey,
+    /// The matching any-signature.
+    pub signature: AnySignature,
+}
+
+impl SingleKeyAuthenticator {
+    /// Creates a new single-key authenticator payload.
+    pub fn new(public_key: AnyPublicKey, signature: AnySignature) -> Self {
+        Self {
+            public_key,
+            signature,
+        }
+    }
+}
+
+/// Typed payload for `AccountAuthenticator::MultiKey`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MultiKeyAuthenticator {
+    /// The multi-key public key.
+    pub public_key: MultiKeyPublicKey,
+    /// The multi-key signature.
+    pub signature: MultiKeySignature,
+}
+
+impl MultiKeyAuthenticator {
+    /// Creates a new multi-key authenticator payload.
+    pub fn new(public_key: MultiKeyPublicKey, signature: MultiKeySignature) -> Self {
+        Self {
+            public_key,
+            signature,
+        }
+    }
 }
 
 /// Ed25519 authenticator helper.
@@ -334,18 +371,16 @@ impl AccountAuthenticator {
         }
     }
     /// Creates a single-key account authenticator.
-    pub fn single_key(public_key: Vec<u8>, signature: Vec<u8>) -> Self {
+    pub fn single_key(public_key: AnyPublicKey, signature: AnySignature) -> Self {
         Self::SingleKey {
-            public_key,
-            signature,
+            authenticator: SingleKeyAuthenticator::new(public_key, signature),
         }
     }
 
     /// Creates a multi-key account authenticator.
-    pub fn multi_key(public_key: Vec<u8>, signature: Vec<u8>) -> Self {
+    pub fn multi_key(public_key: MultiKeyPublicKey, signature: MultiKeySignature) -> Self {
         Self::MultiKey {
-            public_key,
-            signature,
+            authenticator: MultiKeyAuthenticator::new(public_key, signature),
         }
     }
 
@@ -372,6 +407,22 @@ impl AccountAuthenticator {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn sample_any_public_key() -> AnyPublicKey {
+        AnyPublicKey::new(crate::crypto::AnyPublicKeyVariant::Ed25519, vec![0x55; 32])
+    }
+
+    fn sample_any_signature() -> AnySignature {
+        AnySignature::new(crate::crypto::AnyPublicKeyVariant::Ed25519, vec![0x66; 64])
+    }
+
+    fn sample_multi_key_public_key() -> MultiKeyPublicKey {
+        MultiKeyPublicKey::new(vec![sample_any_public_key()], 1).unwrap()
+    }
+
+    fn sample_multi_key_signature() -> MultiKeySignature {
+        MultiKeySignature::new(vec![(0, sample_any_signature())]).unwrap()
+    }
 
     #[test]
     fn test_ed25519_authenticator() {
@@ -519,14 +570,15 @@ mod tests {
 
     #[test]
     fn test_account_authenticator_multi_key() {
-        let auth = AccountAuthenticator::multi_key(vec![0x77; 100], vec![0x88; 200]);
+        let auth = AccountAuthenticator::multi_key(
+            sample_multi_key_public_key(),
+            sample_multi_key_signature(),
+        );
         match auth {
-            AccountAuthenticator::MultiKey {
-                public_key,
-                signature,
-            } => {
-                assert_eq!(public_key.len(), 100);
-                assert_eq!(signature.len(), 200);
+            AccountAuthenticator::MultiKey { authenticator } => {
+                assert_eq!(authenticator.public_key.num_keys(), 1);
+                assert_eq!(authenticator.public_key.threshold(), 1);
+                assert_eq!(authenticator.signature.num_signatures(), 1);
             }
             _ => panic!("Expected MultiKey variant"),
         }
@@ -620,14 +672,19 @@ mod tests {
 
     #[test]
     fn test_account_authenticator_single_key() {
-        let auth = AccountAuthenticator::single_key(vec![0x55; 33], vec![0x66; 65]);
+        let auth = AccountAuthenticator::single_key(sample_any_public_key(), sample_any_signature());
         match auth {
-            AccountAuthenticator::SingleKey {
-                public_key,
-                signature,
-            } => {
-                assert_eq!(public_key.len(), 33);
-                assert_eq!(signature.len(), 65);
+            AccountAuthenticator::SingleKey { authenticator } => {
+                assert_eq!(
+                    authenticator.public_key.variant,
+                    crate::crypto::AnyPublicKeyVariant::Ed25519
+                );
+                assert_eq!(
+                    authenticator.signature.variant,
+                    crate::crypto::AnyPublicKeyVariant::Ed25519
+                );
+                assert_eq!(authenticator.public_key.bytes.len(), 32);
+                assert_eq!(authenticator.signature.bytes.len(), 64);
             }
             _ => panic!("Expected SingleKey variant"),
         }
@@ -636,8 +693,7 @@ mod tests {
     #[test]
     fn test_account_authenticator_single_key_bcs_roundtrip() {
         let auth = AccountAuthenticator::SingleKey {
-            public_key: vec![0x77; 33],
-            signature: vec![0x88; 65],
+            authenticator: SingleKeyAuthenticator::new(sample_any_public_key(), sample_any_signature()),
         };
 
         let serialized = aptos_bcs::to_bytes(&auth).unwrap();
@@ -678,13 +734,13 @@ mod tests {
 
     #[test]
     fn test_single_sender_with_single_key() {
-        let sender = AccountAuthenticator::single_key(vec![0x99; 33], vec![0xaa; 65]);
+        let sender = AccountAuthenticator::single_key(sample_any_public_key(), sample_any_signature());
         let auth = TransactionAuthenticator::single_sender(sender);
 
         match auth {
             TransactionAuthenticator::SingleSender { sender } => match sender {
-                AccountAuthenticator::SingleKey { public_key, .. } => {
-                    assert_eq!(public_key.len(), 33);
+                AccountAuthenticator::SingleKey { authenticator } => {
+                    assert_eq!(authenticator.public_key.bytes.len(), 32);
                 }
                 _ => panic!("Expected SingleKey sender"),
             },
@@ -700,8 +756,12 @@ mod tests {
             public_key: vec![0; 64],
             signature: vec![0; 128],
         };
-        let single_key = AccountAuthenticator::single_key(vec![0; 33], vec![0; 65]);
-        let multi_key = AccountAuthenticator::multi_key(vec![0; 100], vec![0; 200]);
+        let single_key =
+            AccountAuthenticator::single_key(sample_any_public_key(), sample_any_signature());
+        let multi_key = AccountAuthenticator::multi_key(
+            sample_multi_key_public_key(),
+            sample_multi_key_signature(),
+        );
         let no_account = AccountAuthenticator::no_account_authenticator();
 
         assert_eq!(aptos_bcs::to_bytes(&ed25519).unwrap()[0], 0, "Ed25519 = 0");
@@ -796,7 +856,10 @@ mod tests {
 
     #[test]
     fn test_multi_key_authenticator_bcs_roundtrip() {
-        let auth = AccountAuthenticator::multi_key(vec![0xaa; 100], vec![0xbb; 200]);
+        let auth = AccountAuthenticator::multi_key(
+            sample_multi_key_public_key(),
+            sample_multi_key_signature(),
+        );
 
         let serialized = aptos_bcs::to_bytes(&auth).unwrap();
         // MultiKey should be variant index 3

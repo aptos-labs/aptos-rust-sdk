@@ -5,7 +5,8 @@
 
 use crate::account::account::{Account, AuthenticationKey};
 use crate::crypto::{
-    SINGLE_KEY_SCHEME, Secp256r1PrivateKey, Secp256r1PublicKey, derive_authentication_key,
+    AnyPublicKey, AnySignature, SINGLE_KEY_SCHEME, Secp256r1PrivateKey, Secp256r1PublicKey,
+    derive_authentication_key,
 };
 use crate::error::AptosResult;
 use crate::types::AccountAddress;
@@ -109,12 +110,13 @@ impl Account for Secp256r1Account {
     }
 
     fn sign(&self, message: &[u8]) -> crate::error::AptosResult<Vec<u8>> {
-        Ok(self.private_key.sign(message).to_bytes().to_vec())
+        let signature = AnySignature::secp256r1(&self.private_key.sign(message));
+        Ok(signature.to_bcs_bytes())
     }
 
     fn public_key_bytes(&self) -> Vec<u8> {
-        // Return uncompressed format (65 bytes) as required by Aptos protocol
-        self.public_key.to_uncompressed_bytes()
+        let public_key = AnyPublicKey::secp256r1(&self.public_key);
+        public_key.to_bcs_bytes()
     }
 
     fn signature_scheme(&self) -> u8 {
@@ -167,10 +169,16 @@ mod tests {
 
         // Test Account trait methods
         let sig_bytes = account.sign(message).unwrap();
-        assert_eq!(sig_bytes.len(), 64); // P-256 signature is 64 bytes
+        // BCS(AnySignature::Secp256r1) = variant (1) + len (1) + signature (64)
+        assert_eq!(sig_bytes.len(), 66);
+        assert_eq!(sig_bytes[0], 0x02);
+        assert_eq!(sig_bytes[1], 0x40);
 
         let pub_key_bytes = account.public_key_bytes();
-        assert_eq!(pub_key_bytes.len(), 65); // Uncompressed P-256 pubkey is 65 bytes (required by Aptos protocol)
+        // BCS(AnyPublicKey::Secp256r1) = variant (1) + len (1) + pubkey (65)
+        assert_eq!(pub_key_bytes.len(), 67);
+        assert_eq!(pub_key_bytes[0], 0x02);
+        assert_eq!(pub_key_bytes[1], 0x41);
 
         assert!(!account.authentication_key().as_bytes().is_empty());
     }
