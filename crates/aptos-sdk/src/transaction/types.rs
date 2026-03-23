@@ -288,6 +288,125 @@ impl SignedTransaction {
 
         Ok(HashValue::new(crate::crypto::sha3_256(&data)))
     }
+
+    /// Verifies the transaction authenticator against the transaction's
+    /// signing message and sender address.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the authenticator does not verify or if the
+    /// derived sender address does not match the raw transaction sender.
+    pub fn verify_signature(&self) -> AptosResult<()> {
+        match &self.authenticator {
+            TransactionAuthenticator::Ed25519 {
+                public_key,
+                signature,
+            } => {
+                let public_key = crate::crypto::Ed25519PublicKey::from_bytes(&public_key.0)?;
+                let signature = crate::crypto::Ed25519Signature::from_bytes(&signature.0)?;
+                let signing_message = self.raw_txn.signing_message()?;
+                public_key.verify(&signing_message, &signature)?;
+                if public_key.to_address() != self.raw_txn.sender {
+                    return Err(crate::error::AptosError::InvalidSignature(
+                        "signed transaction sender does not match authenticator address".into(),
+                    ));
+                }
+                Ok(())
+            }
+            TransactionAuthenticator::MultiEd25519 {
+                public_key,
+                signature,
+            } => {
+                let public_key = crate::crypto::MultiEd25519PublicKey::from_bytes(public_key)?;
+                let signature = crate::crypto::MultiEd25519Signature::from_bytes(signature)?;
+                let signing_message = self.raw_txn.signing_message()?;
+                public_key.verify(&signing_message, &signature)?;
+                if public_key.to_address() != self.raw_txn.sender {
+                    return Err(crate::error::AptosError::InvalidSignature(
+                        "signed transaction sender does not match authenticator address".into(),
+                    ));
+                }
+                Ok(())
+            }
+            TransactionAuthenticator::SingleSender { sender } => {
+                let signing_message = self.raw_txn.signing_message()?;
+                sender.verify(&signing_message)?;
+                if sender.derived_address()? != self.raw_txn.sender {
+                    return Err(crate::error::AptosError::InvalidSignature(
+                        "signed transaction sender does not match authenticator address".into(),
+                    ));
+                }
+                Ok(())
+            }
+            TransactionAuthenticator::MultiAgent {
+                sender,
+                secondary_signer_addresses,
+                secondary_signers,
+            } => {
+                let signing_message = MultiAgentRawTransaction::new(
+                    self.raw_txn.clone(),
+                    secondary_signer_addresses.clone(),
+                )
+                .signing_message()?;
+                sender.verify(&signing_message)?;
+                if sender.derived_address()? != self.raw_txn.sender {
+                    return Err(crate::error::AptosError::InvalidSignature(
+                        "signed transaction sender does not match authenticator address".into(),
+                    ));
+                }
+                for (expected_address, signer) in secondary_signer_addresses
+                    .iter()
+                    .zip(secondary_signers.iter())
+                {
+                    signer.verify(&signing_message)?;
+                    if signer.derived_address()? != *expected_address {
+                        return Err(crate::error::AptosError::InvalidSignature(
+                            "secondary signer address does not match authenticator address".into(),
+                        ));
+                    }
+                }
+                Ok(())
+            }
+            TransactionAuthenticator::FeePayer {
+                sender,
+                secondary_signer_addresses,
+                secondary_signers,
+                fee_payer_address,
+                fee_payer_signer,
+            } => {
+                let signing_message = FeePayerRawTransaction::new(
+                    self.raw_txn.clone(),
+                    secondary_signer_addresses.clone(),
+                    *fee_payer_address,
+                )
+                .signing_message()?;
+                sender.verify(&signing_message)?;
+                if sender.derived_address()? != self.raw_txn.sender {
+                    return Err(crate::error::AptosError::InvalidSignature(
+                        "signed transaction sender does not match authenticator address".into(),
+                    ));
+                }
+                for (expected_address, signer) in secondary_signer_addresses
+                    .iter()
+                    .zip(secondary_signers.iter())
+                {
+                    signer.verify(&signing_message)?;
+                    if signer.derived_address()? != *expected_address {
+                        return Err(crate::error::AptosError::InvalidSignature(
+                            "secondary signer address does not match authenticator address".into(),
+                        ));
+                    }
+                }
+                fee_payer_signer.verify(&signing_message)?;
+                if fee_payer_signer.derived_address()? != *fee_payer_address {
+                    return Err(crate::error::AptosError::InvalidSignature(
+                        "fee payer address does not match authenticator address".into(),
+                    ));
+                }
+                Ok(())
+            }
+        }
+    }
 }
 
 /// Information about a submitted/executed transaction.
