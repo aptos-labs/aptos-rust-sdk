@@ -612,6 +612,38 @@ mod tests {
 
         let signed = sign_transaction(&txn, &account).unwrap();
         assert_eq!(signed.sender(), account.address());
+        signed.verify_signature().unwrap();
+    }
+
+    #[cfg(all(feature = "ed25519", feature = "secp256k1"))]
+    #[test]
+    fn test_sign_transaction_with_mixed_multi_key_account() {
+        use crate::account::{AnyPrivateKey, MultiKeyAccount};
+        use crate::crypto::{Ed25519PrivateKey, Secp256k1PrivateKey};
+
+        let account = MultiKeyAccount::new(
+            vec![
+                AnyPrivateKey::ed25519(Ed25519PrivateKey::generate()),
+                AnyPrivateKey::secp256k1(Secp256k1PrivateKey::generate()),
+                AnyPrivateKey::ed25519(Ed25519PrivateKey::generate()),
+            ],
+            2,
+        )
+        .unwrap();
+        let recipient = AccountAddress::from_hex("0x123").unwrap();
+        let payload = EntryFunction::apt_transfer(recipient, 1000).unwrap();
+
+        let txn = TransactionBuilder::new()
+            .sender(account.address())
+            .sequence_number(0)
+            .payload(payload.into())
+            .chain_id(ChainId::testnet())
+            .build()
+            .unwrap();
+
+        let signed = sign_transaction(&txn, &account).unwrap();
+        assert_eq!(signed.sender(), account.address());
+        signed.verify_signature().unwrap();
     }
 
     #[cfg(feature = "ed25519")]

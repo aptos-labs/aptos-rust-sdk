@@ -100,6 +100,11 @@ impl AnyPublicKey {
     }
 
     /// Serializes to BCS format.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if BCS serialization fails unexpectedly for an in-memory
+    /// `AnyPublicKey` value.
     pub fn to_bcs_bytes(&self) -> Vec<u8> {
         aptos_bcs::to_bytes(self).expect("AnyPublicKey BCS serialization should never fail")
     }
@@ -227,6 +232,11 @@ impl AnySignature {
     }
 
     /// Serializes to BCS format.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if BCS serialization fails unexpectedly for an in-memory
+    /// `AnySignature` value.
     pub fn to_bcs_bytes(&self) -> Vec<u8> {
         aptos_bcs::to_bytes(self).expect("AnySignature BCS serialization should never fail")
     }
@@ -360,6 +370,11 @@ impl MultiKeyPublicKey {
     }
 
     /// Serializes to bytes for authentication key derivation.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if BCS serialization fails unexpectedly for a validated
+    /// `MultiKeyPublicKey` value.
     pub fn to_bytes(&self) -> Vec<u8> {
         aptos_bcs::to_bytes(self).expect("MultiKeyPublicKey BCS serialization should never fail")
     }
@@ -588,6 +603,11 @@ impl MultiKeySignature {
     }
 
     /// Serializes to bytes.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if BCS serialization fails unexpectedly for a validated
+    /// `MultiKeySignature` value.
     pub fn to_bytes(&self) -> Vec<u8> {
         aptos_bcs::to_bytes(self).expect("MultiKeySignature BCS serialization should never fail")
     }
