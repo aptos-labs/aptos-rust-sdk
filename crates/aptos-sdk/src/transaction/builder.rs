@@ -784,13 +784,9 @@ mod tests {
         };
 
         let secondary_signers: Vec<&dyn Account> = vec![&secondary];
-        let signed = sign_fee_payer_transaction(
-            &fee_payer_txn,
-            &sender,
-            &secondary_signers,
-            &fee_payer,
-        )
-        .unwrap();
+        let signed =
+            sign_fee_payer_transaction(&fee_payer_txn, &sender, &secondary_signers, &fee_payer)
+                .unwrap();
         signed.verify_signature().unwrap();
 
         let mut missing_secondary_signer = signed.clone();
