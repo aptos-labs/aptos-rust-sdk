@@ -861,6 +861,15 @@ mod tests {
     }
 
     #[test]
+    fn test_any_public_key_from_bcs_bytes_accepts_secp256r1_length() {
+        let pk = AnyPublicKey::new(AnyPublicKeyVariant::Secp256r1, vec![0xab; 65]);
+        let bytes = pk.to_bcs_bytes();
+        let decoded = AnyPublicKey::from_bcs_bytes(&bytes).unwrap();
+        assert_eq!(decoded.variant, AnyPublicKeyVariant::Secp256r1);
+        assert_eq!(decoded.bytes.len(), 65);
+    }
+
+    #[test]
     fn test_any_public_key_debug() {
         let pk = AnyPublicKey::new(AnyPublicKeyVariant::Secp256k1, vec![0xbb; 33]);
         let debug = format!("{pk:?}");
@@ -899,6 +908,15 @@ mod tests {
         let sig = AnySignature::new(AnyPublicKeyVariant::Keyless, vec![]);
         let bytes = sig.to_bcs_bytes();
         assert!(AnySignature::from_bcs_bytes(&bytes).is_err());
+    }
+
+    #[test]
+    fn test_any_signature_from_bcs_bytes_accepts_secp256r1_length() {
+        let sig = AnySignature::new(AnyPublicKeyVariant::Secp256r1, vec![0xcd; 64]);
+        let bytes = sig.to_bcs_bytes();
+        let decoded = AnySignature::from_bcs_bytes(&bytes).unwrap();
+        assert_eq!(decoded.variant, AnyPublicKeyVariant::Secp256r1);
+        assert_eq!(decoded.bytes.len(), 64);
     }
 
     #[test]
@@ -1017,6 +1035,50 @@ mod tests {
     }
 
     #[test]
+    fn test_deserialize_bounded_vec_rejects_known_large_size_hint() {
+        use serde::de::IntoDeserializer;
+        use serde::de::value::{Error as ValueError, SeqDeserializer};
+
+        let iter = (0..=MAX_NUM_OF_KEYS).map(|_| 0u8.into_deserializer());
+        let deserializer = SeqDeserializer::<_, ValueError>::new(iter);
+        let result: Result<Vec<u8>, _> = deserialize_bounded_vec(deserializer, "items");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_deserialize_bounded_vec_rejects_overflow_when_size_hint_unknown() {
+        use serde::de::IntoDeserializer;
+        use serde::de::value::{Error as ValueError, SeqDeserializer, U8Deserializer};
+
+        struct UnknownLenIter {
+            remaining: usize,
+        }
+
+        impl Iterator for UnknownLenIter {
+            type Item = U8Deserializer<ValueError>;
+
+            fn next(&mut self) -> Option<Self::Item> {
+                if self.remaining == 0 {
+                    return None;
+                }
+                self.remaining -= 1;
+                Some(0u8.into_deserializer())
+            }
+
+            fn size_hint(&self) -> (usize, Option<usize>) {
+                (0, None)
+            }
+        }
+
+        let iter = UnknownLenIter {
+            remaining: MAX_NUM_OF_KEYS + 1,
+        };
+        let deserializer = SeqDeserializer::<_, ValueError>::new(iter);
+        let result: Result<Vec<u8>, _> = deserialize_bounded_vec(deserializer, "items");
+        assert!(result.is_err());
+    }
+
+    #[test]
     fn test_multi_key_public_key_from_bytes_rejects_too_many_keys() {
         #[derive(Serialize)]
         struct Wire<'a> {
@@ -1087,6 +1149,52 @@ mod tests {
 
         let signatures = [AnySignature::new(AnyPublicKeyVariant::Keyless, vec![])];
         let bitmap = [0x80, 0x00, 0x00, 0x00];
+        let bytes = aptos_bcs::to_bytes(&Wire {
+            signatures: signatures.iter().collect(),
+            signatures_bitmap: &bitmap,
+        })
+        .unwrap();
+
+        assert!(MultiKeySignature::from_bytes(&bytes).is_err());
+    }
+
+    #[test]
+    fn test_multi_key_signature_from_bytes_rejects_invalid_bitmap_length() {
+        #[derive(Serialize)]
+        struct Wire<'a> {
+            signatures: Vec<&'a AnySignature>,
+            #[serde(with = "serde_bytes")]
+            signatures_bitmap: &'a [u8],
+        }
+
+        let signatures = [AnySignature::new(
+            AnyPublicKeyVariant::Ed25519,
+            vec![0x22; 64],
+        )];
+        let bitmap = [0x80, 0x00, 0x00];
+        let bytes = aptos_bcs::to_bytes(&Wire {
+            signatures: signatures.iter().collect(),
+            signatures_bitmap: &bitmap,
+        })
+        .unwrap();
+
+        assert!(MultiKeySignature::from_bytes(&bytes).is_err());
+    }
+
+    #[test]
+    fn test_multi_key_signature_from_bytes_rejects_bitmap_signature_count_mismatch() {
+        #[derive(Serialize)]
+        struct Wire<'a> {
+            signatures: Vec<&'a AnySignature>,
+            #[serde(with = "serde_bytes")]
+            signatures_bitmap: &'a [u8],
+        }
+
+        let signatures = [AnySignature::new(
+            AnyPublicKeyVariant::Ed25519,
+            vec![0x22; 64],
+        )];
+        let bitmap = [0xc0, 0x00, 0x00, 0x00];
         let bytes = aptos_bcs::to_bytes(&Wire {
             signatures: signatures.iter().collect(),
             signatures_bitmap: &bitmap,

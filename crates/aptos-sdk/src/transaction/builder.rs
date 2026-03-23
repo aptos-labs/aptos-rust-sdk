@@ -615,6 +615,34 @@ mod tests {
         signed.verify_signature().unwrap();
     }
 
+    #[cfg(feature = "ed25519")]
+    #[test]
+    fn test_sign_transaction_with_ed25519_single_key_account() {
+        use crate::account::Ed25519SingleKeyAccount;
+        use crate::transaction::authenticator::{AccountAuthenticator, TransactionAuthenticator};
+
+        let account = Ed25519SingleKeyAccount::generate();
+        let recipient = AccountAddress::from_hex("0x123").unwrap();
+        let payload = EntryFunction::apt_transfer(recipient, 1000).unwrap();
+
+        let txn = TransactionBuilder::new()
+            .sender(account.address())
+            .sequence_number(0)
+            .payload(payload.into())
+            .chain_id(ChainId::testnet())
+            .build()
+            .unwrap();
+
+        let signed = sign_transaction(&txn, &account).unwrap();
+        match &signed.authenticator {
+            TransactionAuthenticator::SingleSender { sender } => {
+                assert!(matches!(sender, AccountAuthenticator::SingleKey { .. }));
+            }
+            _ => panic!("expected SingleSender authenticator"),
+        }
+        signed.verify_signature().unwrap();
+    }
+
     #[cfg(all(feature = "ed25519", feature = "secp256k1"))]
     #[test]
     fn test_sign_transaction_with_mixed_multi_key_account() {
@@ -673,6 +701,50 @@ mod tests {
         let signed =
             sign_multi_agent_transaction(&multi_agent, &sender, &secondary_signers).unwrap();
         assert_eq!(signed.sender(), sender.address());
+        signed.verify_signature().unwrap();
+    }
+
+    #[cfg(feature = "ed25519")]
+    #[test]
+    fn test_sign_multi_agent_transaction_with_single_key_accounts() {
+        use crate::account::{Account, Ed25519SingleKeyAccount};
+        use crate::transaction::authenticator::{AccountAuthenticator, TransactionAuthenticator};
+
+        let sender = Ed25519SingleKeyAccount::generate();
+        let secondary = Ed25519SingleKeyAccount::generate();
+        let recipient = AccountAddress::from_hex("0x123").unwrap();
+        let payload = EntryFunction::apt_transfer(recipient, 1000).unwrap();
+
+        let raw_txn = TransactionBuilder::new()
+            .sender(sender.address())
+            .sequence_number(0)
+            .payload(payload.into())
+            .chain_id(ChainId::testnet())
+            .build()
+            .unwrap();
+
+        let multi_agent = MultiAgentRawTransaction {
+            raw_txn,
+            secondary_signer_addresses: vec![secondary.address()],
+        };
+
+        let secondary_signers: Vec<&dyn Account> = vec![&secondary];
+        let signed =
+            sign_multi_agent_transaction(&multi_agent, &sender, &secondary_signers).unwrap();
+        match &signed.authenticator {
+            TransactionAuthenticator::MultiAgent {
+                sender,
+                secondary_signers,
+                ..
+            } => {
+                assert!(matches!(sender, AccountAuthenticator::SingleKey { .. }));
+                assert!(matches!(
+                    secondary_signers[0],
+                    AccountAuthenticator::SingleKey { .. }
+                ));
+            }
+            _ => panic!("expected MultiAgent authenticator"),
+        }
         signed.verify_signature().unwrap();
     }
 
@@ -754,6 +826,53 @@ mod tests {
 
         let signed = sign_fee_payer_transaction(&fee_payer_txn, &sender, &[], &fee_payer).unwrap();
         assert_eq!(signed.sender(), sender.address());
+        signed.verify_signature().unwrap();
+    }
+
+    #[cfg(feature = "ed25519")]
+    #[test]
+    fn test_sign_fee_payer_transaction_with_multi_key_accounts() {
+        use crate::account::{AnyPrivateKey, MultiKeyAccount};
+        use crate::crypto::Ed25519PrivateKey;
+        use crate::transaction::authenticator::{AccountAuthenticator, TransactionAuthenticator};
+
+        let sender = MultiKeyAccount::new(
+            vec![AnyPrivateKey::ed25519(Ed25519PrivateKey::generate())],
+            1,
+        )
+        .unwrap();
+        let fee_payer = MultiKeyAccount::new(
+            vec![AnyPrivateKey::ed25519(Ed25519PrivateKey::generate())],
+            1,
+        )
+        .unwrap();
+        let recipient = AccountAddress::from_hex("0x123").unwrap();
+        let payload = EntryFunction::apt_transfer(recipient, 1000).unwrap();
+
+        let raw_txn = TransactionBuilder::new()
+            .sender(sender.address())
+            .sequence_number(0)
+            .payload(payload.into())
+            .chain_id(ChainId::testnet())
+            .build()
+            .unwrap();
+
+        let fee_payer_txn = FeePayerRawTransaction::new_simple(raw_txn, fee_payer.address());
+        let signed = sign_fee_payer_transaction(&fee_payer_txn, &sender, &[], &fee_payer).unwrap();
+        match &signed.authenticator {
+            TransactionAuthenticator::FeePayer {
+                sender,
+                fee_payer_signer,
+                ..
+            } => {
+                assert!(matches!(sender, AccountAuthenticator::MultiKey { .. }));
+                assert!(matches!(
+                    fee_payer_signer,
+                    AccountAuthenticator::MultiKey { .. }
+                ));
+            }
+            _ => panic!("expected FeePayer authenticator"),
+        }
         signed.verify_signature().unwrap();
     }
 

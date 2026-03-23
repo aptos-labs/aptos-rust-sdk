@@ -1044,6 +1044,97 @@ mod tests {
 
     #[cfg(feature = "ed25519")]
     #[test]
+    fn test_partially_signed_flow_with_single_key_accounts() {
+        use crate::account::Ed25519SingleKeyAccount;
+        use crate::transaction::authenticator::{AccountAuthenticator, TransactionAuthenticator};
+
+        let sender = Ed25519SingleKeyAccount::generate();
+        let fee_payer = Ed25519SingleKeyAccount::generate();
+        let recipient = AccountAddress::from_hex("0x123").unwrap();
+        let payload = EntryFunction::apt_transfer(recipient, 1000).unwrap();
+
+        let fee_payer_txn = SponsoredTransactionBuilder::new()
+            .sender(sender.address())
+            .sequence_number(0)
+            .fee_payer(fee_payer.address())
+            .payload(payload.into())
+            .chain_id(ChainId::testnet())
+            .build()
+            .unwrap();
+
+        let mut partially_signed = PartiallySigned::new(fee_payer_txn);
+        partially_signed.sign_as_sender(&sender).unwrap();
+        partially_signed.sign_as_fee_payer(&fee_payer).unwrap();
+        let signed = partially_signed.finalize().unwrap();
+        match &signed.authenticator {
+            TransactionAuthenticator::FeePayer {
+                sender,
+                fee_payer_signer,
+                ..
+            } => {
+                assert!(matches!(sender, AccountAuthenticator::SingleKey { .. }));
+                assert!(matches!(
+                    fee_payer_signer,
+                    AccountAuthenticator::SingleKey { .. }
+                ));
+            }
+            _ => panic!("expected FeePayer authenticator"),
+        }
+        signed.verify_signature().unwrap();
+    }
+
+    #[cfg(feature = "ed25519")]
+    #[test]
+    fn test_partially_signed_flow_with_multi_key_accounts() {
+        use crate::account::{AnyPrivateKey, MultiKeyAccount};
+        use crate::crypto::Ed25519PrivateKey;
+        use crate::transaction::authenticator::{AccountAuthenticator, TransactionAuthenticator};
+
+        let sender = MultiKeyAccount::new(
+            vec![AnyPrivateKey::ed25519(Ed25519PrivateKey::generate())],
+            1,
+        )
+        .unwrap();
+        let fee_payer = MultiKeyAccount::new(
+            vec![AnyPrivateKey::ed25519(Ed25519PrivateKey::generate())],
+            1,
+        )
+        .unwrap();
+        let recipient = AccountAddress::from_hex("0x123").unwrap();
+        let payload = EntryFunction::apt_transfer(recipient, 1000).unwrap();
+
+        let fee_payer_txn = SponsoredTransactionBuilder::new()
+            .sender(sender.address())
+            .sequence_number(0)
+            .fee_payer(fee_payer.address())
+            .payload(payload.into())
+            .chain_id(ChainId::testnet())
+            .build()
+            .unwrap();
+
+        let mut partially_signed = PartiallySigned::new(fee_payer_txn);
+        partially_signed.sign_as_sender(&sender).unwrap();
+        partially_signed.sign_as_fee_payer(&fee_payer).unwrap();
+        let signed = partially_signed.finalize().unwrap();
+        match &signed.authenticator {
+            TransactionAuthenticator::FeePayer {
+                sender,
+                fee_payer_signer,
+                ..
+            } => {
+                assert!(matches!(sender, AccountAuthenticator::MultiKey { .. }));
+                assert!(matches!(
+                    fee_payer_signer,
+                    AccountAuthenticator::MultiKey { .. }
+                ));
+            }
+            _ => panic!("expected FeePayer authenticator"),
+        }
+        signed.verify_signature().unwrap();
+    }
+
+    #[cfg(feature = "ed25519")]
+    #[test]
     fn test_partially_signed_secondary_index_out_of_bounds() {
         use crate::account::Ed25519Account;
 

@@ -661,6 +661,28 @@ mod tests {
     }
 
     #[test]
+    fn test_sign_prehashed_and_verify_prehashed_roundtrip() {
+        let private_key = Secp256k1PrivateKey::generate();
+        let public_key = private_key.public_key();
+        let hash = crate::crypto::sha3_256(b"prehash roundtrip");
+
+        let signature = private_key.sign_prehashed(&hash);
+        public_key.verify_prehashed(&hash, &signature).unwrap();
+    }
+
+    #[test]
+    fn test_verify_prehashed_wrong_hash_fails() {
+        let private_key = Secp256k1PrivateKey::generate();
+        let public_key = private_key.public_key();
+        let hash = crate::crypto::sha3_256(b"prehash correct");
+        let wrong_hash = crate::crypto::sha3_256(b"prehash wrong");
+        let signature = private_key.sign_prehashed(&hash);
+
+        let result = public_key.verify_prehashed(&wrong_hash, &signature);
+        assert!(result.is_err());
+    }
+
+    #[test]
     fn test_json_serialization_public_key() {
         let private_key = Secp256k1PrivateKey::generate();
         let public_key = private_key.public_key();

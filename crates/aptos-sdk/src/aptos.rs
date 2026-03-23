@@ -923,7 +923,9 @@ mod tests {
     };
     use crate::transaction::payload::{EntryFunction, TransactionPayload};
     use crate::transaction::simulation::SimulateQueryOptions;
-    use crate::transaction::types::{RawTransaction, SignedTransaction};
+    use crate::transaction::types::{
+        FeePayerRawTransaction, MultiAgentRawTransaction, RawTransaction, SignedTransaction,
+    };
     use crate::types::ChainId;
     use wiremock::{
         Mock, MockServer, ResponseTemplate,
@@ -949,6 +951,44 @@ mod tests {
         let url = format!("{}/v1", server.uri());
         let config = AptosConfig::custom(&url).unwrap().without_retry();
         Aptos::new(config).unwrap()
+    }
+
+    fn create_minimal_signed_transaction() -> SignedTransaction {
+        let raw = RawTransaction::new(
+            AccountAddress::ONE,
+            0,
+            TransactionPayload::EntryFunction(
+                EntryFunction::apt_transfer(AccountAddress::ONE, 0).unwrap(),
+            ),
+            100_000,
+            100,
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs()
+                .saturating_add(600),
+            ChainId::testnet(),
+        );
+        SignedTransaction::new(
+            raw,
+            TransactionAuthenticator::Ed25519 {
+                public_key: Ed25519PublicKey([0u8; 32]),
+                signature: Ed25519Signature([0u8; 64]),
+            },
+        )
+    }
+
+    fn simulate_response_json() -> serde_json::Value {
+        serde_json::json!([{
+            "success": true,
+            "vm_status": "Executed successfully",
+            "gas_used": "1500",
+            "max_gas_amount": "200000",
+            "gas_unit_price": "100",
+            "hash": "0xabc",
+            "changes": [],
+            "events": []
+        }])
     }
 
     #[tokio::test]
@@ -1266,5 +1306,147 @@ mod tests {
         assert!(result.success());
         assert_eq!(result.gas_used(), 1500);
         assert_eq!(result.gas_unit_price(), 100);
+    }
+
+    #[tokio::test]
+    async fn test_simulate_signed_without_options() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/v1/transactions/simulate"))
+            .and(|req: &wiremock::Request| {
+                req.url.query().is_none_or(|q| {
+                    !q.contains("estimate_gas_unit_price=")
+                        && !q.contains("estimate_max_gas_amount=")
+                        && !q.contains("estimate_prioritized_gas_unit_price=")
+                })
+            })
+            .respond_with(ResponseTemplate::new(200).set_body_json(simulate_response_json()))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let aptos = create_mock_aptos(&server);
+        let signed = create_minimal_signed_transaction();
+        let result = aptos.simulate_signed(&signed).await.unwrap();
+        assert!(result.success());
+    }
+
+    #[tokio::test]
+    async fn test_simulate_multi_agent_without_options() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/v1/transactions/simulate"))
+            .and(|req: &wiremock::Request| {
+                req.url.query().is_none_or(|q| {
+                    !q.contains("estimate_gas_unit_price=")
+                        && !q.contains("estimate_max_gas_amount=")
+                        && !q.contains("estimate_prioritized_gas_unit_price=")
+                })
+            })
+            .respond_with(ResponseTemplate::new(200).set_body_json(simulate_response_json()))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let aptos = create_mock_aptos(&server);
+        let multi_agent = MultiAgentRawTransaction::new(
+            create_minimal_signed_transaction().raw_txn,
+            vec![AccountAddress::from_hex("0x2").unwrap()],
+        );
+        let result = aptos
+            .simulate_multi_agent(&multi_agent, None)
+            .await
+            .unwrap();
+        assert!(result.success());
+    }
+
+    #[tokio::test]
+    async fn test_simulate_multi_agent_with_options() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/v1/transactions/simulate"))
+            .and(|req: &wiremock::Request| {
+                req.url
+                    .query()
+                    .is_some_and(|q| q.contains("estimate_max_gas_amount=true"))
+            })
+            .respond_with(ResponseTemplate::new(200).set_body_json(simulate_response_json()))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let aptos = create_mock_aptos(&server);
+        let multi_agent = MultiAgentRawTransaction::new(
+            create_minimal_signed_transaction().raw_txn,
+            vec![AccountAddress::from_hex("0x2").unwrap()],
+        );
+        let options = SimulateQueryOptions::new().estimate_max_gas_amount(true);
+        let result = aptos
+            .simulate_multi_agent(&multi_agent, Some(options))
+            .await
+            .unwrap();
+        assert!(result.success());
+    }
+
+    #[tokio::test]
+    async fn test_simulate_fee_payer_without_options() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/v1/transactions/simulate"))
+            .and(|req: &wiremock::Request| {
+                req.url.query().is_none_or(|q| {
+                    !q.contains("estimate_gas_unit_price=")
+                        && !q.contains("estimate_max_gas_amount=")
+                        && !q.contains("estimate_prioritized_gas_unit_price=")
+                })
+            })
+            .respond_with(ResponseTemplate::new(200).set_body_json(simulate_response_json()))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let aptos = create_mock_aptos(&server);
+        let fee_payer_txn = FeePayerRawTransaction::new_simple(
+            create_minimal_signed_transaction().raw_txn,
+            AccountAddress::THREE,
+        );
+        let result = aptos
+            .simulate_fee_payer(&fee_payer_txn, None)
+            .await
+            .unwrap();
+        assert!(result.success());
+    }
+
+    #[tokio::test]
+    async fn test_simulate_fee_payer_with_options() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/v1/transactions/simulate"))
+            .and(|req: &wiremock::Request| {
+                req.url
+                    .query()
+                    .is_some_and(|q| q.contains("estimate_prioritized_gas_unit_price=true"))
+            })
+            .respond_with(ResponseTemplate::new(200).set_body_json(simulate_response_json()))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let aptos = create_mock_aptos(&server);
+        let fee_payer_txn = FeePayerRawTransaction::new_simple(
+            create_minimal_signed_transaction().raw_txn,
+            AccountAddress::THREE,
+        );
+        let options = SimulateQueryOptions::new().estimate_prioritized_gas_unit_price(true);
+        let result = aptos
+            .simulate_fee_payer(&fee_payer_txn, options)
+            .await
+            .unwrap();
+        assert!(result.success());
     }
 }

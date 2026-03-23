@@ -812,6 +812,46 @@ mod tests {
         assert_eq!(auth, deserialized);
     }
 
+    #[cfg(feature = "ed25519")]
+    #[test]
+    fn test_account_authenticator_single_key_verify_and_derived_address() {
+        use crate::crypto::{Ed25519PrivateKey, SINGLE_KEY_SCHEME, derive_authentication_key};
+
+        let private_key = Ed25519PrivateKey::generate();
+        let message = b"single-key verify test";
+        let public_key = AnyPublicKey::ed25519(&private_key.public_key());
+        let signature = AnySignature::ed25519(&private_key.sign(message));
+        let auth = AccountAuthenticator::single_key(public_key.clone(), signature);
+
+        auth.verify(message).unwrap();
+        let expected = AccountAddress::new(derive_authentication_key(
+            &public_key.to_bcs_bytes(),
+            SINGLE_KEY_SCHEME,
+        ));
+        assert_eq!(auth.derived_address().unwrap(), expected);
+    }
+
+    #[cfg(feature = "ed25519")]
+    #[test]
+    fn test_account_authenticator_multi_ed25519_verify_and_derived_address() {
+        use crate::account::{Account, MultiEd25519Account};
+        use crate::crypto::Ed25519PrivateKey;
+
+        let account = MultiEd25519Account::new(
+            vec![Ed25519PrivateKey::generate(), Ed25519PrivateKey::generate()],
+            2,
+        )
+        .unwrap();
+        let message = b"multi-ed25519 verify test";
+        let auth = AccountAuthenticator::MultiEd25519 {
+            public_key: account.public_key_bytes(),
+            signature: account.sign(message).unwrap().to_bytes(),
+        };
+
+        auth.verify(message).unwrap();
+        assert_eq!(auth.derived_address().unwrap(), account.address());
+    }
+
     #[test]
     fn test_no_account_authenticator() {
         let auth = AccountAuthenticator::no_account_authenticator();
@@ -819,6 +859,21 @@ mod tests {
             AccountAuthenticator::NoAccountAuthenticator => {}
             _ => panic!("Expected NoAccountAuthenticator variant"),
         }
+    }
+
+    #[test]
+    fn test_no_account_authenticator_verify_and_derived_address_errors() {
+        let auth = AccountAuthenticator::NoAccountAuthenticator;
+        assert!(auth.verify(b"no-auth").is_err());
+        assert!(auth.derived_address().is_err());
+    }
+
+    #[cfg(feature = "keyless")]
+    #[test]
+    fn test_keyless_authenticator_verify_and_derived_address_not_enabled() {
+        let auth = AccountAuthenticator::keyless(vec![0x11; 32], vec![0x22; 64]);
+        assert!(auth.verify(b"keyless-local").is_err());
+        assert!(auth.derived_address().is_err());
     }
 
     #[test]
