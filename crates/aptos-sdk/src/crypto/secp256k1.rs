@@ -17,8 +17,8 @@
 use crate::crypto::traits::{PublicKey, Signature, Signer, Verifier};
 use crate::error::{AptosError, AptosResult};
 use k256::ecdsa::{
-    Signature as K256Signature, SigningKey, VerifyingKey, signature::Signer as K256Signer,
-    signature::Verifier as K256Verifier,
+    Signature as K256Signature, SigningKey, VerifyingKey, signature::hazmat::PrehashSigner,
+    signature::hazmat::PrehashVerifier,
 };
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -125,15 +125,20 @@ impl Secp256k1PrivateKey {
         }
     }
 
-    /// Signs a message (pre-hashed with SHA256) and returns a low-S signature.
+    /// Signs a message using the Aptos secp256k1 flow.
     ///
-    /// The `k256` crate produces low-S signatures by default. An additional
-    /// normalization step is included as defense-in-depth to guarantee Aptos
-    /// on-chain compatibility.
+    /// Aptos core hashes arbitrary messages with SHA3-256 before signing.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if prehashed signing unexpectedly fails for a valid 32-byte
+    /// SHA3-256 digest.
     pub fn sign(&self, message: &[u8]) -> Secp256k1Signature {
-        // Hash the message with SHA256 first (standard for ECDSA)
-        let hash = crate::crypto::sha2_256(message);
-        let signature: K256Signature = self.inner.sign(&hash);
+        let hash = crate::crypto::sha3_256(message);
+        let signature: K256Signature = self
+            .inner
+            .sign_prehash(&hash)
+            .expect("sha3_256 always returns a 32-byte digest");
         // SECURITY: Ensure low-S (defense-in-depth; k256 should already do this)
         let normalized = signature.normalize_s().unwrap_or(signature);
         Secp256k1Signature { inner: normalized }
@@ -143,8 +148,16 @@ impl Secp256k1PrivateKey {
     ///
     /// The `k256` crate produces low-S signatures by default. An additional
     /// normalization step is included as defense-in-depth.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if prehashed signing unexpectedly fails for the provided
+    /// 32-byte digest.
     pub fn sign_prehashed(&self, hash: &[u8; 32]) -> Secp256k1Signature {
-        let signature: K256Signature = self.inner.sign(hash);
+        let signature: K256Signature = self
+            .inner
+            .sign_prehash(hash)
+            .expect("prehashed secp256k1 signing requires a 32-byte digest");
         // SECURITY: Ensure low-S (defense-in-depth; k256 should already do this)
         let normalized = signature.normalize_s().unwrap_or(signature);
         Secp256k1Signature { inner: normalized }
@@ -259,9 +272,9 @@ impl Secp256k1PublicKey {
         if signature.inner.normalize_s().is_some() {
             return Err(AptosError::SignatureVerificationFailed);
         }
-        let hash = crate::crypto::sha2_256(message);
+        let hash = crate::crypto::sha3_256(message);
         self.inner
-            .verify(&hash, &signature.inner)
+            .verify_prehash(&hash, &signature.inner)
             .map_err(|_| AptosError::SignatureVerificationFailed)
     }
 
@@ -286,7 +299,7 @@ impl Secp256k1PublicKey {
             return Err(AptosError::SignatureVerificationFailed);
         }
         self.inner
-            .verify(hash, &signature.inner)
+            .verify_prehash(hash, &signature.inner)
             .map_err(|_| AptosError::SignatureVerificationFailed)
     }
 
@@ -645,6 +658,28 @@ mod tests {
                 "signing must always produce low-S signatures"
             );
         }
+    }
+
+    #[test]
+    fn test_sign_prehashed_and_verify_prehashed_roundtrip() {
+        let private_key = Secp256k1PrivateKey::generate();
+        let public_key = private_key.public_key();
+        let hash = crate::crypto::sha3_256(b"prehash roundtrip");
+
+        let signature = private_key.sign_prehashed(&hash);
+        public_key.verify_prehashed(&hash, &signature).unwrap();
+    }
+
+    #[test]
+    fn test_verify_prehashed_wrong_hash_fails() {
+        let private_key = Secp256k1PrivateKey::generate();
+        let public_key = private_key.public_key();
+        let hash = crate::crypto::sha3_256(b"prehash correct");
+        let wrong_hash = crate::crypto::sha3_256(b"prehash wrong");
+        let signature = private_key.sign_prehashed(&hash);
+
+        let result = public_key.verify_prehashed(&wrong_hash, &signature);
+        assert!(result.is_err());
     }
 
     #[test]

@@ -24,10 +24,17 @@ cargo build --release                          # Release build
 ### Testing
 
 ```bash
-cargo test -p aptos-sdk                # Run unit tests
+cargo test -p aptos-sdk                # Run all tests (lib, integration, doc)
+cargo test -p aptos-sdk --lib          # Run lib unit tests only
 cargo test -p aptos-sdk --all-features # Test with all features
 cargo test -p aptos-sdk --features "e2e" -- --ignored  # E2E tests (requires localnet)
 ```
+
+**Full test** means: (1) all lib unit tests pass (`cargo test -p aptos-sdk --lib`), and optionally (2) E2E tests when a localnet is available. E2E tests are marked `#[ignore]` and require a running Aptos node. To run them:
+
+- Start localnet first: `aptos node run-localnet --with-faucet`, or
+- Use the script: `./scripts/run-e2e.sh` (starts localnet and runs E2E), or
+- With an already-running node: `cargo test -p aptos-sdk --features "e2e,full" -- --ignored`
 
 ### Linting and Formatting
 
@@ -112,7 +119,8 @@ The SDK follows a client-centric design with `Aptos` as the main entry point:
 
 ## Testing Strategy
 
-- Unit tests are co-located with source code or in `src/tests/` directories
-- E2E tests require running Aptos localnet (`aptos node run-localnet`)
-- Behavioral tests in `crates/aptos-sdk/tests/behavioral/`
-- Property-based testing with `proptest` for crypto components (via `fuzzing` feature)
+- Unit tests are co-located with source code or in `src/tests/` directories.
+- **Full test pass**: Run `cargo test -p aptos-sdk --lib`; all tests (including simulation and fullnode query-param tests) should pass.
+- E2E tests require a running Aptos localnet (`aptos node run-localnet --with-faucet`). They are ignored by default; run with `-- --ignored` and the `e2e` feature, or use `./scripts/run-e2e.sh`.
+- Behavioral tests in `crates/aptos-sdk/tests/behavioral/`.
+- Property-based testing with `proptest` for crypto components (via `fuzzing` feature).

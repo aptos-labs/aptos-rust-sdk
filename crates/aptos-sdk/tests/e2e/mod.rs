@@ -34,6 +34,12 @@
 //! - **transaction_tests**: Transaction building, signing, submission
 //! - **multi_signer_tests**: Multi-agent and fee payer transactions
 //! - **state_tests**: Resource and state queries
+//!
+//! Script bytecode is loaded from each move project: two-signer from
+//! `tests/e2e/move/two_signer_transfer/two_signer_transfer.mv`, single-signer from
+//! `tests/e2e/move/one_signer_transfer/one_signer_transfer.mv`. If a .mv file is
+//! missing, the corresponding test fails (panic with compile instructions). Run the
+//! compile command inside each project directory: `aptos move compile-script --output-file <project>.mv`.
 
 use aptos_sdk::{Aptos, AptosConfig};
 use std::env;
@@ -384,7 +390,80 @@ mod view_tests {
 mod transaction_tests {
     use super::*;
     use aptos_sdk::account::Ed25519Account;
-    use aptos_sdk::transaction::{EntryFunction, builder::sign_transaction};
+    use aptos_sdk::transaction::{
+        EntryFunction, Script, ScriptArgument, TransactionBuilder, TransactionPayload,
+        builder::sign_transaction,
+    };
+
+    #[tokio::test]
+    #[ignore]
+    async fn e2e_script_transfer() {
+        let script_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/e2e/move/one_signer_transfer/one_signer_transfer.mv");
+        let bytecode = std::fs::read(&script_path).expect(
+            "one_signer_transfer.mv not found; run inside tests/e2e/move/one_signer_transfer/: \
+             aptos move compile-script --output-file one_signer_transfer.mv",
+        );
+
+        let config = get_test_config();
+        let aptos = Aptos::new(config).expect("failed to create client");
+
+        let sender = aptos
+            .create_funded_account(100_000_000)
+            .await
+            .expect("failed to create sender");
+
+        let recipient = Ed25519Account::generate().address();
+        let amount = 50_000u64;
+
+        let payload = TransactionPayload::Script(Script::new(
+            bytecode,
+            vec![],
+            vec![
+                ScriptArgument::Address(recipient),
+                ScriptArgument::U64(amount),
+            ],
+        ));
+
+        let sender_seq = aptos
+            .get_sequence_number(sender.address())
+            .await
+            .expect("failed to get sequence number");
+        let chain_id = aptos
+            .ensure_chain_id()
+            .await
+            .expect("failed to resolve chain id");
+
+        let raw_txn = TransactionBuilder::new()
+            .sender(sender.address())
+            .sequence_number(sender_seq)
+            .payload(payload)
+            .chain_id(chain_id)
+            .max_gas_amount(100_000)
+            .gas_unit_price(100)
+            .build()
+            .expect("failed to build");
+
+        let signed = sign_transaction(&raw_txn, &sender).expect("failed to sign");
+
+        let _result = aptos
+            .submit_and_wait(&signed, None)
+            .await
+            .expect("submit_and_wait should succeed");
+
+        wait_for_finality().await;
+
+        let balance = aptos
+            .get_balance(recipient)
+            .await
+            .expect("failed to get recipient balance");
+        assert!(
+            balance >= amount,
+            "recipient balance {} should be >= amount {}",
+            balance,
+            amount
+        );
+    }
 
     #[tokio::test]
     #[ignore]
@@ -612,7 +691,7 @@ mod multi_signer_tests {
     use super::*;
     use aptos_sdk::account::{Account, Ed25519Account};
     use aptos_sdk::transaction::{
-        EntryFunction, TransactionBuilder,
+        EntryFunction, Script, ScriptArgument, TransactionBuilder, TransactionPayload,
         builder::{sign_fee_payer_transaction, sign_multi_agent_transaction},
         types::{FeePayerRawTransaction, MultiAgentRawTransaction},
     };
@@ -673,22 +752,23 @@ mod multi_signer_tests {
             .expect("failed to sign");
 
         // Submit
-        let result = aptos.submit_and_wait(&signed, None).await;
-
-        // This may or may not work depending on localnet support for fee payer
-        match result {
-            Ok(r) => {
-                println!("Fee payer transaction result: {:?}", r.data);
-            }
-            Err(e) => {
-                println!("Fee payer transaction failed (may not be supported): {}", e);
-            }
-        }
+        let result = aptos
+            .submit_and_wait(&signed, None)
+            .await
+            .expect("submit_and_wait should succeed");
+        println!("Fee payer transaction result: {:?}", result.data);
     }
 
     #[tokio::test]
     #[ignore]
     async fn e2e_multi_agent_transaction() {
+        let script_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/e2e/move/two_signer_transfer/two_signer_transfer.mv");
+        let two_signer_bytecode = std::fs::read(&script_path).expect(
+            "two_signer_transfer.mv not found; run inside tests/e2e/move/two_signer_transfer/: \
+             aptos move compile-script --output-file two_signer_transfer.mv",
+        );
+
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
 
@@ -707,11 +787,153 @@ mod multi_signer_tests {
         println!("Sender: {}", sender.address());
         println!("Secondary: {}", secondary.address());
 
-        // Note: Most simple transactions don't need multi-agent
-        // This is just demonstrating the signing flow
-        let payload =
-            EntryFunction::apt_transfer(Ed25519Account::generate().address(), 1000).unwrap();
+        // Use a two-signer script so the VM expects 2 signers (matches multi-agent tx).
+        let recipient = Ed25519Account::generate().address();
+        let amount = 1000u64;
+        let payload = TransactionPayload::Script(Script::new(
+            two_signer_bytecode,
+            vec![],
+            vec![
+                ScriptArgument::Address(recipient),
+                ScriptArgument::U64(amount),
+            ],
+        ));
 
+        let sender_seq = aptos
+            .get_sequence_number(sender.address())
+            .await
+            .unwrap_or(0);
+        let chain_id = aptos
+            .ensure_chain_id()
+            .await
+            .expect("failed to resolve chain id");
+
+        let raw_txn = TransactionBuilder::new()
+            .sender(sender.address())
+            .sequence_number(sender_seq)
+            .payload(payload)
+            .chain_id(chain_id)
+            .max_gas_amount(100_000)
+            .gas_unit_price(100)
+            .build()
+            .expect("failed to build");
+
+        let multi_agent_txn = MultiAgentRawTransaction {
+            raw_txn,
+            secondary_signer_addresses: vec![secondary.address()],
+        };
+
+        // Sign with both accounts
+        let secondary_ref: &dyn Account = &secondary;
+        let signed = sign_multi_agent_transaction(&multi_agent_txn, &sender, &[secondary_ref])
+            .expect("failed to sign");
+
+        // Submit
+        let result = aptos
+            .submit_and_wait(&signed, None)
+            .await
+            .expect("submit_and_wait should succeed");
+        println!("Multi-agent transaction result: {:?}", result.data);
+    }
+
+    /// Simulate a multi-agent transaction (no signatures) then sign and submit.
+    #[tokio::test]
+    #[ignore]
+    async fn e2e_simulate_multi_agent_then_submit() {
+        let script_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/e2e/move/two_signer_transfer/two_signer_transfer.mv");
+        let two_signer_bytecode = std::fs::read(&script_path).expect(
+            "two_signer_transfer.mv not found; run inside tests/e2e/move/two_signer_transfer/: \
+             aptos move compile-script --output-file two_signer_transfer.mv",
+        );
+
+        let config = get_test_config();
+        let aptos = Aptos::new(config).expect("failed to create client");
+
+        let sender = aptos
+            .create_funded_account(200_000_000)
+            .await
+            .expect("failed to create sender");
+        let secondary = aptos
+            .create_funded_account(100_000_000)
+            .await
+            .expect("failed to create secondary");
+
+        // Use a two-signer script so the VM expects 2 signers (matches multi-agent tx).
+        let recipient = Ed25519Account::generate().address();
+        let amount = 1000u64;
+        let payload = TransactionPayload::Script(Script::new(
+            two_signer_bytecode,
+            vec![],
+            vec![
+                ScriptArgument::Address(recipient),
+                ScriptArgument::U64(amount),
+            ],
+        ));
+
+        let sender_seq = aptos
+            .get_sequence_number(sender.address())
+            .await
+            .unwrap_or(0);
+        let chain_id = aptos
+            .ensure_chain_id()
+            .await
+            .expect("failed to resolve chain id");
+
+        let raw_txn = TransactionBuilder::new()
+            .sender(sender.address())
+            .sequence_number(sender_seq)
+            .payload(payload)
+            .chain_id(chain_id)
+            .max_gas_amount(100_000)
+            .gas_unit_price(100)
+            .build()
+            .expect("failed to build");
+
+        let multi_agent_txn = MultiAgentRawTransaction {
+            raw_txn,
+            secondary_signer_addresses: vec![secondary.address()],
+        };
+
+        // Simulate first (no signatures required)
+        let sim_result = aptos
+            .simulate_multi_agent(&multi_agent_txn, None)
+            .await
+            .expect("simulate_multi_agent should succeed");
+        println!(
+            "Simulation success: {}, gas_used: {}",
+            sim_result.success(),
+            sim_result.gas_used()
+        );
+
+        // Then sign and submit
+        let secondary_ref: &dyn Account = &secondary;
+        let signed = sign_multi_agent_transaction(&multi_agent_txn, &sender, &[secondary_ref])
+            .expect("failed to sign");
+        aptos
+            .submit_and_wait(&signed, None)
+            .await
+            .expect("submit_and_wait should succeed");
+    }
+
+    /// Simulate a fee-payer transaction (no signatures) then sign and submit.
+    #[tokio::test]
+    #[ignore]
+    async fn e2e_simulate_fee_payer_then_submit() {
+        let config = get_test_config();
+        let aptos = Aptos::new(config).expect("failed to create client");
+
+        let sender = aptos
+            .create_funded_account(1_000)
+            .await
+            .expect("failed to create sender");
+        let fee_payer = aptos
+            .create_funded_account(500_000_000)
+            .await
+            .expect("failed to create fee payer");
+        let recipient = Ed25519Account::generate();
+
+        let payload = EntryFunction::apt_transfer(recipient.address(), 500).unwrap();
         let sender_seq = aptos
             .get_sequence_number(sender.address())
             .await
@@ -731,27 +953,30 @@ mod multi_signer_tests {
             .build()
             .expect("failed to build");
 
-        let multi_agent_txn = MultiAgentRawTransaction {
+        let fee_payer_txn = FeePayerRawTransaction {
             raw_txn,
-            secondary_signer_addresses: vec![secondary.address()],
+            secondary_signer_addresses: vec![],
+            fee_payer_address: fee_payer.address(),
         };
 
-        // Sign with both accounts
-        let secondary_ref: &dyn Account = &secondary;
-        let signed = sign_multi_agent_transaction(&multi_agent_txn, &sender, &[secondary_ref])
+        // Simulate first (no signatures required)
+        let sim_result = aptos
+            .simulate_fee_payer(&fee_payer_txn, None)
+            .await
+            .expect("simulate_fee_payer should succeed");
+        println!(
+            "Simulation success: {}, gas_used: {}",
+            sim_result.success(),
+            sim_result.gas_used()
+        );
+
+        // Then sign and submit
+        let signed = sign_fee_payer_transaction(&fee_payer_txn, &sender, &[], &fee_payer)
             .expect("failed to sign");
-
-        // Submit
-        let result = aptos.submit_and_wait(&signed, None).await;
-
-        match result {
-            Ok(r) => {
-                println!("Multi-agent transaction result: {:?}", r.data);
-            }
-            Err(e) => {
-                println!("Multi-agent transaction error: {}", e);
-            }
-        }
+        aptos
+            .submit_and_wait(&signed, None)
+            .await
+            .expect("submit_and_wait should succeed");
     }
 }
 
@@ -828,18 +1053,12 @@ mod multi_key_e2e_tests {
             sign_transaction(&raw_txn, &multi_key_account).expect("failed to sign with multi-key");
 
         // Submit
-        let result = aptos.submit_and_wait(&signed, None).await;
-
-        match result {
-            Ok(r) => {
-                let success = r.data.get("success").and_then(|v| v.as_bool());
-                println!("Multi-key transaction success: {:?}", success);
-            }
-            Err(e) => {
-                // Multi-key might not be supported on all networks
-                println!("Multi-key transaction error (may not be supported): {}", e);
-            }
-        }
+        let result = aptos
+            .submit_and_wait(&signed, None)
+            .await
+            .expect("submit_and_wait should succeed");
+        let success = result.data.get("success").and_then(|v| v.as_bool());
+        println!("Multi-key transaction success: {:?}", success);
     }
 }
 

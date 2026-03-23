@@ -123,13 +123,12 @@ impl Secp256r1PrivateKey {
         }
     }
 
-    /// Signs a message (pre-hashed with SHA256) and returns a low-S signature.
+    /// Signs a message using the Aptos secp256r1 flow.
     ///
-    /// The signature is normalized to low-S form to match Aptos on-chain
-    /// verification requirements.
+    /// Aptos core lets the P-256 implementation hash the raw message once
+    /// internally. Prehashing here would hash the message twice.
     pub fn sign(&self, message: &[u8]) -> Secp256r1Signature {
-        let hash = crate::crypto::sha2_256(message);
-        let signature: P256Signature = self.inner.sign(&hash);
+        let signature: P256Signature = self.inner.sign(message);
         // SECURITY: Normalize to low-S to match Aptos on-chain verification.
         // The p256 crate does not guarantee low-S output from signing.
         let normalized = signature.normalize_s().unwrap_or(signature);
@@ -258,9 +257,8 @@ impl Secp256r1PublicKey {
         if signature.inner.normalize_s().is_some() {
             return Err(AptosError::SignatureVerificationFailed);
         }
-        let hash = crate::crypto::sha2_256(message);
         self.inner
-            .verify(&hash, &signature.inner)
+            .verify(message, &signature.inner)
             .map_err(|_| AptosError::SignatureVerificationFailed)
     }
 
