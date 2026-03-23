@@ -1085,7 +1085,7 @@ mod tests {
             signatures_bitmap: &'a [u8],
         }
 
-        let signatures = vec![AnySignature::new(AnyPublicKeyVariant::Keyless, vec![])];
+        let signatures = [AnySignature::new(AnyPublicKeyVariant::Keyless, vec![])];
         let bitmap = [0x80, 0x00, 0x00, 0x00];
         let bytes = aptos_bcs::to_bytes(&Wire {
             signatures: signatures.iter().collect(),
