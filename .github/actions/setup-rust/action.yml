@@ -1,0 +1,27 @@
+name: Setup Rust
+description: Install Rust toolchain and configure cargo cache
+inputs:
+  toolchain:
+    description: Rust toolchain version (e.g. stable, nightly, "1.90")
+    required: false
+    default: stable
+  components:
+    description: Additional components (e.g. rustfmt, clippy)
+    required: false
+    default: ''
+  cache:
+    description: Enable cargo caching via Swatinem/rust-cache
+    required: false
+    default: 'true'
+runs:
+  using: composite
+  steps:
+    - name: Install Rust ${{ inputs.toolchain }}
+      uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # master
+      with:
+        toolchain: ${{ inputs.toolchain }}
+        components: ${{ inputs.components }}
+
+    - name: Cache cargo
+      if: inputs.cache == 'true'
+      uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2

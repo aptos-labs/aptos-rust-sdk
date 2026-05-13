@@ -17,11 +17,16 @@ jobs:
   audit:
     name: Security Audit
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+      - uses: ./.github/actions/setup-rust
+        with:
+          cache: 'false'
 
       - name: Install cargo-audit
         run: cargo install cargo-audit --locked
@@ -33,11 +38,16 @@ jobs:
   deny:
     name: Dependency Check
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+      - uses: ./.github/actions/setup-rust
+        with:
+          cache: 'false'
 
       - name: Install cargo-deny
         run: cargo install cargo-deny --locked

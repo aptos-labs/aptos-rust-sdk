@@ -14,83 +14,87 @@ jobs:
   format:
     name: Format
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v6
-      
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@master
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-rust
         with:
           toolchain: "1.90"
           components: rustfmt
-      
+          cache: 'false'
+
       - name: Check formatting
         run: cargo fmt --all -- --check
 
   lint:
     name: Lint
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v6
-      
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@master
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-rust
         with:
           toolchain: "1.90"
           components: clippy
-      
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
-      
+
       - name: Run Clippy (default features)
         run: cargo clippy -p aptos-sdk --all-targets -- -D warnings
-      
+
       - name: Run Clippy (all features)
         run: cargo clippy -p aptos-sdk --all-targets --all-features -- -D warnings
-      
+
       - name: Run Clippy (no default features)
         run: cargo clippy -p aptos-sdk --no-default-features -- -D warnings
 
   test:
     name: Test
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         rust: [stable]
     steps:
-      - uses: actions/checkout@v6
-      
-      - name: Install Rust ${{ matrix.rust }}
-        uses: dtolnay/rust-toolchain@master
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-rust
         with:
           toolchain: ${{ matrix.rust }}
-      
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
-      
+
       - name: Build
         run: cargo build -p aptos-sdk --all-targets
-      
+
       - name: Run tests
         run: cargo test -p aptos-sdk --all-targets
-      
+
       - name: Run tests (all features)
         run: cargo test -p aptos-sdk --all-targets --all-features
 
   test-linux-arm:
     name: Test (Linux ARM64)
     runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@master
+      - uses: ./.github/actions/setup-rust
         with:
           toolchain: stable
-
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
 
       - name: Build
         run: cargo build -p aptos-sdk --all-targets
@@ -104,16 +108,16 @@ jobs:
   test-macos-intel:
     name: Test (macOS x86)
     runs-on: macos-15-intel
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@master
+      - uses: ./.github/actions/setup-rust
         with:
           toolchain: stable
-
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
 
       - name: Build
         run: cargo build -p aptos-sdk --all-targets
@@ -127,6 +131,8 @@ jobs:
   test-no-simd:
     name: Test (Linux No SIMD - Docker Compatible)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     env:
       # Disable BLST assembly optimizations for portability
       BLST_PORTABLE: "1"
@@ -135,15 +141,13 @@ jobs:
       # QEMU x86 emulation, where advanced SIMD instructions are unavailable.
       RUSTFLAGS: "-C target-cpu=x86-64"
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@master
+      - uses: ./.github/actions/setup-rust
         with:
           toolchain: stable
-
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
 
       - name: Build (default features)
         run: cargo build -p aptos-sdk --all-targets
@@ -160,35 +164,35 @@ jobs:
   test-features:
     name: Test Feature Combinations
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v6
-      
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@master
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-rust
         with:
           toolchain: "1.90"
-      
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
-      
+
       - name: Test with only ed25519
         run: cargo test -p aptos-sdk --no-default-features --features ed25519
-      
+
       - name: Test with only secp256k1
         run: cargo test -p aptos-sdk --no-default-features --features secp256k1
-      
+
       - name: Test with secp256r1
         run: cargo test -p aptos-sdk --features secp256r1
-      
+
       - name: Test with bls
         run: cargo test -p aptos-sdk --features bls
-      
+
       - name: Test with faucet
         run: cargo test -p aptos-sdk --features faucet
-      
+
       - name: Test with indexer
         run: cargo test -p aptos-sdk --features indexer
-      
+
       - name: Test with full features
         run: cargo test -p aptos-sdk --features full
 
@@ -198,14 +202,14 @@ jobs:
   #   name: Spec Tests
   #   runs-on: ubuntu-latest
   #   steps:
-  #     - uses: actions/checkout@v6
-  #     
+  #     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+  #
   #     - name: Install Rust
   #       uses: dtolnay/rust-toolchain@stable
-  #     
+  #
   #     - name: Cache cargo
-  #       uses: Swatinem/rust-cache@v2
-  #     
+  #       uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+  #
   #     - name: Run spec tests
   #       run: cargo test --test specs
   #       working-directory: specifications/tests/rust
@@ -213,20 +217,22 @@ jobs:
   docs:
     name: Documentation
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v6
-      
-      - name: Install Rust nightly (required for doc_auto_cfg and docs.rs parity)
-        uses: dtolnay/rust-toolchain@nightly
-      
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
-      
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-rust
+        with:
+          toolchain: nightly
+
       - name: Check documentation (docs.rs parity)
         env:
           RUSTDOCFLAGS: --cfg docsrs -D warnings
         run: cargo +nightly doc -p aptos-sdk --no-deps --all-features
-      
+
       - name: Check macros documentation
         env:
           RUSTDOCFLAGS: --cfg docsrs -D warnings
@@ -246,76 +252,76 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v6
-      
-      - name: Install Rust nightly (required for doc_auto_cfg feature)
-        uses: dtolnay/rust-toolchain@nightly
-      
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
-      
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-rust
+        with:
+          toolchain: nightly
+
       - name: Build documentation
         env:
           RUSTDOCFLAGS: --cfg docsrs
         run: cargo +nightly doc -p aptos-sdk --no-deps --all-features
-      
+
       - name: Add redirect to main crate
         run: |
           echo '<meta http-equiv="refresh" content="0; url=aptos_sdk/index.html">' > target/doc/index.html
-      
+
       - name: Setup Pages
-        uses: actions/configure-pages@v5
-      
+        uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
+
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v4
+        uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4
         with:
           path: target/doc
-      
+
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
 
   msrv:
     name: Minimum Supported Rust Version
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v6
-      
-      - name: Install Rust 1.85
-        uses: dtolnay/rust-toolchain@master
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-rust
         with:
           toolchain: "1.85"
-      
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
-      
+
       - name: Check MSRV
         run: cargo check -p aptos-sdk
 
   coverage:
     name: Code Coverage
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v6
-      
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@master
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-rust
         with:
           toolchain: "1.90"
-      
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
-      
+
       - name: Install cargo-tarpaulin
         run: cargo install cargo-tarpaulin
-      
+
       - name: Run coverage
         run: |
           cargo tarpaulin -p aptos-sdk --features "full" --skip-clean --out Xml --out Html --output-dir target/coverage
         working-directory: crates/aptos-sdk
-      
+
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@75cd11691c0faa626561e295848008c8a7dddffe # v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: crates/aptos-sdk/target/coverage/cobertura.xml
@@ -327,11 +333,15 @@ jobs:
   security-audit:
     name: Security Audit
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v6
-      
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+
       - name: Install cargo-audit
         run: cargo install cargo-audit
-      
+
       - name: Run security audit
         run: cargo audit
