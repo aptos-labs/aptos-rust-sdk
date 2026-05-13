@@ -139,6 +139,13 @@ impl Secp256k1PrivateKey {
     /// `SHA-256(message)` (or, with a SHA-256 pre-hash, over
     /// `SHA-256(SHA-256(message))`). Both forms verified internally but
     /// were rejected by the chain because the chain hashes with SHA-3-256.
+    ///
+    /// # Panics
+    ///
+    /// Panics only in the (mathematically impossible) case that
+    /// `k256::ecdsa::SigningKey::sign_prehash` returns `Err` for a 32-byte
+    /// prehash, which the `signature::hazmat::PrehashSigner` contract for
+    /// `secp256k1` does not produce.
     pub fn sign(&self, message: &[u8]) -> Secp256k1Signature {
         let digest = crate::crypto::sha3_256(message);
         let signature: K256Signature = self
@@ -154,6 +161,13 @@ impl Secp256k1PrivateKey {
     ///
     /// The caller is responsible for ensuring `digest` is the correct hash
     /// for the on-chain verification scheme (Aptos uses SHA-3-256).
+    ///
+    /// # Panics
+    ///
+    /// Panics only if `k256::ecdsa::SigningKey::sign_prehash` returns `Err`
+    /// for the supplied 32-byte digest, which the
+    /// `signature::hazmat::PrehashSigner` contract for `secp256k1` does not
+    /// produce.
     pub fn sign_prehashed(&self, digest: &[u8; 32]) -> Secp256k1Signature {
         let signature: K256Signature = self
             .inner

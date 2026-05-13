@@ -378,7 +378,7 @@ fn serialize_account_auth_raw_pair<S: Serializer>(
     // Each raw field is serialized via `serialize_raw_bytes` which uses
     // `serialize_tuple(len)` -- BCS emits no length prefix for tuples.
     struct Raw<'a>(&'a [u8]);
-    impl<'a> Serialize for Raw<'a> {
+    impl Serialize for Raw<'_> {
         fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
             serialize_raw_bytes(self.0, s)
         }

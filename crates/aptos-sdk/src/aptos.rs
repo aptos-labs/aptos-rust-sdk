@@ -393,6 +393,10 @@ impl Aptos {
         account: &A,
         payload: TransactionPayload,
     ) -> AptosResult<crate::transaction::SimulationResult> {
+        use crate::transaction::SignedTransaction;
+        use crate::transaction::TransactionAuthenticator;
+        use crate::transaction::authenticator::{Ed25519PublicKey, Ed25519Signature};
+
         let raw_txn = self.build_transaction(account, payload).await?;
 
         // Build a SignedTransaction with a zeroed Ed25519 signature: the
@@ -402,10 +406,6 @@ impl Aptos {
         // private key to sign would defeat that purpose. We attach the
         // account's real public key (the simulator still uses it to walk the
         // signing-message hash) with a 64-byte zero signature.
-        use crate::transaction::SignedTransaction;
-        use crate::transaction::TransactionAuthenticator;
-        use crate::transaction::authenticator::{Ed25519PublicKey, Ed25519Signature};
-
         let pubkey_bytes = account.public_key_bytes();
         let pubkey_arr: [u8; 32] = pubkey_bytes.as_slice().try_into().map_err(|_| {
             crate::error::AptosError::transaction(
