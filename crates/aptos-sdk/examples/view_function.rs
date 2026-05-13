@@ -9,9 +9,9 @@ use aptos_sdk::{Aptos, AptosConfig};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Create client for testnet
-    let aptos = Aptos::new(AptosConfig::testnet())?;
-    println!("Connected to testnet");
+    // Create client for devnet
+    let aptos = Aptos::new(AptosConfig::devnet())?;
+    println!("Connected to devnet");
 
     // Get ledger info
     let ledger_info = aptos.ledger_info().await?;

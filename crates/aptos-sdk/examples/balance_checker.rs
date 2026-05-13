@@ -16,8 +16,8 @@ const OCTAS_PER_APT: f64 = 100_000_000.0;
 async fn main() -> anyhow::Result<()> {
     println!("=== Balance Checker Utility ===\n");
 
-    let aptos = Aptos::new(AptosConfig::testnet())?;
-    println!("Connected to testnet\n");
+    let aptos = Aptos::new(AptosConfig::devnet())?;
+    println!("Connected to devnet\n");
 
     // 1. Check balance of a known address
     println!("--- 1. Check Single Address ---");

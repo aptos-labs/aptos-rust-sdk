@@ -1166,9 +1166,13 @@ mod tests {
         let aptos = Aptos::mainnet().unwrap();
         assert_eq!(aptos.chain_id(), ChainId::mainnet());
 
+        // Devnet's chain ID is intentionally reported as 0 (unknown) at
+        // construction time -- the value is reset whenever devnet itself
+        // is reset, so any hardcoded value would go stale. The Aptos client
+        // populates the live chain ID lazily via `ensure_chain_id`, which is
+        // exercised on the network and not in this offline unit test.
         let aptos = Aptos::devnet().unwrap();
-        // Devnet uses chain_id 165
-        assert_eq!(aptos.chain_id(), ChainId::new(165));
+        assert_eq!(aptos.chain_id(), ChainId::new(0));
     }
 
     #[tokio::test]

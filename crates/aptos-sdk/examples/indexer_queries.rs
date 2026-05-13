@@ -14,8 +14,8 @@ async fn main() -> anyhow::Result<()> {
     println!("=== Indexer Queries Example ===\n");
 
     // Setup
-    let aptos = Aptos::new(AptosConfig::testnet())?;
-    println!("Connected to testnet");
+    let aptos = Aptos::new(AptosConfig::devnet())?;
+    println!("Connected to devnet");
 
     // Get the indexer client (requires "indexer" feature)
     let indexer = aptos.indexer().ok_or_else(|| {

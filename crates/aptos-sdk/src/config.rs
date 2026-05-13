@@ -342,13 +342,18 @@ pub enum Network {
 
 impl Network {
     /// Returns the chain ID for this network.
+    ///
+    /// Devnet's chain ID is intentionally returned as `0` (unknown) because
+    /// it is reset on a regular cadence and any hardcoded value rapidly
+    /// goes stale. Returning `0` causes [`Aptos::ensure_chain_id`] to
+    /// fetch the live chain ID from the configured fullnode and cache it.
     pub fn chain_id(&self) -> ChainId {
         match self {
             Network::Mainnet => ChainId::mainnet(),
             Network::Testnet => ChainId::testnet(),
-            Network::Devnet => ChainId::new(165), // Devnet chain ID
-            Network::Local => ChainId::new(4),    // Local testing chain ID
-            Network::Custom => ChainId::new(0),   // Must be set manually
+            Network::Devnet => ChainId::new(0),
+            Network::Local => ChainId::new(4),
+            Network::Custom => ChainId::new(0),
         }
     }
 
@@ -853,7 +858,9 @@ mod tests {
     fn test_network_chain_id() {
         assert_eq!(Network::Mainnet.chain_id().id(), 1);
         assert_eq!(Network::Testnet.chain_id().id(), 2);
-        assert_eq!(Network::Devnet.chain_id().id(), 165);
+        // Devnet chain ID is reported as 0 (unknown); see Network::chain_id
+        // doc comment. The SDK queries the fullnode to resolve the live ID.
+        assert_eq!(Network::Devnet.chain_id().id(), 0);
         assert_eq!(Network::Local.chain_id().id(), 4);
         assert_eq!(Network::Custom.chain_id().id(), 0);
     }

@@ -16,9 +16,9 @@ use aptos_sdk::{
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Create client for testnet
-    let aptos = Aptos::new(AptosConfig::testnet())?;
-    println!("Connected to testnet");
+    // Create client for devnet
+    let aptos = Aptos::new(AptosConfig::devnet())?;
+    println!("Connected to devnet");
 
     // Generate and fund an account
     let account = aptos.create_funded_account(100_000_000).await?;

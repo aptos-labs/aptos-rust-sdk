@@ -84,10 +84,10 @@ async fn main() -> anyhow::Result<()> {
     assert_eq!(random_account.address(), restored_account.address());
     println!("✓ Addresses match! Account successfully restored from private key.");
 
-    // 7. Demonstrate using an account on testnet
+    // 7. Demonstrate using an account on devnet
     println!("\n--- 7. Using an Account on Testnet ---");
 
-    let config = AptosConfig::testnet();
+    let config = AptosConfig::devnet();
     let aptos = Aptos::new(config)?;
 
     // Generate fresh account for testnet

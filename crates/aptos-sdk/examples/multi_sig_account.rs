@@ -19,9 +19,9 @@ use aptos_sdk::{
 async fn main() -> anyhow::Result<()> {
     println!("=== Multi-Signature Account Example ===\n");
 
-    // Connect to testnet
-    let aptos = Aptos::new(AptosConfig::testnet())?;
-    println!("Connected to testnet (chain_id: {})", aptos.chain_id().id());
+    // Connect to devnet
+    let aptos = Aptos::new(AptosConfig::devnet())?;
+    println!("Connected to devnet (chain_id: {})", aptos.chain_id().id());
 
     // ==== Part 1: Creating a 2-of-3 Multi-Sig Account ====
     println!("\n--- Part 1: Create 2-of-3 Multi-Sig Account ---");

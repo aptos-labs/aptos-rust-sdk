@@ -26,9 +26,9 @@ use aptos_sdk::{
 async fn main() -> anyhow::Result<()> {
     println!("=== On-chain Multisig Account Example ===\n");
 
-    // Connect to testnet
-    let aptos = Aptos::new(AptosConfig::testnet())?;
-    println!("Connected to testnet (chain_id: {})", aptos.chain_id());
+    // Connect to devnet
+    let aptos = Aptos::new(AptosConfig::devnet())?;
+    println!("Connected to devnet (chain_id: {})", aptos.chain_id());
 
     // ==== Part 1: Understanding On-chain Multisig ====
     println!("\n--- Part 1: Understanding On-chain Multisig ---");

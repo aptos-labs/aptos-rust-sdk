@@ -17,10 +17,10 @@ use aptos_sdk::{
 async fn main() -> anyhow::Result<()> {
     println!("=== Multi-Key Account Example ===\n");
 
-    // 1. Setup Aptos client for testnet
-    let config = AptosConfig::testnet();
+    // 1. Setup Aptos client for devnet
+    let config = AptosConfig::devnet();
     let aptos = Aptos::new(config)?;
-    println!("Connected to testnet (chain_id: {})", aptos.chain_id().id());
+    println!("Connected to devnet (chain_id: {})", aptos.chain_id().id());
 
     // 2. Generate individual private keys of different types
     println!("\n--- Creating Mixed Key Types ---");

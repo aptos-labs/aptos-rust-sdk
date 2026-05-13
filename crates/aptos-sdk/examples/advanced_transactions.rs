@@ -24,9 +24,9 @@ use aptos_sdk::{
 async fn main() -> anyhow::Result<()> {
     println!("=== Advanced Transaction Combinations ===\n");
 
-    // Connect to testnet
-    let aptos = Aptos::new(AptosConfig::testnet())?;
-    println!("Connected to testnet (chain_id: {})", aptos.chain_id());
+    // Connect to devnet
+    let aptos = Aptos::new(AptosConfig::devnet())?;
+    println!("Connected to devnet (chain_id: {})", aptos.chain_id());
 
     // ==== Part 1: Sponsored + Multi-agent Transaction ====
     println!("\n--- Part 1: Sponsored + Multi-agent Transaction ---");

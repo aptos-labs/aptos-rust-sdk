@@ -203,7 +203,7 @@ async fn main() -> anyhow::Result<()> {
     println!("\n--- View Function Demo (requires network) ---");
     println!("To call view functions, you need an Aptos client:");
     println!();
-    println!("  let aptos = Aptos::new(AptosConfig::testnet())?;");
+    println!("  let aptos = Aptos::new(AptosConfig::devnet())?;");
     println!("  let coin = CoinModule::new();");
     println!("  let balance = coin.view_balance(&aptos, owner, type_args).await?;");
     println!("  let supply = my_token.view_total_supply(&aptos).await?;");

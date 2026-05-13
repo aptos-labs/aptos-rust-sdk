@@ -270,7 +270,7 @@ module 0xcafe::my_token {
     // use my_token::*;
     //
     // async fn example() -> anyhow::Result<()> {
-    //     let aptos = Aptos::new(AptosConfig::testnet())?;
+    //     let aptos = Aptos::new(AptosConfig::devnet())?;
     //     let account = aptos.account().create_ed25519()?;
     //
     //     // Use generated entry function with meaningful parameter names

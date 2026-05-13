@@ -21,9 +21,9 @@ use aptos_sdk::{
 async fn main() -> anyhow::Result<()> {
     println!("=== Script Transaction Example ===\n");
 
-    // Connect to testnet
-    let aptos = Aptos::new(AptosConfig::testnet())?;
-    println!("Connected to testnet (chain_id: {})", aptos.chain_id());
+    // Connect to devnet
+    let aptos = Aptos::new(AptosConfig::devnet())?;
+    println!("Connected to devnet (chain_id: {})", aptos.chain_id());
 
     // Create and fund accounts
     let sender = aptos.create_funded_account(100_000_000).await?;
