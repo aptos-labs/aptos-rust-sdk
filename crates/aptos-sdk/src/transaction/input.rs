@@ -917,12 +917,28 @@ mod tests {
         assert_eq!(bcs, vec![0xFF; 32]);
     }
 
+    /// Extracts the inner EntryFunction from a TransactionPayload, panicking
+    /// for the test if the payload is not an entry-function variant.
+    fn payload_as_entry_function(
+        p: crate::transaction::TransactionPayload,
+    ) -> crate::transaction::EntryFunction {
+        match p {
+            crate::transaction::TransactionPayload::EntryFunction(ef) => ef,
+            other => panic!(
+                "expected TransactionPayload::EntryFunction, got: {:?}",
+                std::mem::discriminant(&other)
+            ),
+        }
+    }
+
     #[test]
     fn test_input_entry_function_data_new() {
         let builder = InputEntryFunctionData::new("0x1::coin::transfer");
-        let result = builder.build();
-        // Should build successfully (no args required yet)
-        assert!(result.is_ok());
+        let entry_fn = payload_as_entry_function(builder.build().expect("build should succeed"));
+        assert_eq!(entry_fn.module.name.as_str(), "coin");
+        assert_eq!(entry_fn.function, "transfer");
+        assert!(entry_fn.type_args.is_empty());
+        assert!(entry_fn.args.is_empty());
     }
 
     #[test]
@@ -940,10 +956,17 @@ mod tests {
 
     #[test]
     fn test_input_entry_function_data_type_arg() {
-        let builder = InputEntryFunctionData::new("0x1::coin::transfer")
-            .type_arg("0x1::aptos_coin::AptosCoin");
-        let result = builder.build();
-        assert!(result.is_ok());
+        let entry_fn = payload_as_entry_function(
+            InputEntryFunctionData::new("0x1::coin::transfer")
+                .type_arg("0x1::aptos_coin::AptosCoin")
+                .build()
+                .expect("build should succeed"),
+        );
+        assert_eq!(entry_fn.type_args.len(), 1);
+        assert_eq!(
+            entry_fn.type_args[0].to_string(),
+            "0x1::aptos_coin::AptosCoin"
+        );
     }
 
     #[test]
@@ -959,52 +982,83 @@ mod tests {
     fn test_input_entry_function_data_type_arg_typed() {
         use crate::types::TypeTag;
 
-        let builder =
-            InputEntryFunctionData::new("0x1::coin::transfer").type_arg_typed(TypeTag::U64);
-        let result = builder.build();
-        assert!(result.is_ok());
+        let entry_fn = payload_as_entry_function(
+            InputEntryFunctionData::new("0x1::coin::transfer")
+                .type_arg_typed(TypeTag::U64)
+                .build()
+                .expect("build should succeed"),
+        );
+        assert_eq!(entry_fn.type_args, vec![TypeTag::U64]);
     }
 
     #[test]
     fn test_input_entry_function_data_type_args() {
-        let builder = InputEntryFunctionData::new("0x1::coin::transfer").type_args(["u64", "u128"]);
-        let result = builder.build();
-        assert!(result.is_ok());
+        let entry_fn = payload_as_entry_function(
+            InputEntryFunctionData::new("0x1::coin::transfer")
+                .type_args(["u64", "u128"])
+                .build()
+                .expect("build should succeed"),
+        );
+        assert_eq!(entry_fn.type_args.len(), 2);
+        assert_eq!(entry_fn.type_args[0].to_string(), "u64");
+        assert_eq!(entry_fn.type_args[1].to_string(), "u128");
     }
 
     #[test]
     fn test_input_entry_function_data_type_args_typed() {
         use crate::types::TypeTag;
 
-        let builder = InputEntryFunctionData::new("0x1::coin::transfer")
-            .type_args_typed([TypeTag::U64, TypeTag::Bool]);
-        let result = builder.build();
-        assert!(result.is_ok());
+        let entry_fn = payload_as_entry_function(
+            InputEntryFunctionData::new("0x1::coin::transfer")
+                .type_args_typed([TypeTag::U64, TypeTag::Bool])
+                .build()
+                .expect("build should succeed"),
+        );
+        assert_eq!(entry_fn.type_args, vec![TypeTag::U64, TypeTag::Bool]);
     }
 
     #[test]
     fn test_input_entry_function_data_arg() {
-        let builder = InputEntryFunctionData::new("0x1::coin::transfer")
-            .arg(42u64)
-            .arg(true)
-            .arg("hello".to_string());
-        let result = builder.build();
-        assert!(result.is_ok());
+        let entry_fn = payload_as_entry_function(
+            InputEntryFunctionData::new("0x1::coin::transfer")
+                .arg(42u64)
+                .arg(true)
+                .arg("hello".to_string())
+                .build()
+                .expect("build should succeed"),
+        );
+        assert_eq!(entry_fn.args.len(), 3, "all three args must be present");
+        // u64 BCS encodes 42 as 8 little-endian bytes: 0x2a 0x00 * 7
+        assert_eq!(entry_fn.args[0][0], 42);
+        // bool true is one byte: 0x01
+        assert_eq!(entry_fn.args[1], vec![0x01]);
     }
 
     #[test]
     fn test_input_entry_function_data_arg_raw() {
         let raw_bytes = vec![0x01, 0x02, 0x03];
-        let builder = InputEntryFunctionData::new("0x1::coin::transfer").arg_raw(raw_bytes);
-        let result = builder.build();
-        assert!(result.is_ok());
+        let entry_fn = payload_as_entry_function(
+            InputEntryFunctionData::new("0x1::coin::transfer")
+                .arg_raw(raw_bytes.clone())
+                .build()
+                .expect("build should succeed"),
+        );
+        assert_eq!(entry_fn.args.len(), 1);
+        assert_eq!(entry_fn.args[0], raw_bytes);
     }
 
     #[test]
     fn test_input_entry_function_data_args() {
-        let builder = InputEntryFunctionData::new("0x1::coin::transfer").args([1u64, 2u64, 3u64]);
-        let result = builder.build();
-        assert!(result.is_ok());
+        let entry_fn = payload_as_entry_function(
+            InputEntryFunctionData::new("0x1::coin::transfer")
+                .args([1u64, 2u64, 3u64])
+                .build()
+                .expect("build should succeed"),
+        );
+        assert_eq!(entry_fn.args.len(), 3);
+        assert_eq!(entry_fn.args[0][0], 1);
+        assert_eq!(entry_fn.args[1][0], 2);
+        assert_eq!(entry_fn.args[2][0], 3);
     }
 
     #[test]
@@ -1012,8 +1066,14 @@ mod tests {
         use crate::types::AccountAddress;
 
         let recipient = AccountAddress::from_hex("0x123").unwrap();
-        let result = InputEntryFunctionData::transfer_apt(recipient, 1000);
-        assert!(result.is_ok());
+        let entry_fn = payload_as_entry_function(
+            InputEntryFunctionData::transfer_apt(recipient, 1000)
+                .expect("transfer_apt should succeed"),
+        );
+        assert_eq!(entry_fn.module.address, AccountAddress::ONE);
+        assert_eq!(entry_fn.module.name.as_str(), "aptos_account");
+        assert_eq!(entry_fn.function, "transfer");
+        assert_eq!(entry_fn.args.len(), 2);
     }
 
     #[test]
@@ -1027,7 +1087,12 @@ mod tests {
     fn test_input_entry_function_data_builder_clone() {
         let builder = InputEntryFunctionData::new("0x1::coin::transfer").arg(42u64);
         let cloned = builder.clone();
-        assert!(cloned.build().is_ok());
+        let original_built = payload_as_entry_function(builder.build().expect("original builds"));
+        let cloned_built = payload_as_entry_function(cloned.build().expect("clone builds"));
+        // Cloning produces a behaviourally-identical builder (same module, function, args).
+        assert_eq!(original_built.module.name, cloned_built.module.name);
+        assert_eq!(original_built.function, cloned_built.function);
+        assert_eq!(original_built.args, cloned_built.args);
     }
 
     #[test]
