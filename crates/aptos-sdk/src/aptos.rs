@@ -658,48 +658,97 @@ impl Aptos {
     ///
     /// This method waits for the faucet transactions to be confirmed before returning.
     ///
+    /// Some Aptos faucets (notably devnet) cap the amount delivered per request to a
+    /// fixed value (typically 1 APT / 100,000,000 octas) regardless of the requested
+    /// amount. This method automatically issues additional faucet requests, up to a
+    /// reasonable limit, until the account's balance has been topped up by at least
+    /// `amount` octas. The returned vector contains the transaction hashes from every
+    /// underlying faucet call.
+    ///
     /// # Errors
     ///
     /// Returns an error if the faucet feature is not enabled, the faucet request fails
     /// (e.g., rate limiting 429, server error 500), waiting for transaction confirmation
-    /// times out, or any HTTP/API errors occur.
+    /// times out, any HTTP/API errors occur, or if the requested amount cannot be
+    /// delivered after several attempts.
     #[cfg(feature = "faucet")]
     pub async fn fund_account(
         &self,
         address: AccountAddress,
         amount: u64,
     ) -> AptosResult<Vec<String>> {
+        // Hard-cap on how many faucet calls we'll make to satisfy a single
+        // `fund_account` request. This prevents unbounded faucet usage if the
+        // faucet is silently dropping requests.
+        const MAX_FAUCET_ATTEMPTS: u32 = 16;
+
         let faucet = self
             .faucet
             .as_ref()
             .ok_or_else(|| AptosError::FeatureNotEnabled("faucet".into()))?;
-        let txn_hashes = faucet.fund(address, amount).await?;
 
-        // Parse hashes first to own them
-        let hashes: Vec<HashValue> = txn_hashes
-            .iter()
-            .filter_map(|hash_str| {
-                // Hash might have 0x prefix or not
-                let hash_str_clean = hash_str.strip_prefix("0x").unwrap_or(hash_str);
-                HashValue::from_hex(hash_str_clean).ok()
-            })
-            .collect();
+        // Snapshot the starting balance (0 if the account doesn't yet exist).
+        let starting_balance = self.get_balance(address).await.unwrap_or(0);
+        let target_balance = starting_balance.saturating_add(amount);
 
-        // Wait for all faucet transactions to be confirmed in parallel
-        let wait_futures: Vec<_> = hashes
-            .iter()
-            .map(|hash| {
-                self.fullnode
-                    .wait_for_transaction(hash, Some(Duration::from_secs(60)))
-            })
-            .collect();
+        let mut all_hashes: Vec<String> = Vec::new();
+        let mut current_balance = starting_balance;
+        let mut attempts = 0u32;
 
-        let results = futures::future::join_all(wait_futures).await;
-        for result in results {
-            result?;
+        while current_balance < target_balance && attempts < MAX_FAUCET_ATTEMPTS {
+            attempts += 1;
+            let still_needed = target_balance.saturating_sub(current_balance);
+            let txn_hashes = faucet.fund(address, still_needed).await?;
+
+            // Parse hashes for waiting on confirmation.
+            let hashes: Vec<HashValue> = txn_hashes
+                .iter()
+                .filter_map(|hash_str| {
+                    let hash_str_clean = hash_str.strip_prefix("0x").unwrap_or(hash_str);
+                    HashValue::from_hex(hash_str_clean).ok()
+                })
+                .collect();
+
+            // Wait for all faucet transactions in this batch to be confirmed in parallel.
+            let wait_futures: Vec<_> = hashes
+                .iter()
+                .map(|hash| {
+                    self.fullnode
+                        .wait_for_transaction(hash, Some(Duration::from_secs(60)))
+                })
+                .collect();
+            let results = futures::future::join_all(wait_futures).await;
+            for result in results {
+                result?;
+            }
+
+            all_hashes.extend(txn_hashes);
+
+            // Re-read balance; if it didn't move, the faucet isn't going to help.
+            let new_balance = self.get_balance(address).await.unwrap_or(current_balance);
+            if new_balance <= current_balance {
+                return Err(AptosError::api(
+                    400,
+                    format!(
+                        "faucet returned successful response but balance did not increase (\
+                         attempts={attempts}, balance={new_balance}, requested top-up={amount})"
+                    ),
+                ));
+            }
+            current_balance = new_balance;
         }
 
-        Ok(txn_hashes)
+        if current_balance < target_balance {
+            return Err(AptosError::api(
+                429,
+                format!(
+                    "faucet could not deliver {amount} octas in {attempts} attempts \
+                     (starting balance={starting_balance}, current balance={current_balance})"
+                ),
+            ));
+        }
+
+        Ok(all_hashes)
     }
 
     #[cfg(all(feature = "faucet", feature = "ed25519"))]
