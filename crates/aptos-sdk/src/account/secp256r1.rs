@@ -98,11 +98,11 @@ impl Account for Secp256r1Account {
     }
 
     fn authentication_key(&self) -> AuthenticationKey {
-        let raw = self.public_key.to_raw_bytes();
-        let mut bcs_bytes = Vec::with_capacity(1 + 1 + raw.len());
+        let uncompressed = self.public_key.to_uncompressed_bytes();
+        let mut bcs_bytes = Vec::with_capacity(1 + 1 + uncompressed.len());
         bcs_bytes.push(0x02); // Secp256r1Ecdsa variant
-        bcs_bytes.push(64); // ULEB128(64)
-        bcs_bytes.extend_from_slice(&raw);
+        bcs_bytes.push(65); // ULEB128(65)
+        bcs_bytes.extend_from_slice(&uncompressed);
         let key = derive_authentication_key(&bcs_bytes, SINGLE_KEY_SCHEME);
         AuthenticationKey::new(key)
     }
@@ -134,12 +134,13 @@ impl Account for Secp256r1Account {
     }
 
     fn public_key_bytes(&self) -> Vec<u8> {
-        // Return BCS-serialized `AnyPublicKey::Secp256r1Ecdsa` (variant=2, len=64, raw_64_bytes).
-        let raw = self.public_key.to_raw_bytes();
-        let mut out = Vec::with_capacity(1 + 1 + raw.len());
+        // BCS-serialized `AnyPublicKey::Secp256r1Ecdsa`
+        // (variant=2, ULEB128(65), 65 bytes SEC1 uncompressed).
+        let uncompressed = self.public_key.to_uncompressed_bytes();
+        let mut out = Vec::with_capacity(1 + 1 + uncompressed.len());
         out.push(0x02); // AnyPublicKey::Secp256r1Ecdsa variant
-        out.push(64); // ULEB128(64)
-        out.extend_from_slice(&raw);
+        out.push(65); // ULEB128(65)
+        out.extend_from_slice(&uncompressed);
         out
     }
 
@@ -198,11 +199,12 @@ mod tests {
         assert_eq!(sig_bytes[1], 64, "ULEB128(64)");
 
         // public_key_bytes() returns BCS(AnyPublicKey::Secp256r1Ecdsa) =
-        // variant(2) + ULEB128(64) + 64-byte raw `X || Y`. Total = 1 + 1 + 64 = 66 bytes.
+        // variant(2) + ULEB128(65) + 65-byte SEC1 uncompressed. Total = 67 bytes.
         let pub_key_bytes = account.public_key_bytes();
-        assert_eq!(pub_key_bytes.len(), 66);
+        assert_eq!(pub_key_bytes.len(), 67);
         assert_eq!(pub_key_bytes[0], 0x02, "AnyPublicKey::Secp256r1Ecdsa variant tag");
-        assert_eq!(pub_key_bytes[1], 64, "ULEB128(64)");
+        assert_eq!(pub_key_bytes[1], 65, "ULEB128(65)");
+        assert_eq!(pub_key_bytes[2], 0x04, "SEC1 uncompressed marker");
 
         assert!(!account.authentication_key().as_bytes().is_empty());
     }

@@ -332,14 +332,16 @@ impl Secp256r1PublicKey {
     ///
     /// Where `BCS(AnyPublicKey::Secp256r1)` = `0x02 || ULEB128(65) || uncompressed_public_key`
     pub fn to_address(&self) -> crate::types::AccountAddress {
-        // BCS format: variant_byte || ULEB128(length) || raw_64_byte_pubkey.
-        // The on-chain `AnyPublicKey::Secp256r1Ecdsa` variant uses the 64-byte
-        // raw `X || Y` encoding (no SEC1 0x04 marker).
-        let raw = self.to_raw_bytes();
-        let mut bcs_bytes = Vec::with_capacity(1 + 1 + raw.len());
+        // Mirrors secp256k1: the chain canonicalises P-256 public keys to
+        // 65-byte SEC1 uncompressed form (0x04 || X || Y) when computing
+        // authentication keys via `bcs::to_bytes(&AnyPublicKey)`. The SDK
+        // matches that exact encoding so the derived address agrees with
+        // the chain.
+        let uncompressed = self.to_uncompressed_bytes();
+        let mut bcs_bytes = Vec::with_capacity(1 + 1 + uncompressed.len());
         bcs_bytes.push(0x02); // Secp256r1Ecdsa variant
-        bcs_bytes.push(64); // ULEB128(64)
-        bcs_bytes.extend_from_slice(&raw);
+        bcs_bytes.push(65); // ULEB128(65)
+        bcs_bytes.extend_from_slice(&uncompressed);
         crate::crypto::derive_address(&bcs_bytes, crate::crypto::SINGLE_KEY_SCHEME)
     }
 }

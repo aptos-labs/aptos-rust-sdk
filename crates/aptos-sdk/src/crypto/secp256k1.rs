@@ -17,8 +17,8 @@
 use crate::crypto::traits::{PublicKey, Signature, Signer, Verifier};
 use crate::error::{AptosError, AptosResult};
 use k256::ecdsa::{
-    Signature as K256Signature, SigningKey, VerifyingKey, signature::Signer as K256Signer,
-    signature::Verifier as K256Verifier,
+    Signature as K256Signature, SigningKey, VerifyingKey,
+    signature::hazmat::{PrehashSigner, PrehashVerifier},
 };
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -125,35 +125,40 @@ impl Secp256k1PrivateKey {
         }
     }
 
-    /// Signs a message and returns a low-S ECDSA signature over SHA-256(message).
+    /// Signs `message` and returns a low-S ECDSA signature over the
+    /// `SHA3-256` digest of `message`.
     ///
-    /// The `k256` crate produces low-S signatures by default. An additional
-    /// normalization step is included as defense-in-depth to guarantee Aptos
-    /// on-chain compatibility.
+    /// Aptos on-chain verification (see `aptos-crypto::secp256k1_ecdsa::Signature::verify`)
+    /// hashes the signing-message preimage with **SHA-3-256** before invoking
+    /// ECDSA on the 32-byte digest. We mirror that flow exactly: compute the
+    /// SHA-3-256 digest first, then sign it via `PrehashSigner` so the k256
+    /// crate does not apply its default SHA-256 internally.
     ///
-    /// # Implementation note
-    ///
-    /// `k256::ecdsa::SigningKey: signature::Signer<Signature>` hashes its input
-    /// with SHA-256 internally before signing. The historical SDK code
-    /// pre-hashed the message *and* called `sign()`, producing a signature over
-    /// `SHA-256(SHA-256(message))` instead of `SHA-256(message)`. That
-    /// double-hashing was self-consistent (sign + verify both double-hashed)
-    /// but did not match Aptos on-chain ECDSA verification, which hashes once.
-    /// We now sign the raw message and let `k256` apply SHA-256 exactly once.
+    /// Historical note: prior versions of this SDK relied on `Signer::sign`
+    /// which does an internal SHA-256, producing a signature over
+    /// `SHA-256(message)` (or, with a SHA-256 pre-hash, over
+    /// `SHA-256(SHA-256(message))`). Both forms verified internally but
+    /// were rejected by the chain because the chain hashes with SHA-3-256.
     pub fn sign(&self, message: &[u8]) -> Secp256k1Signature {
-        let signature: K256Signature = self.inner.sign(message);
+        let digest = crate::crypto::sha3_256(message);
+        let signature: K256Signature = self
+            .inner
+            .sign_prehash(&digest)
+            .expect("32-byte SHA3-256 digest is a valid ECDSA prehash");
         // SECURITY: Ensure low-S (defense-in-depth; k256 should already do this)
         let normalized = signature.normalize_s().unwrap_or(signature);
         Secp256k1Signature { inner: normalized }
     }
 
-    /// Signs a pre-hashed message directly and returns a low-S signature.
+    /// Signs a 32-byte pre-computed digest directly, with NO further hashing.
     ///
-    /// The `k256` crate produces low-S signatures by default. An additional
-    /// normalization step is included as defense-in-depth.
-    pub fn sign_prehashed(&self, hash: &[u8; 32]) -> Secp256k1Signature {
-        let signature: K256Signature = self.inner.sign(hash);
-        // SECURITY: Ensure low-S (defense-in-depth; k256 should already do this)
+    /// The caller is responsible for ensuring `digest` is the correct hash
+    /// for the on-chain verification scheme (Aptos uses SHA-3-256).
+    pub fn sign_prehashed(&self, digest: &[u8; 32]) -> Secp256k1Signature {
+        let signature: K256Signature = self
+            .inner
+            .sign_prehash(digest)
+            .expect("32-byte digest is a valid ECDSA prehash");
         let normalized = signature.normalize_s().unwrap_or(signature);
         Secp256k1Signature { inner: normalized }
     }
@@ -301,10 +306,12 @@ impl Secp256k1PublicKey {
         if signature.inner.normalize_s().is_some() {
             return Err(AptosError::SignatureVerificationFailed);
         }
-        // `Verifier::verify` on `VerifyingKey<C>` SHA-256s the message internally,
-        // mirroring how `sign(message)` produces a signature over SHA-256(message).
+        // Aptos hashes secp256k1 signing messages with SHA-3-256 -- not SHA-256.
+        // Match that exactly via `verify_prehash` so k256 does not apply its
+        // default SHA-256 hashing.
+        let digest = crate::crypto::sha3_256(message);
         self.inner
-            .verify(message, &signature.inner)
+            .verify_prehash(&digest, &signature.inner)
             .map_err(|_| AptosError::SignatureVerificationFailed)
     }
 
@@ -328,8 +335,9 @@ impl Secp256k1PublicKey {
         if signature.inner.normalize_s().is_some() {
             return Err(AptosError::SignatureVerificationFailed);
         }
+        // Verify against the 32-byte digest directly (no additional hashing).
         self.inner
-            .verify(hash, &signature.inner)
+            .verify_prehash(hash, &signature.inner)
             .map_err(|_| AptosError::SignatureVerificationFailed)
     }
 
@@ -340,17 +348,21 @@ impl Secp256k1PublicKey {
     ///
     /// Where `BCS(AnyPublicKey::Secp256k1)` = `0x01 || ULEB128(65) || uncompressed_public_key`
     pub fn to_address(&self) -> crate::types::AccountAddress {
-        // BCS format: variant_byte || ULEB128(length) || raw_64_byte_pubkey
+        // BCS format: variant_byte || ULEB128(length) || pubkey_bytes.
         //
-        // The on-chain `AnyPublicKey::Secp256k1Ecdsa` variant carries a 64-byte
-        // raw `(X || Y)` representation (no SEC1 0x04 marker). The
-        // authentication-key derivation is the SHA3-256 of that BCS-encoded
-        // public key concatenated with the `SingleKey` scheme byte.
-        let raw = self.to_raw_bytes();
-        let mut bcs_bytes = Vec::with_capacity(1 + 1 + raw.len());
+        // The chain's `AccountAuthenticator::SingleKey` authentication-key
+        // derivation goes through `bcs::to_bytes(&AnyPublicKey)`, which for
+        // the `Secp256k1Ecdsa` variant re-serializes the underlying
+        // `secp256k1_ecdsa::PublicKey` via `libsecp256k1::PublicKey::serialize()`
+        // -- always producing 65 bytes of SEC1 uncompressed encoding
+        // (0x04 || X || Y), regardless of which form (33/64/65) was on the
+        // wire. We must therefore derive the address using the same 65-byte
+        // canonical form to obtain an address the chain will agree with.
+        let uncompressed = self.to_uncompressed_bytes();
+        let mut bcs_bytes = Vec::with_capacity(1 + 1 + uncompressed.len());
         bcs_bytes.push(0x01); // AnyPublicKey::Secp256k1Ecdsa variant
-        bcs_bytes.push(64); // ULEB128(64)
-        bcs_bytes.extend_from_slice(&raw);
+        bcs_bytes.push(65); // ULEB128(65)
+        bcs_bytes.extend_from_slice(&uncompressed);
         crate::crypto::derive_address(&bcs_bytes, crate::crypto::SINGLE_KEY_SCHEME)
     }
 }

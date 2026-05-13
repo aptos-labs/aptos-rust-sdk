@@ -80,28 +80,25 @@ impl AnyPublicKey {
     }
 
     /// Creates a Secp256k1 public key.
-    /// Uses the on-chain raw 64-byte `(X || Y)` encoding (the SEC1 0x04
-    /// uncompressed-point marker is dropped), which is what the
-    /// `aptos-stdlib::secp256k1::ecdsa_raw_public_key_from_64_bytes` parser
-    /// expects under `AnyPublicKey::Secp256k1Ecdsa`.
+    /// Uses the 65-byte SEC1 uncompressed encoding so the chain's
+    /// `bcs::to_bytes(&AnyPublicKey::Secp256k1Ecdsa)` re-serialisation produces
+    /// the same bytes during auth-key derivation. The SDK and chain therefore
+    /// agree on the address.
     #[cfg(feature = "secp256k1")]
     pub fn secp256k1(public_key: &crate::crypto::Secp256k1PublicKey) -> Self {
         Self {
             variant: AnyPublicKeyVariant::Secp256k1,
-            bytes: public_key.to_raw_bytes().to_vec(),
+            bytes: public_key.to_uncompressed_bytes(),
         }
     }
 
     /// Creates a Secp256r1 public key.
-    /// Uses the on-chain raw 64-byte `(X || Y)` encoding (the SEC1 0x04
-    /// uncompressed-point marker is dropped), which is what the
-    /// `aptos-stdlib::secp256r1::ecdsa_raw_public_key_from_64_bytes` parser
-    /// expects under `AnyPublicKey::Secp256r1Ecdsa`.
+    /// Uses 65-byte SEC1 uncompressed encoding (see `secp256k1` for rationale).
     #[cfg(feature = "secp256r1")]
     pub fn secp256r1(public_key: &crate::crypto::Secp256r1PublicKey) -> Self {
         Self {
             variant: AnyPublicKeyVariant::Secp256r1,
-            bytes: public_key.to_raw_bytes().to_vec(),
+            bytes: public_key.to_uncompressed_bytes(),
         }
     }
 
@@ -581,9 +578,12 @@ impl MultiKeySignature {
             last_index = Some(*index);
 
             // Set bit in bitmap
+            // Aptos uses MSB-first ordering within each bitmap byte
+            // (matches `aptos_bitvec::BitVec::set`: `0b1000_0000 >> pos`).
+            // index 0 -> bit 7 of byte 0, index 7 -> bit 0 of byte 0, etc.
             let byte_index = (index / 8) as usize;
-            let bit_index = index % 8;
-            bitmap[byte_index] |= 1 << bit_index;
+            let bit_in_byte = index % 8;
+            bitmap[byte_index] |= 0b1000_0000u8 >> bit_in_byte;
         }
 
         Ok(Self { signatures, bitmap })
@@ -610,28 +610,33 @@ impl MultiKeySignature {
             return false;
         }
         let byte_index = (index / 8) as usize;
-        let bit_index = index % 8;
-        (self.bitmap[byte_index] >> bit_index) & 1 == 1
+        let bit_in_byte = index % 8;
+        (self.bitmap[byte_index] & (0b1000_0000u8 >> bit_in_byte)) != 0
     }
 
-    /// Serializes to bytes.
+    /// Serializes to bytes, matching the on-chain BCS layout of
+    /// `MultiKeyAuthenticator { signatures: Vec<AnySignature>, signatures_bitmap: BitVec }`.
     ///
-    /// Format: `num_signatures` || `sig1_bcs` || `sig2_bcs` || ... || bitmap (4 bytes)
+    /// Wire layout: `ULEB128(num_sigs) || BCS(AnySignature)... || BCS(BitVec)`
+    /// where `BCS(BitVec) = ULEB128(num_bitmap_bytes) || bitmap_bytes`.
     #[allow(clippy::cast_possible_truncation)] // signatures.len() <= MAX_NUM_OF_KEYS (32)
     pub fn to_bytes(&self) -> Vec<u8> {
-        // Pre-allocate: 1 byte num_sigs + estimated sig size (avg ~66 bytes per sig) + 4 bytes bitmap
-        let estimated_size = 5 + self.signatures.len() * 68;
+        // Pre-allocate: 1 byte num_sigs + estimated sig size (~68 bytes per sig)
+        // + 1 byte bitmap length prefix + 4 bytes bitmap.
+        let estimated_size = 1 + self.signatures.len() * 68 + 1 + 4;
         let mut bytes = Vec::with_capacity(estimated_size);
 
-        // Number of signatures (validated in new())
+        // ULEB128(num_signatures). num_sigs <= 32 fits in a single byte.
         bytes.push(self.signatures.len() as u8);
 
-        // Each signature in BCS format (ordered by index)
+        // Each AnySignature in BCS format (ordered by signer index).
         for (_, sig) in &self.signatures {
             bytes.extend(sig.to_bcs_bytes());
         }
 
-        // Bitmap (4 bytes)
+        // BitVec BCS prefix: ULEB128(4).
+        bytes.push(4);
+        // Bitmap bytes.
         bytes.extend_from_slice(&self.bitmap);
 
         bytes
@@ -653,7 +658,10 @@ impl MultiKeySignature {
         // Largest supported signature is ~72 bytes for ECDSA DER format
         const MAX_SIGNATURE_SIZE: usize = 128;
 
-        if bytes.len() < 5 {
+        // Wire layout (matches `to_bytes`):
+        //   ULEB128(num_sigs) || sigs... || ULEB128(4) || 4 bitmap bytes
+        // Minimum length is 1 (num_sigs) + 1 (BitVec length prefix) + 4 (bitmap) = 6.
+        if bytes.len() < 6 {
             return Err(AptosError::InvalidSignature("bytes too short".into()));
         }
 
@@ -664,22 +672,31 @@ impl MultiKeySignature {
             )));
         }
 
-        // Read bitmap from the end
+        // Read bitmap from the end. Last 4 bytes are the bitmap bytes; the byte
+        // just before is the ULEB128(4) length prefix from BCS(BitVec).
         let bitmap_start = bytes.len() - 4;
         let mut bitmap = [0u8; 4];
         bitmap.copy_from_slice(&bytes[bitmap_start..]);
+        let bitvec_prefix_idx = bitmap_start.checked_sub(1).ok_or_else(|| {
+            AptosError::InvalidSignature("MultiKeySignature too short for BitVec prefix".into())
+        })?;
+        if bytes[bitvec_prefix_idx] != 4 {
+            return Err(AptosError::InvalidSignature(
+                "MultiKeySignature: expected BCS BitVec length prefix = 4".into(),
+            ));
+        }
 
         // Parse signatures
         let mut offset = 1;
         let mut signatures = Vec::with_capacity(num_sigs);
 
-        // Determine signer indices from bitmap (MAX_NUM_OF_KEYS is 32, fits in u8)
+        // MSB-first bit order (matches aptos-core's `aptos_bitvec::BitVec`).
         let mut signer_indices = Vec::new();
         #[allow(clippy::cast_possible_truncation)]
         for bit_pos in 0..(MAX_NUM_OF_KEYS as u8) {
             let byte_idx = (bit_pos / 8) as usize;
-            let bit_idx = bit_pos % 8;
-            if (bitmap[byte_idx] >> bit_idx) & 1 == 1 {
+            let bit_in_byte = bit_pos % 8;
+            if (bitmap[byte_idx] & (0b1000_0000u8 >> bit_in_byte)) != 0 {
                 signer_indices.push(bit_pos);
             }
         }
@@ -690,8 +707,11 @@ impl MultiKeySignature {
             ));
         }
 
+        // Signatures occupy the range `[1, bitvec_prefix_idx)` -- everything
+        // between the leading num_sigs byte and the BCS BitVec length prefix.
+        let sigs_end = bitvec_prefix_idx;
         for &index in &signer_indices {
-            if offset >= bitmap_start {
+            if offset >= sigs_end {
                 return Err(AptosError::InvalidSignature("bytes too short".into()));
             }
 
@@ -700,7 +720,7 @@ impl MultiKeySignature {
 
             // Decode ULEB128 length
             let (len, len_bytes) =
-                uleb128_decode(&bytes[offset..bitmap_start]).ok_or_else(|| {
+                uleb128_decode(&bytes[offset..sigs_end]).ok_or_else(|| {
                     AptosError::InvalidSignature("invalid ULEB128 length encoding".into())
                 })?;
             offset += len_bytes;
@@ -711,7 +731,7 @@ impl MultiKeySignature {
                 )));
             }
 
-            if offset + len > bitmap_start {
+            if offset + len > sigs_end {
                 return Err(AptosError::InvalidSignature(
                     "bytes too short for signature".into(),
                 ));
