@@ -474,7 +474,6 @@ impl<'de> Deserialize<'de> for AccountAuthenticator {
     }
 }
 
-
 /// Ed25519 authenticator helper.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Ed25519Authenticator {

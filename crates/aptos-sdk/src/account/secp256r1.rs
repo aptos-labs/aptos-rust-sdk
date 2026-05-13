@@ -202,7 +202,10 @@ mod tests {
         // variant(2) + ULEB128(65) + 65-byte SEC1 uncompressed. Total = 67 bytes.
         let pub_key_bytes = account.public_key_bytes();
         assert_eq!(pub_key_bytes.len(), 67);
-        assert_eq!(pub_key_bytes[0], 0x02, "AnyPublicKey::Secp256r1Ecdsa variant tag");
+        assert_eq!(
+            pub_key_bytes[0], 0x02,
+            "AnyPublicKey::Secp256r1Ecdsa variant tag"
+        );
         assert_eq!(pub_key_bytes[1], 65, "ULEB128(65)");
         assert_eq!(pub_key_bytes[2], 0x04, "SEC1 uncompressed marker");
 

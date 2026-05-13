@@ -719,10 +719,9 @@ impl MultiKeySignature {
             offset += 1;
 
             // Decode ULEB128 length
-            let (len, len_bytes) =
-                uleb128_decode(&bytes[offset..sigs_end]).ok_or_else(|| {
-                    AptosError::InvalidSignature("invalid ULEB128 length encoding".into())
-                })?;
+            let (len, len_bytes) = uleb128_decode(&bytes[offset..sigs_end]).ok_or_else(|| {
+                AptosError::InvalidSignature("invalid ULEB128 length encoding".into())
+            })?;
             offset += len_bytes;
 
             if len > MAX_SIGNATURE_SIZE {

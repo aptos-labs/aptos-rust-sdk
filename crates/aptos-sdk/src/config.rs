@@ -345,7 +345,7 @@ impl Network {
     ///
     /// Devnet's chain ID is intentionally returned as `0` (unknown) because
     /// it is reset on a regular cadence and any hardcoded value rapidly
-    /// goes stale. Returning `0` causes [`Aptos::ensure_chain_id`] to
+    /// goes stale. Returning `0` causes [`crate::Aptos::ensure_chain_id`] to
     /// fetch the live chain ID from the configured fullnode and cache it.
     pub fn chain_id(&self) -> ChainId {
         match self {

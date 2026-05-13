@@ -395,9 +395,7 @@ mod view_tests {
         let balance_str = result[0]
             .as_str()
             .expect("balance must be returned as a string");
-        let balance_via_view: u64 = balance_str
-            .parse()
-            .expect("balance must parse as a u64");
+        let balance_via_view: u64 = balance_str.parse().expect("balance must parse as a u64");
 
         // Compare against the canonical get_balance helper. The view function
         // and the helper must agree on the balance.
@@ -1129,9 +1127,7 @@ mod state_tests {
 mod single_key_tests {
     use super::*;
     use aptos_sdk::account::{Ed25519Account, Ed25519SingleKeyAccount};
-    use aptos_sdk::transaction::{
-        EntryFunction, TransactionBuilder, builder::sign_transaction,
-    };
+    use aptos_sdk::transaction::{EntryFunction, TransactionBuilder, builder::sign_transaction};
 
     #[tokio::test]
     #[ignore]
@@ -1198,9 +1194,7 @@ mod single_key_tests {
 mod secp256k1_tests {
     use super::*;
     use aptos_sdk::account::{Ed25519Account, Secp256k1Account};
-    use aptos_sdk::transaction::{
-        EntryFunction, TransactionBuilder, builder::sign_transaction,
-    };
+    use aptos_sdk::transaction::{EntryFunction, TransactionBuilder, builder::sign_transaction};
 
     #[tokio::test]
     #[ignore]
@@ -1279,9 +1273,7 @@ mod secp256k1_tests {
 mod secp256r1_tests {
     use super::*;
     use aptos_sdk::account::Secp256r1Account;
-    use aptos_sdk::transaction::{
-        EntryFunction, TransactionBuilder, builder::sign_transaction,
-    };
+    use aptos_sdk::transaction::{EntryFunction, TransactionBuilder, builder::sign_transaction};
 
     #[tokio::test]
     #[ignore]
@@ -1357,9 +1349,7 @@ mod multi_ed25519_tests {
     use super::*;
     use aptos_sdk::account::{Ed25519Account, MultiEd25519Account};
     use aptos_sdk::crypto::Ed25519PrivateKey;
-    use aptos_sdk::transaction::{
-        EntryFunction, TransactionBuilder, builder::sign_transaction,
-    };
+    use aptos_sdk::transaction::{EntryFunction, TransactionBuilder, builder::sign_transaction};
 
     #[tokio::test]
     #[ignore]

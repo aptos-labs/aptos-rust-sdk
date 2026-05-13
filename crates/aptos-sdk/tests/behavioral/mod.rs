@@ -910,7 +910,11 @@ mod auth_key_tests {
         let public_key = private_key.public_key();
 
         let uncompressed = public_key.to_uncompressed_bytes();
-        assert_eq!(uncompressed.len(), 65, "SEC1 uncompressed pubkey is 65 bytes");
+        assert_eq!(
+            uncompressed.len(),
+            65,
+            "SEC1 uncompressed pubkey is 65 bytes"
+        );
         assert_eq!(uncompressed[0], 0x04, "SEC1 uncompressed marker");
 
         let mut bcs_any_pubkey = Vec::with_capacity(1 + 1 + uncompressed.len());
@@ -936,7 +940,11 @@ mod auth_key_tests {
         let public_key = private_key.public_key();
 
         let uncompressed = public_key.to_uncompressed_bytes();
-        assert_eq!(uncompressed.len(), 65, "SEC1 uncompressed pubkey is 65 bytes");
+        assert_eq!(
+            uncompressed.len(),
+            65,
+            "SEC1 uncompressed pubkey is 65 bytes"
+        );
         assert_eq!(uncompressed[0], 0x04, "SEC1 uncompressed marker");
 
         let mut bcs_any_pubkey = Vec::with_capacity(1 + 1 + uncompressed.len());
