@@ -1,7 +1,34 @@
-//! Secp256r1 (P-256) account implementation.
+// Module docs prefer prose ("Aptos networks", "WebAuthn", etc.) over backticks
+// in several places where clippy's pedantic `doc_markdown` lint would otherwise
+// fire. We allow the lint locally to keep the deprecation note readable.
+#![allow(clippy::doc_markdown)]
+
+//! `Secp256r1` (P-256) account implementation.
 //!
-//! Secp256r1, also known as P-256 or prime256v1, is commonly used in
-//! WebAuthn/Passkey implementations.
+//! `Secp256r1`, also known as P-256 or `prime256v1`, is commonly used in
+//! WebAuthn / Passkey implementations.
+//!
+//! # ⚠️ Deprecated for transaction signing
+//!
+//! [`Secp256r1Account`] cannot successfully submit transactions on current
+//! Aptos networks. The on-chain `AnySignature` enum reserves variant index
+//! `2` for **WebAuthn** (a `PartialAuthenticatorAssertionResponse` that
+//! wraps a `secp256r1` signature in `authenticator_data` /
+//! `client_data_json`) -- not for bare `secp256r1` ECDSA signatures. A
+//! `Secp256r1Account`-signed transaction is therefore rejected by every
+//! Aptos validator with a deserialization-level error.
+//!
+//! Use [`WebAuthnAccount`](super::WebAuthnAccount) for any new code that
+//! needs to sign Aptos transactions with a P-256 key. `WebAuthnAccount`
+//! reuses [`Secp256r1PrivateKey`] / [`Secp256r1PublicKey`] internally but
+//! emits the correct on-chain wire format. See the on-chain definition in
+//! [aptos-core][webauthn-rs].
+//!
+//! `Secp256r1Account` remains available for off-chain uses (raw P-256
+//! `sign` / `verify`, key-management interop), but every API surface here
+//! that touches on-chain semantics is marked `#[deprecated]`.
+//!
+//! [webauthn-rs]: https://github.com/aptos-labs/aptos-core/blob/main/types/src/transaction/webauthn.rs
 
 use crate::account::account::{Account, AuthenticationKey};
 use crate::crypto::{
@@ -11,19 +38,40 @@ use crate::error::AptosResult;
 use crate::types::AccountAddress;
 use std::fmt;
 
-/// A Secp256r1 (P-256) ECDSA account for signing transactions.
+/// A `Secp256r1` (P-256) ECDSA account.
 ///
-/// This account type uses the P-256 elliptic curve, which is commonly used
-/// in WebAuthn/Passkey implementations for browser-based authentication.
+/// # ⚠️ Deprecated for on-chain transaction signing
+///
+/// On current Aptos networks the on-chain `AnySignature` variant at index
+/// 2 is `WebAuthn`, **not** bare `secp256r1` ECDSA. Transactions signed by
+/// this account type are rejected by every Aptos validator. Use
+/// [`WebAuthnAccount`](super::WebAuthnAccount) instead -- it reuses the
+/// same key material and produces the correct WebAuthn-envelope wire
+/// format.
+///
+/// This type is still useful for off-chain P-256 use (sign / verify of
+/// arbitrary bytes, key import/export, key-derivation testing) and for
+/// constructing [`MultiKeyAccount`](super::MultiKeyAccount) public-key
+/// material.
 ///
 /// # Example
 ///
 /// ```rust
+/// # #![allow(deprecated)]
 /// use aptos_sdk::account::Secp256r1Account;
 ///
+/// // For off-chain signing only -- this account cannot submit
+/// // transactions to a live Aptos network. Use `WebAuthnAccount` for that.
 /// let account = Secp256r1Account::generate();
 /// println!("Address: {}", account.address());
 /// ```
+#[deprecated(
+    since = "0.5.0",
+    note = "Use `WebAuthnAccount` for on-chain transaction signing. Bare \
+            secp256r1 signatures are not accepted by Aptos validators (the \
+            on-chain AnySignature variant 2 is WebAuthn, not Secp256r1Ecdsa). \
+            This type is retained for off-chain use only."
+)]
 #[derive(Clone)]
 pub struct Secp256r1Account {
     private_key: Secp256r1PrivateKey,
@@ -31,6 +79,7 @@ pub struct Secp256r1Account {
     address: AccountAddress,
 }
 
+#[allow(deprecated)]
 impl Secp256r1Account {
     /// Generates a new random Secp256r1 account.
     pub fn generate() -> Self {
@@ -92,6 +141,7 @@ impl Secp256r1Account {
     }
 }
 
+#[allow(deprecated)]
 impl Account for Secp256r1Account {
     fn address(&self) -> AccountAddress {
         self.address
@@ -149,6 +199,7 @@ impl Account for Secp256r1Account {
     }
 }
 
+#[allow(deprecated)]
 impl fmt::Debug for Secp256r1Account {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Secp256r1Account")
@@ -159,6 +210,7 @@ impl fmt::Debug for Secp256r1Account {
 }
 
 #[cfg(test)]
+#[allow(deprecated)] // we are deliberately testing the deprecated API
 mod tests {
     use super::*;
     use crate::account::Account;

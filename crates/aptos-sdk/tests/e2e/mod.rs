@@ -1252,46 +1252,45 @@ mod secp256k1_tests {
 }
 
 // =============================================================================
-// Secp256r1 Account Tests
+// WebAuthn / Passkey Account Tests (real transfer flow with synthetic
+// PartialAuthenticatorAssertionResponse)
 //
-// NOTE: On current devnet/testnet, the `AnySignature` variant at index 2 is
-// `WebAuthn { signature: PartialAuthenticatorAssertionResponse }`, not a bare
-// Secp256r1Ecdsa signature. As a result, a transaction signed directly by
-// `Secp256r1Account` (which emits `AnySignature::Secp256r1` at variant 2) is
-// rejected at submission time with a deserialization error: the chain tries
-// to parse the bytes as a WebAuthnSignature envelope and finds the raw 64-byte
-// ECDSA signature instead.
+// On current Aptos networks the on-chain `AnySignature` variant at index 2
+// is `WebAuthn { signature: PartialAuthenticatorAssertionResponse }`, not a
+// bare Secp256r1Ecdsa signature. The SDK ships a `WebAuthnAccount` wrapper
+// that wraps a P-256 key in the WebAuthn envelope (rpIdHash +
+// authenticator_data + client_data_json + canonical low-S signature) so the
+// chain accepts the resulting transaction.
 //
-// We keep the end-to-end test in place but verify that the chain rejects the
-// transaction with the *expected* failure mode (validation/deserialization,
-// not a panic, network error, or generic INVALID_SIGNATURE). When the SDK
-// adds a real `WebAuthnAccount` wrapper this test should be replaced with a
-// genuine successful end-to-end secp256r1 / WebAuthn flow.
+// This test exercises that path end-to-end against devnet: fund a
+// WebAuthn-derived address, submit a real APT transfer signed by the
+// WebAuthn account, and verify the recipient is credited exactly the
+// transferred amount.
 // =============================================================================
 
 #[cfg(all(feature = "secp256r1", feature = "faucet"))]
-mod secp256r1_tests {
+mod webauthn_tests {
     use super::*;
-    use aptos_sdk::account::Secp256r1Account;
+    use aptos_sdk::account::WebAuthnAccount;
     use aptos_sdk::transaction::{EntryFunction, TransactionBuilder, builder::sign_transaction};
 
     #[tokio::test]
     #[ignore]
-    async fn e2e_secp256r1_account_rejected_pending_webauthn() {
+    async fn e2e_webauthn_account_transfer() {
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
 
-        let sender = Secp256r1Account::generate();
+        let sender = WebAuthnAccount::generate();
         aptos
             .fund_account(sender.address(), 500_000_000)
             .await
-            .expect("failed to fund secp256r1 account");
+            .expect("failed to fund WebAuthn account");
         wait_for_finality().await;
 
         #[cfg(feature = "ed25519")]
         let recipient = aptos_sdk::account::Ed25519Account::generate();
         #[cfg(not(feature = "ed25519"))]
-        let recipient = Secp256r1Account::generate();
+        let recipient = WebAuthnAccount::generate();
 
         let amount: u64 = 2_718_281;
         let payload = EntryFunction::apt_transfer(recipient.address(), amount).unwrap();
@@ -1316,27 +1315,29 @@ mod secp256r1_tests {
             .expect("failed to build");
 
         let signed = sign_transaction(&raw_txn, &sender).expect("failed to sign");
-        let result = aptos.submit_and_wait(&signed, None).await;
+        let result = aptos
+            .submit_and_wait(&signed, None)
+            .await
+            .expect("WebAuthn transaction submission must succeed on devnet");
 
-        match result {
-            Ok(r) => panic!(
-                "secp256r1 single-key transaction unexpectedly accepted: {:?}\n\
-                 If WebAuthn-bare-ECDSA support has shipped on devnet, replace \
-                 this test with a real success assertion.",
-                r.data
-            ),
-            Err(e) => {
-                let msg = e.to_string().to_lowercase();
-                assert!(
-                    msg.contains("deserialize")
-                        || msg.contains("webauthn")
-                        || msg.contains("invalid")
-                        || msg.contains("validation"),
-                    "expected a validation/deserialization-level error for \
-                     a bare secp256r1 ECDSA signature on devnet, got: {e}"
-                );
-            }
-        }
+        let success = result.data.get("success").and_then(|v| v.as_bool());
+        assert_eq!(
+            success,
+            Some(true),
+            "WebAuthn transaction must execute successfully on devnet: {:?}",
+            result.data
+        );
+
+        wait_for_finality().await;
+
+        let recipient_balance = aptos
+            .get_balance(recipient.address())
+            .await
+            .expect("failed to get recipient balance");
+        assert_eq!(
+            recipient_balance, amount,
+            "recipient must receive exactly the transferred amount"
+        );
     }
 }
 

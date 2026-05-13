@@ -244,7 +244,7 @@ impl AnySignature {
 /// For typical sizes (< 128), this returns a single byte.
 #[allow(clippy::cast_possible_truncation)] // value & 0x7F is always <= 127
 #[inline]
-fn uleb128_encode(mut value: usize) -> Vec<u8> {
+pub(crate) fn uleb128_encode(mut value: usize) -> Vec<u8> {
     // Pre-allocate for common case: values < 128 need 1 byte, < 16384 need 2 bytes
     let mut result = Vec::with_capacity(if value < 128 { 1 } else { 2 });
     loop {

@@ -43,6 +43,8 @@ mod multi_key;
 mod secp256k1;
 #[cfg(feature = "secp256r1")]
 mod secp256r1;
+#[cfg(feature = "secp256r1")]
+mod webauthn;
 
 pub use account::{Account, AnyAccount, AuthenticationKey};
 #[cfg(feature = "ed25519")]
@@ -60,4 +62,7 @@ pub use multi_key::{AnyPrivateKey, MultiKeyAccount};
 #[cfg(feature = "secp256k1")]
 pub use secp256k1::Secp256k1Account;
 #[cfg(feature = "secp256r1")]
+#[allow(deprecated)] // Re-exported for back-compat; the type itself is deprecated.
 pub use secp256r1::Secp256r1Account;
+#[cfg(feature = "secp256r1")]
+pub use webauthn::{DEFAULT_WEBAUTHN_ORIGIN, DEFAULT_WEBAUTHN_RP_ID, WebAuthnAccount};
