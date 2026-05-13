@@ -246,11 +246,17 @@ will return `429 Request rejected by 1 checkers` when the suite issues many
 `fund_account` calls back-to-back. Running the same tests serially with
 ~3-5 minute cooldowns between batches makes them all pass.
 
-`Secp256r1Account` direct submission remains rejected by the chain
-because devnet's `AnySignature` variant 2 is `WebAuthn`, not bare
-`Secp256r1Ecdsa`. The E2E test now asserts that the chain rejects with a
-deserialization-level error (not a panic / network error), and the SDK
-documents this as a known limitation pending WebAuthn account support.
+**WebAuthn account support shipped.** Following the original audit a
+follow-up commit adds `WebAuthnAccount`, which wraps a secp256r1 key in
+the on-chain WebAuthn `PartialAuthenticatorAssertionResponse` envelope
+(synthetic `authenticator_data` + `client_data_json` carrying
+`SHA3-256(signing_message)` as the base64url challenge). End-to-end:
+`e2e_webauthn_account_transfer` now passes on devnet -- the chain
+accepts the synthetic envelope and credits the recipient the exact
+transferred amount. `Secp256r1Account` is marked `#[deprecated]` for
+on-chain use and the docs redirect callers to `WebAuthnAccount`. The
+type remains usable for off-chain P-256 sign/verify and as a
+public-key source for `MultiKeyAccount`.
 
 ---
 
@@ -311,8 +317,9 @@ remaining bias from passing-but-useless assertions.
 
 These were identified during the audit but are scoped out:
 
-1. Ship a `WebAuthnAccount` (and `AnySignature::WebAuthn` plumbing) so
-   secp256r1 keys can sign real on-chain transactions.
+1. ~~Ship a `WebAuthnAccount` (and `AnySignature::WebAuthn` plumbing) so
+   secp256r1 keys can sign real on-chain transactions.~~ Shipped in this
+   branch (`crates/aptos-sdk/src/account/webauthn.rs`).
 2. Wire `cargo tarpaulin` into CI with a 90 % line-coverage gate. The
    pre-existing `tarpaulin.toml` is ready; only the GitHub Actions step
    is missing.
