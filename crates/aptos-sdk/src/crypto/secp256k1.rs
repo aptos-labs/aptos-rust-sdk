@@ -125,15 +125,23 @@ impl Secp256k1PrivateKey {
         }
     }
 
-    /// Signs a message (pre-hashed with SHA256) and returns a low-S signature.
+    /// Signs a message and returns a low-S ECDSA signature over SHA-256(message).
     ///
     /// The `k256` crate produces low-S signatures by default. An additional
     /// normalization step is included as defense-in-depth to guarantee Aptos
     /// on-chain compatibility.
+    ///
+    /// # Implementation note
+    ///
+    /// `k256::ecdsa::SigningKey: signature::Signer<Signature>` hashes its input
+    /// with SHA-256 internally before signing. The historical SDK code
+    /// pre-hashed the message *and* called `sign()`, producing a signature over
+    /// `SHA-256(SHA-256(message))` instead of `SHA-256(message)`. That
+    /// double-hashing was self-consistent (sign + verify both double-hashed)
+    /// but did not match Aptos on-chain ECDSA verification, which hashes once.
+    /// We now sign the raw message and let `k256` apply SHA-256 exactly once.
     pub fn sign(&self, message: &[u8]) -> Secp256k1Signature {
-        // Hash the message with SHA256 first (standard for ECDSA)
-        let hash = crate::crypto::sha2_256(message);
-        let signature: K256Signature = self.inner.sign(&hash);
+        let signature: K256Signature = self.inner.sign(message);
         // SECURITY: Ensure low-S (defense-in-depth; k256 should already do this)
         let normalized = signature.normalize_s().unwrap_or(signature);
         Secp256k1Signature { inner: normalized }
@@ -182,6 +190,18 @@ impl Secp256k1PublicKey {
     ///
     /// Returns [`AptosError::InvalidPublicKey`] if the bytes do not represent a valid Secp256k1 compressed public key.
     pub fn from_bytes(bytes: &[u8]) -> AptosResult<Self> {
+        // Accept any SEC1-style encoding (33 compressed, 65 uncompressed) as
+        // before; *also* accept the raw 64-byte `(X || Y)` Aptos on-chain
+        // format by reconstructing the SEC1 uncompressed form (a leading 0x04
+        // followed by the 64 raw bytes).
+        if bytes.len() == 64 {
+            let mut sec1 = Vec::with_capacity(65);
+            sec1.push(0x04);
+            sec1.extend_from_slice(bytes);
+            return VerifyingKey::from_sec1_bytes(&sec1)
+                .map(|inner| Self { inner })
+                .map_err(|e| AptosError::InvalidPublicKey(e.to_string()));
+        }
         let verifying_key = VerifyingKey::from_sec1_bytes(bytes)
             .map_err(|e| AptosError::InvalidPublicKey(e.to_string()))?;
         Ok(Self {
@@ -223,11 +243,33 @@ impl Secp256k1PublicKey {
         self.inner.to_sec1_bytes().to_vec()
     }
 
-    /// Returns the public key as uncompressed bytes (65 bytes).
+    /// Returns the public key in SEC1 uncompressed encoding (65 bytes, leading 0x04 marker).
+    ///
+    /// Most Aptos on-chain APIs use the *raw* 64-byte encoding (the `X || Y`
+    /// coordinates with the 0x04 marker dropped) -- see [`Self::to_raw_bytes`].
+    /// This method is retained for callers that need the SEC1 form.
     pub fn to_uncompressed_bytes(&self) -> Vec<u8> {
         #[allow(unused_imports)]
         use k256::elliptic_curve::sec1::ToEncodedPoint;
         self.inner.to_encoded_point(false).as_bytes().to_vec()
+    }
+
+    /// Returns the public key as the raw 64 bytes of the `X || Y` affine
+    /// coordinates, without the leading SEC1 0x04 uncompressed-point marker.
+    ///
+    /// This is the encoding expected by `aptos-stdlib`'s
+    /// `secp256k1::ecdsa_raw_public_key_from_64_bytes` and by the
+    /// `AnyPublicKey::Secp256k1Ecdsa` variant on-chain (each variant carries a
+    /// `vector<u8>` of length 64).
+    pub fn to_raw_bytes(&self) -> [u8; 64] {
+        let uncompressed = self.to_uncompressed_bytes();
+        // The encoded form is always `0x04 || X(32) || Y(32)` so we can safely
+        // drop the first byte here.
+        debug_assert_eq!(uncompressed.len(), 65);
+        debug_assert_eq!(uncompressed[0], 0x04);
+        let mut out = [0u8; 64];
+        out.copy_from_slice(&uncompressed[1..]);
+        out
     }
 
     /// Returns the public key as a hex string (compressed format).
@@ -259,9 +301,10 @@ impl Secp256k1PublicKey {
         if signature.inner.normalize_s().is_some() {
             return Err(AptosError::SignatureVerificationFailed);
         }
-        let hash = crate::crypto::sha2_256(message);
+        // `Verifier::verify` on `VerifyingKey<C>` SHA-256s the message internally,
+        // mirroring how `sign(message)` produces a signature over SHA-256(message).
         self.inner
-            .verify(&hash, &signature.inner)
+            .verify(message, &signature.inner)
             .map_err(|_| AptosError::SignatureVerificationFailed)
     }
 
@@ -297,12 +340,17 @@ impl Secp256k1PublicKey {
     ///
     /// Where `BCS(AnyPublicKey::Secp256k1)` = `0x01 || ULEB128(65) || uncompressed_public_key`
     pub fn to_address(&self) -> crate::types::AccountAddress {
-        // BCS format: variant_byte || ULEB128(length) || uncompressed_public_key
-        let uncompressed = self.to_uncompressed_bytes();
-        let mut bcs_bytes = Vec::with_capacity(1 + 1 + uncompressed.len());
-        bcs_bytes.push(0x01); // Secp256k1 variant
-        bcs_bytes.push(65); // ULEB128(65) = 0x41, but 65 < 128 so it's just 65
-        bcs_bytes.extend_from_slice(&uncompressed);
+        // BCS format: variant_byte || ULEB128(length) || raw_64_byte_pubkey
+        //
+        // The on-chain `AnyPublicKey::Secp256k1Ecdsa` variant carries a 64-byte
+        // raw `(X || Y)` representation (no SEC1 0x04 marker). The
+        // authentication-key derivation is the SHA3-256 of that BCS-encoded
+        // public key concatenated with the `SingleKey` scheme byte.
+        let raw = self.to_raw_bytes();
+        let mut bcs_bytes = Vec::with_capacity(1 + 1 + raw.len());
+        bcs_bytes.push(0x01); // AnyPublicKey::Secp256k1Ecdsa variant
+        bcs_bytes.push(64); // ULEB128(64)
+        bcs_bytes.extend_from_slice(&raw);
         crate::crypto::derive_address(&bcs_bytes, crate::crypto::SINGLE_KEY_SCHEME)
     }
 }

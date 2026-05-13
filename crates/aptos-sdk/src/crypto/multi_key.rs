@@ -80,22 +80,28 @@ impl AnyPublicKey {
     }
 
     /// Creates a Secp256k1 public key.
-    /// Uses uncompressed format (65 bytes) as required by the Aptos protocol.
+    /// Uses the on-chain raw 64-byte `(X || Y)` encoding (the SEC1 0x04
+    /// uncompressed-point marker is dropped), which is what the
+    /// `aptos-stdlib::secp256k1::ecdsa_raw_public_key_from_64_bytes` parser
+    /// expects under `AnyPublicKey::Secp256k1Ecdsa`.
     #[cfg(feature = "secp256k1")]
     pub fn secp256k1(public_key: &crate::crypto::Secp256k1PublicKey) -> Self {
         Self {
             variant: AnyPublicKeyVariant::Secp256k1,
-            bytes: public_key.to_uncompressed_bytes(),
+            bytes: public_key.to_raw_bytes().to_vec(),
         }
     }
 
     /// Creates a Secp256r1 public key.
-    /// Uses uncompressed format (65 bytes) as required by the Aptos protocol.
+    /// Uses the on-chain raw 64-byte `(X || Y)` encoding (the SEC1 0x04
+    /// uncompressed-point marker is dropped), which is what the
+    /// `aptos-stdlib::secp256r1::ecdsa_raw_public_key_from_64_bytes` parser
+    /// expects under `AnyPublicKey::Secp256r1Ecdsa`.
     #[cfg(feature = "secp256r1")]
     pub fn secp256r1(public_key: &crate::crypto::Secp256r1PublicKey) -> Self {
         Self {
             variant: AnyPublicKeyVariant::Secp256r1,
-            bytes: public_key.to_uncompressed_bytes(),
+            bytes: public_key.to_raw_bytes().to_vec(),
         }
     }
 

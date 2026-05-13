@@ -98,23 +98,49 @@ impl Account for Secp256r1Account {
     }
 
     fn authentication_key(&self) -> AuthenticationKey {
-        // Use correct BCS format: variant_byte || ULEB128(length) || uncompressed_public_key
-        let uncompressed = self.public_key.to_uncompressed_bytes();
-        let mut bcs_bytes = Vec::with_capacity(1 + 1 + uncompressed.len());
-        bcs_bytes.push(0x02); // Secp256r1 variant
-        bcs_bytes.push(65); // ULEB128(65) = 65
-        bcs_bytes.extend_from_slice(&uncompressed);
+        let raw = self.public_key.to_raw_bytes();
+        let mut bcs_bytes = Vec::with_capacity(1 + 1 + raw.len());
+        bcs_bytes.push(0x02); // Secp256r1Ecdsa variant
+        bcs_bytes.push(64); // ULEB128(64)
+        bcs_bytes.extend_from_slice(&raw);
         let key = derive_authentication_key(&bcs_bytes, SINGLE_KEY_SCHEME);
         AuthenticationKey::new(key)
     }
 
     fn sign(&self, message: &[u8]) -> crate::error::AptosResult<Vec<u8>> {
-        Ok(self.private_key.sign(message).to_bytes().to_vec())
+        // Return BCS-serialized `AnySignature::Secp256r1` (variant=2, len=64, bytes).
+        //
+        // NOTE: At the time of writing (devnet, ledger version ~49M, 2026-05),
+        // raw `AnySignature::Secp256r1Ecdsa` may not be honored as a
+        // single-key transaction authenticator -- the on-chain variant 2 in
+        // `AnySignature` is the `WebAuthn` wrapper, which carries an
+        // `AssertionSignature` plus a `client_data_json` and authenticator
+        // data, not a bare ECDSA signature. This signing path produces a wire
+        // format consistent with the SDK's address-derivation, but submitting
+        // such transactions on-chain may fail at signature verification until
+        // the SDK adds a `WebAuthnAccount` wrapper. Use `Ed25519SingleKeyAccount`
+        // or `Secp256k1Account` for end-to-end transaction flows.
+        let sig = self.private_key.sign(message).to_bytes().to_vec();
+        debug_assert_eq!(
+            sig.len(),
+            64,
+            "Secp256r1 signature must be exactly 64 bytes (R || S)"
+        );
+        let mut out = Vec::with_capacity(1 + 1 + sig.len());
+        out.push(0x02); // AnySignature::Secp256r1 variant
+        out.push(64); // ULEB128(64)
+        out.extend_from_slice(&sig);
+        Ok(out)
     }
 
     fn public_key_bytes(&self) -> Vec<u8> {
-        // Return uncompressed format (65 bytes) as required by Aptos protocol
-        self.public_key.to_uncompressed_bytes()
+        // Return BCS-serialized `AnyPublicKey::Secp256r1Ecdsa` (variant=2, len=64, raw_64_bytes).
+        let raw = self.public_key.to_raw_bytes();
+        let mut out = Vec::with_capacity(1 + 1 + raw.len());
+        out.push(0x02); // AnyPublicKey::Secp256r1Ecdsa variant
+        out.push(64); // ULEB128(64)
+        out.extend_from_slice(&raw);
+        out
     }
 
     fn signature_scheme(&self) -> u8 {
@@ -165,12 +191,18 @@ mod tests {
         let account = Secp256r1Account::generate();
         let message = b"test message";
 
-        // Test Account trait methods
+        // sign() returns BCS(AnySignature::Secp256r1) = 1 + 1 + 64 = 66 bytes.
         let sig_bytes = account.sign(message).unwrap();
-        assert_eq!(sig_bytes.len(), 64); // P-256 signature is 64 bytes
+        assert_eq!(sig_bytes.len(), 66);
+        assert_eq!(sig_bytes[0], 0x02, "AnySignature::Secp256r1 variant tag");
+        assert_eq!(sig_bytes[1], 64, "ULEB128(64)");
 
+        // public_key_bytes() returns BCS(AnyPublicKey::Secp256r1Ecdsa) =
+        // variant(2) + ULEB128(64) + 64-byte raw `X || Y`. Total = 1 + 1 + 64 = 66 bytes.
         let pub_key_bytes = account.public_key_bytes();
-        assert_eq!(pub_key_bytes.len(), 65); // Uncompressed P-256 pubkey is 65 bytes (required by Aptos protocol)
+        assert_eq!(pub_key_bytes.len(), 66);
+        assert_eq!(pub_key_bytes[0], 0x02, "AnyPublicKey::Secp256r1Ecdsa variant tag");
+        assert_eq!(pub_key_bytes[1], 64, "ULEB128(64)");
 
         assert!(!account.authentication_key().as_bytes().is_empty());
     }

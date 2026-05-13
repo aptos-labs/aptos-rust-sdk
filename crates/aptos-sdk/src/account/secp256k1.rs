@@ -94,23 +94,44 @@ impl Account for Secp256k1Account {
     }
 
     fn authentication_key(&self) -> AuthenticationKey {
-        // Use correct BCS format: variant_byte || ULEB128(length) || uncompressed_public_key
-        let uncompressed = self.public_key.to_uncompressed_bytes();
-        let mut bcs_bytes = Vec::with_capacity(1 + 1 + uncompressed.len());
-        bcs_bytes.push(0x01); // Secp256k1 variant
-        bcs_bytes.push(65); // ULEB128(65) = 65
-        bcs_bytes.extend_from_slice(&uncompressed);
+        // BCS format: variant_byte || ULEB128(length) || raw_64_byte_pubkey.
+        // The on-chain `AnyPublicKey::Secp256k1Ecdsa` variant uses the 64-byte
+        // raw `X || Y` encoding (no SEC1 0x04 marker).
+        let raw = self.public_key.to_raw_bytes();
+        let mut bcs_bytes = Vec::with_capacity(1 + 1 + raw.len());
+        bcs_bytes.push(0x01); // Secp256k1Ecdsa variant
+        bcs_bytes.push(64); // ULEB128(64)
+        bcs_bytes.extend_from_slice(&raw);
         let key = derive_authentication_key(&bcs_bytes, SINGLE_KEY_SCHEME);
         AuthenticationKey::new(key)
     }
 
     fn sign(&self, message: &[u8]) -> crate::error::AptosResult<Vec<u8>> {
-        Ok(self.private_key.sign(message).to_bytes().to_vec())
+        // Return BCS-serialized `AnySignature::Secp256k1` (variant=1, len=64, bytes).
+        // This matches the on-chain `SingleKeyAuthenticator.signature: AnySignature`
+        // wire format consumed when this account is wrapped in `AccountAuthenticator::SingleKey`.
+        let sig = self.private_key.sign(message).to_bytes().to_vec();
+        debug_assert_eq!(
+            sig.len(),
+            64,
+            "Secp256k1 signature must be exactly 64 bytes (R || S)"
+        );
+        let mut out = Vec::with_capacity(1 + 1 + sig.len());
+        out.push(0x01); // AnySignature::Secp256k1 variant
+        out.push(64); // ULEB128(64)
+        out.extend_from_slice(&sig);
+        Ok(out)
     }
 
     fn public_key_bytes(&self) -> Vec<u8> {
-        // Return uncompressed format (65 bytes) as required by Aptos protocol
-        self.public_key.to_uncompressed_bytes()
+        // Return BCS-serialized `AnyPublicKey::Secp256k1Ecdsa` (variant=1, len=64, raw_64_bytes).
+        // This matches `SingleKeyAuthenticator.public_key: AnyPublicKey` on the wire.
+        let raw = self.public_key.to_raw_bytes();
+        let mut out = Vec::with_capacity(1 + 1 + raw.len());
+        out.push(0x01); // AnyPublicKey::Secp256k1Ecdsa variant
+        out.push(64); // ULEB128(64)
+        out.extend_from_slice(&raw);
+        out
     }
 
     fn signature_scheme(&self) -> u8 {
@@ -183,7 +204,11 @@ mod tests {
     fn test_public_key_bytes() {
         let account = Secp256k1Account::generate();
         let bytes = account.public_key_bytes();
-        assert_eq!(bytes.len(), 65); // Uncompressed public key (required by Aptos protocol)
+        // Public key bytes are BCS(AnyPublicKey::Secp256k1Ecdsa) = variant(1) +
+        // ULEB128(64) + 64-byte raw `X || Y`. Total = 1 + 1 + 64 = 66 bytes.
+        assert_eq!(bytes.len(), 66);
+        assert_eq!(bytes[0], 0x01, "AnyPublicKey::Secp256k1Ecdsa variant tag");
+        assert_eq!(bytes[1], 64, "ULEB128(64)");
     }
 
     #[test]
@@ -197,7 +222,10 @@ mod tests {
         let account = Secp256k1Account::generate();
         let message = b"test message";
         let sig_bytes = account.sign(message).unwrap();
-        assert_eq!(sig_bytes.len(), 64);
+        // Sign returns BCS(AnySignature::Secp256k1) = 1 + 1 + 64 = 66 bytes.
+        assert_eq!(sig_bytes.len(), 66);
+        assert_eq!(sig_bytes[0], 0x01, "AnySignature::Secp256k1 variant tag");
+        assert_eq!(sig_bytes[1], 64, "ULEB128(64)");
     }
 
     #[test]

@@ -898,75 +898,56 @@ mod auth_key_tests {
         );
     }
 
-    /// Test that Secp256k1 SingleKey auth key derivation uses uncompressed pubkey:
-    /// SHA3-256(BCS(AnyPublicKey::Secp256k1) || 0x02)
+    /// Test that Secp256k1 SingleKey auth key derivation uses the raw 64-byte
+    /// `(X || Y)` form (matching aptos-stdlib's
+    /// `secp256k1::ecdsa_raw_public_key_from_64_bytes`):
+    ///   `SHA3-256(BCS(AnyPublicKey::Secp256k1Ecdsa) || 0x02)`
+    /// where `BCS(AnyPublicKey::Secp256k1Ecdsa) = 0x01 || ULEB128(64) || 64 raw bytes`.
     #[test]
-    fn test_secp256k1_auth_key_uses_uncompressed_pubkey() {
+    fn test_secp256k1_auth_key_uses_raw_64_byte_pubkey() {
         let private_key = Secp256k1PrivateKey::from_bytes(&[3u8; 32]).unwrap();
         let public_key = private_key.public_key();
 
-        // Verify uncompressed pubkey is 65 bytes
-        let uncompressed = public_key.to_uncompressed_bytes();
-        assert_eq!(
-            uncompressed.len(),
-            65,
-            "Secp256k1 uncompressed pubkey should be 65 bytes"
-        );
-        assert_eq!(
-            uncompressed[0], 0x04,
-            "Uncompressed pubkey should start with 0x04"
-        );
+        let raw = public_key.to_raw_bytes();
+        assert_eq!(raw.len(), 64, "raw pubkey must be 64 bytes (X || Y)");
 
-        // Build BCS(AnyPublicKey::Secp256k1) = 0x01 || ULEB128(65) || uncompressed_pubkey
-        let mut bcs_any_pubkey = Vec::with_capacity(1 + 1 + uncompressed.len());
-        bcs_any_pubkey.push(0x01); // Secp256k1 variant
-        bcs_any_pubkey.push(65); // ULEB128(65)
-        bcs_any_pubkey.extend_from_slice(&uncompressed);
+        let mut bcs_any_pubkey = Vec::with_capacity(1 + 1 + raw.len());
+        bcs_any_pubkey.push(0x01); // Secp256k1Ecdsa variant
+        bcs_any_pubkey.push(64); // ULEB128(64)
+        bcs_any_pubkey.extend_from_slice(&raw);
 
         let expected_auth_key = derive_authentication_key(&bcs_any_pubkey, SINGLE_KEY_SCHEME);
-
-        // The address from to_address() should match
         let actual_address = public_key.to_address();
         assert_eq!(
             actual_address.to_bytes(),
             expected_auth_key,
-            "Secp256k1 address derivation mismatch - should use uncompressed pubkey"
+            "Secp256k1 address derivation must use 64-byte raw pubkey (not 65-byte uncompressed)"
         );
     }
 
-    /// Test that Secp256r1 SingleKey auth key derivation uses uncompressed pubkey:
-    /// SHA3-256(BCS(AnyPublicKey::Secp256r1) || 0x02)
+    /// Test that Secp256r1 SingleKey auth key derivation uses the raw 64-byte
+    /// `(X || Y)` form:
+    ///   `SHA3-256(BCS(AnyPublicKey::Secp256r1Ecdsa) || 0x02)`
+    /// where `BCS(AnyPublicKey::Secp256r1Ecdsa) = 0x02 || ULEB128(64) || 64 raw bytes`.
     #[test]
-    fn test_secp256r1_auth_key_uses_uncompressed_pubkey() {
+    fn test_secp256r1_auth_key_uses_raw_64_byte_pubkey() {
         let private_key = Secp256r1PrivateKey::from_bytes(&[4u8; 32]).unwrap();
         let public_key = private_key.public_key();
 
-        // Verify uncompressed pubkey is 65 bytes
-        let uncompressed = public_key.to_uncompressed_bytes();
-        assert_eq!(
-            uncompressed.len(),
-            65,
-            "Secp256r1 uncompressed pubkey should be 65 bytes"
-        );
-        assert_eq!(
-            uncompressed[0], 0x04,
-            "Uncompressed pubkey should start with 0x04"
-        );
+        let raw = public_key.to_raw_bytes();
+        assert_eq!(raw.len(), 64, "raw pubkey must be 64 bytes (X || Y)");
 
-        // Build BCS(AnyPublicKey::Secp256r1) = 0x02 || ULEB128(65) || uncompressed_pubkey
-        let mut bcs_any_pubkey = Vec::with_capacity(1 + 1 + uncompressed.len());
-        bcs_any_pubkey.push(0x02); // Secp256r1 variant
-        bcs_any_pubkey.push(65); // ULEB128(65)
-        bcs_any_pubkey.extend_from_slice(&uncompressed);
+        let mut bcs_any_pubkey = Vec::with_capacity(1 + 1 + raw.len());
+        bcs_any_pubkey.push(0x02); // Secp256r1Ecdsa variant
+        bcs_any_pubkey.push(64); // ULEB128(64)
+        bcs_any_pubkey.extend_from_slice(&raw);
 
         let expected_auth_key = derive_authentication_key(&bcs_any_pubkey, SINGLE_KEY_SCHEME);
-
-        // The address from to_address() should match
         let actual_address = public_key.to_address();
         assert_eq!(
             actual_address.to_bytes(),
             expected_auth_key,
-            "Secp256r1 address derivation mismatch - should use uncompressed pubkey"
+            "Secp256r1 address derivation must use 64-byte raw pubkey (not 65-byte uncompressed)"
         );
     }
 

@@ -311,6 +311,18 @@ impl Ed25519SingleKeyAccount {
         bcs_bytes.extend_from_slice(&pk_bytes);
         bcs_bytes
     }
+
+    /// Returns the BCS-serialized `AnySignature::Ed25519` bytes for `SingleKey` authenticator.
+    ///
+    /// Format: `0x00 || ULEB128(64) || signature_bytes`
+    fn bcs_signature_bytes(sig: &crate::crypto::Ed25519Signature) -> Vec<u8> {
+        let sig_bytes = sig.to_bytes();
+        let mut out = Vec::with_capacity(1 + 1 + sig_bytes.len());
+        out.push(0x00); // Ed25519 variant
+        out.push(64); // ULEB128(64)
+        out.extend_from_slice(&sig_bytes);
+        out
+    }
 }
 
 impl Account for Ed25519SingleKeyAccount {
@@ -325,7 +337,11 @@ impl Account for Ed25519SingleKeyAccount {
     }
 
     fn sign(&self, message: &[u8]) -> AptosResult<Vec<u8>> {
-        Ok(self.private_key.sign(message).to_bytes().to_vec())
+        // Return BCS-serialized `AnySignature::Ed25519` so the wire format consumed
+        // by `AccountAuthenticator::SingleKey` matches what the on-chain
+        // `SingleKeyAuthenticator { signature: AnySignature }` deserializer expects.
+        let sig = self.private_key.sign(message);
+        Ok(Self::bcs_signature_bytes(&sig))
     }
 
     fn public_key_bytes(&self) -> Vec<u8> {
@@ -552,7 +568,10 @@ mod tests {
         let account = Ed25519SingleKeyAccount::generate();
         let message = b"test message";
         let sig_bytes = account.sign(message).unwrap();
-        assert_eq!(sig_bytes.len(), 64);
+        // sign() returns BCS(AnySignature::Ed25519) = 1 + 1 + 64 = 66 bytes.
+        assert_eq!(sig_bytes.len(), 66);
+        assert_eq!(sig_bytes[0], 0x00, "AnySignature::Ed25519 variant tag");
+        assert_eq!(sig_bytes[1], 64, "ULEB128(64)");
     }
 
     #[test]
