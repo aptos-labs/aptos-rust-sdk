@@ -394,7 +394,31 @@ impl Aptos {
         payload: TransactionPayload,
     ) -> AptosResult<crate::transaction::SimulationResult> {
         let raw_txn = self.build_transaction(account, payload).await?;
-        let signed = crate::transaction::builder::sign_transaction(&raw_txn, account)?;
+
+        // Build a SignedTransaction with a zeroed Ed25519 signature: the
+        // simulation endpoint *rejects* valid signatures (it returns 400
+        // "Simulated transactions must not have a valid signature") because
+        // its job is gas estimation, not actual execution. Using a real
+        // private key to sign would defeat that purpose. We attach the
+        // account's real public key (the simulator still uses it to walk the
+        // signing-message hash) with a 64-byte zero signature.
+        use crate::transaction::SignedTransaction;
+        use crate::transaction::TransactionAuthenticator;
+        use crate::transaction::authenticator::{Ed25519PublicKey, Ed25519Signature};
+
+        let pubkey_bytes = account.public_key_bytes();
+        let pubkey_arr: [u8; 32] = pubkey_bytes.as_slice().try_into().map_err(|_| {
+            crate::error::AptosError::transaction(
+                "simulate(): account does not expose a 32-byte Ed25519 public key; \
+                 use simulate_signed() with a hand-built zero-signed transaction",
+            )
+        })?;
+        let auth = TransactionAuthenticator::Ed25519 {
+            public_key: Ed25519PublicKey(pubkey_arr),
+            signature: Ed25519Signature([0u8; 64]),
+        };
+        let signed = SignedTransaction::new(raw_txn, auth);
+
         let response = self.fullnode.simulate_transaction(&signed).await?;
         crate::transaction::SimulationResult::from_response(response.into_inner())
     }
