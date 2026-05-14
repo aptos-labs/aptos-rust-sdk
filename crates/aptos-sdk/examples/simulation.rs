@@ -134,7 +134,7 @@ async fn main() -> anyhow::Result<()> {
         let estimated_gas = aptos.estimate_gas(&sender, payload.clone().into()).await?;
 
         println!("\nGas Estimation:");
-        println!("  Estimated gas (with 20% buffer): {} units", estimated_gas);
+        println!("  Estimated gas (with 20% buffer): {estimated_gas} units");
 
         // Now submit the transaction
         println!("\nSubmitting transaction...");
@@ -149,8 +149,8 @@ async fn main() -> anyhow::Result<()> {
             .and_then(|s| s.parse::<u64>().ok())
             .unwrap_or(0);
 
-        println!("  Actual gas used:    {} units", actual_gas);
-        println!("  Estimated was:      {} units", estimated_gas);
+        println!("  Actual gas used:    {actual_gas} units");
+        println!("  Estimated was:      {estimated_gas} units");
     }
 
     // 5. Simulate to check contract state

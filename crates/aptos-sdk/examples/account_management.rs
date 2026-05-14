@@ -38,7 +38,7 @@ async fn main() -> anyhow::Result<()> {
     // Generate account with a new mnemonic
     let (mnemonic_account, mnemonic_phrase) = Ed25519Account::generate_with_mnemonic()?;
     println!("Generated 24-word mnemonic:");
-    println!("  {}", mnemonic_phrase);
+    println!("  {mnemonic_phrase}");
     println!("\n  ⚠️  IMPORTANT: Store this phrase securely!");
     println!("\nDerived Account (index 0):");
     println!("  Address: {}", mnemonic_account.address());
@@ -57,7 +57,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Standard test mnemonic (DO NOT use for real funds!)
     let test_phrase = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
-    println!("Test mnemonic: {}", test_phrase);
+    println!("Test mnemonic: {test_phrase}");
 
     let test_account = Ed25519Account::from_mnemonic(test_phrase, 0)?;
     println!("Derived address: {}", test_account.address());
@@ -71,10 +71,7 @@ async fn main() -> anyhow::Result<()> {
     // NEVER print, log, or expose private keys in production code!
     let pk_bytes = random_account.private_key().to_bytes();
     let pk_hex = const_hex::encode(pk_bytes);
-    println!(
-        "[DEMO ONLY - NEVER DO THIS IN PRODUCTION] Private key (hex): {}",
-        pk_hex
-    );
+    println!("[DEMO ONLY - NEVER DO THIS IN PRODUCTION] Private key (hex): {pk_hex}");
 
     // Recreate account from private key hex
     let restored_account = Ed25519Account::from_private_key_hex(&pk_hex)?;

@@ -83,10 +83,10 @@ async fn basic_submit_and_wait(
     let success = result
         .data
         .get("success")
-        .and_then(|v| v.as_bool())
+        .and_then(serde_json::value::Value::as_bool)
         .unwrap_or(false);
     println!("sign_submit_and_wait() completed");
-    println!("  Success: {}", success);
+    println!("  Success: {success}");
     println!("  Default timeout: 30 seconds");
 
     Ok(())
@@ -101,7 +101,7 @@ async fn custom_timeout(
     let payload = EntryFunction::apt_transfer(recipient, 100_000)?;
 
     // Custom timeout: 60 seconds
-    let long_timeout = Some(Duration::from_secs(60));
+    let long_timeout = Some(Duration::from_mins(1));
     println!("Using custom timeout: 60 seconds");
 
     let _result = aptos
@@ -112,7 +112,7 @@ async fn custom_timeout(
 
     // Short timeout example (for demonstration)
     let payload2 = EntryFunction::apt_transfer(recipient, 50_000)?;
-    let short_timeout = Some(Duration::from_secs(120)); // 2 minutes for safety
+    let short_timeout = Some(Duration::from_mins(2)); // 2 minutes for safety
 
     let result2 = aptos
         .sign_submit_and_wait(sender, payload2.into(), short_timeout)
@@ -121,9 +121,9 @@ async fn custom_timeout(
     let success = result2
         .data
         .get("success")
-        .and_then(|v| v.as_bool())
+        .and_then(serde_json::value::Value::as_bool)
         .unwrap_or(false);
-    println!("Second transaction success: {}", success);
+    println!("Second transaction success: {success}");
 
     // Note: If a transaction times out, you can still check its status later
     // using wait_for_transaction with the hash
@@ -143,7 +143,7 @@ async fn deferred_waiting(
     println!("Step 1: Submit transaction (non-blocking)");
     let pending = aptos.sign_and_submit(sender, payload.into()).await?;
     let txn_hash = pending.data.hash;
-    println!("  Transaction submitted: {}", txn_hash);
+    println!("  Transaction submitted: {txn_hash}");
 
     // Step 2: Do other work while transaction is pending
     println!("\nStep 2: Doing other work...");
@@ -154,21 +154,21 @@ async fn deferred_waiting(
     println!("\nStep 3: Wait for transaction confirmation");
     let result = aptos
         .fullnode()
-        .wait_for_transaction(&txn_hash, Some(Duration::from_secs(60)))
+        .wait_for_transaction(&txn_hash, Some(Duration::from_mins(1)))
         .await?;
 
     let success = result
         .data
         .get("success")
-        .and_then(|v| v.as_bool())
+        .and_then(serde_json::value::Value::as_bool)
         .unwrap_or(false);
-    println!("  Transaction confirmed: {}", success);
+    println!("  Transaction confirmed: {success}");
 
     // You can also check status without blocking using get_transaction_by_hash
     println!("\nStep 4: Non-blocking status check");
     let status = aptos.fullnode().get_transaction_by_hash(&txn_hash).await?;
     let version = status.data.get("version").and_then(|v| v.as_str());
-    println!("  Transaction version: {:?}", version);
+    println!("  Transaction version: {version:?}");
 
     Ok(())
 }
@@ -188,7 +188,8 @@ async fn batch_parallel_waiting(aptos: &Aptos, sender: &Ed25519Account) -> anyho
         .iter()
         .enumerate()
         .map(|(i, r)| {
-            EntryFunction::apt_transfer(r.address(), (i as u64 + 1) * 100_000).map(|ef| ef.into())
+            EntryFunction::apt_transfer(r.address(), (i as u64 + 1) * 100_000)
+                .map(std::convert::Into::into)
         })
         .collect::<Result<Vec<_>, _>>()?;
 
@@ -211,7 +212,7 @@ async fn batch_parallel_waiting(aptos: &Aptos, sender: &Ed25519Account) -> anyho
     let results = batch.submit_and_wait_all(aptos.fullnode(), None).await;
     let elapsed = start.elapsed();
 
-    println!("\nParallel wait completed in {:?}", elapsed);
+    println!("\nParallel wait completed in {elapsed:?}");
 
     // Summarize results
     let summary = BatchSummary::from_results(&results);
@@ -244,7 +245,8 @@ async fn batch_sequential_waiting(aptos: &Aptos, sender: &Ed25519Account) -> any
         .iter()
         .enumerate()
         .map(|(i, r)| {
-            EntryFunction::apt_transfer(r.address(), (i as u64 + 1) * 50_000).map(|ef| ef.into())
+            EntryFunction::apt_transfer(r.address(), (i as u64 + 1) * 50_000)
+                .map(std::convert::Into::into)
         })
         .collect::<Result<Vec<_>, _>>()?;
 
@@ -267,7 +269,7 @@ async fn batch_sequential_waiting(aptos: &Aptos, sender: &Ed25519Account) -> any
         .await;
     let elapsed = start.elapsed();
 
-    println!("\nSequential wait completed in {:?}", elapsed);
+    println!("\nSequential wait completed in {elapsed:?}");
     println!("(Slower than parallel, but ensures order)");
 
     // Check each result
@@ -327,7 +329,7 @@ async fn parsing_results(
     let success = result
         .data
         .get("success")
-        .and_then(|v| v.as_bool())
+        .and_then(serde_json::value::Value::as_bool)
         .unwrap_or(false);
     let vm_status = result
         .data
@@ -335,10 +337,10 @@ async fn parsing_results(
         .and_then(|v| v.as_str())
         .unwrap_or("N/A");
 
-    println!("  hash: {}", hash);
-    println!("  version: {}", version);
-    println!("  success: {}", success);
-    println!("  vm_status: {}", vm_status);
+    println!("  hash: {hash}");
+    println!("  version: {version}");
+    println!("  success: {success}");
+    println!("  vm_status: {vm_status}");
 
     // Gas information
     let gas_used = result
@@ -357,8 +359,8 @@ async fn parsing_results(
     let total_gas_cost = gas_used_u64 * gas_price_u64;
 
     println!("\nGas information:");
-    println!("  gas_used: {} units", gas_used);
-    println!("  gas_unit_price: {} octas", gas_unit_price);
+    println!("  gas_used: {gas_used} units");
+    println!("  gas_unit_price: {gas_unit_price} octas");
     println!(
         "  total_cost: {} octas ({} APT)",
         total_gas_cost,
@@ -378,8 +380,8 @@ async fn parsing_results(
         .unwrap_or("N/A");
 
     println!("\nTiming:");
-    println!("  executed_at: {} (microseconds since epoch)", timestamp);
-    println!("  expiration: {} (seconds since epoch)", expiration);
+    println!("  executed_at: {timestamp} (microseconds since epoch)");
+    println!("  expiration: {expiration} (seconds since epoch)");
 
     // Events (if any)
     if let Some(events) = result.data.get("events").and_then(|v| v.as_array()) {
@@ -389,7 +391,7 @@ async fn parsing_results(
                 .get("type")
                 .and_then(|v| v.as_str())
                 .unwrap_or("unknown");
-            println!("  Event {}: {}", i, event_type);
+            println!("  Event {i}: {event_type}");
         }
     }
 
@@ -427,9 +429,9 @@ async fn retry_patterns(
     match aptos.submit_transaction(&signed_txn).await {
         Ok(p) => println!("   Resubmit: {} (same hash, safe)", p.data.hash),
         Err(e) if e.to_string().contains("already") => {
-            println!("   Resubmit: already submitted (safe)")
+            println!("   Resubmit: already submitted (safe)");
         }
-        Err(e) => println!("   Resubmit error: {} (may be expected)", e),
+        Err(e) => println!("   Resubmit error: {e} (may be expected)"),
     }
 
     // Wait for the transaction
@@ -440,9 +442,9 @@ async fn retry_patterns(
     let success = result
         .data
         .get("success")
-        .and_then(|v| v.as_bool())
+        .and_then(serde_json::value::Value::as_bool)
         .unwrap_or(false);
-    println!("   Final result: success={}", success);
+    println!("   Final result: success={success}");
 
     // Pattern 2: Retry with exponential backoff (handled by SDK)
     println!("\n2. Automatic retry with backoff:");
@@ -503,38 +505,32 @@ async fn multiple_independent(aptos: &Aptos, _sender: &Ed25519Account) -> anyhow
     );
 
     let elapsed = start.elapsed();
-    println!("\nAll 3 transactions completed in {:?}", elapsed);
+    println!("\nAll 3 transactions completed in {elapsed:?}");
 
     // Check results
-    let s1 = result1
-        .map(|r| {
-            r.data
-                .get("success")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false)
-        })
-        .unwrap_or(false);
-    let s2 = result2
-        .map(|r| {
-            r.data
-                .get("success")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false)
-        })
-        .unwrap_or(false);
-    let s3 = result3
-        .map(|r| {
-            r.data
-                .get("success")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(false)
-        })
-        .unwrap_or(false);
+    let s1 = result1.is_ok_and(|r| {
+        r.data
+            .get("success")
+            .and_then(serde_json::value::Value::as_bool)
+            .unwrap_or(false)
+    });
+    let s2 = result2.is_ok_and(|r| {
+        r.data
+            .get("success")
+            .and_then(serde_json::value::Value::as_bool)
+            .unwrap_or(false)
+    });
+    let s3 = result3.is_ok_and(|r| {
+        r.data
+            .get("success")
+            .and_then(serde_json::value::Value::as_bool)
+            .unwrap_or(false)
+    });
 
     println!("Results:");
-    println!("  Sender 1: success={}", s1);
-    println!("  Sender 2: success={}", s2);
-    println!("  Sender 3: success={}", s3);
+    println!("  Sender 1: success={s1}");
+    println!("  Sender 2: success={s2}");
+    println!("  Sender 3: success={s3}");
 
     // Verify recipient got all the funds
     tokio::time::sleep(Duration::from_secs(1)).await;
@@ -545,7 +541,7 @@ async fn multiple_independent(aptos: &Aptos, _sender: &Ed25519Account) -> anyhow
     );
     println!(
         "Expected: {} APT",
-        (1_000_000 + 2_000_000 + 3_000_000) as f64 / 100_000_000.0
+        f64::from(1_000_000 + 2_000_000 + 3_000_000) / 100_000_000.0
     );
 
     Ok(())

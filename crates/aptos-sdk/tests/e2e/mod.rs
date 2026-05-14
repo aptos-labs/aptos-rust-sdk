@@ -28,12 +28,12 @@
 //!
 //! ## Test Categories
 //!
-//! - **account_tests**: Account creation, funding, balance queries
-//! - **transfer_tests**: APT transfers between accounts
-//! - **view_tests**: View function calls
-//! - **transaction_tests**: Transaction building, signing, submission
-//! - **multi_signer_tests**: Multi-agent and fee payer transactions
-//! - **state_tests**: Resource and state queries
+//! - **`account_tests`**: Account creation, funding, balance queries
+//! - **`transfer_tests`**: APT transfers between accounts
+//! - **`view_tests`**: View function calls
+//! - **`transaction_tests`**: Transaction building, signing, submission
+//! - **`multi_signer_tests`**: Multi-agent and fee payer transactions
+//! - **`state_tests`**: Resource and state queries
 
 use aptos_sdk::{Aptos, AptosConfig};
 use std::env;
@@ -82,7 +82,7 @@ mod account_tests {
             .fund_account(account.address(), 100_000_000)
             .await
             .expect("failed to fund account");
-        println!("Funded with txns: {:?}", txn_hashes);
+        println!("Funded with txns: {txn_hashes:?}");
 
         wait_for_finality().await;
 
@@ -92,7 +92,7 @@ mod account_tests {
             .await
             .expect("failed to get balance");
         assert!(balance > 0, "balance should be > 0");
-        println!("Balance: {} octas", balance);
+        println!("Balance: {balance} octas");
     }
 
     #[tokio::test]
@@ -134,7 +134,7 @@ mod account_tests {
             .await
             .expect("failed to get sequence number");
 
-        println!("Sequence number: {}", seq_num);
+        println!("Sequence number: {seq_num}");
         // New account should have sequence number 0
         assert_eq!(seq_num, 0);
     }
@@ -259,7 +259,10 @@ mod transfer_tests {
             .await
             .expect("failed to transfer");
 
-        let success = result.data.get("success").and_then(|v| v.as_bool());
+        let success = result
+            .data
+            .get("success")
+            .and_then(serde_json::Value::as_bool);
         assert_eq!(success, Some(true), "transfer should succeed");
         println!("Transfer successful!");
 
@@ -296,7 +299,10 @@ mod transfer_tests {
                 .await
                 .expect("failed to transfer");
 
-            let success = result.data.get("success").and_then(|v| v.as_bool());
+            let success = result
+                .data
+                .get("success")
+                .and_then(serde_json::Value::as_bool);
             assert_eq!(success, Some(true));
             println!("Transfer {} to {} successful", i + 1, recipient.address());
         }
@@ -307,7 +313,7 @@ mod transfer_tests {
         for (i, recipient) in recipients.iter().enumerate() {
             let balance = aptos.get_balance(recipient.address()).await.unwrap_or(0);
             let expected = 1_000_000 * (i as u64 + 1);
-            assert_eq!(balance, expected, "recipient {} balance mismatch", i);
+            assert_eq!(balance, expected, "recipient {i} balance mismatch");
         }
     }
 
@@ -333,7 +339,7 @@ mod transfer_tests {
         assert!(
             result.is_err() || {
                 let r = result.unwrap();
-                r.data.get("success").and_then(|v| v.as_bool()) == Some(false)
+                r.data.get("success").and_then(serde_json::Value::as_bool) == Some(false)
             }
         );
     }
@@ -360,7 +366,7 @@ mod view_tests {
             .expect("failed to call view function");
 
         assert!(!result.is_empty(), "should return a value");
-        println!("Current timestamp: {:?}", result);
+        println!("Current timestamp: {result:?}");
 
         // Parse the timestamp
         if let Some(timestamp) = result[0].as_str() {
@@ -447,7 +453,7 @@ mod view_tests {
         let aptos = Aptos::new(config).expect("failed to create client");
 
         let random_address = Ed25519Account::generate().address();
-        println!("Random address: {}", random_address);
+        println!("Random address: {random_address}");
 
         let result = aptos
             .view(
@@ -458,7 +464,7 @@ mod view_tests {
             .await
             .expect("failed to call view function");
 
-        println!("Result: {:?}", result);
+        println!("Result: {result:?}");
         // Note: Modern Aptos chains use implicit accounts (AIP-42), so all addresses
         // are considered to "exist" with sequence_number=0 until a transaction is made.
         // The view function returns true for all addresses now.
@@ -510,7 +516,10 @@ mod transaction_tests {
             .await
             .expect("failed to submit");
 
-        let success = result.data.get("success").and_then(|v| v.as_bool());
+        let success = result
+            .data
+            .get("success")
+            .and_then(serde_json::Value::as_bool);
         assert_eq!(
             success,
             Some(true),
@@ -570,11 +579,13 @@ mod transaction_tests {
 
         assert!(!result.data.is_empty(), "simulation should return results");
 
-        let success = result.data[0].get("success").and_then(|v| v.as_bool());
+        let success = result.data[0]
+            .get("success")
+            .and_then(serde_json::Value::as_bool);
         assert_eq!(success, Some(true), "simulation should succeed");
 
         let gas_used = result.data[0].get("gas_used").and_then(|v| v.as_str());
-        println!("Simulated gas used: {:?}", gas_used);
+        println!("Simulated gas used: {gas_used:?}");
     }
 
     #[tokio::test]
@@ -632,7 +643,7 @@ mod transaction_tests {
             sender.address().to_long_string()
         );
 
-        let success = txn.data.get("success").and_then(|v| v.as_bool());
+        let success = txn.data.get("success").and_then(serde_json::Value::as_bool);
         assert_eq!(success, Some(true));
     }
 
@@ -806,7 +817,10 @@ mod multi_signer_tests {
             .await
             .expect("fee-payer transaction must be accepted by devnet");
 
-        let success = result.data.get("success").and_then(|v| v.as_bool());
+        let success = result
+            .data
+            .get("success")
+            .and_then(serde_json::Value::as_bool);
         assert_eq!(
             success,
             Some(true),
@@ -909,7 +923,7 @@ mod multi_signer_tests {
         // *or* a structured API error indicating signer-count mismatch.
         match aptos.submit_and_wait(&signed, None).await {
             Ok(r) => {
-                let success = r.data.get("success").and_then(|v| v.as_bool());
+                let success = r.data.get("success").and_then(serde_json::Value::as_bool);
                 assert!(
                     success.is_some(),
                     "transaction result must contain a `success` field"
@@ -1006,7 +1020,10 @@ mod multi_key_e2e_tests {
             .await
             .expect("multi-key transaction must be accepted");
 
-        let success = result.data.get("success").and_then(|v| v.as_bool());
+        let success = result
+            .data
+            .get("success")
+            .and_then(serde_json::Value::as_bool);
         assert_eq!(
             success,
             Some(true),
@@ -1174,7 +1191,10 @@ mod single_key_tests {
             .await
             .expect("transaction submission failed");
 
-        let success = result.data.get("success").and_then(|v| v.as_bool());
+        let success = result
+            .data
+            .get("success")
+            .and_then(serde_json::Value::as_bool);
         assert_eq!(success, Some(true), "transaction must succeed");
 
         wait_for_finality().await;
@@ -1239,7 +1259,10 @@ mod secp256k1_tests {
             .await
             .expect("transaction submission failed");
 
-        let success = result.data.get("success").and_then(|v| v.as_bool());
+        let success = result
+            .data
+            .get("success")
+            .and_then(serde_json::Value::as_bool);
         assert_eq!(success, Some(true), "secp256k1 transfer must succeed");
 
         wait_for_finality().await;
@@ -1321,7 +1344,10 @@ mod webauthn_tests {
             .await
             .expect("WebAuthn transaction submission must succeed on devnet");
 
-        let success = result.data.get("success").and_then(|v| v.as_bool());
+        let success = result
+            .data
+            .get("success")
+            .and_then(serde_json::Value::as_bool);
         assert_eq!(
             success,
             Some(true),
@@ -1397,7 +1423,10 @@ mod multi_ed25519_tests {
             .await
             .expect("multi-ed25519 transaction submission failed");
 
-        let success = result.data.get("success").and_then(|v| v.as_bool());
+        let success = result
+            .data
+            .get("success")
+            .and_then(serde_json::Value::as_bool);
         assert_eq!(success, Some(true), "multi-ed25519 transfer must succeed");
 
         wait_for_finality().await;
@@ -1618,7 +1647,10 @@ mod sponsored_builder_tests {
             .await
             .expect("sponsored transaction submission failed");
 
-        let success = result.data.get("success").and_then(|v| v.as_bool());
+        let success = result
+            .data
+            .get("success")
+            .and_then(serde_json::Value::as_bool);
         assert_eq!(success, Some(true), "sponsored transaction must succeed");
 
         wait_for_finality().await;
@@ -1663,10 +1695,9 @@ mod balance_tests {
                 .expect("failed to get balance");
             assert!(
                 balance >= 50_000_000,
-                "Account {} should have at least 50M octas",
-                i
+                "Account {i} should have at least 50M octas"
             );
-            println!("Account {}: {} octas", i, balance);
+            println!("Account {i}: {balance} octas");
         }
     }
 }

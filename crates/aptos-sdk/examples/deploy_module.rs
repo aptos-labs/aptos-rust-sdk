@@ -88,7 +88,7 @@ async fn main() -> anyhow::Result<()> {
             println!("No modules found (account is new, which is expected)");
         }
         Err(e) => {
-            println!("Error: {}", e);
+            println!("Error: {e}");
         }
     }
 

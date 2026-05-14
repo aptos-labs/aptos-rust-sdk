@@ -33,6 +33,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the zero-signed authenticator built by `Aptos::simulate`.
 
 ### Changed
+- **MSRV bumped from 1.90 to 1.95**. Both `rust-toolchain.toml` and the
+  workspace `rust-version = "1.95.0"` field in the root `Cargo.toml`
+  now require Rust 1.95+; every CI job (Test, Lint, MSRV, Format,
+  Documentation, Security Audit, Code Coverage) is pinned to 1.95.
+  Downstream consumers building against the SDK need at least Rust
+  1.95.0 -- released 2026-04-14, well under the typical "last six
+  months" support window.
+- **Cargo manifest modernised.** Switched from `resolver = "2"` to
+  `resolver = "3"` (the recommended resolver for edition-2024 packages,
+  with tighter `--no-default-features` unification). Lint configuration
+  moved into `[workspace.lints]` in the root `Cargo.toml` (stabilised
+  in Rust 1.74); both member crates now declare `[lints] workspace = true`.
+  The previous per-crate `#![warn(...)]` / `#![allow(...)]` block in
+  `crates/aptos-sdk/src/lib.rs` has been retired -- workspace lints
+  cover the same surface and additionally apply to examples, tests,
+  and the proc-macros crate.
 - Increased default max gas amount from 200,000 to 2,000,000 (10x).
 - `Aptos::fund_account` now keeps issuing faucet requests until the
   on-chain balance has grown by the requested amount (max 16 attempts),

@@ -75,7 +75,7 @@ async fn main() -> anyhow::Result<()> {
             }
         }
         Err(e) => {
-            println!("Note: Token module query: {}", e);
+            println!("Note: Token module query: {e}");
         }
     }
 
@@ -105,7 +105,7 @@ async fn main() -> anyhow::Result<()> {
             }
         }
         Err(e) => {
-            println!("Note: Collection module query: {}", e);
+            println!("Note: Collection module query: {e}");
         }
     }
 
@@ -136,7 +136,7 @@ async fn main() -> anyhow::Result<()> {
                     }
                 }
                 Err(e) => {
-                    println!("Indexer query error: {}", e);
+                    println!("Indexer query error: {e}");
                 }
             }
 
@@ -150,7 +150,7 @@ async fn main() -> anyhow::Result<()> {
                             println!(
                                 "  {}: {} {}",
                                 metadata.symbol,
-                                amount as f64 / 10f64.powi(metadata.decimals as i32),
+                                amount as f64 / 10f64.powi(i32::from(metadata.decimals)),
                                 metadata.name
                             );
                         } else {
@@ -159,7 +159,7 @@ async fn main() -> anyhow::Result<()> {
                     }
                 }
                 Err(e) => {
-                    println!("Fungible asset query error: {}", e);
+                    println!("Fungible asset query error: {e}");
                 }
             }
         } else {
@@ -212,7 +212,7 @@ async fn main() -> anyhow::Result<()> {
             }
         }
         Err(e) => {
-            println!("Object module query: {}", e);
+            println!("Object module query: {e}");
         }
     }
 
@@ -248,7 +248,7 @@ async fn main() -> anyhow::Result<()> {
             }
         }
         Err(e) => {
-            println!("FA module query: {}", e);
+            println!("FA module query: {e}");
         }
     }
 

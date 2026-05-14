@@ -226,9 +226,18 @@ point:
 
 ## Rust Toolchain
 
-- **Version**: 1.90+ (specified in `rust-toolchain.toml`).
-- **Edition**: 2024.
-- **Components**: cargo, clippy, rustc, rust-docs, rust-std.
+- **Version**: 1.95+ (specified in both `rust-toolchain.toml` and the
+  workspace `rust-version` field in the root `Cargo.toml`). The MSRV
+  CI job pins to exactly this version, so accidentally using a feature
+  that lands in a later stable release will fail CI.
+- **Edition**: 2024 with `resolver = "3"` (the recommended resolver for
+  edition-2024 packages; tightens `--no-default-features` unification).
+- **Components**: cargo, clippy, rustfmt, rustc, rust-docs, rust-std.
+- **Lints**: configured centrally in `[workspace.lints]` in the root
+  `Cargo.toml`. Both member crates inherit it via `[lints] workspace = true`.
+  Do **not** re-add `#![warn(...)]` / `#![allow(...)]` to individual
+  `lib.rs` files unless the configuration is genuinely crate-local;
+  prefer extending the workspace block.
 - **Note**: uses stable rustfmt for formatting. The Documentation CI
   job requires nightly for `--cfg docsrs` parity with docs.rs.
 

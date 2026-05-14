@@ -20,7 +20,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: "1.90"
+          toolchain: "1.95"
           components: rustfmt
       
       - name: Check formatting
@@ -35,7 +35,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: "1.90"
+          toolchain: "1.95"
           components: clippy
       
       - name: Cache cargo
@@ -166,7 +166,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: "1.90"
+          toolchain: "1.95"
       
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
@@ -281,16 +281,19 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       
-      - name: Install Rust 1.85
+      # MSRV matches the workspace `rust-version` in `Cargo.toml`. This job
+      # exists to catch accidental use of features that landed in a stable
+      # release newer than our advertised MSRV.
+      - name: Install Rust 1.95 (MSRV)
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: "1.85"
+          toolchain: "1.95"
       
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
       
       - name: Check MSRV
-        run: cargo check -p aptos-sdk
+        run: cargo check -p aptos-sdk --all-features
 
   coverage:
     name: Code Coverage
@@ -298,14 +301,10 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       
-      # Tarpaulin requires a newer Rust than the SDK's MSRV (1.90):
-      # current cargo-tarpaulin pulls in `cargo-platform >= 0.3.3` which
-      # itself requires rustc 1.91. We use `stable` for this job only --
-      # the SDK and all other CI jobs continue to build against 1.90.
-      - name: Install Rust (stable, required by latest cargo-tarpaulin)
+      - name: Install Rust
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: stable
+          toolchain: "1.95"
       
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2

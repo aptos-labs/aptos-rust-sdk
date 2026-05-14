@@ -134,7 +134,7 @@ impl Default for PoolConfig {
             max_idle_per_host: None, // unlimited
             max_idle_total: 100,
             idle_timeout: Duration::from_secs(90),
-            tcp_keepalive: Some(Duration::from_secs(60)),
+            tcp_keepalive: Some(Duration::from_mins(1)),
             tcp_nodelay: true,
             max_response_size: DEFAULT_MAX_RESPONSE_SIZE,
         }
@@ -156,7 +156,7 @@ impl PoolConfig {
         Self {
             max_idle_per_host: Some(32),
             max_idle_total: 256,
-            idle_timeout: Duration::from_secs(300),
+            idle_timeout: Duration::from_mins(5),
             tcp_keepalive: Some(Duration::from_secs(30)),
             tcp_nodelay: true,
             max_response_size: DEFAULT_MAX_RESPONSE_SIZE,
@@ -733,11 +733,11 @@ mod tests {
     #[test]
     fn test_builder_methods() {
         let config = AptosConfig::testnet()
-            .with_timeout(Duration::from_secs(60))
+            .with_timeout(Duration::from_mins(1))
             .with_max_retries(5)
             .with_api_key("test-key");
 
-        assert_eq!(config.timeout, Duration::from_secs(60));
+        assert_eq!(config.timeout, Duration::from_mins(1));
         assert_eq!(config.retry_config.max_retries, 5);
         assert_eq!(config.api_key, Some("test-key".to_string()));
     }
@@ -792,13 +792,13 @@ mod tests {
         let config = PoolConfig::builder()
             .max_idle_per_host(16)
             .max_idle_total(64)
-            .idle_timeout(Duration::from_secs(60))
+            .idle_timeout(Duration::from_mins(1))
             .tcp_nodelay(false)
             .build();
 
         assert_eq!(config.max_idle_per_host, Some(16));
         assert_eq!(config.max_idle_total, 64);
-        assert_eq!(config.idle_timeout, Duration::from_secs(60));
+        assert_eq!(config.idle_timeout, Duration::from_mins(1));
         assert!(!config.tcp_nodelay);
     }
 

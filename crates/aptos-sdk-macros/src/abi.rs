@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 /// Move module ABI.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MoveModuleABI {
+pub(crate) struct MoveModuleABI {
     /// The module address.
     pub address: String,
     /// The module name.
@@ -19,7 +19,7 @@ pub struct MoveModuleABI {
 
 /// A function defined in a Move module.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MoveFunction {
+pub(crate) struct MoveFunction {
     /// Function name.
     pub name: String,
     /// Visibility.
@@ -44,7 +44,7 @@ pub struct MoveFunction {
 
 /// Generic type parameter in a function.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MoveFunctionGenericTypeParam {
+pub(crate) struct MoveFunctionGenericTypeParam {
     /// Constraints on the type parameter.
     #[serde(default)]
     pub constraints: Vec<String>,
@@ -52,7 +52,7 @@ pub struct MoveFunctionGenericTypeParam {
 
 /// A struct defined in a Move module.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MoveStructDef {
+pub(crate) struct MoveStructDef {
     /// Struct name.
     pub name: String,
     /// Whether this is a native struct.
@@ -71,7 +71,7 @@ pub struct MoveStructDef {
 
 /// Generic type parameter in a struct.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MoveStructGenericTypeParam {
+pub(crate) struct MoveStructGenericTypeParam {
     /// Constraints on the type parameter.
     #[serde(default)]
     pub constraints: Vec<String>,
@@ -79,7 +79,7 @@ pub struct MoveStructGenericTypeParam {
 
 /// A field in a Move struct.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MoveStructField {
+pub(crate) struct MoveStructField {
     /// Field name.
     pub name: String,
     /// Field type.

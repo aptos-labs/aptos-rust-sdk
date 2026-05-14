@@ -57,7 +57,7 @@ async fn main() -> anyhow::Result<()> {
 
     println!("ScriptArgument variants:");
     for (name, arg) in &demo_args {
-        println!("  - {}: {:?}", name, arg);
+        println!("  - {name}: {arg:?}");
     }
 
     // ==== Part 3: Creating a Script Payload ====
@@ -219,7 +219,7 @@ async fn main() -> anyhow::Result<()> {
     println!("  Recipients: 3");
     println!(
         "  Total transfer: {} APT",
-        (1_000_000 + 2_000_000 + 3_000_000) as f64 / 100_000_000.0
+        f64::from(1_000_000 + 2_000_000 + 3_000_000) / 100_000_000.0
     );
     println!("  Benefit: Atomic - all succeed or all fail");
 

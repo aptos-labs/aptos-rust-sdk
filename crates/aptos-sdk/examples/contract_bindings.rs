@@ -8,6 +8,12 @@
 //! cargo run --example contract_bindings --features "ed25519,macros"
 //! ```
 
+// Generated contract types deliberately leave their fields undocumented in
+// this demo; documenting them is the user's job in real code. Silence
+// `missing_docs` for this example so it still compiles under the workspace
+// lint set.
+#![allow(missing_docs)]
+
 use aptos_sdk::{aptos_contract, types::AccountAddress};
 
 // ANCHOR: define_contract
@@ -181,7 +187,7 @@ async fn main() -> anyhow::Result<()> {
         vec![],    // type_args (e.g., AptosCoin type)
     )?;
 
-    println!("\nGenerated transfer payload: {:?}", transfer_payload);
+    println!("\nGenerated transfer payload: {transfer_payload:?}");
     // ANCHOR_END: build_transaction
 
     // ANCHOR: custom_token_operations
@@ -190,12 +196,12 @@ async fn main() -> anyhow::Result<()> {
         recipient, // recipient
         500_000,   // amount
     )?;
-    println!("Generated mint payload: {:?}", mint_payload);
+    println!("Generated mint payload: {mint_payload:?}");
 
     let burn_payload = my_token.burn(
         100_000, // amount
     )?;
-    println!("Generated burn payload: {:?}", burn_payload);
+    println!("Generated burn payload: {burn_payload:?}");
     // ANCHOR_END: custom_token_operations
 
     // ANCHOR: view_functions
@@ -218,7 +224,7 @@ async fn main() -> anyhow::Result<()> {
         decimals: 8,
         total_supply: 1_000_000_000,
     };
-    println!("TokenInfo: {:?}", token_info);
+    println!("TokenInfo: {token_info:?}");
     // ANCHOR_END: generated_structs
 
     println!("\n=== Benefits of Type-Safe Bindings ===");

@@ -54,13 +54,13 @@ async fn main() -> anyhow::Result<()> {
                     .and_then(serde_json::Value::as_str)
                     .unwrap_or("unknown");
                 println!("\n  Event {}:", i + 1);
-                println!("    Type: {}", event_type);
+                println!("    Type: {event_type}");
 
                 // Parse event data
                 if let Some(data) = event.get("data")
                     && let Some(amount) = data.get("amount").and_then(serde_json::Value::as_str)
                 {
-                    println!("    Amount: {} octas", amount);
+                    println!("    Amount: {amount} octas");
                 }
 
                 // Show sequence number
@@ -68,7 +68,7 @@ async fn main() -> anyhow::Result<()> {
                     .get("sequence_number")
                     .and_then(serde_json::Value::as_str)
                 {
-                    println!("    Sequence: {}", seq);
+                    println!("    Sequence: {seq}");
                 }
             }
         }
@@ -102,7 +102,7 @@ async fn main() -> anyhow::Result<()> {
                     }
                 }
             }
-            Err(e) => println!("  Could not fetch events: {}", e),
+            Err(e) => println!("  Could not fetch events: {e}"),
         }
     }
 
@@ -134,7 +134,7 @@ async fn main() -> anyhow::Result<()> {
                     }
                 }
             }
-            Err(e) => println!("  Could not fetch events: {}", e),
+            Err(e) => println!("  Could not fetch events: {e}"),
         }
     }
 
@@ -172,8 +172,7 @@ async fn print_account_event_summary(aptos: &Aptos, address: AccountAddress) -> 
             Some(100),
         )
         .await
-        .map(|r| r.data.len())
-        .unwrap_or(0);
+        .map_or(0, |r| r.data.len());
 
     // Count withdrawals
     let withdrawals = aptos
@@ -186,12 +185,11 @@ async fn print_account_event_summary(aptos: &Aptos, address: AccountAddress) -> 
             Some(100),
         )
         .await
-        .map(|r| r.data.len())
-        .unwrap_or(0);
+        .map_or(0, |r| r.data.len());
 
-    println!("  Address: {}", address);
-    println!("  Deposit events:  {}", deposits);
-    println!("  Withdraw events: {}", withdrawals);
+    println!("  Address: {address}");
+    println!("  Deposit events:  {deposits}");
+    println!("  Withdraw events: {withdrawals}");
 
     Ok(())
 }

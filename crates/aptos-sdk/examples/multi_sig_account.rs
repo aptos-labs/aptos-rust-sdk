@@ -95,8 +95,11 @@ async fn main() -> anyhow::Result<()> {
 
     // Submit and wait
     let result = aptos.submit_and_wait(&signed, None).await?;
-    let success = result.data.get("success").and_then(|v| v.as_bool());
-    println!("Transaction success: {:?}", success);
+    let success = result
+        .data
+        .get("success")
+        .and_then(serde_json::value::Value::as_bool);
+    println!("Transaction success: {success:?}");
 
     // ==== Part 4: Distributed Signing (Multiple Parties) ====
     println!("\n--- Part 4: Distributed Signing Scenario ---");
@@ -145,8 +148,8 @@ async fn main() -> anyhow::Result<()> {
     // Verify the aggregated signature
     let multi_pk = multi_account.public_key();
     match multi_pk.verify(&message, &aggregated) {
-        Ok(_) => println!("✓ Aggregated signature verified!"),
-        Err(e) => println!("✗ Verification failed: {}", e),
+        Ok(()) => println!("✓ Aggregated signature verified!"),
+        Err(e) => println!("✗ Verification failed: {e}"),
     }
 
     // ==== Part 5: View-Only Account ====

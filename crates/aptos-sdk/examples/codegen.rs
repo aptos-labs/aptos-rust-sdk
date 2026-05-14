@@ -116,7 +116,7 @@ fn main() -> anyhow::Result<()> {
 
     // ANCHOR: move_source
     // Move source provides parameter names and documentation
-    let move_source = r#"
+    let move_source = r"
 /// A token management module.
 ///
 /// This module provides functionality for minting, transferring, 
@@ -188,7 +188,7 @@ module 0xcafe::my_token {
         0
     }
 }
-"#;
+";
 
     // Parse the Move source
     let source_info = MoveSourceParser::parse(move_source);
@@ -219,7 +219,7 @@ module 0xcafe::my_token {
         if line.contains("pub fn transfer")
             || line.contains("/// Entry function: `my_token::transfer`")
         {
-            println!("{}", line);
+            println!("{line}");
         }
     }
     // ANCHOR_END: generate_without_source
@@ -237,7 +237,7 @@ module 0xcafe::my_token {
             in_transfer = true;
         }
         if in_transfer {
-            println!("{}", line);
+            println!("{line}");
             if line.starts_with("pub fn transfer") {
                 break;
             }
@@ -257,7 +257,7 @@ module 0xcafe::my_token {
     let full_generator = ModuleGenerator::new(&abi, full_config).with_source_info(full_source_info);
     let full_code = full_generator.generate()?;
 
-    println!("{}", full_code);
+    println!("{full_code}");
 
     // ANCHOR: usage_example
     // The generated code can be used like this:

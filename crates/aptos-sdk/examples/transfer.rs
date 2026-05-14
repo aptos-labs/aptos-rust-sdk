@@ -41,7 +41,10 @@ async fn main() -> anyhow::Result<()> {
         .transfer_apt(&sender, recipient.address(), 10_000_000)
         .await?;
 
-    let success = result.data.get("success").and_then(|v| v.as_bool());
+    let success = result
+        .data
+        .get("success")
+        .and_then(serde_json::value::Value::as_bool);
     if success == Some(true) {
         println!("Transfer successful!");
 
@@ -63,7 +66,7 @@ async fn main() -> anyhow::Result<()> {
             .get("vm_status")
             .and_then(|v| v.as_str())
             .unwrap_or("unknown");
-        println!("Transfer failed: {}", vm_status);
+        println!("Transfer failed: {vm_status}");
     }
 
     Ok(())

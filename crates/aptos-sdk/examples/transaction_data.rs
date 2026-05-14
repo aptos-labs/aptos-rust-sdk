@@ -11,13 +11,13 @@
 use aptos_sdk::{Aptos, AptosConfig, account::Ed25519Account, transaction::EntryFunction};
 use serde::Deserialize;
 
-/// Coin deposit event from 0x1::coin
+/// Coin deposit event from `0x1::coin`
 #[derive(Debug, Deserialize)]
 struct DepositEvent {
     amount: String,
 }
 
-/// Coin withdraw event from 0x1::coin
+/// Coin withdraw event from `0x1::coin`
 #[derive(Debug, Deserialize)]
 struct WithdrawEvent {
     amount: String,
@@ -47,7 +47,7 @@ async fn main() -> anyhow::Result<()> {
     let payload = EntryFunction::apt_transfer(recipient.address(), 10_000_000)?;
     let pending = aptos.sign_and_submit(&sender, payload.into()).await?;
     let txn_hash = pending.data.hash;
-    println!("Submitted transaction: {}", txn_hash);
+    println!("Submitted transaction: {txn_hash}");
 
     // Wait for the transaction
     let result = aptos
@@ -78,7 +78,7 @@ async fn main() -> anyhow::Result<()> {
         result
             .data
             .get("success")
-            .and_then(|v| v.as_bool())
+            .and_then(serde_json::Value::as_bool)
             .unwrap_or(false)
     );
     println!(
@@ -123,7 +123,7 @@ async fn main() -> anyhow::Result<()> {
         let gas_price: u64 = gas_price.parse().unwrap_or(0);
         let cost_octas = gas_used * gas_price;
         let cost_apt = cost_octas as f64 / 100_000_000.0;
-        println!("  Total Gas Cost: {} APT ({} octas)", cost_apt, cost_octas);
+        println!("  Total Gas Cost: {cost_apt} APT ({cost_octas} octas)");
     }
 
     // ==== Part 2: Parse Events from Transaction ====
@@ -204,10 +204,7 @@ async fn main() -> anyhow::Result<()> {
             }
         }
         Err(e) => {
-            println!(
-                "Could not get events (account may not have CoinStore): {}",
-                e
-            );
+            println!("Could not get events (account may not have CoinStore): {e}");
         }
     }
 
@@ -240,7 +237,7 @@ async fn main() -> anyhow::Result<()> {
                 .unwrap_or("unknown");
             let success = txn
                 .get("success")
-                .and_then(|v| v.as_bool())
+                .and_then(serde_json::Value::as_bool)
                 .unwrap_or(false);
             println!("  {}: {} (success: {})", i + 1, txn_type, success);
         }
@@ -319,7 +316,7 @@ async fn main() -> anyhow::Result<()> {
         );
 
         if let Some(args) = payload.get("arguments").and_then(|v| v.as_array()) {
-            println!("  Arguments: {:?}", args);
+            println!("  Arguments: {args:?}");
         }
     }
 

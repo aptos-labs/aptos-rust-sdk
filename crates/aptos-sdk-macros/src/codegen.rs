@@ -105,7 +105,7 @@ fn safe_format_ident(name: &str) -> Result<proc_macro2::Ident, TokenStream> {
 }
 
 /// Generates the contract implementation.
-pub fn generate_contract_impl(
+pub(crate) fn generate_contract_impl(
     name: &Ident,
     abi: &MoveModuleABI,
     source_info: Option<&MoveSourceInfo>,
@@ -133,8 +133,8 @@ pub fn generate_contract_impl(
         .collect();
 
     // Constants
-    let address_const = address.to_string();
-    let module_const = module_name.to_string();
+    let address_const = address.clone();
+    let module_const = module_name.clone();
 
     quote! {
         /// Generated contract bindings for `#address_const::#module_const`.
@@ -223,7 +223,7 @@ fn generate_struct(struct_def: &MoveStructDef) -> TokenStream {
         Err(err) => return err,
     };
     let abilities = struct_def.abilities.join(", ");
-    let doc = format!("Move struct with abilities: {}", abilities);
+    let doc = format!("Move struct with abilities: {abilities}");
 
     let fields: Vec<_> = struct_def
         .fields
@@ -343,9 +343,9 @@ fn generate_entry_function(
     // Documentation
     let doc = source_func
         .and_then(|f| f.doc.as_ref())
-        .map(|d| format!("{}\n\n", d))
+        .map(|d| format!("{d}\n\n"))
         .unwrap_or_default();
-    let full_doc = format!("{}Entry function: `{}::{}`", doc, module, func_name_str);
+    let full_doc = format!("{doc}Entry function: `{module}::{func_name_str}`");
 
     quote! {
         #[doc = #full_doc]
@@ -459,15 +459,13 @@ fn generate_view_function(
     // Documentation
     let doc = source_func
         .and_then(|f| f.doc.as_ref())
-        .map(|d| format!("{}\n\n", d))
+        .map(|d| format!("{d}\n\n"))
         .unwrap_or_default();
     let full_doc_bcs = format!(
-        "{}View function: `{}::{}` (BCS - recommended for type safety)",
-        doc, module, func_name_str
+        "{doc}View function: `{module}::{func_name_str}` (BCS - recommended for type safety)"
     );
     let full_doc_json = format!(
-        "{}View function: `{}::{}` (JSON - for debugging/compatibility)",
-        doc, module, func_name_str
+        "{doc}View function: `{module}::{func_name_str}` (JSON - for debugging/compatibility)"
     );
 
     quote! {
@@ -540,7 +538,7 @@ fn get_param_name(
         t if t.starts_with("vector<") => "items".to_string(),
         t if t.contains("::string::String") => "name".to_string(),
         t if t.contains("::object::Object") => "object".to_string(),
-        _ => format!("arg{}", index),
+        _ => format!("arg{index}"),
     }
 }
 
@@ -585,7 +583,7 @@ fn is_signer_param(move_type: &str) -> bool {
     move_type == "&signer" || move_type == "signer"
 }
 
-/// Converts snake_case to PascalCase.
+/// Converts `snake_case` to `PascalCase`.
 fn to_pascal_case(s: &str) -> String {
     let mut result = String::new();
     let mut capitalize_next = true;
@@ -604,7 +602,7 @@ fn to_pascal_case(s: &str) -> String {
     result
 }
 
-/// Converts PascalCase to snake_case.
+/// Converts `PascalCase` to `snake_case`.
 fn to_snake_case(s: &str) -> String {
     let mut result = String::new();
 
@@ -630,7 +628,7 @@ fn safe_ident(name: &str) -> String {
         | "else" | "match" | "loop" | "while" | "for" | "in" | "return" | "break" | "continue"
         | "async" | "await" | "struct" | "enum" | "trait" | "impl" | "dyn" | "const" | "static"
         | "unsafe" | "extern" | "crate" | "super" | "where" | "as" | "true" | "false" => {
-            format!("r#{}", snake)
+            format!("r#{snake}")
         }
         _ => snake,
     }

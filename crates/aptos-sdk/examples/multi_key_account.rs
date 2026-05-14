@@ -1,6 +1,6 @@
 //! Example: Multi-Key Account with Mixed Signature Types
 //!
-//! This example demonstrates how to create and use a MultiKeyAccount,
+//! This example demonstrates how to create and use a `MultiKeyAccount`,
 //! which supports M-of-N threshold signatures with mixed key types
 //! (e.g., Ed25519 + Secp256k1 in the same account).
 //!
@@ -106,7 +106,7 @@ async fn main() -> anyhow::Result<()> {
     // 9. Verify recipient received funds
     tokio::time::sleep(std::time::Duration::from_secs(2)).await;
     let recipient_balance = aptos.get_balance(recipient.address()).await?;
-    println!("\nRecipient balance: {} octas", recipient_balance);
+    println!("\nRecipient balance: {recipient_balance} octas");
 
     // 10. Demonstrate distributed signing scenario
     println!("\n=== Distributed Signing Demo ===");
@@ -180,11 +180,11 @@ async fn demonstrate_distributed_signing() -> anyhow::Result<()> {
 
     // Party 1 creates their signature on the real transaction message
     let (idx1, sig1) = party1_account.create_signature_contribution(&signing_message, 0)?;
-    println!("Party 1 signed with key index {}", idx1);
+    println!("Party 1 signed with key index {idx1}");
 
     // Party 2 creates their signature on the real transaction message
     let (idx2, sig2) = party2_account.create_signature_contribution(&signing_message, 1)?;
-    println!("Party 2 signed with key index {}", idx2);
+    println!("Party 2 signed with key index {idx2}");
 
     // Combine signatures (can be done by any party or a relayer)
     println!("\n--- Aggregating Signatures ---");

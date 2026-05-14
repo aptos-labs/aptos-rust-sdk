@@ -11,7 +11,7 @@
 use aptos_sdk::{Aptos, AptosConfig, types::AccountAddress};
 use serde::Deserialize;
 
-/// CoinStore resource structure
+/// `CoinStore` resource structure
 #[derive(Debug, Deserialize)]
 struct CoinStore {
     coin: Coin,
@@ -94,7 +94,7 @@ async fn main() -> anyhow::Result<()> {
             println!("  Frozen: {}", coin_store.frozen);
         }
         Err(e) => {
-            println!("Could not read coin store: {}", e);
+            println!("Could not read coin store: {e}");
         }
     }
 
@@ -105,7 +105,7 @@ async fn main() -> anyhow::Result<()> {
     let timestamp = aptos
         .view("0x1::timestamp::now_seconds", vec![], vec![])
         .await?;
-    println!("Current blockchain timestamp: {:?} seconds", timestamp);
+    println!("Current blockchain timestamp: {timestamp:?} seconds");
 
     // Get total APT supply
     let supply = aptos
@@ -115,7 +115,7 @@ async fn main() -> anyhow::Result<()> {
             vec![],
         )
         .await?;
-    println!("APT total supply: {:?}", supply);
+    println!("APT total supply: {supply:?}");
 
     // Check if an address is an account
     let is_account = aptos
@@ -125,7 +125,7 @@ async fn main() -> anyhow::Result<()> {
             vec![serde_json::json!("0x1")],
         )
         .await?;
-    println!("Is 0x1 an account: {:?}", is_account);
+    println!("Is 0x1 an account: {is_account:?}");
 
     // Get account sequence number via view
     let seq_num = aptos
@@ -135,7 +135,7 @@ async fn main() -> anyhow::Result<()> {
             vec![serde_json::json!("0x1")],
         )
         .await?;
-    println!("Framework sequence number: {:?}", seq_num);
+    println!("Framework sequence number: {seq_num:?}");
 
     // ==== Part 4: Read Staking Info (if exists) ====
     println!("\n=== Part 4: Read Staking Resources ===");
@@ -230,7 +230,7 @@ async fn main() -> anyhow::Result<()> {
             vec![],
         )
         .await?;
-    println!("APT coin name: {:?}", coin_info);
+    println!("APT coin name: {coin_info:?}");
 
     let coin_symbol = aptos
         .view(
@@ -239,7 +239,7 @@ async fn main() -> anyhow::Result<()> {
             vec![],
         )
         .await?;
-    println!("APT coin symbol: {:?}", coin_symbol);
+    println!("APT coin symbol: {coin_symbol:?}");
 
     let coin_decimals = aptos
         .view(
@@ -248,7 +248,7 @@ async fn main() -> anyhow::Result<()> {
             vec![],
         )
         .await?;
-    println!("APT coin decimals: {:?}", coin_decimals);
+    println!("APT coin decimals: {coin_decimals:?}");
 
     println!("\n✓ All contract state reading examples completed!");
     Ok(())

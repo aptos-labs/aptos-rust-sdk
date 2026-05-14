@@ -228,7 +228,10 @@ mod multi_ed25519_tests {
     #[test]
     fn test_multi_ed25519_insufficient_keys() {
         let all_keys: Vec<_> = (0..3).map(|_| Ed25519PrivateKey::generate()).collect();
-        let public_keys: Vec<_> = all_keys.iter().map(|k| k.public_key()).collect();
+        let public_keys: Vec<_> = all_keys
+            .iter()
+            .map(aptos_sdk::crypto::Ed25519PrivateKey::public_key)
+            .collect();
 
         // Only own 1 key (not enough for threshold of 2)
         let my_keys = vec![(0u8, all_keys[0].clone())];
@@ -246,7 +249,10 @@ mod multi_ed25519_tests {
     #[test]
     fn test_multi_ed25519_address_derivation() {
         let keys: Vec<_> = (0..3).map(|_| Ed25519PrivateKey::generate()).collect();
-        let public_keys: Vec<_> = keys.iter().map(|k| k.public_key()).collect();
+        let public_keys: Vec<_> = keys
+            .iter()
+            .map(aptos_sdk::crypto::Ed25519PrivateKey::public_key)
+            .collect();
 
         let account1 = MultiEd25519Account::new(keys.clone(), 2).unwrap();
         let account2 = MultiEd25519Account::view_only(public_keys.clone(), 2).unwrap();
@@ -262,7 +268,10 @@ mod multi_ed25519_tests {
     #[test]
     fn test_multi_ed25519_threshold_validation() {
         let keys: Vec<_> = (0..3).map(|_| Ed25519PrivateKey::generate()).collect();
-        let public_keys: Vec<_> = keys.iter().map(|k| k.public_key()).collect();
+        let public_keys: Vec<_> = keys
+            .iter()
+            .map(aptos_sdk::crypto::Ed25519PrivateKey::public_key)
+            .collect();
 
         // Valid threshold
         assert!(MultiEd25519Account::view_only(public_keys.clone(), 1).is_ok());
@@ -695,8 +704,8 @@ mod error_tests {
             required: 3,
             provided: 2,
         };
-        assert!(err.to_string().contains("3"));
-        assert!(err.to_string().contains("2"));
+        assert!(err.to_string().contains('3'));
+        assert!(err.to_string().contains('2'));
     }
 }
 
@@ -847,8 +856,8 @@ mod auth_key_tests {
         );
     }
 
-    /// Test that Ed25519 SingleKey auth key derivation is:
-    /// SHA3-256(BCS(AnyPublicKey::Ed25519) || 0x02)
+    /// Test that Ed25519 `SingleKey` auth key derivation is:
+    /// `SHA3-256(BCS(AnyPublicKey::Ed25519)` || 0x02)
     #[test]
     fn test_ed25519_single_key_auth_key_derivation() {
         // Create a deterministic key for testing
@@ -875,7 +884,7 @@ mod auth_key_tests {
         );
     }
 
-    /// Test that same private key produces DIFFERENT addresses for legacy vs SingleKey
+    /// Test that same private key produces DIFFERENT addresses for legacy vs `SingleKey`
     #[test]
     fn test_ed25519_legacy_vs_single_key_different_addresses() {
         let private_key = Ed25519PrivateKey::from_bytes(&[2u8; 32]).unwrap();
@@ -898,7 +907,7 @@ mod auth_key_tests {
         );
     }
 
-    /// Test that Secp256k1 SingleKey auth-key derivation uses the 65-byte SEC1
+    /// Test that Secp256k1 `SingleKey` auth-key derivation uses the 65-byte SEC1
     /// uncompressed form, matching `libsecp256k1::PublicKey::serialize()`
     /// (which is how `bcs::to_bytes(&AnyPublicKey::Secp256k1Ecdsa)`
     /// canonicalises the public key on the chain side):
@@ -932,7 +941,7 @@ mod auth_key_tests {
         );
     }
 
-    /// Test that Secp256r1 SingleKey auth-key derivation uses the 65-byte SEC1
+    /// Test that Secp256r1 `SingleKey` auth-key derivation uses the 65-byte SEC1
     /// uncompressed form, mirroring secp256k1.
     #[test]
     fn test_secp256r1_auth_key_uses_uncompressed_pubkey() {

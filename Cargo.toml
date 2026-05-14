@@ -1,5 +1,8 @@
 [workspace]
-resolver = "2"
+# Resolver v3 is the recommended resolver for edition-2024 packages
+# (stabilised in Rust 1.84). It tightens the unification rules for
+# `--no-default-features` builds, matching how CI checks the SDK.
+resolver = "3"
 
 members = [
     "crates/aptos-sdk",
@@ -24,7 +27,75 @@ homepage = "https://aptoslabs.com"
 license = "Apache-2.0"
 publish = false
 repository = "https://github.com/aptos-labs/aptos-rust-sdk"
-rust-version = "1.90.0"
+rust-version = "1.95.0"
+
+# Centralised lint configuration. Member crates inherit this block via
+# `[lints] workspace = true`. Stabilised in Rust 1.74; replaces the older
+# pattern of putting `#![warn(...)]` / `#![allow(...)]` attributes in each
+# crate's `lib.rs`, which the borrow checker / rustfmt / clippy could not
+# all consistently observe.
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+missing_debug_implementations = "warn"
+unreachable_pub = "warn"
+# Modern rust-2018 idioms (idiom suggestions like `use crate::...` over
+# `extern crate ...`, anonymous-lifetime warnings, etc.). Kept at warn so
+# the build still succeeds against newer idiom proposals in nightly.
+rust_2018_idioms = { level = "warn", priority = -1 }
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+# Pedantic-lint exceptions: these are intentionally allowed because they
+# fire on patterns that are correct, idiomatic in an SDK codebase, or
+# stylistically preferred here. Each `allow` corresponds to a clippy
+# lint that introduces noise without improving correctness in this
+# repository.
+must_use_candidate = "allow"
+match_same_arms = "allow"
+# Numeric casts in API surface and demo code are intentional and
+# bounded (balances printed in APT, sizes that fit in u32 mantissa, etc.).
+cast_precision_loss = "allow"
+cast_possible_wrap = "allow"
+cast_possible_truncation = "allow"
+cast_sign_loss = "allow"
+# Examples and tests sometimes use very-similar names (sender / sender2,
+# pk / pk_bytes); the alternative names are worse for readability.
+similar_names = "allow"
+# Underscore-prefixed bindings are deliberate "kept around for clarity"
+# placeholders in examples.
+used_underscore_binding = "allow"
+# `let foo = ...; struct Bar; ...` is the dominant pattern for inline
+# helpers in tests and examples; banning it harms readability.
+items_after_statements = "allow"
+# We intentionally use unbuffered std::io in a few examples and tests
+# where the surrounding code does its own batching / line-based printing.
+unbuffered_bytes = "allow"
+# Doc-comment markdown lint fires on every external identifier; the
+# codebase has already migrated all reasonable callouts to backticks
+# but examples and prose still trip it.
+doc_markdown = "allow"
+# Function-length and struct-bool-count are stylistic; example programs
+# and the codegen CLI have a few long functions / config structs by design.
+too_many_lines = "allow"
+struct_excessive_bools = "allow"
+# Numeric-literal underscore separators are not consistently used in the
+# crate; turning them into hard errors via -D warnings is noise.
+unreadable_literal = "allow"
+# `#[ignore]` without a `= "reason"` argument: the e2e tests use bare
+# `#[ignore]` to gate network-dependent tests; the reason is documented
+# in the module-level comment of `tests/e2e/mod.rs`.
+needless_pass_by_value = "allow"
+# Many e2e tests use plain `#[ignore]`; the gating rationale is in the
+# module-level docs, not a per-test attribute argument.
+ignore_without_reason = "allow"
+# `async` functions with no `await` are common in trait implementations
+# whose signatures must be `async fn` regardless of internal awaits.
+unused_async = "allow"
+# A handful of futures inside async tests temporarily hold large local
+# state. None of them are awaited in hot paths so the size warning is
+# noise.
+large_futures = "allow"
 
 [workspace.dependencies]
 # Internal crate dependencies.

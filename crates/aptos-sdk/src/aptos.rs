@@ -726,7 +726,7 @@ impl Aptos {
                 .iter()
                 .map(|hash| {
                     self.fullnode
-                        .wait_for_transaction(hash, Some(Duration::from_secs(60)))
+                        .wait_for_transaction(hash, Some(Duration::from_mins(1)))
                 })
                 .collect();
             let results = futures::future::join_all(wait_futures).await;
@@ -1250,7 +1250,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_config_builder() {
-        let config = AptosConfig::testnet().with_timeout(Duration::from_secs(60));
+        let config = AptosConfig::testnet().with_timeout(Duration::from_mins(1));
 
         let aptos = Aptos::new(config).unwrap();
         assert_eq!(aptos.chain_id(), ChainId::testnet());

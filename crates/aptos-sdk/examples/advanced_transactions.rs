@@ -2,8 +2,8 @@
 //!
 //! This example demonstrates how to combine different transaction features:
 //! 1. Sponsored + Multi-agent transactions
-//! 2. Sponsored + MultiKey account transactions
-//! 3. Sponsored + MultiEd25519 (multisig) transactions
+//! 2. Sponsored + `MultiKey` account transactions
+//! 3. Sponsored + `MultiEd25519` (multisig) transactions
 //! 4. Batch transactions with different account types
 //!
 //! Run with: `cargo run --example advanced_transactions --features "ed25519,secp256k1,faucet"`
@@ -136,9 +136,9 @@ async fn sponsored_multi_agent_example(aptos: &Aptos) -> anyhow::Result<()> {
     let success = result
         .data
         .get("success")
-        .and_then(|v| v.as_bool())
+        .and_then(serde_json::value::Value::as_bool)
         .unwrap_or(false);
-    println!("Transaction success: {}", success);
+    println!("Transaction success: {success}");
 
     // Verify fee payer paid the gas
     let fee_payer_balance = aptos.get_balance(fee_payer.address()).await?;
@@ -150,10 +150,10 @@ async fn sponsored_multi_agent_example(aptos: &Aptos) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Example: Sponsored transaction with MultiKey account as sender
+/// Example: Sponsored transaction with `MultiKey` account as sender
 ///
 /// This combines:
-/// - MultiKey account (mixed key types, threshold signing)
+/// - `MultiKey` account (mixed key types, threshold signing)
 /// - Fee payer sponsoring gas
 async fn sponsored_multikey_example(aptos: &Aptos) -> anyhow::Result<()> {
     // Create keys of different types
@@ -226,9 +226,9 @@ async fn sponsored_multikey_example(aptos: &Aptos) -> anyhow::Result<()> {
     let success = result
         .data
         .get("success")
-        .and_then(|v| v.as_bool())
+        .and_then(serde_json::value::Value::as_bool)
         .unwrap_or(false);
-    println!("Transaction success: {}", success);
+    println!("Transaction success: {success}");
 
     // Check recipient balance
     let recipient_balance = aptos.get_balance(recipient.address()).await.unwrap_or(0);
@@ -240,10 +240,10 @@ async fn sponsored_multikey_example(aptos: &Aptos) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Example: Sponsored transaction with MultiEd25519 (classic multisig) account
+/// Example: Sponsored transaction with `MultiEd25519` (classic multisig) account
 ///
 /// This combines:
-/// - MultiEd25519 account (M-of-N Ed25519 threshold)
+/// - `MultiEd25519` account (M-of-N Ed25519 threshold)
 /// - Fee payer sponsoring gas
 async fn sponsored_multisig_example(aptos: &Aptos) -> anyhow::Result<()> {
     // Generate Ed25519 keys
@@ -311,9 +311,9 @@ async fn sponsored_multisig_example(aptos: &Aptos) -> anyhow::Result<()> {
     let success = result
         .data
         .get("success")
-        .and_then(|v| v.as_bool())
+        .and_then(serde_json::value::Value::as_bool)
         .unwrap_or(false);
-    println!("Transaction success: {}", success);
+    println!("Transaction success: {success}");
 
     Ok(())
 }
@@ -392,7 +392,7 @@ async fn batch_multisig_example(aptos: &Aptos) -> anyhow::Result<()> {
         }
     }
 
-    println!("Batch results: {} succeeded, {} failed", succeeded, failed);
+    println!("Batch results: {succeeded} succeeded, {failed} failed");
 
     // Verify balances
     let r1_balance = aptos.get_balance(recipient1.address()).await.unwrap_or(0);
@@ -407,11 +407,11 @@ async fn batch_multisig_example(aptos: &Aptos) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Example: Multi-agent transaction where secondary signer is a MultiKey account
+/// Example: Multi-agent transaction where secondary signer is a `MultiKey` account
 ///
 /// This combines:
 /// - Multi-agent (multiple required signers)
-/// - MultiKey account as one of the signers
+/// - `MultiKey` account as one of the signers
 async fn multi_agent_multikey_example(aptos: &Aptos) -> anyhow::Result<()> {
     // Primary signer: regular Ed25519
     let primary = Ed25519Account::generate();
@@ -485,9 +485,9 @@ async fn multi_agent_multikey_example(aptos: &Aptos) -> anyhow::Result<()> {
     let success = result
         .data
         .get("success")
-        .and_then(|v| v.as_bool())
+        .and_then(serde_json::value::Value::as_bool)
         .unwrap_or(false);
-    println!("Transaction success: {}", success);
+    println!("Transaction success: {success}");
 
     Ok(())
 }

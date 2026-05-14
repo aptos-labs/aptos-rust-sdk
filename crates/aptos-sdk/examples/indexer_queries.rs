@@ -24,7 +24,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Use a known address with activity (Aptos Framework)
     let known_address = AccountAddress::ONE; // 0x1
-    println!("Querying data for address: {}", known_address);
+    println!("Querying data for address: {known_address}");
 
     // 1. Get fungible asset balances
     println!("\n--- 1. Fungible Asset Balances ---");
@@ -43,7 +43,7 @@ async fn main() -> anyhow::Result<()> {
                     println!("  ... and {} more", balances.len() - 5);
                 }
             }
-            Err(e) => println!("  Could not fetch balances: {}", e),
+            Err(e) => println!("  Could not fetch balances: {e}"),
         }
     }
 
@@ -77,7 +77,7 @@ async fn main() -> anyhow::Result<()> {
                     }
                 }
             }
-            Err(e) => println!("  Could not fetch tokens: {}", e),
+            Err(e) => println!("  Could not fetch tokens: {e}"),
         }
     }
 
@@ -104,7 +104,7 @@ async fn main() -> anyhow::Result<()> {
                     }
                 }
             }
-            Err(e) => println!("  Could not fetch transactions: {}", e),
+            Err(e) => println!("  Could not fetch transactions: {e}"),
         }
     }
 
@@ -112,14 +112,14 @@ async fn main() -> anyhow::Result<()> {
     println!("\n--- 4. Custom GraphQL Query ---");
     {
         // Custom query to get processor status
-        let query = r#"
+        let query = r"
             query GetProcessorStatus {
                 processor_status(limit: 3) {
                     processor
                     last_success_version
                 }
             }
-        "#;
+        ";
 
         #[derive(Debug, serde::Deserialize)]
         struct ProcessorStatus {
@@ -142,7 +142,7 @@ async fn main() -> anyhow::Result<()> {
                     );
                 }
             }
-            Err(e) => println!("  Query failed: {}", e),
+            Err(e) => println!("  Query failed: {e}"),
         }
     }
 
