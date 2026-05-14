@@ -31,6 +31,8 @@ jobs:
   resolve:
     name: Resolve Crates
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       publish_macros: ${{ steps.resolve.outputs.publish_macros }}
       publish_sdk: ${{ steps.resolve.outputs.publish_sdk }}
@@ -67,30 +69,32 @@ jobs:
   verify:
     name: Verify Release
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v6
-      
-      - name: Install Rust nightly (for docs.rs parity check)
-        uses: dtolnay/rust-toolchain@nightly
-      
-      - name: Install Rust stable (primary toolchain)
-        uses: dtolnay/rust-toolchain@master
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-rust
+        with:
+          toolchain: nightly
+          cache: 'false'
+
+      - uses: ./.github/actions/setup-rust
         with:
           toolchain: "1.95"
           components: clippy, rustfmt
-      
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
-      
+
       - name: Check formatting
         run: cargo fmt --all -- --check
-      
+
       - name: Run Clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
-      
+
       - name: Run tests
         run: cargo test --all-targets --all-features
-      
+
       - name: Build documentation (docs.rs parity)
         env:
           RUSTDOCFLAGS: --cfg docsrs -D warnings
@@ -99,18 +103,18 @@ jobs:
   publish-macros:
     name: Publish aptos-sdk-macros
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     needs: [resolve, verify]
     if: needs.resolve.outputs.publish_macros == 'true'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@master
+      - uses: ./.github/actions/setup-rust
         with:
           toolchain: "1.95"
-
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
 
       # --no-verify: The aptos-sdk dev-dependency is path-only (dropped from the
       # published crate to break the circular publish dependency), so the
@@ -129,6 +133,8 @@ jobs:
   publish-sdk:
     name: Publish aptos-sdk
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     needs: [resolve, verify, publish-macros]
     # Run if SDK should be published, AND either macros wasn't needed or macros succeeded
     if: |
@@ -137,15 +143,13 @@ jobs:
       needs.verify.result == 'success' &&
       (needs.publish-macros.result == 'success' || needs.publish-macros.result == 'skipped')
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@master
+      - uses: ./.github/actions/setup-rust
         with:
           toolchain: "1.95"
-
-      - name: Cache cargo
-        uses: Swatinem/rust-cache@v2
 
       # If macros was just published, poll crates.io until it's indexed
       - name: Wait for crates.io to index aptos-sdk-macros
@@ -204,12 +208,13 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 0
-      
+          persist-credentials: false
+
       - name: Generate release notes
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           generate_release_notes: true
           draft: false
