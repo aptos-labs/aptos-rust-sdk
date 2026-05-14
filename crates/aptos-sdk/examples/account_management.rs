@@ -38,7 +38,7 @@ async fn main() -> anyhow::Result<()> {
     // Generate account with a new mnemonic
     let (mnemonic_account, mnemonic_phrase) = Ed25519Account::generate_with_mnemonic()?;
     println!("Generated 24-word mnemonic:");
-    println!("  {}", mnemonic_phrase);
+    println!("  {mnemonic_phrase}");
     println!("\n  ⚠️  IMPORTANT: Store this phrase securely!");
     println!("\nDerived Account (index 0):");
     println!("  Address: {}", mnemonic_account.address());
@@ -57,7 +57,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Standard test mnemonic (DO NOT use for real funds!)
     let test_phrase = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
-    println!("Test mnemonic: {}", test_phrase);
+    println!("Test mnemonic: {test_phrase}");
 
     let test_account = Ed25519Account::from_mnemonic(test_phrase, 0)?;
     println!("Derived address: {}", test_account.address());
@@ -71,10 +71,7 @@ async fn main() -> anyhow::Result<()> {
     // NEVER print, log, or expose private keys in production code!
     let pk_bytes = random_account.private_key().to_bytes();
     let pk_hex = const_hex::encode(pk_bytes);
-    println!(
-        "[DEMO ONLY - NEVER DO THIS IN PRODUCTION] Private key (hex): {}",
-        pk_hex
-    );
+    println!("[DEMO ONLY - NEVER DO THIS IN PRODUCTION] Private key (hex): {pk_hex}");
 
     // Recreate account from private key hex
     let restored_account = Ed25519Account::from_private_key_hex(&pk_hex)?;
@@ -84,27 +81,27 @@ async fn main() -> anyhow::Result<()> {
     assert_eq!(random_account.address(), restored_account.address());
     println!("✓ Addresses match! Account successfully restored from private key.");
 
-    // 7. Demonstrate using an account on testnet
-    println!("\n--- 7. Using an Account on Testnet ---");
+    // 7. Demonstrate using an account on devnet
+    println!("\n--- 7. Using an Account on Devnet ---");
 
-    let config = AptosConfig::testnet();
+    let config = AptosConfig::devnet();
     let aptos = Aptos::new(config)?;
 
-    // Generate fresh account for testnet
-    let testnet_account = Ed25519Account::generate();
-    println!("New testnet account: {}", testnet_account.address());
+    // Generate fresh account for devnet
+    let devnet_account = Ed25519Account::generate();
+    println!("New devnet account: {}", devnet_account.address());
 
     // Fund it
     println!("Funding account...");
     aptos
-        .fund_account(testnet_account.address(), 100_000_000)
+        .fund_account(devnet_account.address(), 100_000_000)
         .await?;
 
     // Wait for funding
     tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
     // Check balance
-    let balance = aptos.get_balance(testnet_account.address()).await?;
+    let balance = aptos.get_balance(devnet_account.address()).await?;
     println!("Balance: {} APT", balance as f64 / 100_000_000.0);
 
     // 8. Summary of key concepts

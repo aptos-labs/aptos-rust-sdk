@@ -9,9 +9,9 @@ use aptos_sdk::{Aptos, AptosConfig, account::Ed25519Account};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Create client for testnet
-    let aptos = Aptos::new(AptosConfig::testnet())?;
-    println!("Connected to testnet");
+    // Create client for devnet
+    let aptos = Aptos::new(AptosConfig::devnet())?;
+    println!("Connected to devnet");
 
     // Generate an account to deploy from
     let deployer = Ed25519Account::generate();
@@ -88,7 +88,7 @@ async fn main() -> anyhow::Result<()> {
             println!("No modules found (account is new, which is expected)");
         }
         Err(e) => {
-            println!("Error: {}", e);
+            println!("Error: {e}");
         }
     }
 

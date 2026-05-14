@@ -23,7 +23,7 @@ jobs:
 
       - uses: ./.github/actions/setup-rust
         with:
-          toolchain: "1.90"
+          toolchain: "1.95"
           components: rustfmt
           cache: 'false'
 
@@ -42,7 +42,7 @@ jobs:
 
       - uses: ./.github/actions/setup-rust
         with:
-          toolchain: "1.90"
+          toolchain: "1.95"
           components: clippy
 
       - name: Run Clippy (default features)
@@ -173,7 +173,7 @@ jobs:
 
       - uses: ./.github/actions/setup-rust
         with:
-          toolchain: "1.90"
+          toolchain: "1.95"
 
       - name: Test with only ed25519
         run: cargo test -p aptos-sdk --no-default-features --features ed25519
@@ -293,10 +293,10 @@ jobs:
 
       - uses: ./.github/actions/setup-rust
         with:
-          toolchain: "1.85"
-
+          toolchain: "1.95"
+          
       - name: Check MSRV
-        run: cargo check -p aptos-sdk
+        run: cargo check -p aptos-sdk --all-features
 
   coverage:
     name: Code Coverage
@@ -310,10 +310,10 @@ jobs:
 
       - uses: ./.github/actions/setup-rust
         with:
-          toolchain: "1.90"
+          toolchain: "1.95"
 
       - name: Install cargo-tarpaulin
-        run: cargo install cargo-tarpaulin
+        run: cargo install --locked cargo-tarpaulin
 
       - name: Run coverage
         run: |

@@ -54,20 +54,10 @@
 //! - [`types`] - Core Aptos types
 //! - [`codegen`] - Code generation from Move ABIs
 
+// docs.rs parity: stabilise the `doc_cfg` feature so feature-gated items
+// render as such on docs.rs. All other lint configuration now lives in
+// `[workspace.lints]` in the root `Cargo.toml`.
 #![cfg_attr(docsrs, feature(doc_cfg))]
-#![forbid(unsafe_code)]
-#![warn(
-    missing_docs,
-    missing_debug_implementations,
-    rust_2018_idioms,
-    unreachable_pub,
-    clippy::pedantic
-)]
-// Pedantic lint exceptions - these are intentionally allowed
-#![allow(
-    clippy::must_use_candidate,       // Too noisy for SDK functions
-    clippy::match_same_arms,          // Sometimes intentionally explicit for clarity TODO: Remove, this showed a couple of issues
-)]
 
 pub mod account;
 pub mod api;

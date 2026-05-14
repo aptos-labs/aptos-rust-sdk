@@ -16,8 +16,8 @@ const OCTAS_PER_APT: f64 = 100_000_000.0;
 async fn main() -> anyhow::Result<()> {
     println!("=== Balance Checker Utility ===\n");
 
-    let aptos = Aptos::new(AptosConfig::testnet())?;
-    println!("Connected to testnet\n");
+    let aptos = Aptos::new(AptosConfig::devnet())?;
+    println!("Connected to devnet\n");
 
     // 1. Check balance of a known address
     println!("--- 1. Check Single Address ---");
@@ -44,7 +44,7 @@ async fn main() -> anyhow::Result<()> {
                 println!("  {}: {} APT", name, format_apt(balance));
                 total += balance;
             } else {
-                println!("  {}: Account not found or no balance", name);
+                println!("  {name}: Account not found or no balance");
             }
         }
 
@@ -100,12 +100,12 @@ async fn main() -> anyhow::Result<()> {
         // Check a real account
         let real_addr = AccountAddress::ONE;
         let exists = check_account_exists(&aptos, real_addr).await;
-        println!("  0x1 exists: {}", exists);
+        println!("  0x1 exists: {exists}");
 
         // Check a random (likely non-existent) account
         let random_account = Ed25519Account::generate();
         let exists = check_account_exists(&aptos, random_account.address()).await;
-        println!("  Random address exists: {}", exists);
+        println!("  Random address exists: {exists}");
     }
 
     println!("\n--- Summary ---");
@@ -123,19 +123,19 @@ async fn main() -> anyhow::Result<()> {
 fn format_apt(octas: u64) -> String {
     let apt = octas as f64 / OCTAS_PER_APT;
     if apt >= 1.0 {
-        format!("{:.4}", apt)
+        format!("{apt:.4}")
     } else if apt >= 0.0001 {
-        format!("{:.6}", apt)
+        format!("{apt:.6}")
     } else {
-        format!("{:.8}", apt)
+        format!("{apt:.8}")
     }
 }
 
 async fn check_balance(aptos: &Aptos, address: AccountAddress, name: &str) -> anyhow::Result<u64> {
     match aptos.get_balance(address).await {
         Ok(balance) => {
-            println!("  {}", name);
-            println!("    Address: {}", address);
+            println!("  {name}");
+            println!("    Address: {address}");
             println!(
                 "    Balance: {} APT ({} octas)",
                 format_apt(balance),
@@ -144,16 +144,16 @@ async fn check_balance(aptos: &Aptos, address: AccountAddress, name: &str) -> an
             Ok(balance)
         }
         Err(e) => {
-            println!("  {}", name);
-            println!("    Address: {}", address);
-            println!("    Error: {}", e);
+            println!("  {name}");
+            println!("    Address: {address}");
+            println!("    Error: {e}");
             Err(e.into())
         }
     }
 }
 
 async fn print_account_details(aptos: &Aptos, address: AccountAddress) -> anyhow::Result<()> {
-    println!("Account: {}", address);
+    println!("Account: {address}");
 
     // Get balance
     let balance = aptos.get_balance(address).await.unwrap_or(0);
@@ -161,7 +161,7 @@ async fn print_account_details(aptos: &Aptos, address: AccountAddress) -> anyhow
 
     // Get sequence number
     let seq_num = aptos.get_sequence_number(address).await.unwrap_or(0);
-    println!("  Sequence Number: {}", seq_num);
+    println!("  Sequence Number: {seq_num}");
 
     Ok(())
 }

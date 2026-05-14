@@ -155,13 +155,16 @@ fn derive_ed25519_from_seed(seed: &[u8], index: u32) -> AptosResult<[u8; 32]> {
     chain_code.copy_from_slice(&result[32..]);
 
     // Aptos derivation path: m/44'/637'/0'/0'/index'
-    // All indices are hardened (with 0x80000000 offset)
+    // All indices are hardened (with 0x80000000 offset).
+    // Hex literals on the constants below silence
+    // clippy::decimal_literal_in_bitwise_op (which fired starting
+    // in Rust 1.95) without changing any of the encoded values.
     let path = [
-        44 | 0x8000_0000,    // 44' (purpose)
-        637 | 0x8000_0000,   // 637' (Aptos coin type)
-        0x8000_0000,         // 0' (account)
-        0x8000_0000,         // 0' (change)
-        index | 0x8000_0000, // index' (address index)
+        0x0000_002Cu32 | 0x8000_0000, // 44'  (BIP-44 purpose)
+        0x0000_027Du32 | 0x8000_0000, // 637' (Aptos coin type)
+        0x8000_0000,                  // 0'   (account)
+        0x8000_0000,                  // 0'   (change)
+        index | 0x8000_0000,          // index' (address index)
     ];
 
     for child_index in path {

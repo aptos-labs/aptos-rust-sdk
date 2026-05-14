@@ -1,7 +1,7 @@
 //! Example: On-chain Multisig Accounts (Multisig V2)
 //!
 //! This example demonstrates how to work with Aptos on-chain multisig accounts.
-//! Unlike MultiEd25519Account (client-side threshold signing), on-chain multisig
+//! Unlike `MultiEd25519Account` (client-side threshold signing), on-chain multisig
 //! uses the `0x1::multisig_account` module for governance-style proposals.
 //!
 //! On-chain multisig workflow:
@@ -26,9 +26,9 @@ use aptos_sdk::{
 async fn main() -> anyhow::Result<()> {
     println!("=== On-chain Multisig Account Example ===\n");
 
-    // Connect to testnet
-    let aptos = Aptos::new(AptosConfig::testnet())?;
-    println!("Connected to testnet (chain_id: {})", aptos.chain_id());
+    // Connect to devnet
+    let aptos = Aptos::new(AptosConfig::devnet())?;
+    println!("Connected to devnet (chain_id: {})", aptos.chain_id());
 
     // ==== Part 1: Understanding On-chain Multisig ====
     println!("\n--- Part 1: Understanding On-chain Multisig ---");
@@ -80,7 +80,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Extract the multisig account address from the event
     let multisig_address = extract_multisig_address(&result.data)?;
-    println!("Multisig account created: {}", multisig_address);
+    println!("Multisig account created: {multisig_address}");
 
     // Fund the multisig account
     println!("\nFunding multisig account...");
@@ -114,13 +114,13 @@ async fn main() -> anyhow::Result<()> {
     let success = proposal_result
         .data
         .get("success")
-        .and_then(|v| v.as_bool())
+        .and_then(serde_json::Value::as_bool)
         .unwrap_or(false);
-    println!("Proposal created: {}", success);
+    println!("Proposal created: {success}");
 
     // The sequence number of this proposal (starts at 1)
     let sequence_number = 1u64;
-    println!("Proposal sequence number: {}", sequence_number);
+    println!("Proposal sequence number: {sequence_number}");
 
     // ==== Part 5: Vote on the Proposal ====
     println!("\n--- Part 5: Voting on the Proposal ---");
@@ -139,9 +139,9 @@ async fn main() -> anyhow::Result<()> {
     let success = approve_result
         .data
         .get("success")
-        .and_then(|v| v.as_bool())
+        .and_then(serde_json::Value::as_bool)
         .unwrap_or(false);
-    println!("Owner 2 approved: {}", success);
+    println!("Owner 2 approved: {success}");
 
     // Now we have 2 approvals (owner1 implicitly + owner2), meeting the threshold
 
@@ -178,9 +178,9 @@ async fn main() -> anyhow::Result<()> {
     let success = exec_result
         .data
         .get("success")
-        .and_then(|v| v.as_bool())
+        .and_then(serde_json::Value::as_bool)
         .unwrap_or(false);
-    println!("Execution success: {}", success);
+    println!("Execution success: {success}");
 
     // Verify the transfer
     tokio::time::sleep(std::time::Duration::from_secs(2)).await;
@@ -227,9 +227,9 @@ async fn main() -> anyhow::Result<()> {
     let success = reject_result
         .data
         .get("success")
-        .and_then(|v| v.as_bool())
+        .and_then(serde_json::Value::as_bool)
         .unwrap_or(false);
-    println!("Rejection recorded: {}", success);
+    println!("Rejection recorded: {success}");
 
     // Owner 3 also rejects
     let reject_payload_3 = InputEntryFunctionData::new("0x1::multisig_account::reject_transaction")
@@ -299,7 +299,7 @@ fn extract_multisig_address(data: &serde_json::Value) -> anyhow::Result<AccountA
                     .and_then(|v| v.as_str())
             {
                 return AccountAddress::from_hex(addr_str)
-                    .map_err(|e| anyhow::anyhow!("Invalid address: {}", e));
+                    .map_err(|e| anyhow::anyhow!("Invalid address: {e}"));
             }
         }
     }
@@ -315,7 +315,7 @@ fn extract_multisig_address(data: &serde_json::Value) -> anyhow::Result<AccountA
                     && typ.contains("multisig_account::MultisigAccount")
                 {
                     return AccountAddress::from_hex(addr)
-                        .map_err(|e| anyhow::anyhow!("Invalid address: {}", e));
+                        .map_err(|e| anyhow::anyhow!("Invalid address: {e}"));
                 }
             }
         }
@@ -356,7 +356,7 @@ async fn query_multisig_state(
                 .get("num_signatures_required")
                 .and_then(|v| v.as_str())
             {
-                println!("  Required signatures: {}", threshold);
+                println!("  Required signatures: {threshold}");
             }
 
             // Parse last executed
@@ -366,7 +366,7 @@ async fn query_multisig_state(
                 .get("last_executed_sequence_number")
                 .and_then(|v| v.as_str())
             {
-                println!("  Last executed sequence: {}", last);
+                println!("  Last executed sequence: {last}");
             }
 
             // Parse next sequence
@@ -376,11 +376,11 @@ async fn query_multisig_state(
                 .get("next_sequence_number")
                 .and_then(|v| v.as_str())
             {
-                println!("  Next sequence: {}", next);
+                println!("  Next sequence: {next}");
             }
         }
         Err(e) => {
-            println!("Could not query multisig state: {}", e);
+            println!("Could not query multisig state: {e}");
         }
     }
 

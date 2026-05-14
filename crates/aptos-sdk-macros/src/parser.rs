@@ -8,7 +8,7 @@ use syn::{
 };
 
 /// Input for the `aptos_contract!` macro.
-pub struct ContractInput {
+pub(crate) struct ContractInput {
     /// The name of the generated struct.
     pub name: Ident,
     /// The ABI JSON string.
@@ -18,7 +18,7 @@ pub struct ContractInput {
 }
 
 impl Parse for ContractInput {
-    fn parse(input: ParseStream) -> Result<Self> {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
         let mut name = None;
         let mut abi = None;
         let mut source = None;
@@ -43,7 +43,7 @@ impl Parse for ContractInput {
                 _ => {
                     return Err(syn::Error::new(
                         key.span(),
-                        format!("Unknown key '{}'. Expected 'name', 'abi', or 'source'", key),
+                        format!("Unknown key '{key}'. Expected 'name', 'abi', or 'source'"),
                     ));
                 }
             }
@@ -63,7 +63,7 @@ impl Parse for ContractInput {
 }
 
 /// Input for the `aptos_contract_file!` macro.
-pub struct FileInput {
+pub(crate) struct FileInput {
     /// Path to the ABI file.
     pub path: String,
     /// Name of the generated struct.
@@ -73,7 +73,7 @@ pub struct FileInput {
 }
 
 impl Parse for FileInput {
-    fn parse(input: ParseStream) -> Result<Self> {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
         // First argument: file path
         let path: LitStr = input.parse()?;
         input.parse::<Token![,]>()?;
@@ -100,7 +100,7 @@ impl Parse for FileInput {
 
 /// Information extracted from a Move function definition.
 #[derive(Debug, Clone, Default)]
-pub struct MoveFunctionInfo {
+pub(crate) struct MoveFunctionInfo {
     /// The function name.
     pub name: String,
     /// Documentation comment.
@@ -113,7 +113,7 @@ pub struct MoveFunctionInfo {
 
 /// Information extracted from a Move module.
 #[derive(Debug, Clone, Default)]
-pub struct MoveSourceInfo {
+pub(crate) struct MoveSourceInfo {
     /// Module documentation.
     #[allow(dead_code)] // Reserved for future use in generated documentation
     pub doc: Option<String>,
@@ -122,7 +122,7 @@ pub struct MoveSourceInfo {
 }
 
 /// Parses Move source code to extract function info.
-pub fn parse_move_source(source: &str) -> MoveSourceInfo {
+pub(crate) fn parse_move_source(source: &str) -> MoveSourceInfo {
     let mut info = MoveSourceInfo::default();
     let lines: Vec<&str> = source.lines().collect();
 
@@ -167,9 +167,10 @@ fn parse_function(lines: &[&str], start: usize) -> MoveFunctionInfo {
         if prev_line.starts_with("///") {
             let doc_content = prev_line.strip_prefix("///").unwrap_or("").trim();
             doc_lines.insert(0, doc_content.to_string());
-        } else if prev_line.is_empty() || prev_line.starts_with("#[") {
-            continue;
-        } else {
+        } else if !prev_line.is_empty() && !prev_line.starts_with("#[") {
+            // Anything else terminates the doc-comment block we are scanning
+            // backwards for. Empty lines and `#[attr]` lines are skipped over
+            // implicitly via the loop continuation.
             break;
         }
     }

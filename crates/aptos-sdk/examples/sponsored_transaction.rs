@@ -16,9 +16,9 @@ use aptos_sdk::{
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Create client for testnet
-    let aptos = Aptos::new(AptosConfig::testnet())?;
-    println!("Connected to testnet");
+    // Create client for devnet
+    let aptos = Aptos::new(AptosConfig::devnet())?;
+    println!("Connected to devnet");
 
     // Generate accounts
     let sender = Ed25519Account::generate();
@@ -79,7 +79,10 @@ async fn main() -> anyhow::Result<()> {
     println!("\nSubmitting sponsored transaction...");
     let result = aptos.submit_and_wait(&signed_txn, None).await?;
 
-    let success = result.data.get("success").and_then(|v| v.as_bool());
+    let success = result
+        .data
+        .get("success")
+        .and_then(serde_json::value::Value::as_bool);
     if success == Some(true) {
         println!("Transaction successful!");
 
@@ -104,7 +107,7 @@ async fn main() -> anyhow::Result<()> {
             .get("vm_status")
             .and_then(|v| v.as_str())
             .unwrap_or("unknown");
-        println!("Transaction failed: {}", vm_status);
+        println!("Transaction failed: {vm_status}");
     }
 
     Ok(())

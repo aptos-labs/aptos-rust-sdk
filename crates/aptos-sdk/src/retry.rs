@@ -478,7 +478,7 @@ mod tests {
             .build();
 
         // Attempt 3 would be 1000 * 2^2 = 4000ms, but capped at 2000ms
-        assert_eq!(config.delay_for_attempt(3), Duration::from_millis(2000));
+        assert_eq!(config.delay_for_attempt(3), Duration::from_secs(2));
     }
 
     #[test]

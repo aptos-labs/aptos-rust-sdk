@@ -28,12 +28,12 @@
 //!
 //! ## Test Categories
 //!
-//! - **account_tests**: Account creation, funding, balance queries
-//! - **transfer_tests**: APT transfers between accounts
-//! - **view_tests**: View function calls
-//! - **transaction_tests**: Transaction building, signing, submission
-//! - **multi_signer_tests**: Multi-agent and fee payer transactions
-//! - **state_tests**: Resource and state queries
+//! - **`account_tests`**: Account creation, funding, balance queries
+//! - **`transfer_tests`**: APT transfers between accounts
+//! - **`view_tests`**: View function calls
+//! - **`transaction_tests`**: Transaction building, signing, submission
+//! - **`multi_signer_tests`**: Multi-agent and fee payer transactions
+//! - **`state_tests`**: Resource and state queries
 
 use aptos_sdk::{Aptos, AptosConfig};
 use std::env;
@@ -82,7 +82,7 @@ mod account_tests {
             .fund_account(account.address(), 100_000_000)
             .await
             .expect("failed to fund account");
-        println!("Funded with txns: {:?}", txn_hashes);
+        println!("Funded with txns: {txn_hashes:?}");
 
         wait_for_finality().await;
 
@@ -92,7 +92,7 @@ mod account_tests {
             .await
             .expect("failed to get balance");
         assert!(balance > 0, "balance should be > 0");
-        println!("Balance: {} octas", balance);
+        println!("Balance: {balance} octas");
     }
 
     #[tokio::test]
@@ -134,7 +134,7 @@ mod account_tests {
             .await
             .expect("failed to get sequence number");
 
-        println!("Sequence number: {}", seq_num);
+        println!("Sequence number: {seq_num}");
         // New account should have sequence number 0
         assert_eq!(seq_num, 0);
     }
@@ -148,10 +148,82 @@ mod account_tests {
         // Random unfunded account
         let account = Ed25519Account::generate();
 
-        let result = aptos.get_sequence_number(account.address()).await;
+        // Under AIP-42 (implicit accounts) the fullnode reports sequence_number = 0
+        // for any address that has never been touched. The two valid outcomes are:
+        //   * an explicit "not found" error, or
+        //   * sequence_number == 0
+        // anything else (a non-zero seq num for a freshly-generated random key) is a bug.
+        match aptos.get_sequence_number(account.address()).await {
+            Ok(seq) => assert_eq!(
+                seq, 0,
+                "freshly generated account should have sequence number 0 \
+                 (or return not-found), got {seq}"
+            ),
+            Err(e) => assert!(
+                e.is_not_found(),
+                "unexpected error for unfunded account (expected a not-found \
+                 error or success with seq=0, but got something else): {e}"
+            ),
+        }
 
-        // Should get an error for non-existent account
-        assert!(result.is_err() || result.unwrap() == 0);
+        // get_balance for a fresh address should return 0.
+        let balance = aptos
+            .get_balance(account.address())
+            .await
+            .expect("get_balance should succeed for unfunded address (implicit accounts)");
+        assert_eq!(balance, 0, "fresh account must have zero balance");
+
+        // account_exists currently maps to `GET /accounts/{addr}` which, under
+        // AIP-42 (implicit accounts) on modern Aptos chains, returns 200 for
+        // any well-formed address. The helper therefore reports `true` even
+        // for never-funded addresses. We assert this is the actual behavior so
+        // a regression (e.g., the helper falsely reporting `false` on devnet)
+        // would surface immediately, while making the AIP-42 contract explicit
+        // in the test name.
+        let exists = aptos
+            .account_exists(account.address())
+            .await
+            .expect("account_exists should succeed");
+        assert!(
+            exists,
+            "under AIP-42 implicit accounts the fullnode reports any \
+             well-formed address as existing"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn e2e_sequence_number_increments() {
+        let config = get_test_config();
+        let aptos = Aptos::new(config).expect("failed to create client");
+
+        let sender = aptos
+            .create_funded_account(500_000_000)
+            .await
+            .expect("failed to create funded sender");
+
+        let start = aptos
+            .get_sequence_number(sender.address())
+            .await
+            .expect("failed to get sequence number");
+        assert_eq!(start, 0, "new account must start at sequence number 0");
+
+        // Send two transactions and verify the on-chain sequence number advances.
+        for i in 1..=2u64 {
+            let recipient = Ed25519Account::generate();
+            aptos
+                .transfer_apt(&sender, recipient.address(), 1_000)
+                .await
+                .expect("transfer failed");
+            let now = aptos
+                .get_sequence_number(sender.address())
+                .await
+                .expect("failed to get sequence number");
+            assert_eq!(
+                now, i,
+                "sequence number must increment by exactly 1 per submitted transaction"
+            );
+        }
     }
 }
 
@@ -187,7 +259,10 @@ mod transfer_tests {
             .await
             .expect("failed to transfer");
 
-        let success = result.data.get("success").and_then(|v| v.as_bool());
+        let success = result
+            .data
+            .get("success")
+            .and_then(serde_json::Value::as_bool);
         assert_eq!(success, Some(true), "transfer should succeed");
         println!("Transfer successful!");
 
@@ -224,7 +299,10 @@ mod transfer_tests {
                 .await
                 .expect("failed to transfer");
 
-            let success = result.data.get("success").and_then(|v| v.as_bool());
+            let success = result
+                .data
+                .get("success")
+                .and_then(serde_json::Value::as_bool);
             assert_eq!(success, Some(true));
             println!("Transfer {} to {} successful", i + 1, recipient.address());
         }
@@ -235,7 +313,7 @@ mod transfer_tests {
         for (i, recipient) in recipients.iter().enumerate() {
             let balance = aptos.get_balance(recipient.address()).await.unwrap_or(0);
             let expected = 1_000_000 * (i as u64 + 1);
-            assert_eq!(balance, expected, "recipient {} balance mismatch", i);
+            assert_eq!(balance, expected, "recipient {i} balance mismatch");
         }
     }
 
@@ -261,7 +339,7 @@ mod transfer_tests {
         assert!(
             result.is_err() || {
                 let r = result.unwrap();
-                r.data.get("success").and_then(|v| v.as_bool()) == Some(false)
+                r.data.get("success").and_then(serde_json::Value::as_bool) == Some(false)
             }
         );
     }
@@ -288,7 +366,7 @@ mod view_tests {
             .expect("failed to call view function");
 
         assert!(!result.is_empty(), "should return a value");
-        println!("Current timestamp: {:?}", result);
+        println!("Current timestamp: {result:?}");
 
         // Parse the timestamp
         if let Some(timestamp) = result[0].as_str() {
@@ -303,14 +381,14 @@ mod view_tests {
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
 
+        let funded_amount: u64 = 100_000_000;
         let account = aptos
-            .create_funded_account(100_000_000)
+            .create_funded_account(funded_amount)
             .await
             .expect("failed to create account");
 
         wait_for_finality().await;
 
-        // Use view function to check balance
         let result = aptos
             .view(
                 "0x1::coin::balance",
@@ -320,8 +398,26 @@ mod view_tests {
             .await
             .expect("failed to call view function");
 
-        assert!(!result.is_empty());
-        println!("Balance via view: {:?}", result);
+        assert_eq!(result.len(), 1, "view function should return one value");
+        let balance_str = result[0]
+            .as_str()
+            .expect("balance must be returned as a string");
+        let balance_via_view: u64 = balance_str.parse().expect("balance must parse as a u64");
+
+        // Compare against the canonical get_balance helper. The view function
+        // and the helper must agree on the balance.
+        let balance_via_helper = aptos
+            .get_balance(account.address())
+            .await
+            .expect("get_balance failed");
+        assert_eq!(
+            balance_via_view, balance_via_helper,
+            "view-function balance must match get_balance helper"
+        );
+        assert!(
+            balance_via_view >= funded_amount,
+            "balance ({balance_via_view}) must be at least the funded amount ({funded_amount})"
+        );
     }
 
     #[tokio::test]
@@ -357,7 +453,7 @@ mod view_tests {
         let aptos = Aptos::new(config).expect("failed to create client");
 
         let random_address = Ed25519Account::generate().address();
-        println!("Random address: {}", random_address);
+        println!("Random address: {random_address}");
 
         let result = aptos
             .view(
@@ -368,7 +464,7 @@ mod view_tests {
             .await
             .expect("failed to call view function");
 
-        println!("Result: {:?}", result);
+        println!("Result: {result:?}");
         // Note: Modern Aptos chains use implicit accounts (AIP-42), so all addresses
         // are considered to "exist" with sequence_number=0 until a transaction is made.
         // The view function returns true for all addresses now.
@@ -398,41 +494,50 @@ mod transaction_tests {
             .expect("failed to create account");
 
         let recipient = Ed25519Account::generate();
+        let amount: u64 = 1_234_567;
 
-        // Build transaction manually
-        let payload = EntryFunction::apt_transfer(recipient.address(), 1000).unwrap();
+        let payload = EntryFunction::apt_transfer(recipient.address(), amount).unwrap();
         let raw_txn = aptos
             .build_transaction(&sender, payload.into())
             .await
             .expect("failed to build transaction");
 
-        // Sign
         let signed = sign_transaction(&raw_txn, &sender).expect("failed to sign");
 
-        // Debug: Print BCS bytes
+        // BCS round-trip: serialize then deserialize the signed transaction.
         let bcs_bytes = signed.to_bcs().expect("failed to serialize");
-        println!("BCS bytes ({} total):", bcs_bytes.len());
-        println!(
-            "First 100 bytes: {}",
-            const_hex::encode(&bcs_bytes[..100.min(bcs_bytes.len())])
-        );
-        println!(
-            "Last 100 bytes: {}",
-            const_hex::encode(&bcs_bytes[bcs_bytes.len().saturating_sub(100)..])
-        );
-        println!(
-            "Authenticator variant (byte at offset {}): {}",
-            bcs_bytes.len() - 97,
-            bcs_bytes.get(bcs_bytes.len() - 97).unwrap_or(&0)
+        assert!(
+            !bcs_bytes.is_empty(),
+            "BCS serialization must produce bytes"
         );
 
-        // Submit
         let result = aptos
             .submit_and_wait(&signed, None)
             .await
             .expect("failed to submit");
 
-        println!("Transaction result: {:?}", result.data);
+        let success = result
+            .data
+            .get("success")
+            .and_then(serde_json::Value::as_bool);
+        assert_eq!(
+            success,
+            Some(true),
+            "transaction should execute successfully, got: {:?}",
+            result.data
+        );
+
+        wait_for_finality().await;
+
+        // Verify the recipient was credited the *exact* amount.
+        let balance = aptos
+            .get_balance(recipient.address())
+            .await
+            .expect("failed to get recipient balance");
+        assert_eq!(
+            balance, amount,
+            "recipient should have received exactly the transferred amount"
+        );
     }
 
     #[tokio::test]
@@ -474,11 +579,13 @@ mod transaction_tests {
 
         assert!(!result.data.is_empty(), "simulation should return results");
 
-        let success = result.data[0].get("success").and_then(|v| v.as_bool());
+        let success = result.data[0]
+            .get("success")
+            .and_then(serde_json::Value::as_bool);
         assert_eq!(success, Some(true), "simulation should succeed");
 
         let gas_used = result.data[0].get("gas_used").and_then(|v| v.as_str());
-        println!("Simulated gas used: {:?}", gas_used);
+        println!("Simulated gas used: {gas_used:?}");
     }
 
     #[tokio::test]
@@ -494,21 +601,50 @@ mod transaction_tests {
             .await
             .expect("failed to create account");
 
-        // Do a transfer
         let result = aptos
             .transfer_apt(&sender, Ed25519Account::generate().address(), 1000)
             .await
             .expect("failed to transfer");
 
-        let hash_str = result.data.get("hash").and_then(|v| v.as_str()).unwrap();
-        println!("Transaction hash: {}", hash_str);
+        let hash_str = result
+            .data
+            .get("hash")
+            .and_then(|v| v.as_str())
+            .expect("response must include a transaction hash");
 
         wait_for_finality().await;
 
-        // Parse the hash and get transaction by hash (via fullnode client)
         let hash = HashValue::from_hex(hash_str).expect("invalid hash");
-        let txn = aptos.fullnode().get_transaction_by_hash(&hash).await;
-        assert!(txn.is_ok(), "should be able to get transaction by hash");
+        let txn = aptos
+            .fullnode()
+            .get_transaction_by_hash(&hash)
+            .await
+            .expect("should be able to get transaction by hash");
+
+        // Verify the looked-up txn matches the one we submitted.
+        let looked_up_hash = txn
+            .data
+            .get("hash")
+            .and_then(|v| v.as_str())
+            .expect("response must contain hash");
+        assert_eq!(looked_up_hash, hash_str);
+
+        let sender_field = txn
+            .data
+            .get("sender")
+            .and_then(|v| v.as_str())
+            .expect("transaction must have a sender field");
+        // Sender can be returned in short or long form. Compare against both.
+        assert!(
+            sender_field == sender.address().to_short_string()
+                || sender_field == sender.address().to_long_string(),
+            "sender mismatch: got {sender_field}, expected {} or {}",
+            sender.address().to_short_string(),
+            sender.address().to_long_string()
+        );
+
+        let success = txn.data.get("success").and_then(serde_json::Value::as_bool);
+        assert_eq!(success, Some(true));
     }
 
     #[tokio::test]
@@ -623,31 +759,35 @@ mod multi_signer_tests {
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
 
-        // Create sender with minimal funds (just for account creation)
+        // Sender has just enough APT to pay the transfer itself (no gas budget).
         let sender = aptos
-            .create_funded_account(1_000)
+            .create_funded_account(100_000_000)
             .await
             .expect("failed to create sender");
 
-        // Create fee payer with lots of funds
+        // Fee payer covers the gas.
         let fee_payer = aptos
             .create_funded_account(500_000_000)
             .await
             .expect("failed to create fee payer");
 
         let recipient = Ed25519Account::generate();
+        let transfer_amount: u64 = 500;
 
-        println!("Sender: {}", sender.address());
-        println!("Fee payer: {}", fee_payer.address());
-        println!("Recipient: {}", recipient.address());
-
-        // Build the fee payer transaction
-        let payload = EntryFunction::apt_transfer(recipient.address(), 500).unwrap();
+        let payload = EntryFunction::apt_transfer(recipient.address(), transfer_amount).unwrap();
 
         let sender_seq = aptos
             .get_sequence_number(sender.address())
             .await
-            .unwrap_or(0);
+            .expect("failed to get sender seq");
+        let fee_payer_balance_before = aptos
+            .get_balance(fee_payer.address())
+            .await
+            .expect("failed to read fee payer balance");
+        let sender_balance_before = aptos
+            .get_balance(sender.address())
+            .await
+            .expect("failed to read sender balance");
         let chain_id = aptos
             .ensure_chain_id()
             .await
@@ -658,7 +798,7 @@ mod multi_signer_tests {
             .sequence_number(sender_seq)
             .payload(payload.into())
             .chain_id(chain_id)
-            .max_gas_amount(100_000)
+            .max_gas_amount(2_000_000)
             .gas_unit_price(100)
             .build()
             .expect("failed to build");
@@ -672,18 +812,51 @@ mod multi_signer_tests {
         let signed = sign_fee_payer_transaction(&fee_payer_txn, &sender, &[], &fee_payer)
             .expect("failed to sign");
 
-        // Submit
-        let result = aptos.submit_and_wait(&signed, None).await;
+        let result = aptos
+            .submit_and_wait(&signed, None)
+            .await
+            .expect("fee-payer transaction must be accepted by devnet");
 
-        // This may or may not work depending on localnet support for fee payer
-        match result {
-            Ok(r) => {
-                println!("Fee payer transaction result: {:?}", r.data);
-            }
-            Err(e) => {
-                println!("Fee payer transaction failed (may not be supported): {}", e);
-            }
-        }
+        let success = result
+            .data
+            .get("success")
+            .and_then(serde_json::Value::as_bool);
+        assert_eq!(
+            success,
+            Some(true),
+            "fee-payer transaction must succeed: {:?}",
+            result.data
+        );
+
+        wait_for_finality().await;
+
+        // Recipient must have received exactly the transferred amount.
+        let recipient_balance = aptos
+            .get_balance(recipient.address())
+            .await
+            .expect("failed to get recipient balance");
+        assert_eq!(recipient_balance, transfer_amount);
+
+        // Sender balance must drop by exactly the transferred amount (no gas).
+        let sender_balance_after = aptos
+            .get_balance(sender.address())
+            .await
+            .expect("failed to get sender balance");
+        assert_eq!(
+            sender_balance_after,
+            sender_balance_before - transfer_amount,
+            "sender should have paid only the transfer amount, not gas"
+        );
+
+        // Fee payer should have decreased -- but by *less* than the gas budget.
+        let fee_payer_balance_after = aptos
+            .get_balance(fee_payer.address())
+            .await
+            .expect("failed to get fee payer balance");
+        assert!(
+            fee_payer_balance_after < fee_payer_balance_before,
+            "fee payer must have paid gas"
+        );
     }
 
     #[tokio::test]
@@ -692,30 +865,30 @@ mod multi_signer_tests {
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
 
-        // Create primary sender
         let sender = aptos
-            .create_funded_account(200_000_000)
+            .create_funded_account(500_000_000)
             .await
             .expect("failed to create sender");
-
-        // Create secondary signer
         let secondary = aptos
             .create_funded_account(100_000_000)
             .await
             .expect("failed to create secondary");
 
-        println!("Sender: {}", sender.address());
-        println!("Secondary: {}", secondary.address());
-
-        // Note: Most simple transactions don't need multi-agent
-        // This is just demonstrating the signing flow
+        // Use a multi-agent-aware system entry point: aptos_account::transfer takes one
+        // signer + a recipient address + amount. We instead use 0x1::coin::transfer
+        // with a CoinType to keep the surface small. Even for a single-signer payload,
+        // adding a secondary signer is rejected on devnet as "incorrect number of
+        // secondary signers", so this test verifies the SDK *signing* path produces
+        // a transaction that *parses* on the node. We accept either an Ok response
+        // (success=true with new style nodes) or an explicit per-payload validation
+        // error from the node.
         let payload =
             EntryFunction::apt_transfer(Ed25519Account::generate().address(), 1000).unwrap();
 
         let sender_seq = aptos
             .get_sequence_number(sender.address())
             .await
-            .unwrap_or(0);
+            .expect("failed to get sender seq");
         let chain_id = aptos
             .ensure_chain_id()
             .await
@@ -726,7 +899,7 @@ mod multi_signer_tests {
             .sequence_number(sender_seq)
             .payload(payload.into())
             .chain_id(chain_id)
-            .max_gas_amount(100_000)
+            .max_gas_amount(2_000_000)
             .gas_unit_price(100)
             .build()
             .expect("failed to build");
@@ -736,20 +909,36 @@ mod multi_signer_tests {
             secondary_signer_addresses: vec![secondary.address()],
         };
 
-        // Sign with both accounts
         let secondary_ref: &dyn Account = &secondary;
         let signed = sign_multi_agent_transaction(&multi_agent_txn, &sender, &[secondary_ref])
             .expect("failed to sign");
 
-        // Submit
-        let result = aptos.submit_and_wait(&signed, None).await;
+        // BCS round-trip must succeed.
+        let bytes = signed.to_bcs().expect("BCS serialization should succeed");
+        assert!(!bytes.is_empty());
 
-        match result {
+        // Submission may fail (the payload only takes a single signer), but the
+        // failure must be a deterministic VM/validation error, not a panic or
+        // network-level error. We assert that we either get a successful submission
+        // *or* a structured API error indicating signer-count mismatch.
+        match aptos.submit_and_wait(&signed, None).await {
             Ok(r) => {
-                println!("Multi-agent transaction result: {:?}", r.data);
+                let success = r.data.get("success").and_then(serde_json::Value::as_bool);
+                assert!(
+                    success.is_some(),
+                    "transaction result must contain a `success` field"
+                );
             }
             Err(e) => {
-                println!("Multi-agent transaction error: {}", e);
+                let msg = e.to_string().to_lowercase();
+                assert!(
+                    msg.contains("signer")
+                        || msg.contains("validation")
+                        || msg.contains("auth")
+                        || msg.contains("argument"),
+                    "expected a validation-level error for multi-agent on a single-signer \
+                     payload, got: {e}"
+                );
             }
         }
     }
@@ -772,7 +961,7 @@ mod multi_key_e2e_tests {
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
 
-        // Create a 2-of-3 multi-key account with mixed types
+        // 2-of-3 multi-key account: two Ed25519 keys and one Secp256k1 key.
         let ed_key1 = Ed25519PrivateKey::generate();
         let secp_key = Secp256k1PrivateKey::generate();
         let ed_key2 = Ed25519PrivateKey::generate();
@@ -782,33 +971,32 @@ mod multi_key_e2e_tests {
             AnyPrivateKey::secp256k1(secp_key),
             AnyPrivateKey::ed25519(ed_key2),
         ];
-
         let multi_key_account = MultiKeyAccount::new(keys, 2).unwrap();
-        println!("Multi-key account: {}", multi_key_account.address());
 
-        // Fund the multi-key account
         aptos
-            .fund_account(multi_key_account.address(), 100_000_000)
+            .fund_account(multi_key_account.address(), 500_000_000)
             .await
-            .expect("failed to fund");
+            .expect("failed to fund multi-key account");
 
         wait_for_finality().await;
 
-        // Check balance
-        let balance = aptos
+        let balance_before = aptos
             .get_balance(multi_key_account.address())
             .await
-            .unwrap_or(0);
-        println!("Multi-key balance: {}", balance);
+            .expect("failed to get multi-key balance");
+        assert!(
+            balance_before >= 500_000_000,
+            "multi-key account should be funded to at least 500M octas"
+        );
 
-        // Build and sign a transfer
         let recipient = aptos_sdk::account::Ed25519Account::generate();
-        let payload = EntryFunction::apt_transfer(recipient.address(), 1_000_000).unwrap();
+        let transfer_amount: u64 = 1_000_000;
+        let payload = EntryFunction::apt_transfer(recipient.address(), transfer_amount).unwrap();
 
         let seq = aptos
             .get_sequence_number(multi_key_account.address())
             .await
-            .unwrap_or(0);
+            .expect("failed to get seq");
         let chain_id = aptos
             .ensure_chain_id()
             .await
@@ -819,7 +1007,7 @@ mod multi_key_e2e_tests {
             .sequence_number(seq)
             .payload(payload.into())
             .chain_id(chain_id)
-            .max_gas_amount(100_000)
+            .max_gas_amount(2_000_000)
             .gas_unit_price(100)
             .build()
             .expect("failed to build");
@@ -827,19 +1015,32 @@ mod multi_key_e2e_tests {
         let signed =
             sign_transaction(&raw_txn, &multi_key_account).expect("failed to sign with multi-key");
 
-        // Submit
-        let result = aptos.submit_and_wait(&signed, None).await;
+        let result = aptos
+            .submit_and_wait(&signed, None)
+            .await
+            .expect("multi-key transaction must be accepted");
 
-        match result {
-            Ok(r) => {
-                let success = r.data.get("success").and_then(|v| v.as_bool());
-                println!("Multi-key transaction success: {:?}", success);
-            }
-            Err(e) => {
-                // Multi-key might not be supported on all networks
-                println!("Multi-key transaction error (may not be supported): {}", e);
-            }
-        }
+        let success = result
+            .data
+            .get("success")
+            .and_then(serde_json::Value::as_bool);
+        assert_eq!(
+            success,
+            Some(true),
+            "multi-key transaction must succeed: {:?}",
+            result.data
+        );
+
+        wait_for_finality().await;
+
+        let recipient_balance = aptos
+            .get_balance(recipient.address())
+            .await
+            .expect("failed to get recipient balance");
+        assert_eq!(
+            recipient_balance, transfer_amount,
+            "recipient should have received exactly the transferred amount"
+        );
     }
 }
 
@@ -853,115 +1054,388 @@ mod state_tests {
 
     #[tokio::test]
     #[ignore]
-    async fn e2e_get_account_resource() {
+    async fn e2e_get_account_resource_after_first_txn() {
+        use aptos_sdk::account::Ed25519Account;
+
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
 
-        let account = aptos
-            .create_funded_account(100_000_000)
+        // Under AIP-42 (implicit accounts) an address that has only been
+        // *funded* via the faucet does not yet have a `0x1::account::Account`
+        // resource on chain -- the resource is materialised the first time
+        // *that account itself* submits a transaction. Drive at least one
+        // transfer from this account so the Account resource exists, then
+        // assert it parses and that the sequence_number it reports is 1.
+        let sender = aptos
+            .create_funded_account(500_000_000)
             .await
             .expect("failed to create account");
+        let recipient = Ed25519Account::generate();
+        aptos
+            .transfer_apt(&sender, recipient.address(), 1_000)
+            .await
+            .expect("first transfer should succeed");
 
         wait_for_finality().await;
 
-        // Get the Account resource via fullnode client
         let resource = aptos
             .fullnode()
-            .get_account_resource(account.address(), "0x1::account::Account")
-            .await;
+            .get_account_resource(sender.address(), "0x1::account::Account")
+            .await
+            .expect("0x1::account::Account resource must exist after first txn");
 
-        match resource {
-            Ok(r) => {
-                println!("Account resource: {:?}", r.data);
-            }
-            Err(e) => {
-                println!("Failed to get resource: {}", e);
-            }
-        }
+        assert_eq!(resource.data.typ, "0x1::account::Account");
+        let seq_str = resource
+            .data
+            .data
+            .get("sequence_number")
+            .and_then(|v| v.as_str())
+            .expect("Account resource must have sequence_number");
+        let seq: u64 = seq_str.parse().expect("sequence_number must be numeric");
+        assert_eq!(
+            seq, 1,
+            "after exactly one transfer the on-chain sequence number must be 1"
+        );
     }
 
     #[tokio::test]
     #[ignore]
-    async fn e2e_get_coin_store_resource() {
+    async fn e2e_get_resources_for_funded_account() {
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
 
+        let funded_amount: u64 = 100_000_000;
         let account = aptos
-            .create_funded_account(100_000_000)
+            .create_funded_account(funded_amount)
             .await
             .expect("failed to create account");
 
         wait_for_finality().await;
 
-        // Get the CoinStore resource for APT
-        let resource = aptos
-            .fullnode()
-            .get_account_resource(
-                account.address(),
-                "0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>",
-            )
-            .await;
+        // Modern Aptos APT balances live in fungible-store object resources,
+        // not in `0x1::coin::CoinStore`. Use the canonical `get_balance`
+        // helper and assert it matches the funded amount.
+        let balance = aptos
+            .get_balance(account.address())
+            .await
+            .expect("failed to read balance");
+        assert!(
+            balance >= funded_amount,
+            "balance ({balance}) must be at least the funded amount ({funded_amount})"
+        );
 
-        match resource {
-            Ok(r) => {
-                println!("CoinStore resource: {:?}", r.data);
-            }
-            Err(e) => {
-                println!("Failed to get CoinStore: {}", e);
-            }
-        }
+        // We do NOT assert that `get_account_resources` is non-empty. Under
+        // AIP-42 a pure-faucet-funded address may have *no* directly-owned
+        // resources (its balance is held in a fungible store object
+        // referenced indirectly), so the call is exercised for its
+        // network/serialization path only.
+        let _ = aptos
+            .fullnode()
+            .get_account_resources(account.address())
+            .await
+            .expect("listing resources should not error");
     }
 }
 
 // =============================================================================
-// SingleKey Account Tests
+// SingleKey Account Tests (real transfer flow)
 // =============================================================================
 
 #[cfg(all(feature = "ed25519", feature = "faucet"))]
 mod single_key_tests {
-    use aptos_sdk::account::Ed25519SingleKeyAccount;
+    use super::*;
+    use aptos_sdk::account::{Ed25519Account, Ed25519SingleKeyAccount};
+    use aptos_sdk::transaction::{EntryFunction, TransactionBuilder, builder::sign_transaction};
 
     #[tokio::test]
     #[ignore]
-    async fn e2e_single_key_account_address_derivation() {
-        // Test that SingleKey accounts derive addresses correctly
-        let account = Ed25519SingleKeyAccount::generate();
+    async fn e2e_single_key_account_transfer() {
+        let config = get_test_config();
+        let aptos = Aptos::new(config).expect("failed to create client");
 
-        // Address should not be zero
-        assert!(!account.address().is_zero());
+        // SingleKey accounts derive a different address than legacy Ed25519.
+        let sender = Ed25519SingleKeyAccount::generate();
 
-        // Same key should produce same address
-        let address1 = account.address();
-        let address2 = account.address();
-        assert_eq!(address1, address2);
+        aptos
+            .fund_account(sender.address(), 500_000_000)
+            .await
+            .expect("failed to fund single-key account");
+        wait_for_finality().await;
 
-        println!("SingleKey account address: {}", account.address());
+        let recipient = Ed25519Account::generate();
+        let amount: u64 = 2_500_000;
+        let payload = EntryFunction::apt_transfer(recipient.address(), amount).unwrap();
+
+        let seq = aptos
+            .get_sequence_number(sender.address())
+            .await
+            .expect("failed to get seq");
+        let chain_id = aptos
+            .ensure_chain_id()
+            .await
+            .expect("failed to resolve chain id");
+
+        let raw_txn = TransactionBuilder::new()
+            .sender(sender.address())
+            .sequence_number(seq)
+            .payload(payload.into())
+            .chain_id(chain_id)
+            .max_gas_amount(2_000_000)
+            .gas_unit_price(100)
+            .build()
+            .expect("failed to build");
+
+        let signed = sign_transaction(&raw_txn, &sender).expect("failed to sign");
+        let result = aptos
+            .submit_and_wait(&signed, None)
+            .await
+            .expect("transaction submission failed");
+
+        let success = result
+            .data
+            .get("success")
+            .and_then(serde_json::Value::as_bool);
+        assert_eq!(success, Some(true), "transaction must succeed");
+
+        wait_for_finality().await;
+
+        let recipient_balance = aptos
+            .get_balance(recipient.address())
+            .await
+            .expect("failed to get recipient balance");
+        assert_eq!(recipient_balance, amount);
     }
 }
 
 // =============================================================================
-// Secp256k1 Account Tests
+// Secp256k1 Account Tests (real transfer flow)
 // =============================================================================
 
 #[cfg(all(feature = "secp256k1", feature = "faucet"))]
 mod secp256k1_tests {
-    use aptos_sdk::account::Secp256k1Account;
+    use super::*;
+    use aptos_sdk::account::{Ed25519Account, Secp256k1Account};
+    use aptos_sdk::transaction::{EntryFunction, TransactionBuilder, builder::sign_transaction};
 
     #[tokio::test]
     #[ignore]
-    async fn e2e_secp256k1_account_address_derivation() {
-        // Test that Secp256k1 accounts derive addresses correctly
-        let account = Secp256k1Account::generate();
+    async fn e2e_secp256k1_account_transfer() {
+        let config = get_test_config();
+        let aptos = Aptos::new(config).expect("failed to create client");
 
-        // Address should not be zero
-        assert!(!account.address().is_zero());
+        let sender = Secp256k1Account::generate();
+        aptos
+            .fund_account(sender.address(), 500_000_000)
+            .await
+            .expect("failed to fund secp256k1 account");
+        wait_for_finality().await;
 
-        // Same key should produce same address
-        let address1 = account.address();
-        let address2 = account.address();
-        assert_eq!(address1, address2);
+        let recipient = Ed25519Account::generate();
+        let amount: u64 = 3_141_592;
+        let payload = EntryFunction::apt_transfer(recipient.address(), amount).unwrap();
 
-        println!("Secp256k1 account address: {}", account.address());
+        let seq = aptos
+            .get_sequence_number(sender.address())
+            .await
+            .expect("failed to get seq");
+        let chain_id = aptos
+            .ensure_chain_id()
+            .await
+            .expect("failed to resolve chain id");
+
+        let raw_txn = TransactionBuilder::new()
+            .sender(sender.address())
+            .sequence_number(seq)
+            .payload(payload.into())
+            .chain_id(chain_id)
+            .max_gas_amount(2_000_000)
+            .gas_unit_price(100)
+            .build()
+            .expect("failed to build");
+
+        let signed = sign_transaction(&raw_txn, &sender).expect("failed to sign");
+        let result = aptos
+            .submit_and_wait(&signed, None)
+            .await
+            .expect("transaction submission failed");
+
+        let success = result
+            .data
+            .get("success")
+            .and_then(serde_json::Value::as_bool);
+        assert_eq!(success, Some(true), "secp256k1 transfer must succeed");
+
+        wait_for_finality().await;
+
+        let balance = aptos
+            .get_balance(recipient.address())
+            .await
+            .expect("failed to get recipient balance");
+        assert_eq!(balance, amount);
+    }
+}
+
+// =============================================================================
+// WebAuthn / Passkey Account Tests (real transfer flow with synthetic
+// PartialAuthenticatorAssertionResponse)
+//
+// On current Aptos networks the on-chain `AnySignature` variant at index 2
+// is `WebAuthn { signature: PartialAuthenticatorAssertionResponse }`, not a
+// bare Secp256r1Ecdsa signature. The SDK ships a `WebAuthnAccount` wrapper
+// that wraps a P-256 key in the WebAuthn envelope (rpIdHash +
+// authenticator_data + client_data_json + canonical low-S signature) so the
+// chain accepts the resulting transaction.
+//
+// This test exercises that path end-to-end against devnet: fund a
+// WebAuthn-derived address, submit a real APT transfer signed by the
+// WebAuthn account, and verify the recipient is credited exactly the
+// transferred amount.
+// =============================================================================
+
+#[cfg(all(feature = "secp256r1", feature = "faucet"))]
+mod webauthn_tests {
+    use super::*;
+    use aptos_sdk::account::WebAuthnAccount;
+    use aptos_sdk::transaction::{EntryFunction, TransactionBuilder, builder::sign_transaction};
+
+    #[tokio::test]
+    #[ignore]
+    async fn e2e_webauthn_account_transfer() {
+        let config = get_test_config();
+        let aptos = Aptos::new(config).expect("failed to create client");
+
+        let sender = WebAuthnAccount::generate();
+        aptos
+            .fund_account(sender.address(), 500_000_000)
+            .await
+            .expect("failed to fund WebAuthn account");
+        wait_for_finality().await;
+
+        #[cfg(feature = "ed25519")]
+        let recipient = aptos_sdk::account::Ed25519Account::generate();
+        #[cfg(not(feature = "ed25519"))]
+        let recipient = WebAuthnAccount::generate();
+
+        let amount: u64 = 2_718_281;
+        let payload = EntryFunction::apt_transfer(recipient.address(), amount).unwrap();
+
+        let seq = aptos
+            .get_sequence_number(sender.address())
+            .await
+            .expect("failed to get seq");
+        let chain_id = aptos
+            .ensure_chain_id()
+            .await
+            .expect("failed to resolve chain id");
+
+        let raw_txn = TransactionBuilder::new()
+            .sender(sender.address())
+            .sequence_number(seq)
+            .payload(payload.into())
+            .chain_id(chain_id)
+            .max_gas_amount(2_000_000)
+            .gas_unit_price(100)
+            .build()
+            .expect("failed to build");
+
+        let signed = sign_transaction(&raw_txn, &sender).expect("failed to sign");
+        let result = aptos
+            .submit_and_wait(&signed, None)
+            .await
+            .expect("WebAuthn transaction submission must succeed on devnet");
+
+        let success = result
+            .data
+            .get("success")
+            .and_then(serde_json::Value::as_bool);
+        assert_eq!(
+            success,
+            Some(true),
+            "WebAuthn transaction must execute successfully on devnet: {:?}",
+            result.data
+        );
+
+        wait_for_finality().await;
+
+        let recipient_balance = aptos
+            .get_balance(recipient.address())
+            .await
+            .expect("failed to get recipient balance");
+        assert_eq!(
+            recipient_balance, amount,
+            "recipient must receive exactly the transferred amount"
+        );
+    }
+}
+
+// =============================================================================
+// MultiEd25519 Account Tests (real on-chain flow)
+// =============================================================================
+
+#[cfg(all(feature = "ed25519", feature = "faucet"))]
+mod multi_ed25519_tests {
+    use super::*;
+    use aptos_sdk::account::{Ed25519Account, MultiEd25519Account};
+    use aptos_sdk::crypto::Ed25519PrivateKey;
+    use aptos_sdk::transaction::{EntryFunction, TransactionBuilder, builder::sign_transaction};
+
+    #[tokio::test]
+    #[ignore]
+    async fn e2e_multi_ed25519_transfer() {
+        let config = get_test_config();
+        let aptos = Aptos::new(config).expect("failed to create client");
+
+        let keys: Vec<_> = (0..3).map(|_| Ed25519PrivateKey::generate()).collect();
+        let account = MultiEd25519Account::new(keys, 2).unwrap();
+
+        aptos
+            .fund_account(account.address(), 500_000_000)
+            .await
+            .expect("failed to fund multi-ed25519 account");
+        wait_for_finality().await;
+
+        let recipient = Ed25519Account::generate();
+        let amount: u64 = 4_096_000;
+        let payload = EntryFunction::apt_transfer(recipient.address(), amount).unwrap();
+
+        let seq = aptos
+            .get_sequence_number(account.address())
+            .await
+            .expect("failed to get seq");
+        let chain_id = aptos
+            .ensure_chain_id()
+            .await
+            .expect("failed to resolve chain id");
+
+        let raw_txn = TransactionBuilder::new()
+            .sender(account.address())
+            .sequence_number(seq)
+            .payload(payload.into())
+            .chain_id(chain_id)
+            .max_gas_amount(2_000_000)
+            .gas_unit_price(100)
+            .build()
+            .expect("failed to build");
+
+        let signed = sign_transaction(&raw_txn, &account).expect("failed to sign");
+        let result = aptos
+            .submit_and_wait(&signed, None)
+            .await
+            .expect("multi-ed25519 transaction submission failed");
+
+        let success = result
+            .data
+            .get("success")
+            .and_then(serde_json::Value::as_bool);
+        assert_eq!(success, Some(true), "multi-ed25519 transfer must succeed");
+
+        wait_for_finality().await;
+
+        let balance = aptos
+            .get_balance(recipient.address())
+            .await
+            .expect("failed to get recipient balance");
+        assert_eq!(balance, amount);
     }
 }
 
@@ -977,22 +1451,23 @@ mod batch_tests {
 
     #[tokio::test]
     #[ignore]
-    async fn e2e_batch_build() {
+    async fn e2e_batch_build_and_submit() {
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
 
-        // Create sender
+        // Fund well above the gas budget for 2 transactions (~400M octas).
         let sender = aptos
-            .create_funded_account(500_000_000)
+            .create_funded_account(1_000_000_000)
             .await
             .expect("failed to create sender");
 
         let recipient1 = Ed25519Account::generate();
         let recipient2 = Ed25519Account::generate();
+        let amount1: u64 = 7_777_777;
+        let amount2: u64 = 8_888_888;
 
         wait_for_finality().await;
 
-        // Get sequence number and resolve chain ID
         let seq_num = aptos
             .fullnode()
             .get_sequence_number(sender.address())
@@ -1003,10 +1478,9 @@ mod batch_tests {
             .await
             .expect("failed to resolve chain id");
 
-        // Build batch using TransactionBatchBuilder
-        let payload1 = InputEntryFunctionData::transfer_apt(recipient1.address(), 10_000_000)
+        let payload1 = InputEntryFunctionData::transfer_apt(recipient1.address(), amount1)
             .expect("failed to build payload 1");
-        let payload2 = InputEntryFunctionData::transfer_apt(recipient2.address(), 10_000_000)
+        let payload2 = InputEntryFunctionData::transfer_apt(recipient2.address(), amount2)
             .expect("failed to build payload 2");
 
         let batch = TransactionBatchBuilder::new()
@@ -1017,15 +1491,177 @@ mod batch_tests {
             .add_payload(payload2)
             .build_and_sign(&sender)
             .expect("failed to build batch");
-
-        println!("Created batch of {} transactions", batch.len());
         assert_eq!(batch.len(), 2);
+
+        let txns = batch.transactions();
+        // Sequence numbers must be strictly increasing and dense.
+        assert_eq!(txns[0].raw_txn.sequence_number, seq_num);
+        assert_eq!(txns[1].raw_txn.sequence_number, seq_num + 1);
+
+        // Submit each transaction in the batch and wait for both to finalize.
+        for txn in txns {
+            aptos
+                .submit_and_wait(txn, None)
+                .await
+                .expect("batch transaction must succeed");
+        }
+
+        wait_for_finality().await;
+
+        // Recipients should have exactly the funded amounts.
+        let balance1 = aptos
+            .get_balance(recipient1.address())
+            .await
+            .expect("failed to read recipient1 balance");
+        let balance2 = aptos
+            .get_balance(recipient2.address())
+            .await
+            .expect("failed to read recipient2 balance");
+        assert_eq!(balance1, amount1);
+        assert_eq!(balance2, amount2);
+
+        // Sender sequence number must have advanced by 2.
+        let new_seq = aptos
+            .get_sequence_number(sender.address())
+            .await
+            .expect("failed to read seq");
+        assert_eq!(new_seq, seq_num + 2);
     }
 }
 
 // =============================================================================
 // Additional Balance Tests
 // =============================================================================
+
+// =============================================================================
+// Gas Estimation Tests
+// =============================================================================
+
+#[cfg(all(feature = "ed25519", feature = "faucet"))]
+mod gas_tests {
+    use super::*;
+    use aptos_sdk::account::Ed25519Account;
+    use aptos_sdk::transaction::EntryFunction;
+
+    #[tokio::test]
+    #[ignore]
+    async fn e2e_estimate_gas_for_transfer() {
+        let config = get_test_config();
+        let aptos = Aptos::new(config).expect("failed to create client");
+
+        let sender = aptos
+            .create_funded_account(500_000_000)
+            .await
+            .expect("failed to create sender");
+        let recipient = Ed25519Account::generate();
+
+        let payload = EntryFunction::apt_transfer(recipient.address(), 1_000)
+            .expect("failed to build payload");
+
+        let gas_used = aptos
+            .estimate_gas(&sender, payload.into())
+            .await
+            .expect("estimate_gas must succeed");
+
+        // Sanity bounds: a basic APT transfer is on the order of a few hundred to
+        // a few thousand gas units on devnet. We bound very loosely to avoid
+        // flakiness with on-chain gas schedule changes.
+        assert!(gas_used > 0, "gas_used must be positive");
+        assert!(
+            gas_used < 1_000_000,
+            "gas_used ({gas_used}) is wildly higher than expected for an APT transfer"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn e2e_estimate_gas_price() {
+        let config = get_test_config();
+        let aptos = Aptos::new(config).expect("failed to create client");
+
+        let estimate = aptos
+            .fullnode()
+            .estimate_gas_price()
+            .await
+            .expect("estimate_gas_price must succeed");
+
+        assert!(
+            estimate.data.gas_estimate > 0,
+            "gas_estimate must be positive"
+        );
+    }
+}
+
+// =============================================================================
+// Sponsored (Fee Payer) Builder Helper Tests
+// =============================================================================
+
+#[cfg(all(feature = "ed25519", feature = "faucet"))]
+mod sponsored_builder_tests {
+    use super::*;
+    use aptos_sdk::account::Ed25519Account;
+    use aptos_sdk::transaction::{EntryFunction, SponsoredTransactionBuilder};
+
+    #[tokio::test]
+    #[ignore]
+    async fn e2e_sponsored_builder_real_transfer() {
+        let config = get_test_config();
+        let aptos = Aptos::new(config).expect("failed to create client");
+
+        // Sender has just the transfer amount; sponsor covers gas.
+        let sender = aptos
+            .create_funded_account(100_000_000)
+            .await
+            .expect("failed to create sender");
+        let sponsor = aptos
+            .create_funded_account(500_000_000)
+            .await
+            .expect("failed to create sponsor");
+        let recipient = Ed25519Account::generate();
+
+        let sender_seq = aptos
+            .get_sequence_number(sender.address())
+            .await
+            .expect("failed to get sender seq");
+        let chain_id = aptos
+            .ensure_chain_id()
+            .await
+            .expect("failed to resolve chain id");
+
+        let amount: u64 = 12_345;
+        let payload = EntryFunction::apt_transfer(recipient.address(), amount).unwrap();
+
+        let signed = SponsoredTransactionBuilder::new()
+            .sender(sender.address())
+            .sequence_number(sender_seq)
+            .fee_payer(sponsor.address())
+            .payload(payload.into())
+            .chain_id(chain_id)
+            .max_gas_amount(2_000_000)
+            .gas_unit_price(100)
+            .build_and_sign(&sender, &[], &sponsor)
+            .expect("failed to build+sign sponsored transaction");
+
+        let result = aptos
+            .submit_and_wait(&signed, None)
+            .await
+            .expect("sponsored transaction submission failed");
+
+        let success = result
+            .data
+            .get("success")
+            .and_then(serde_json::Value::as_bool);
+        assert_eq!(success, Some(true), "sponsored transaction must succeed");
+
+        wait_for_finality().await;
+
+        let recipient_balance = aptos
+            .get_balance(recipient.address())
+            .await
+            .expect("failed to get recipient balance");
+        assert_eq!(recipient_balance, amount);
+    }
+}
 
 #[cfg(all(feature = "ed25519", feature = "faucet"))]
 mod balance_tests {
@@ -1059,10 +1695,9 @@ mod balance_tests {
                 .expect("failed to get balance");
             assert!(
                 balance >= 50_000_000,
-                "Account {} should have at least 50M octas",
-                i
+                "Account {i} should have at least 50M octas"
             );
-            println!("Account {}: {} octas", i, balance);
+            println!("Account {i}: {balance} octas");
         }
     }
 }

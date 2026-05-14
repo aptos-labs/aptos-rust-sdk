@@ -13,6 +13,9 @@ readme = "README.md"
 keywords = ["aptos", "blockchain", "macros", "codegen", "web3"]
 categories = ["cryptography", "development-tools::procedural-macro-helpers"]
 
+[lints]
+workspace = true
+
 [lib]
 proc-macro = true
 

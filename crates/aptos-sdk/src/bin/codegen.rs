@@ -54,7 +54,7 @@ struct Args {
     #[arg(short, long, conflicts_with_all = ["module", "network"])]
     input: Option<PathBuf>,
 
-    /// On-chain module to fetch (format: address::module_name)
+    /// On-chain module to fetch (format: `address::module_name`)
     #[arg(short, long, requires = "network")]
     module: Option<String>,
 
@@ -108,7 +108,7 @@ async fn main() -> anyhow::Result<()> {
     } else if let Some(module_str) = &args.module {
         // Fetch from network
         let network = args.network.as_ref().unwrap();
-        println!("Fetching module {} from {:?}...", module_str, network);
+        println!("Fetching module {module_str} from {network:?}...");
 
         let config = network.to_config();
         let aptos = Aptos::new(config)?;
@@ -117,8 +117,7 @@ async fn main() -> anyhow::Result<()> {
         let parts: Vec<&str> = module_str.split("::").collect();
         if parts.len() != 2 {
             anyhow::bail!(
-                "Invalid module format. Expected 'address::module_name', got: {}",
-                module_str
+                "Invalid module format. Expected 'address::module_name', got: {module_str}"
             );
         }
 
@@ -134,7 +133,7 @@ async fn main() -> anyhow::Result<()> {
         response
             .data
             .abi
-            .ok_or_else(|| anyhow::anyhow!("Module {} does not have ABI information", module_str))?
+            .ok_or_else(|| anyhow::anyhow!("Module {module_str} does not have ABI information"))?
     } else {
         anyhow::bail!("Either --input or --module must be specified");
     };
@@ -194,9 +193,9 @@ async fn main() -> anyhow::Result<()> {
 
     println!();
     println!("Summary:");
-    println!("  - Entry functions: {}", entry_count);
-    println!("  - View functions: {}", view_count);
-    println!("  - Structs: {}", struct_count);
+    println!("  - Entry functions: {entry_count}");
+    println!("  - View functions: {view_count}");
+    println!("  - Structs: {struct_count}");
 
     if args.source.is_some() {
         println!("  - (Parameter names enriched from Move source)");

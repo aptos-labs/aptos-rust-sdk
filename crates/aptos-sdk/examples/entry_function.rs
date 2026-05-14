@@ -1,8 +1,8 @@
 //! Example: Entry Function Transactions
 //!
 //! This example demonstrates multiple ways to build entry function transactions:
-//! 1. Using the ergonomic InputEntryFunctionData builder
-//! 2. Using EntryFunction directly with manual BCS encoding
+//! 1. Using the ergonomic `InputEntryFunctionData` builder
+//! 2. Using `EntryFunction` directly with manual BCS encoding
 //! 3. Using convenience helpers for common operations
 //! 4. Working with type arguments and complex data types
 //!
@@ -22,9 +22,9 @@ use aptos_sdk::{
 async fn main() -> anyhow::Result<()> {
     println!("=== Entry Function Transaction Examples ===\n");
 
-    // Connect to testnet
-    let aptos = Aptos::new(AptosConfig::testnet())?;
-    println!("Connected to testnet (chain_id: {})", aptos.chain_id());
+    // Connect to devnet
+    let aptos = Aptos::new(AptosConfig::devnet())?;
+    println!("Connected to devnet (chain_id: {})", aptos.chain_id());
 
     // Create and fund accounts
     let sender = aptos.create_funded_account(100_000_000).await?;
@@ -50,9 +50,9 @@ async fn main() -> anyhow::Result<()> {
     let success = result
         .data
         .get("success")
-        .and_then(|v| v.as_bool())
+        .and_then(serde_json::value::Value::as_bool)
         .unwrap_or(false);
-    println!("  Transaction success: {}", success);
+    println!("  Transaction success: {success}");
 
     // ==== Part 2: Using Type Arguments ====
     println!("\n--- Part 2: Entry Functions with Type Arguments ---");
@@ -72,9 +72,9 @@ async fn main() -> anyhow::Result<()> {
     let success = result
         .data
         .get("success")
-        .and_then(|v| v.as_bool())
+        .and_then(serde_json::value::Value::as_bool)
         .unwrap_or(false);
-    println!("  Transaction success: {}", success);
+    println!("  Transaction success: {success}");
 
     // ==== Part 3: Convenience Helpers ====
     println!("\n--- Part 3: Convenience Helper Methods ---");
@@ -89,7 +89,7 @@ async fn main() -> anyhow::Result<()> {
         result
             .data
             .get("success")
-            .and_then(|v| v.as_bool())
+            .and_then(serde_json::value::Value::as_bool)
             .unwrap_or(false)
     );
 
@@ -107,7 +107,7 @@ async fn main() -> anyhow::Result<()> {
         result
             .data
             .get("success")
-            .and_then(|v| v.as_bool())
+            .and_then(serde_json::value::Value::as_bool)
             .unwrap_or(false)
     );
 
@@ -135,7 +135,7 @@ async fn main() -> anyhow::Result<()> {
         result
             .data
             .get("success")
-            .and_then(|v| v.as_bool())
+            .and_then(serde_json::value::Value::as_bool)
             .unwrap_or(false)
     );
 
@@ -181,7 +181,7 @@ async fn main() -> anyhow::Result<()> {
         result
             .data
             .get("success")
-            .and_then(|v| v.as_bool())
+            .and_then(serde_json::value::Value::as_bool)
             .unwrap_or(false)
     );
 
@@ -247,7 +247,7 @@ async fn main() -> anyhow::Result<()> {
         result
             .data
             .get("success")
-            .and_then(|v| v.as_bool())
+            .and_then(serde_json::value::Value::as_bool)
             .unwrap_or(false)
     );
 
@@ -270,7 +270,7 @@ async fn main() -> anyhow::Result<()> {
         result
             .data
             .get("success")
-            .and_then(|v| v.as_bool())
+            .and_then(serde_json::value::Value::as_bool)
             .unwrap_or(false)
     );
 
@@ -299,7 +299,7 @@ async fn main() -> anyhow::Result<()> {
         result
             .data
             .get("success")
-            .and_then(|v| v.as_bool())
+            .and_then(serde_json::value::Value::as_bool)
             .unwrap_or(false)
     );
 
@@ -312,7 +312,7 @@ async fn main() -> anyhow::Result<()> {
         .build();
     println!("Invalid function ID: {}", result.is_err());
     if let Err(e) = result {
-        println!("  Error: {}", e);
+        println!("  Error: {e}");
     }
 
     // Invalid type argument

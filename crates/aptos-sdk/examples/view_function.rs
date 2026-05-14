@@ -9,9 +9,9 @@ use aptos_sdk::{Aptos, AptosConfig};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Create client for testnet
-    let aptos = Aptos::new(AptosConfig::testnet())?;
-    println!("Connected to testnet");
+    // Create client for devnet
+    let aptos = Aptos::new(AptosConfig::devnet())?;
+    println!("Connected to devnet");
 
     // Get ledger info
     let ledger_info = aptos.ledger_info().await?;
@@ -25,7 +25,7 @@ async fn main() -> anyhow::Result<()> {
     let result = aptos
         .view("0x1::timestamp::now_seconds", vec![], vec![])
         .await?;
-    println!("Current timestamp: {:?}", result);
+    println!("Current timestamp: {result:?}");
     println!();
 
     // Check if an account exists
@@ -38,7 +38,7 @@ async fn main() -> anyhow::Result<()> {
             vec![serde_json::json!(framework_address)],
         )
         .await?;
-    println!("Account exists: {:?}", result);
+    println!("Account exists: {result:?}");
     println!();
 
     // Get account sequence number
@@ -50,12 +50,12 @@ async fn main() -> anyhow::Result<()> {
             vec![serde_json::json!(framework_address)],
         )
         .await?;
-    println!("Sequence number: {:?}", result);
+    println!("Sequence number: {result:?}");
     println!();
 
     // Get coin balance for an address
     let test_address = "0x1"; // Framework address
-    println!("Getting APT balance for {}...", test_address);
+    println!("Getting APT balance for {test_address}...");
     let result = aptos
         .view(
             "0x1::coin::balance",
@@ -63,7 +63,7 @@ async fn main() -> anyhow::Result<()> {
             vec![serde_json::json!(test_address)],
         )
         .await?;
-    println!("Balance: {:?} octas", result);
+    println!("Balance: {result:?} octas");
 
     Ok(())
 }

@@ -332,10 +332,16 @@ impl MultiEd25519Signature {
             }
             last_index = Some(*index);
 
-            // Set bit in bitmap
+            // Set bit in bitmap. Aptos uses MSB-first ordering within each byte:
+            // index 0 -> bit 7 of byte 0, index 7 -> bit 0 of byte 0, index 8 ->
+            // bit 7 of byte 1, etc. This must exactly match aptos-core's
+            // `multi_ed25519::bitmap_set_bit` (uses `128 >> bucket_pos`) or
+            // on-chain signature verification fails with INVALID_SIGNATURE
+            // because the chain reads a different set of signer indices than
+            // we wrote.
             let byte_index = (index / 8) as usize;
-            let bit_index = index % 8;
-            bitmap[byte_index] |= 1 << bit_index;
+            let bit_index_in_byte = index % 8;
+            bitmap[byte_index] |= 128u8 >> bit_index_in_byte;
         }
 
         Ok(Self { signatures, bitmap })
@@ -373,16 +379,17 @@ impl MultiEd25519Signature {
             )));
         }
 
-        // Parse signatures (MAX_NUM_OF_KEYS is 32, which fits in u8)
+        // Parse signatures (MAX_NUM_OF_KEYS is 32, which fits in u8). MSB-first
+        // bit ordering: signer index 0 is bit 7 of byte 0 (see `new`).
         let mut signatures = Vec::with_capacity(num_sigs);
         let mut sig_idx = 0;
 
         #[allow(clippy::cast_possible_truncation)]
         for bit_pos in 0..(MAX_NUM_OF_KEYS as u8) {
             let byte_idx = (bit_pos / 8) as usize;
-            let bit_idx = bit_pos % 8;
+            let bit_in_byte = bit_pos % 8;
 
-            if (bitmap[byte_idx] >> bit_idx) & 1 == 1 {
+            if (bitmap[byte_idx] & (128u8 >> bit_in_byte)) != 0 {
                 let start = sig_idx * ED25519_SIGNATURE_LENGTH;
                 let end = start + ED25519_SIGNATURE_LENGTH;
                 let sig = Ed25519Signature::from_bytes(&sig_bytes[start..end])?;
@@ -425,8 +432,8 @@ impl MultiEd25519Signature {
             return false;
         }
         let byte_index = (index / 8) as usize;
-        let bit_index = index % 8;
-        (self.bitmap[byte_index] >> bit_index) & 1 == 1
+        let bit_in_byte = index % 8;
+        (self.bitmap[byte_index] & (128u8 >> bit_in_byte)) != 0
     }
 }
 
@@ -660,10 +667,10 @@ mod tests {
         let multi_sig = MultiEd25519Signature::new(vec![(0, sig0), (2, sig2)]).unwrap();
 
         assert_eq!(multi_sig.num_signatures(), 2);
-        // Check bitmap has bits 0 and 2 set (little-endian 4 bytes)
+        // Aptos MSB-first bit order: signer index 0 = bit 7, signer index 2 = bit 5.
+        // So with signers {0, 2}, bitmap[0] = 0b1010_0000 = 0xa0 = 160.
         let bitmap_bytes = multi_sig.bitmap();
-        // Bit 0 and bit 2 set means first byte should be 0b00000101 = 5
-        assert_eq!(bitmap_bytes[0], 5);
+        assert_eq!(bitmap_bytes[0], 0b1010_0000);
     }
 
     #[test]

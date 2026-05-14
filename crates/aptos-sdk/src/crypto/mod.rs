@@ -54,7 +54,7 @@ mod bls12381;
 mod ed25519;
 #[cfg(feature = "ed25519")]
 mod multi_ed25519;
-mod multi_key;
+pub(crate) mod multi_key;
 #[cfg(feature = "secp256k1")]
 mod secp256k1;
 #[cfg(feature = "secp256r1")]

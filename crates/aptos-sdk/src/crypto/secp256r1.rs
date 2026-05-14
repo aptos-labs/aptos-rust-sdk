@@ -128,8 +128,14 @@ impl Secp256r1PrivateKey {
     /// The signature is normalized to low-S form to match Aptos on-chain
     /// verification requirements.
     pub fn sign(&self, message: &[u8]) -> Secp256r1Signature {
-        let hash = crate::crypto::sha2_256(message);
-        let signature: P256Signature = self.inner.sign(&hash);
+        // `p256::ecdsa::SigningKey: signature::Signer<Signature>` hashes its input
+        // with SHA-256 internally before signing. The historical SDK code
+        // pre-hashed the message *and* called `sign()`, producing a signature
+        // over `SHA-256(SHA-256(message))` instead of `SHA-256(message)`. That
+        // double-hashing was self-consistent (sign + verify both double-hashed)
+        // but did not match Aptos on-chain ECDSA verification, which hashes
+        // once. We now sign the raw message and let `p256` apply SHA-256 once.
+        let signature: P256Signature = self.inner.sign(message);
         // SECURITY: Normalize to low-S to match Aptos on-chain verification.
         // The p256 crate does not guarantee low-S output from signing.
         let normalized = signature.normalize_s().unwrap_or(signature);
@@ -179,6 +185,16 @@ impl Secp256r1PublicKey {
     ///
     /// Returns [`AptosError::InvalidPublicKey`] if the bytes do not represent a valid Secp256r1 compressed public key.
     pub fn from_bytes(bytes: &[u8]) -> AptosResult<Self> {
+        // Accept SEC1-style encodings (33 compressed, 65 uncompressed) *and*
+        // the raw 64-byte `(X || Y)` Aptos on-chain encoding.
+        if bytes.len() == 64 {
+            let mut sec1 = Vec::with_capacity(65);
+            sec1.push(0x04);
+            sec1.extend_from_slice(bytes);
+            return VerifyingKey::from_sec1_bytes(&sec1)
+                .map(|inner| Self { inner })
+                .map_err(|e| AptosError::InvalidPublicKey(e.to_string()));
+        }
         let verifying_key = VerifyingKey::from_sec1_bytes(bytes)
             .map_err(|e| AptosError::InvalidPublicKey(e.to_string()))?;
         Ok(Self {
@@ -222,11 +238,30 @@ impl Secp256r1PublicKey {
         self.inner.to_encoded_point(true).as_bytes().to_vec()
     }
 
-    /// Returns the public key as uncompressed bytes (65 bytes).
+    /// Returns the public key in SEC1 uncompressed encoding (65 bytes, leading 0x04 marker).
+    ///
+    /// Most Aptos on-chain APIs use the *raw* 64-byte encoding (the `X || Y`
+    /// coordinates with the 0x04 marker dropped); see [`Self::to_raw_bytes`].
+    /// This method is retained for callers that need the SEC1 form.
     pub fn to_uncompressed_bytes(&self) -> Vec<u8> {
         #[allow(unused_imports)]
         use p256::elliptic_curve::sec1::ToEncodedPoint;
         self.inner.to_encoded_point(false).as_bytes().to_vec()
+    }
+
+    /// Returns the public key as the raw 64 bytes of the `X || Y` affine
+    /// coordinates, without the leading SEC1 0x04 uncompressed-point marker.
+    ///
+    /// This is the encoding expected by the on-chain
+    /// `AnyPublicKey::Secp256r1Ecdsa` variant (carrying a `vector<u8>` of
+    /// length 64).
+    pub fn to_raw_bytes(&self) -> [u8; 64] {
+        let uncompressed = self.to_uncompressed_bytes();
+        debug_assert_eq!(uncompressed.len(), 65);
+        debug_assert_eq!(uncompressed[0], 0x04);
+        let mut out = [0u8; 64];
+        out.copy_from_slice(&uncompressed[1..]);
+        out
     }
 
     /// Returns the public key as a hex string (compressed format).
@@ -258,9 +293,10 @@ impl Secp256r1PublicKey {
         if signature.inner.normalize_s().is_some() {
             return Err(AptosError::SignatureVerificationFailed);
         }
-        let hash = crate::crypto::sha2_256(message);
+        // `Verifier::verify` SHA-256s the message internally, mirroring how
+        // `sign(message)` produces a signature over SHA-256(message).
         self.inner
-            .verify(&hash, &signature.inner)
+            .verify(message, &signature.inner)
             .map_err(|_| AptosError::SignatureVerificationFailed)
     }
 
@@ -292,15 +328,19 @@ impl Secp256r1PublicKey {
     /// Derives the account address for this public key.
     ///
     /// Uses the `SingleKey` authentication scheme (`scheme_id` = 2):
-    /// `auth_key = SHA3-256(BCS(AnyPublicKey::Secp256r1) || 0x02)`
+    /// `auth_key = SHA3-256(BCS(AnyPublicKey::Secp256r1Ecdsa) || 0x02)`
     ///
-    /// Where `BCS(AnyPublicKey::Secp256r1)` = `0x02 || ULEB128(65) || uncompressed_public_key`
+    /// Where `BCS(AnyPublicKey::Secp256r1Ecdsa)` = `0x02 || ULEB128(65) || uncompressed_public_key`
     pub fn to_address(&self) -> crate::types::AccountAddress {
-        // BCS format: variant_byte || ULEB128(length) || uncompressed_public_key
+        // Mirrors secp256k1: the chain canonicalises P-256 public keys to
+        // 65-byte SEC1 uncompressed form (0x04 || X || Y) when computing
+        // authentication keys via `bcs::to_bytes(&AnyPublicKey)`. The SDK
+        // matches that exact encoding so the derived address agrees with
+        // the chain.
         let uncompressed = self.to_uncompressed_bytes();
         let mut bcs_bytes = Vec::with_capacity(1 + 1 + uncompressed.len());
-        bcs_bytes.push(0x02); // Secp256r1 variant
-        bcs_bytes.push(65); // ULEB128(65) = 65 (since 65 < 128)
+        bcs_bytes.push(0x02); // Secp256r1Ecdsa variant
+        bcs_bytes.push(65); // ULEB128(65)
         bcs_bytes.extend_from_slice(&uncompressed);
         crate::crypto::derive_address(&bcs_bytes, crate::crypto::SINGLE_KEY_SCHEME)
     }
