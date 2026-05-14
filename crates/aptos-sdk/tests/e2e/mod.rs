@@ -160,8 +160,9 @@ mod account_tests {
                  (or return not-found), got {seq}"
             ),
             Err(e) => assert!(
-                e.is_not_found() || e.to_string().contains("not"),
-                "unexpected error for unfunded account: {e}"
+                e.is_not_found(),
+                "unexpected error for unfunded account (expected a not-found \
+                 error or success with seq=0, but got something else): {e}"
             ),
         }
 

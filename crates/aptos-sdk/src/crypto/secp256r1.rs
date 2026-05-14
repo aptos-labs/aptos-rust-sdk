@@ -328,9 +328,9 @@ impl Secp256r1PublicKey {
     /// Derives the account address for this public key.
     ///
     /// Uses the `SingleKey` authentication scheme (`scheme_id` = 2):
-    /// `auth_key = SHA3-256(BCS(AnyPublicKey::Secp256r1) || 0x02)`
+    /// `auth_key = SHA3-256(BCS(AnyPublicKey::Secp256r1Ecdsa) || 0x02)`
     ///
-    /// Where `BCS(AnyPublicKey::Secp256r1)` = `0x02 || ULEB128(65) || uncompressed_public_key`
+    /// Where `BCS(AnyPublicKey::Secp256r1Ecdsa)` = `0x02 || ULEB128(65) || uncompressed_public_key`
     pub fn to_address(&self) -> crate::types::AccountAddress {
         // Mirrors secp256k1: the chain canonicalises P-256 public keys to
         // 65-byte SEC1 uncompressed form (0x04 || X || Y) when computing

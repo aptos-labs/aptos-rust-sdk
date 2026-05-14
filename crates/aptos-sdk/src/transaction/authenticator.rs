@@ -1051,40 +1051,35 @@ mod tests {
     }
 
     #[test]
-    fn debug_dump_single_key_secp256r1_bytes() {
-        // Simulate AnyPublicKey::Secp256r1 (variant=2, len=65, 65 bytes)
+    fn test_single_key_single_sender_bcs_wire_format() {
+        // Pin the byte-for-byte wire layout of
+        // `TransactionAuthenticator::SingleSender(AccountAuthenticator::SingleKey)`
+        // so that a future regression in the hand-rolled Serialize impl is
+        // caught at unit-test time (rather than at submission time on the
+        // chain). The inner AnyPublicKey / AnySignature payloads must be
+        // emitted *inline* after the variant tags -- no outer length prefixes.
         let mut pk = vec![0u8; 67];
-        pk[0] = 0x02;
-        pk[1] = 65;
-        pk[2] = 0x04;
-        // Simulate AnySignature::Secp256r1 (variant=2, len=64, 64 bytes)
+        pk[0] = 0x02; // AnyPublicKey::Secp256r1Ecdsa variant
+        pk[1] = 65; // ULEB128(65)
+        pk[2] = 0x04; // SEC1 uncompressed marker
         let mut sig = vec![0u8; 66];
-        sig[0] = 0x02;
-        sig[1] = 64;
+        sig[0] = 0x02; // AnySignature::WebAuthn variant
+        sig[1] = 64; // ULEB128(64)
 
         let auth = AccountAuthenticator::single_key(pk.clone(), sig.clone());
         let bytes = aptos_bcs::to_bytes(&auth).unwrap();
-        eprintln!(
-            "AccountAuthenticator::SingleKey(pk={} sig={}) -> {} bytes",
-            pk.len(),
-            sig.len(),
-            bytes.len()
-        );
-        for chunk in bytes.chunks(16) {
-            let hex: String = chunk.iter().map(|b| format!("{b:02x} ")).collect();
-            eprintln!("  {hex}");
-        }
+        let mut expected_inner = Vec::new();
+        expected_inner.push(2u8); // AccountAuthenticator::SingleKey variant tag
+        expected_inner.extend_from_slice(&pk); // AnyPublicKey inline (no length prefix)
+        expected_inner.extend_from_slice(&sig); // AnySignature inline (no length prefix)
+        assert_eq!(bytes, expected_inner);
 
         let txn = TransactionAuthenticator::single_sender(auth);
         let bytes = aptos_bcs::to_bytes(&txn).unwrap();
-        eprintln!(
-            "\nTransactionAuthenticator::SingleSender(SingleKey) -> {} bytes",
-            bytes.len()
-        );
-        for chunk in bytes.chunks(16) {
-            let hex: String = chunk.iter().map(|b| format!("{b:02x} ")).collect();
-            eprintln!("  {hex}");
-        }
+        let mut expected_outer = Vec::new();
+        expected_outer.push(4u8); // TransactionAuthenticator::SingleSender variant tag
+        expected_outer.extend_from_slice(&expected_inner);
+        assert_eq!(bytes, expected_outer);
     }
 
     #[test]

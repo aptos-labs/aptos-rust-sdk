@@ -85,26 +85,26 @@ async fn main() -> anyhow::Result<()> {
     println!("✓ Addresses match! Account successfully restored from private key.");
 
     // 7. Demonstrate using an account on devnet
-    println!("\n--- 7. Using an Account on Testnet ---");
+    println!("\n--- 7. Using an Account on Devnet ---");
 
     let config = AptosConfig::devnet();
     let aptos = Aptos::new(config)?;
 
-    // Generate fresh account for testnet
-    let testnet_account = Ed25519Account::generate();
-    println!("New testnet account: {}", testnet_account.address());
+    // Generate fresh account for devnet
+    let devnet_account = Ed25519Account::generate();
+    println!("New devnet account: {}", devnet_account.address());
 
     // Fund it
     println!("Funding account...");
     aptos
-        .fund_account(testnet_account.address(), 100_000_000)
+        .fund_account(devnet_account.address(), 100_000_000)
         .await?;
 
     // Wait for funding
     tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 
     // Check balance
-    let balance = aptos.get_balance(testnet_account.address()).await?;
+    let balance = aptos.get_balance(devnet_account.address()).await?;
     println!("Balance: {} APT", balance as f64 / 100_000_000.0);
 
     // 8. Summary of key concepts

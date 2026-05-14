@@ -917,7 +917,7 @@ mod tests {
         assert_eq!(bcs, vec![0xFF; 32]);
     }
 
-    /// Extracts the inner EntryFunction from a TransactionPayload, panicking
+    /// Extracts the inner `EntryFunction` from a `TransactionPayload`, panicking
     /// for the test if the payload is not an entry-function variant.
     fn payload_as_entry_function(
         p: crate::transaction::TransactionPayload,
