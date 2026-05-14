@@ -7,8 +7,125 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+### Added
+- `WebAuthnAccount` for on-chain `secp256r1` transaction signing. Wraps a
+  `Secp256r1PrivateKey` and emits the on-chain `AnySignature::WebAuthn`
+  envelope (synthetic `PartialAuthenticatorAssertionResponse` carrying
+  `SHA3-256(signing_message)` as the base64url challenge, a configurable
+  `rp_id` / `origin`, and a 37-byte `authenticatorData`). End-to-end
+  verified against devnet via `e2e_webauthn_account_transfer`.
+- `DEFAULT_WEBAUTHN_RP_ID` / `DEFAULT_WEBAUTHN_ORIGIN` constants and
+  `WebAuthnAccount::from_parts(...)` for callers that need to pin the
+  relying-party identity for off-chain auditing.
+- `Secp256k1PublicKey::to_raw_bytes()` and
+  `Secp256r1PublicKey::to_raw_bytes()` return the 64-byte raw `(X || Y)`
+  encoding that `aptos-stdlib::secp256k1::ecdsa_raw_public_key_from_64_bytes`
+  expects (in addition to the existing 65-byte SEC1 uncompressed form).
+- New end-to-end tests in `tests/e2e/`: real transfer flows for
+  `Ed25519SingleKeyAccount`, `Secp256k1Account`, `WebAuthnAccount`,
+  `MultiEd25519Account`, and `MultiKeyAccount`; gas-estimation tests;
+  sponsored-builder transfer; sequence-number progression; batch
+  submission; and an `e2e_account_not_found` regression test that
+  pins the AIP-42 implicit-account contract.
+- New regression unit tests pin the on-chain BCS wire layout of
+  `TransactionAuthenticator::SingleSender(AccountAuthenticator::SingleKey)`
+  and `AccountAuthenticator::MultiKey`, plus the per-scheme behaviour of
+  the zero-signed authenticator built by `Aptos::simulate`.
+
 ### Changed
-- Increased default max gas amount from 200,000 to 2,000,000 (10x)
+- Increased default max gas amount from 200,000 to 2,000,000 (10x).
+- `Aptos::fund_account` now keeps issuing faucet requests until the
+  on-chain balance has grown by the requested amount (max 16 attempts),
+  so devnet -- whose `/mint` endpoint caps each response at 1 APT --
+  actually delivers the requested amount instead of silently
+  short-funding the caller.
+- `Aptos::simulate` and `Aptos::estimate_gas` now build a zero-signed
+  `SignedTransaction` whose authenticator shape matches the account's
+  signature scheme (Ed25519, MultiEd25519, SingleKey, MultiKey). The
+  simulation endpoint rejects valid signatures since it is a
+  gas-estimation tool, not an execution tool; previously the helper only
+  worked for `Ed25519Account`.
+- `Network::Devnet.chain_id()` now returns `0` ("unknown") instead of a
+  hardcoded value. The `Aptos` client treats `0` as a signal to fetch
+  the live chain ID from the configured fullnode via
+  `Aptos::ensure_chain_id`, so devnet transactions automatically pick up
+  the correct chain ID across devnet resets.
+- All `examples/*.rs` programs switched from `AptosConfig::testnet()`
+  to `AptosConfig::devnet()`. The Aptos testnet faucet now requires a
+  JWT-authenticated API key (`x-is-jwt: true`) and rejects
+  unauthenticated requests with HTTP 500.
+- `Secp256k1PublicKey::from_bytes` and `Secp256r1PublicKey::from_bytes`
+  now also accept the 64-byte raw `(X || Y)` encoding (in addition to
+  the SEC1 compressed/uncompressed forms).
+
+### Deprecated
+- `Secp256r1Account` for on-chain transaction signing. The on-chain
+  `AnySignature` variant 2 is `WebAuthn` (a
+  `PartialAuthenticatorAssertionResponse`), not bare `Secp256r1Ecdsa`,
+  so transactions signed by `Secp256r1Account` are rejected by every
+  Aptos validator with a deserialization-level error. Use
+  `WebAuthnAccount` instead. `Secp256r1Account` is retained for
+  off-chain P-256 sign/verify and as a public-key source for
+  `MultiKeyAccount`.
+
+### Fixed
+- BCS wire format of `AccountAuthenticator::{SingleKey, MultiKey, Keyless}`.
+  Previously the derived `Serialize` impl added a ULEB128 length prefix
+  in front of each pre-BCS-encoded inner field, so the chain's
+  `bcs::from_bytes::<MultiKeyAuthenticator>` rejected the bytes with
+  `DeserializationError`. The hand-rolled `Serialize` now emits the
+  `AnyPublicKey` / `AnySignature` payloads inline after the variant tag,
+  matching the on-chain `SingleKeyAuthenticator` / `MultiKeyAuthenticator`
+  struct layout.
+- `Secp256k1PrivateKey::sign` no longer double-hashes. The previous
+  implementation pre-hashed the message with SHA-256 and then called
+  `k256::ecdsa::SigningKey::sign`, which *also* applies SHA-256
+  internally, producing a signature over `SHA-256(SHA-256(msg))`. Sign
+  and verify both double-hashed so unit tests passed, but the chain's
+  `aptos-crypto::secp256k1_ecdsa::Signature::verify` hashes the
+  signing message with **SHA-3-256** -- so every transaction was rejected
+  with `INVALID_SIGNATURE`. `sign` and `verify` now compute the SHA-3-256
+  digest themselves and route through `signature::hazmat::PrehashSigner` /
+  `PrehashVerifier`.
+- `Ed25519SingleKeyAccount` / `Secp256k1Account` / `Secp256r1Account` /
+  `WebAuthnAccount` -- `Account::sign` now wraps the produced signature
+  in the BCS-encoded `AnySignature::*` framing expected by the on-chain
+  `SingleKeyAuthenticator.signature` field. Previously the bare 64-byte
+  signature was emitted, which the chain rejected.
+- `MultiEd25519Signature` and `MultiKeySignature` signer-bitmaps are now
+  MSB-first within each byte (matches `aptos-crypto::multi_ed25519::bitmap_set_bit`
+  -- `128u8 >> bucket_pos` -- and `aptos_bitvec::BitVec::set`). The SDK
+  was LSB-first, so the chain looked up the wrong public key for each
+  signature and rejected every multi-signature transaction with
+  `INVALID_SIGNATURE`.
+- `MultiKeySignature::to_bytes` now emits the BCS `BitVec` ULEB128 length
+  prefix in front of the 4-byte bitmap, matching the on-chain
+  `BCS((Vec<AnySignature>, BitVec))` layout. Previously the bitmap was
+  appended raw and the chain's deserializer rejected the bytes.
+- `Secp256k1PublicKey::to_address` and `Secp256r1PublicKey::to_address`
+  now derive the auth key from 65-byte SEC1 uncompressed encoding
+  (matching the chain's canonicalisation through
+  `libsecp256k1::PublicKey::serialize()` / `p256::ecdsa::VerifyingKey::to_sec1_bytes()`).
+  Previously the SDK and the chain disagreed on the address for the same
+  key, so a SDK-derived address could not actually receive funds the
+  chain would let the same key spend.
+- Devnet end-to-end submission. The combination of the
+  `fund_account` looping, the devnet chain-ID auto-resolve, the
+  zero-signed simulator, the deprecation of `Secp256r1Account`, and the
+  on-wire fixes above means every account type the SDK can sign for
+  (Ed25519, Ed25519SingleKey, Secp256k1, MultiEd25519, MultiKey, WebAuthn)
+  now successfully submits transactions on devnet.
+
+### Security
+- New 2026-05 security review (`SECURITY_REVIEW_2026-05.md`) confirms
+  every Feb-2026 finding remains remediated. Three new informational /
+  low-severity items are tracked (S-23 example prints private key,
+  S-24 fuzz targets still missing, S-25 `secp256r1` `S == ORDER_HALF`
+  regression test). The audit's correctness fixes either preserve or
+  improve the prior security posture (e.g. `secp256k1` SHA-3-256
+  alignment improves domain separation from other ECDSA-over-SHA-256
+  protocols; `Aptos::simulate` no longer routes private-key material
+  through the gas-estimation path).
 
 ## [0.4.1] - 2026-03-04
 
