@@ -298,16 +298,23 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       
-      - name: Install Rust
+      # Tarpaulin requires a newer Rust than the SDK's MSRV (1.90):
+      # current cargo-tarpaulin pulls in `cargo-platform >= 0.3.3` which
+      # itself requires rustc 1.91. We use `stable` for this job only --
+      # the SDK and all other CI jobs continue to build against 1.90.
+      - name: Install Rust (stable, required by latest cargo-tarpaulin)
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: "1.90"
+          toolchain: stable
       
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
       
+      # `--locked` makes the install respect cargo-tarpaulin's own lockfile,
+      # so transient changes in its transitive dependency graph (e.g. a new
+      # `cargo-platform` release bumping its MSRV) cannot break this job.
       - name: Install cargo-tarpaulin
-        run: cargo install cargo-tarpaulin
+        run: cargo install --locked cargo-tarpaulin
       
       - name: Run coverage
         run: |

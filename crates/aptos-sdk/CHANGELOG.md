@@ -126,6 +126,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   alignment improves domain separation from other ECDSA-over-SHA-256
   protocols; `Aptos::simulate` no longer routes private-key material
   through the gas-estimation path).
+- Patched five RUSTSEC advisories surfaced by `cargo audit`:
+  - `aws-lc-sys < 0.39.0`: RUSTSEC-2026-0044 (X.509 name-constraints
+    bypass via wildcard / Unicode CN) and RUSTSEC-2026-0048 (CRL
+    distribution-point scope-check logic error). Bumped to 0.41.0.
+  - `rustls-webpki < 0.103.13`: RUSTSEC-2026-0098 (URI-name name
+    constraints incorrectly accepted), RUSTSEC-2026-0099 (name
+    constraints accepted for wildcard certificates), and
+    RUSTSEC-2026-0104 (reachable panic in CRL parsing). Bumped to
+    0.103.13.
 
 ## [0.4.1] - 2026-03-04
 
