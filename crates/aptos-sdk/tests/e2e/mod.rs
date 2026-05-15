@@ -556,9 +556,7 @@ mod transaction_tests {
             .expect("failed to get recipient balance");
         assert!(
             balance >= amount,
-            "recipient balance {} should be >= amount {}",
-            balance,
-            amount
+            "recipient balance {balance} should be >= amount {amount}",
         );
     }
 
