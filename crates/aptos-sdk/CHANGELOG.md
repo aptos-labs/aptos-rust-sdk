@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `FullnodeClient::simulate_transaction_with_options` — simulate with optional query parameters (`estimate_max_gas_amount`, `estimate_gas_unit_price`, `estimate_prioritized_gas_unit_price`). Existing `simulate_transaction` is unchanged (single-arg) and delegates to the new method with `None` for backward compatibility.
 - `Aptos::simulate_signed_with_options`, plus option-aware multi-signer simulation (`Aptos::simulate_multi_agent`, `Aptos::simulate_fee_payer`) for consistent high-level simulation APIs while preserving no-options usage.
 - `build_simulation_signed_multi_agent` and `build_simulation_signed_fee_payer` for constructing simulation-only signed transactions using `NoAccountAuthenticator` placeholders.
+- `SignedTransaction::for_simulate_endpoint`, `TransactionAuthenticator::for_simulate_endpoint`, and `AccountAuthenticator::for_simulate_endpoint` — strip signing material for `/transactions/simulate` when serializing manually; `FullnodeClient::simulate_transaction` / `simulate_transaction_with_options` apply the same transform automatically.
+- `AnyPublicKey::from_bcs_bytes` and `AnySignature::from_bcs_bytes` — parse raw BCS `AnyPublicKey` / `AnySignature` bytes for `SingleKey` validation, `AccountAuthenticator::verify`, and related builder paths.
 - `WebAuthnAccount` for on-chain `secp256r1` transaction signing. Wraps a
   `Secp256r1PrivateKey` and emits the on-chain `AnySignature::WebAuthn`
   envelope (synthetic `PartialAuthenticatorAssertionResponse` carrying
