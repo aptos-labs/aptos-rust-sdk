@@ -230,18 +230,15 @@ fn make_transaction_authenticator(
             public_key, signature,
         )),
         crate::crypto::MULTI_KEY_SCHEME => {
-            // Multi-key uses SingleSender variant with AccountAuthenticator::MultiKey
-            let public_key = MultiKeyPublicKey::from_bytes(&public_key)?;
-            let signature = MultiKeySignature::from_bytes(&signature)?;
+            let _ = MultiKeyPublicKey::from_bytes(&public_key)?;
+            let _ = MultiKeySignature::from_bytes(&signature)?;
             Ok(TransactionAuthenticator::single_sender(
                 AccountAuthenticator::multi_key(public_key, signature),
             ))
         }
         crate::crypto::SINGLE_KEY_SCHEME => {
-            // Single-key scheme is used by Secp256k1, Secp256r1, and Ed25519SingleKey accounts
-            // Uses SingleSender variant with AccountAuthenticator::SingleKey
-            let public_key = AnyPublicKey::from_bcs_bytes(&public_key)?;
-            let signature = AnySignature::from_bcs_bytes(&signature)?;
+            let _ = AnyPublicKey::from_bcs_bytes(&public_key)?;
+            let _ = AnySignature::from_bcs_bytes(&signature)?;
             Ok(TransactionAuthenticator::single_sender(
                 AccountAuthenticator::single_key(public_key, signature),
             ))
@@ -278,13 +275,13 @@ fn make_account_authenticator(
             signature,
         }),
         crate::crypto::SINGLE_KEY_SCHEME => {
-            let public_key = AnyPublicKey::from_bcs_bytes(&public_key)?;
-            let signature = AnySignature::from_bcs_bytes(&signature)?;
+            let _ = AnyPublicKey::from_bcs_bytes(&public_key)?;
+            let _ = AnySignature::from_bcs_bytes(&signature)?;
             Ok(AccountAuthenticator::single_key(public_key, signature))
         }
         crate::crypto::MULTI_KEY_SCHEME => {
-            let public_key = MultiKeyPublicKey::from_bytes(&public_key)?;
-            let signature = MultiKeySignature::from_bytes(&signature)?;
+            let _ = MultiKeyPublicKey::from_bytes(&public_key)?;
+            let _ = MultiKeySignature::from_bytes(&signature)?;
             Ok(AccountAuthenticator::multi_key(public_key, signature))
         }
         #[cfg(feature = "keyless")]

@@ -115,6 +115,34 @@ impl AnyPublicKey {
         result
     }
 
+    /// Parses BCS `AnyPublicKey` bytes (`variant` || `ULEB128(len)` || raw key bytes).
+    pub fn from_bcs_bytes(bytes: &[u8]) -> AptosResult<Self> {
+        if bytes.is_empty() {
+            return Err(AptosError::InvalidPublicKey(
+                "AnyPublicKey BCS empty".into(),
+            ));
+        }
+        let variant = AnyPublicKeyVariant::from_byte(bytes[0])?;
+        let (len, len_bytes) = uleb128_decode(&bytes[1..]).ok_or_else(|| {
+            AptosError::InvalidPublicKey("AnyPublicKey BCS invalid length prefix".into())
+        })?;
+        let start = 1 + len_bytes;
+        let end = start.checked_add(len).ok_or_else(|| {
+            AptosError::InvalidPublicKey("AnyPublicKey BCS length overflow".into())
+        })?;
+        if end > bytes.len() {
+            return Err(AptosError::InvalidPublicKey(
+                "AnyPublicKey BCS truncated payload".into(),
+            ));
+        }
+        if end != bytes.len() {
+            return Err(AptosError::InvalidPublicKey(
+                "AnyPublicKey BCS trailing bytes".into(),
+            ));
+        }
+        Ok(Self::new(variant, bytes[start..end].to_vec()))
+    }
+
     /// Verifies a signature against a message.
     ///
     /// # Errors
@@ -236,6 +264,36 @@ impl AnySignature {
         result.extend(uleb128_encode(self.bytes.len()));
         result.extend_from_slice(&self.bytes);
         result
+    }
+
+    /// Parses BCS `AnySignature` bytes (`variant` || `ULEB128(len)` || raw signature bytes).
+    pub fn from_bcs_bytes(bytes: &[u8]) -> AptosResult<Self> {
+        if bytes.is_empty() {
+            return Err(AptosError::InvalidSignature(
+                "AnySignature BCS empty".into(),
+            ));
+        }
+        let variant = AnyPublicKeyVariant::from_byte(bytes[0]).map_err(|e| {
+            AptosError::InvalidSignature(format!("AnySignature BCS bad variant: {e}"))
+        })?;
+        let (len, len_bytes) = uleb128_decode(&bytes[1..]).ok_or_else(|| {
+            AptosError::InvalidSignature("AnySignature BCS invalid length prefix".into())
+        })?;
+        let start = 1 + len_bytes;
+        let end = start.checked_add(len).ok_or_else(|| {
+            AptosError::InvalidSignature("AnySignature BCS length overflow".into())
+        })?;
+        if end > bytes.len() {
+            return Err(AptosError::InvalidSignature(
+                "AnySignature BCS truncated payload".into(),
+            ));
+        }
+        if end != bytes.len() {
+            return Err(AptosError::InvalidSignature(
+                "AnySignature BCS trailing bytes".into(),
+            ));
+        }
+        Ok(Self::new(variant, bytes[start..end].to_vec()))
     }
 }
 

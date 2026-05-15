@@ -1085,6 +1085,11 @@ mod multi_signer_tests {
             .simulate_multi_agent(&multi_agent_txn, None)
             .await
             .expect("simulate_multi_agent should succeed");
+        assert!(
+            sim_result.success(),
+            "simulation must succeed before submit (vm_status={})",
+            sim_result.vm_status()
+        );
         println!(
             "Simulation success: {}, gas_used: {}",
             sim_result.success(),
@@ -1149,6 +1154,11 @@ mod multi_signer_tests {
             .simulate_fee_payer(&fee_payer_txn, None)
             .await
             .expect("simulate_fee_payer should succeed");
+        assert!(
+            sim_result.success(),
+            "simulation must succeed before submit (vm_status={})",
+            sim_result.vm_status()
+        );
         println!(
             "Simulation success: {}, gas_used: {}",
             sim_result.success(),
