@@ -71,7 +71,11 @@ jobs:
 
       - uses: ./.github/actions/setup-rust
         with:
-          toolchain: ${{ matrix.rust }}
+          # `macos-latest` + rust-cache has intermittently restored a broken `cargo`
+          # shim (rustup-init with "unexpected argument 'build'"). Match MSRV and
+          # skip cache there; other OSes keep stable + cache.
+          toolchain: ${{ matrix.os == 'macos-latest' && '1.95' || matrix.rust }}
+          cache: ${{ matrix.os == 'macos-latest' && 'false' || 'true' }}
 
       - name: Build
         run: cargo build -p aptos-sdk --all-targets
