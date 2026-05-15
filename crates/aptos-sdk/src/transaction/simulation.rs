@@ -17,6 +17,11 @@
 //! These use [`SimulateQueryOptions`] when you need gas estimation query parameters
 //! (e.g. `estimate_gas_unit_price`, `estimate_max_gas_amount`) on the simulate endpoint.
 //!
+//! [`crate::api::FullnodeClient::simulate_transaction`] rewrites authenticators
+//! (see [`crate::transaction::types::SignedTransaction::for_simulate_endpoint`]) before
+//! sending so the fullnode never receives a cryptographically valid signature on the
+//! simulate path.
+//!
 //! # Example
 //!
 //! ```rust,ignore

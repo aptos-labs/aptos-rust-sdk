@@ -253,6 +253,19 @@ impl SignedTransaction {
         }
     }
 
+    /// Clones this transaction with authenticators rewritten for `/transactions/simulate`.
+    ///
+    /// The Aptos fullnode rejects simulate requests that carry a cryptographically **valid**
+    /// signature. [`crate::api::FullnodeClient::simulate_transaction`] applies this
+    /// transformation automatically; this helper exists for callers who serialize manually.
+    #[must_use]
+    pub fn for_simulate_endpoint(&self) -> Self {
+        Self {
+            raw_txn: self.raw_txn.clone(),
+            authenticator: self.authenticator.clone().for_simulate_endpoint(),
+        }
+    }
+
     /// Serializes this signed transaction to BCS bytes.
     ///
     /// # Errors

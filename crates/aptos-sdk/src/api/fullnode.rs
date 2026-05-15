@@ -400,6 +400,9 @@ impl FullnodeClient {
     ///
     /// Delegates to [`simulate_transaction_with_options`](Self::simulate_transaction_with_options) with `None` for options.
     ///
+    /// The request body is derived from `signed_txn` after rewriting authenticators for the
+    /// simulate endpoint (see [`SignedTransaction::for_simulate_endpoint`]).
+    ///
     /// # Errors
     ///
     /// Returns an error if the transaction cannot be serialized to BCS, the HTTP request fails,
@@ -417,6 +420,11 @@ impl FullnodeClient {
     /// Pass [`SimulateQueryOptions`] to request gas estimation behavior
     /// (e.g. `estimate_gas_unit_price`, `estimate_max_gas_amount`) as query
     /// parameters to the `/transactions/simulate` endpoint.
+    ///
+    /// Authenticators on `signed_txn` are rewritten client-side (via
+    /// [`SignedTransaction::for_simulate_endpoint`]) before BCS serialization so the
+    /// fullnode never receives a cryptographically valid signature (which it rejects with
+    /// HTTP 400).
     ///
     /// # Errors
     ///
@@ -440,7 +448,7 @@ impl FullnodeClient {
                 pairs.append_pair("estimate_prioritized_gas_unit_price", "true");
             }
         }
-        let bcs_bytes = signed_txn.to_bcs()?;
+        let bcs_bytes = signed_txn.for_simulate_endpoint().to_bcs()?;
         let client = self.client.clone();
         let retry_config = self.retry_config.clone();
         let max_response_size = self.config.pool_config().max_response_size;

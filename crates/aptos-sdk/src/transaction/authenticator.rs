@@ -563,6 +563,70 @@ impl TransactionAuthenticator {
     pub fn single_sender(sender: AccountAuthenticator) -> Self {
         Self::SingleSender { sender }
     }
+
+    /// Rewrites this transaction authenticator for `/transactions/simulate`.
+    ///
+    /// Delegates nested [`AccountAuthenticator`] values to
+    /// [`AccountAuthenticator::for_simulate_endpoint`]. Top-level legacy
+    /// [`TransactionAuthenticator::Ed25519`] / [`MultiEd25519`] variants keep their public
+    /// keys but zero signature bytes (there is no `NoAccountAuthenticator` slot in those
+    /// variants).
+    #[must_use]
+    pub fn for_simulate_endpoint(self) -> Self {
+        match self {
+            Self::Ed25519 {
+                public_key,
+                signature: _,
+            } => Self::Ed25519 {
+                public_key,
+                signature: Ed25519Signature([0u8; 64]),
+            },
+            Self::MultiEd25519 {
+                public_key,
+                signature,
+            } => Self::MultiEd25519 {
+                public_key,
+                signature: vec![0u8; signature.len()],
+            },
+            Self::MultiAgent {
+                sender,
+                secondary_signer_addresses,
+                secondary_signers,
+            } => {
+                let secondary: Vec<AccountAuthenticator> = secondary_signers
+                    .into_iter()
+                    .map(AccountAuthenticator::for_simulate_endpoint)
+                    .collect();
+                Self::multi_agent(
+                    sender.for_simulate_endpoint(),
+                    secondary_signer_addresses,
+                    secondary,
+                )
+            }
+            Self::FeePayer {
+                sender,
+                secondary_signer_addresses,
+                secondary_signers,
+                fee_payer_address,
+                fee_payer_signer,
+            } => {
+                let secondary: Vec<AccountAuthenticator> = secondary_signers
+                    .into_iter()
+                    .map(AccountAuthenticator::for_simulate_endpoint)
+                    .collect();
+                Self::fee_payer(
+                    sender.for_simulate_endpoint(),
+                    secondary_signer_addresses,
+                    secondary,
+                    fee_payer_address,
+                    fee_payer_signer.for_simulate_endpoint(),
+                )
+            }
+            Self::SingleSender { sender } => {
+                Self::single_sender(sender.for_simulate_endpoint())
+            }
+        }
+    }
 }
 
 impl AccountAuthenticator {
@@ -592,6 +656,50 @@ impl AccountAuthenticator {
     /// Creates a no account authenticator.
     pub fn no_account_authenticator() -> Self {
         Self::NoAccountAuthenticator
+    }
+
+    /// Rewrites this authenticator for the Aptos `/transactions/simulate` endpoint.
+    ///
+    /// The fullnode rejects requests whose authenticators contain a cryptographically
+    /// **valid** signature (HTTP 400: "Simulated transactions must not have a valid
+    /// signature"). The SDK applies this transform automatically before simulate HTTP
+    /// calls so callers do not need to hand-replace authenticators.
+    ///
+    /// * [`SingleKey`](AccountAuthenticator::SingleKey) and [`Keyless`](AccountAuthenticator::Keyless)
+    ///   become [`NoAccountAuthenticator`], matching the common workaround for unified-key
+    ///   accounts.
+    /// * [`Ed25519`](AccountAuthenticator::Ed25519), [`MultiEd25519`](AccountAuthenticator::MultiEd25519),
+    ///   and [`MultiKey`](AccountAuthenticator::MultiKey) keep their public key material but replace
+    ///   signature bytes with zeros (preserving `MultiEd25519` / `MultiKey` vector lengths).
+    #[must_use]
+    pub fn for_simulate_endpoint(self) -> Self {
+        match self {
+            Self::NoAccountAuthenticator => Self::NoAccountAuthenticator,
+            Self::Ed25519 {
+                public_key,
+                signature: _,
+            } => Self::Ed25519 {
+                public_key,
+                signature: Ed25519Signature([0u8; 64]),
+            },
+            Self::MultiEd25519 {
+                public_key,
+                signature,
+            } => Self::MultiEd25519 {
+                public_key,
+                signature: vec![0u8; signature.len()],
+            },
+            Self::SingleKey { .. } => Self::NoAccountAuthenticator,
+            Self::MultiKey {
+                public_key,
+                signature,
+            } => Self::MultiKey {
+                public_key,
+                signature: vec![0u8; signature.len()],
+            },
+            #[cfg(feature = "keyless")]
+            Self::Keyless { .. } => Self::NoAccountAuthenticator,
+        }
     }
 
     /// Creates a keyless account authenticator.
@@ -1055,6 +1163,46 @@ mod tests {
         match auth {
             AccountAuthenticator::NoAccountAuthenticator => {}
             _ => panic!("Expected NoAccountAuthenticator variant"),
+        }
+    }
+
+    #[cfg(feature = "ed25519")]
+    #[test]
+    fn test_account_authenticator_for_simulate_endpoint_single_key_to_no_account() {
+        let auth = AccountAuthenticator::single_key(vec![0x01, 0x02], vec![0x03, 0x04]);
+        let sanitized = auth.for_simulate_endpoint();
+        assert!(matches!(
+            sanitized,
+            AccountAuthenticator::NoAccountAuthenticator
+        ));
+    }
+
+    #[cfg(feature = "ed25519")]
+    #[test]
+    fn test_transaction_authenticator_for_simulate_endpoint_single_sender_strips_single_key() {
+        let sender = AccountAuthenticator::single_key(vec![0x05, 0x06], vec![0x07, 0x08]);
+        let auth = TransactionAuthenticator::single_sender(sender);
+        let sanitized = auth.for_simulate_endpoint();
+        assert!(matches!(
+            sanitized,
+            TransactionAuthenticator::SingleSender { ref sender }
+                if matches!(sender, AccountAuthenticator::NoAccountAuthenticator)
+        ));
+    }
+
+    #[cfg(feature = "ed25519")]
+    #[test]
+    fn test_transaction_authenticator_for_simulate_endpoint_ed25519_zeros_sig() {
+        let auth = TransactionAuthenticator::Ed25519 {
+            public_key: Ed25519PublicKey([7u8; 32]),
+            signature: Ed25519Signature([9u8; 64]),
+        };
+        let sanitized = auth.for_simulate_endpoint();
+        match sanitized {
+            TransactionAuthenticator::Ed25519 { signature, .. } => {
+                assert_eq!(signature.0, [0u8; 64]);
+            }
+            _ => panic!("expected Ed25519"),
         }
     }
 

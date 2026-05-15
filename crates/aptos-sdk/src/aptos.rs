@@ -362,6 +362,9 @@ impl Aptos {
     ///
     /// Returns an error if the transaction cannot be serialized to BCS, the HTTP request fails,
     /// the API returns an error status code, or the response cannot be parsed as JSON.
+    ///
+    /// Note: [`FullnodeClient::simulate_transaction`] rewrites authenticators for the simulate
+    /// endpoint before sending; callers may pass a normally signed transaction.
     pub async fn simulate_transaction(
         &self,
         signed_txn: &SignedTransaction,
@@ -418,6 +421,11 @@ impl Aptos {
     /// For gas estimation options (e.g. `estimate_gas_unit_price`), use
     /// [`simulate_signed_with_options`](Self::simulate_signed_with_options).
     ///
+    /// Authenticators are rewritten client-side before the HTTP request (see
+    /// [`SignedTransaction::for_simulate_endpoint`]); you do not need to swap in
+    /// [`AccountAuthenticator::NoAccountAuthenticator`](crate::transaction::authenticator::AccountAuthenticator::no_account_authenticator)
+    /// manually to avoid the fullnode's "must not have a valid signature" error.
+    ///
     /// # Errors
     ///
     /// Returns an error if simulation fails or the simulation response cannot be parsed.
@@ -434,6 +442,9 @@ impl Aptos {
     /// Use this when you need [`SimulateQueryOptions`] (e.g. `estimate_gas_unit_price`,
     /// `estimate_max_gas_amount`). For the common case without options, use
     /// [`simulate_signed`](Self::simulate_signed) instead.
+    ///
+    /// Like [`simulate_signed`](Self::simulate_signed), this applies
+    /// [`SignedTransaction::for_simulate_endpoint`] before calling the fullnode.
     ///
     /// # Errors
     ///

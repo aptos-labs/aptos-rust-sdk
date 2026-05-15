@@ -89,6 +89,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `MultiKeyAccount`.
 
 ### Fixed
+- **Simulate endpoint** — `FullnodeClient::simulate_transaction` / `simulate_transaction_with_options` now serialize `signed_txn.for_simulate_endpoint()` so authenticators are rewritten client-side (e.g. `SingleKey` → `NoAccountAuthenticator`, legacy `Ed25519` signatures zeroed) before calling `/transactions/simulate`, avoiding the fullnode 400 "Simulated transactions must not have a valid signature" when passing a normally signed transaction to `Aptos::simulate_signed` or the raw client.
 - BCS wire format of `AccountAuthenticator::{SingleKey, MultiKey, Keyless}`.
   Previously the derived `Serialize` impl added a ULEB128 length prefix
   in front of each pre-BCS-encoded inner field, so the chain's
