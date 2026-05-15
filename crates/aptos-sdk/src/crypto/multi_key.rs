@@ -116,6 +116,12 @@ impl AnyPublicKey {
     }
 
     /// Parses BCS `AnyPublicKey` bytes (`variant` || `ULEB128(len)` || raw key bytes).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AptosError::InvalidPublicKey`] if the slice is empty, the variant byte is
+    /// unknown, the length prefix is malformed, the payload is truncated, or trailing bytes
+    /// remain after the declared key bytes.
     pub fn from_bcs_bytes(bytes: &[u8]) -> AptosResult<Self> {
         if bytes.is_empty() {
             return Err(AptosError::InvalidPublicKey(
@@ -267,6 +273,12 @@ impl AnySignature {
     }
 
     /// Parses BCS `AnySignature` bytes (`variant` || `ULEB128(len)` || raw signature bytes).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AptosError::InvalidSignature`] if the slice is empty, the variant byte is
+    /// unknown, the length prefix is malformed, the payload is truncated, or trailing bytes
+    /// remain after the declared signature bytes.
     pub fn from_bcs_bytes(bytes: &[u8]) -> AptosResult<Self> {
         if bytes.is_empty() {
             return Err(AptosError::InvalidSignature(
