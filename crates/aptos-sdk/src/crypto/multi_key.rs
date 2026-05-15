@@ -115,6 +115,40 @@ impl AnyPublicKey {
         result
     }
 
+    /// Parses BCS `AnyPublicKey` bytes (`variant` || `ULEB128(len)` || raw key bytes).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AptosError::InvalidPublicKey`] if the slice is empty, the variant byte is
+    /// unknown, the length prefix is malformed, the payload is truncated, or trailing bytes
+    /// remain after the declared key bytes.
+    pub fn from_bcs_bytes(bytes: &[u8]) -> AptosResult<Self> {
+        if bytes.is_empty() {
+            return Err(AptosError::InvalidPublicKey(
+                "AnyPublicKey BCS empty".into(),
+            ));
+        }
+        let variant = AnyPublicKeyVariant::from_byte(bytes[0])?;
+        let (len, len_bytes) = uleb128_decode(&bytes[1..]).ok_or_else(|| {
+            AptosError::InvalidPublicKey("AnyPublicKey BCS invalid length prefix".into())
+        })?;
+        let start = 1 + len_bytes;
+        let end = start.checked_add(len).ok_or_else(|| {
+            AptosError::InvalidPublicKey("AnyPublicKey BCS length overflow".into())
+        })?;
+        if end > bytes.len() {
+            return Err(AptosError::InvalidPublicKey(
+                "AnyPublicKey BCS truncated payload".into(),
+            ));
+        }
+        if end != bytes.len() {
+            return Err(AptosError::InvalidPublicKey(
+                "AnyPublicKey BCS trailing bytes".into(),
+            ));
+        }
+        Ok(Self::new(variant, bytes[start..end].to_vec()))
+    }
+
     /// Verifies a signature against a message.
     ///
     /// # Errors
@@ -228,14 +262,79 @@ impl AnySignature {
         }
     }
 
-    /// Serializes to BCS format: `variant_byte` || ULEB128(length) || bytes
+    /// Serializes to BCS `AnySignature` bytes.
+    ///
+    /// Most variants use `variant_byte` || `ULEB128(len)` || `payload`.
+    ///
+    /// On Aptos, discriminant `2` is shared by bare `Secp256r1Ecdsa` signatures (64-byte
+    /// payload) and the `WebAuthn` variant, which embeds a `PartialAuthenticatorAssertionResponse`
+    /// struct **without** an outer `ULEB128` length prefix after the enum tag. When this struct
+    /// is present, the first payload byte is `0x00` (`AssertionSignature::Secp256r1Ecdsa`).
+    /// For that shape we serialize as `0x02 || payload` to match the chain and
+    /// [`crate::account::WebAuthnAccount`].
     pub fn to_bcs_bytes(&self) -> Vec<u8> {
+        if self.variant == AnyPublicKeyVariant::Secp256r1 && self.bytes.len() != 64 {
+            let mut result = Vec::with_capacity(1 + self.bytes.len());
+            result.push(self.variant.as_byte());
+            result.extend_from_slice(&self.bytes);
+            return result;
+        }
         let mut result = Vec::with_capacity(1 + 1 + self.bytes.len());
         result.push(self.variant.as_byte());
         // BCS uses ULEB128 for vector lengths
         result.extend(uleb128_encode(self.bytes.len()));
         result.extend_from_slice(&self.bytes);
         result
+    }
+
+    /// Parses BCS `AnySignature` bytes from the wire.
+    ///
+    /// For variants other than `Secp256r1` (`2`), this expects
+    /// `variant` || `ULEB128(len)` || `payload`.
+    ///
+    /// For discriminant `2`, Aptos uses two layouts:
+    ///
+    /// - Bare ECDSA: `0x02` || `ULEB128(64)` || 64-byte signature. The length prefix always
+    ///   begins with `0x40` when `64` is encoded as a single ULEB128 byte.
+    /// - WebAuthn: `0x02` || BCS(`PartialAuthenticatorAssertionResponse`), which begins with
+    ///   `0x00` (`AssertionSignature::Secp256r1Ecdsa`) — **no** outer `ULEB128` wrapping the
+    ///   struct.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AptosError::InvalidSignature`] if the slice is empty, the variant byte is
+    /// unknown, the length prefix is malformed, the payload is truncated, or trailing bytes
+    /// remain after the declared signature bytes.
+    pub fn from_bcs_bytes(bytes: &[u8]) -> AptosResult<Self> {
+        if bytes.is_empty() {
+            return Err(AptosError::InvalidSignature(
+                "AnySignature BCS empty".into(),
+            ));
+        }
+        let variant = AnyPublicKeyVariant::from_byte(bytes[0]).map_err(|e| {
+            AptosError::InvalidSignature(format!("AnySignature BCS bad variant: {e}"))
+        })?;
+        if variant == AnyPublicKeyVariant::Secp256r1 && bytes.len() > 1 && bytes[1] == 0x00 {
+            return Ok(Self::new(variant, bytes[1..].to_vec()));
+        }
+        let (len, len_bytes) = uleb128_decode(&bytes[1..]).ok_or_else(|| {
+            AptosError::InvalidSignature("AnySignature BCS invalid length prefix".into())
+        })?;
+        let start = 1 + len_bytes;
+        let end = start.checked_add(len).ok_or_else(|| {
+            AptosError::InvalidSignature("AnySignature BCS length overflow".into())
+        })?;
+        if end > bytes.len() {
+            return Err(AptosError::InvalidSignature(
+                "AnySignature BCS truncated payload".into(),
+            ));
+        }
+        if end != bytes.len() {
+            return Err(AptosError::InvalidSignature(
+                "AnySignature BCS trailing bytes".into(),
+            ));
+        }
+        Ok(Self::new(variant, bytes[start..end].to_vec()))
     }
 }
 
@@ -842,6 +941,31 @@ mod tests {
         assert_eq!(bcs[1], 64); // ULEB128(64) = 0x40 (since 64 < 128)
         assert_eq!(bcs[2], 0xdd); // first byte of signature
         assert_eq!(bcs.len(), 1 + 1 + 64); // variant + length + bytes
+    }
+
+    #[test]
+    fn test_any_signature_secp256r1_bare_bcs_roundtrip() {
+        let inner = vec![0x42u8; 64];
+        let mut wire = vec![0x02, 0x40];
+        wire.extend_from_slice(&inner);
+        let sig = AnySignature::from_bcs_bytes(&wire).expect("parse bare Secp256r1");
+        assert_eq!(sig.variant, AnyPublicKeyVariant::Secp256r1);
+        assert_eq!(sig.bytes, inner);
+        assert_eq!(sig.to_bcs_bytes(), wire);
+    }
+
+    #[test]
+    fn test_any_signature_webauthn_style_bcs_roundtrip() {
+        // Synthetic PAAR-shaped payload: starts with AssertionSignature::Secp256r1Ecdsa (0x00)
+        // and is not exactly 64 bytes so `to_bcs_bytes` uses WebAuthn framing.
+        let mut paar = vec![0x00u8, 0x40];
+        paar.extend(vec![0x11u8; 64]);
+        let mut wire = vec![0x02];
+        wire.extend_from_slice(&paar);
+        let sig = AnySignature::from_bcs_bytes(&wire).expect("parse WebAuthn-style");
+        assert_eq!(sig.variant, AnyPublicKeyVariant::Secp256r1);
+        assert_eq!(sig.bytes, paar);
+        assert_eq!(sig.to_bcs_bytes(), wire);
     }
 
     #[test]

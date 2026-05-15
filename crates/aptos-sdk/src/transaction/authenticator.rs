@@ -563,6 +563,69 @@ impl TransactionAuthenticator {
     pub fn single_sender(sender: AccountAuthenticator) -> Self {
         Self::SingleSender { sender }
     }
+
+    /// Rewrites this transaction authenticator for `/transactions/simulate`.
+    ///
+    /// Delegates nested [`AccountAuthenticator`] values to
+    /// [`AccountAuthenticator::for_simulate_endpoint`]. Top-level legacy
+    /// [`TransactionAuthenticator::Ed25519`] / [`TransactionAuthenticator::MultiEd25519`]
+    /// variants keep their public keys but zero signature bytes (there is no
+    /// [`AccountAuthenticator::NoAccountAuthenticator`] field in those top-level
+    /// authenticator shapes).
+    #[must_use]
+    pub fn for_simulate_endpoint(self) -> Self {
+        match self {
+            Self::Ed25519 {
+                public_key,
+                signature: _,
+            } => Self::Ed25519 {
+                public_key,
+                signature: Ed25519Signature([0u8; 64]),
+            },
+            Self::MultiEd25519 {
+                public_key,
+                signature,
+            } => Self::MultiEd25519 {
+                public_key,
+                signature: vec![0u8; signature.len()],
+            },
+            Self::MultiAgent {
+                sender,
+                secondary_signer_addresses,
+                secondary_signers,
+            } => {
+                let secondary: Vec<AccountAuthenticator> = secondary_signers
+                    .into_iter()
+                    .map(AccountAuthenticator::for_simulate_endpoint)
+                    .collect();
+                Self::multi_agent(
+                    sender.for_simulate_endpoint(),
+                    secondary_signer_addresses,
+                    secondary,
+                )
+            }
+            Self::FeePayer {
+                sender,
+                secondary_signer_addresses,
+                secondary_signers,
+                fee_payer_address,
+                fee_payer_signer,
+            } => {
+                let secondary: Vec<AccountAuthenticator> = secondary_signers
+                    .into_iter()
+                    .map(AccountAuthenticator::for_simulate_endpoint)
+                    .collect();
+                Self::fee_payer(
+                    sender.for_simulate_endpoint(),
+                    secondary_signer_addresses,
+                    secondary,
+                    fee_payer_address,
+                    fee_payer_signer.for_simulate_endpoint(),
+                )
+            }
+            Self::SingleSender { sender } => Self::single_sender(sender.for_simulate_endpoint()),
+        }
+    }
 }
 
 impl AccountAuthenticator {
@@ -594,6 +657,50 @@ impl AccountAuthenticator {
         Self::NoAccountAuthenticator
     }
 
+    /// Rewrites this authenticator for the Aptos `/transactions/simulate` endpoint.
+    ///
+    /// The fullnode rejects requests whose authenticators contain a cryptographically
+    /// **valid** signature (HTTP 400: "Simulated transactions must not have a valid
+    /// signature"). The SDK applies this transform automatically before simulate HTTP
+    /// calls so callers do not need to hand-replace authenticators.
+    ///
+    /// * [`SingleKey`](AccountAuthenticator::SingleKey) and [`Keyless`](AccountAuthenticator::Keyless)
+    ///   become [`AccountAuthenticator::NoAccountAuthenticator`], matching the common workaround for unified-key
+    ///   accounts.
+    /// * [`Ed25519`](AccountAuthenticator::Ed25519), [`MultiEd25519`](AccountAuthenticator::MultiEd25519),
+    ///   and [`MultiKey`](AccountAuthenticator::MultiKey) keep their public key material but replace
+    ///   signature bytes with zeros (preserving `MultiEd25519` / `MultiKey` vector lengths).
+    #[must_use]
+    pub fn for_simulate_endpoint(self) -> Self {
+        match self {
+            Self::NoAccountAuthenticator => Self::NoAccountAuthenticator,
+            Self::Ed25519 {
+                public_key,
+                signature: _,
+            } => Self::Ed25519 {
+                public_key,
+                signature: Ed25519Signature([0u8; 64]),
+            },
+            Self::MultiEd25519 {
+                public_key,
+                signature,
+            } => Self::MultiEd25519 {
+                public_key,
+                signature: vec![0u8; signature.len()],
+            },
+            Self::SingleKey { .. } => Self::NoAccountAuthenticator,
+            Self::MultiKey {
+                public_key,
+                signature,
+            } => Self::MultiKey {
+                public_key,
+                signature: vec![0u8; signature.len()],
+            },
+            #[cfg(feature = "keyless")]
+            Self::Keyless { .. } => Self::NoAccountAuthenticator,
+        }
+    }
+
     /// Creates a keyless account authenticator.
     ///
     /// # Arguments
@@ -607,11 +714,116 @@ impl AccountAuthenticator {
             signature,
         }
     }
+
+    /// Verifies the authenticator against a signing message.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the authenticator does not verify for the message.
+    pub fn verify(&self, message: &[u8]) -> crate::error::AptosResult<()> {
+        match self {
+            #[cfg(feature = "ed25519")]
+            Self::Ed25519 {
+                public_key,
+                signature,
+            } => {
+                let public_key = crate::crypto::Ed25519PublicKey::from_bytes(&public_key.0)?;
+                let signature = crate::crypto::Ed25519Signature::from_bytes(&signature.0)?;
+                public_key.verify(message, &signature)
+            }
+            #[cfg(not(feature = "ed25519"))]
+            Self::Ed25519 { .. } => Err(crate::error::AptosError::FeatureNotEnabled(
+                "Ed25519 verification".into(),
+            )),
+            #[cfg(feature = "ed25519")]
+            Self::MultiEd25519 {
+                public_key,
+                signature,
+            } => {
+                let public_key = crate::crypto::MultiEd25519PublicKey::from_bytes(public_key)?;
+                let signature = crate::crypto::MultiEd25519Signature::from_bytes(signature)?;
+                public_key.verify(message, &signature)
+            }
+            #[cfg(not(feature = "ed25519"))]
+            Self::MultiEd25519 { .. } => Err(crate::error::AptosError::FeatureNotEnabled(
+                "MultiEd25519 verification".into(),
+            )),
+            Self::SingleKey {
+                public_key,
+                signature,
+            } => {
+                let pk = crate::crypto::AnyPublicKey::from_bcs_bytes(public_key)?;
+                let sig = crate::crypto::AnySignature::from_bcs_bytes(signature)?;
+                pk.verify(message, &sig)
+            }
+            Self::MultiKey {
+                public_key,
+                signature,
+            } => {
+                let pk = crate::crypto::MultiKeyPublicKey::from_bytes(public_key)?;
+                let sig = crate::crypto::MultiKeySignature::from_bytes(signature)?;
+                pk.verify(message, &sig)
+            }
+            Self::NoAccountAuthenticator => Err(crate::error::AptosError::InvalidSignature(
+                "no account authenticator cannot be verified".into(),
+            )),
+            #[cfg(feature = "keyless")]
+            Self::Keyless { .. } => Err(crate::error::AptosError::FeatureNotEnabled(
+                "local keyless verification".into(),
+            )),
+        }
+    }
+
+    /// Returns the account address implied by this authenticator's public key material.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the contained public key bytes cannot be parsed.
+    pub fn derived_address(&self) -> crate::error::AptosResult<AccountAddress> {
+        match self {
+            #[cfg(feature = "ed25519")]
+            Self::Ed25519 { public_key, .. } => {
+                let public_key = crate::crypto::Ed25519PublicKey::from_bytes(&public_key.0)?;
+                Ok(public_key.to_address())
+            }
+            #[cfg(not(feature = "ed25519"))]
+            Self::Ed25519 { .. } => Err(crate::error::AptosError::FeatureNotEnabled(
+                "Ed25519 address derivation".into(),
+            )),
+            #[cfg(feature = "ed25519")]
+            Self::MultiEd25519 { public_key, .. } => {
+                let public_key = crate::crypto::MultiEd25519PublicKey::from_bytes(public_key)?;
+                Ok(public_key.to_address())
+            }
+            #[cfg(not(feature = "ed25519"))]
+            Self::MultiEd25519 { .. } => Err(crate::error::AptosError::FeatureNotEnabled(
+                "MultiEd25519 address derivation".into(),
+            )),
+            Self::SingleKey { public_key, .. } => Ok(AccountAddress::new(
+                crate::crypto::derive_authentication_key(
+                    public_key,
+                    crate::crypto::SINGLE_KEY_SCHEME,
+                ),
+            )),
+            Self::MultiKey { public_key, .. } => {
+                let pk = crate::crypto::MultiKeyPublicKey::from_bytes(public_key)?;
+                Ok(pk.to_address())
+            }
+            Self::NoAccountAuthenticator => Err(crate::error::AptosError::InvalidSignature(
+                "no account authenticator has no derived address".into(),
+            )),
+            #[cfg(feature = "keyless")]
+            Self::Keyless { .. } => Err(crate::error::AptosError::FeatureNotEnabled(
+                "local keyless address derivation".into(),
+            )),
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::crypto::{AnyPublicKey, AnySignature, MultiKeyPublicKey, MultiKeySignature};
 
     #[test]
     fn test_ed25519_authenticator() {
@@ -903,6 +1115,47 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "ed25519")]
+    #[test]
+    fn test_account_authenticator_single_key_verify_and_derived_address() {
+        use crate::crypto::{Ed25519PrivateKey, SINGLE_KEY_SCHEME, derive_authentication_key};
+
+        let private_key = Ed25519PrivateKey::generate();
+        let message = b"single-key verify test";
+        let public_key = crate::crypto::AnyPublicKey::ed25519(&private_key.public_key());
+        let signature = crate::crypto::AnySignature::ed25519(&private_key.sign(message));
+        let auth =
+            AccountAuthenticator::single_key(public_key.to_bcs_bytes(), signature.to_bcs_bytes());
+
+        auth.verify(message).unwrap();
+        let expected = AccountAddress::new(derive_authentication_key(
+            &public_key.to_bcs_bytes(),
+            SINGLE_KEY_SCHEME,
+        ));
+        assert_eq!(auth.derived_address().unwrap(), expected);
+    }
+
+    #[cfg(feature = "ed25519")]
+    #[test]
+    fn test_account_authenticator_multi_ed25519_verify_and_derived_address() {
+        use crate::account::{Account, MultiEd25519Account};
+        use crate::crypto::Ed25519PrivateKey;
+
+        let account = MultiEd25519Account::new(
+            vec![Ed25519PrivateKey::generate(), Ed25519PrivateKey::generate()],
+            2,
+        )
+        .unwrap();
+        let message = b"multi-ed25519 verify test";
+        let auth = AccountAuthenticator::MultiEd25519 {
+            public_key: account.public_key_bytes(),
+            signature: account.sign(message).unwrap().to_bytes(),
+        };
+
+        auth.verify(message).unwrap();
+        assert_eq!(auth.derived_address().unwrap(), account.address());
+    }
+
     #[test]
     fn test_no_account_authenticator() {
         let auth = AccountAuthenticator::no_account_authenticator();
@@ -910,6 +1163,61 @@ mod tests {
             AccountAuthenticator::NoAccountAuthenticator => {}
             _ => panic!("Expected NoAccountAuthenticator variant"),
         }
+    }
+
+    #[cfg(feature = "ed25519")]
+    #[test]
+    fn test_account_authenticator_for_simulate_endpoint_single_key_to_no_account() {
+        let auth = AccountAuthenticator::single_key(vec![0x01, 0x02], vec![0x03, 0x04]);
+        let sanitized = auth.for_simulate_endpoint();
+        assert!(matches!(
+            sanitized,
+            AccountAuthenticator::NoAccountAuthenticator
+        ));
+    }
+
+    #[cfg(feature = "ed25519")]
+    #[test]
+    fn test_transaction_authenticator_for_simulate_endpoint_single_sender_strips_single_key() {
+        let sender = AccountAuthenticator::single_key(vec![0x05, 0x06], vec![0x07, 0x08]);
+        let auth = TransactionAuthenticator::single_sender(sender);
+        let sanitized = auth.for_simulate_endpoint();
+        assert!(matches!(
+            sanitized,
+            TransactionAuthenticator::SingleSender { ref sender }
+                if matches!(sender, AccountAuthenticator::NoAccountAuthenticator)
+        ));
+    }
+
+    #[cfg(feature = "ed25519")]
+    #[test]
+    fn test_transaction_authenticator_for_simulate_endpoint_ed25519_zeros_sig() {
+        let auth = TransactionAuthenticator::Ed25519 {
+            public_key: Ed25519PublicKey([7u8; 32]),
+            signature: Ed25519Signature([9u8; 64]),
+        };
+        let sanitized = auth.for_simulate_endpoint();
+        match sanitized {
+            TransactionAuthenticator::Ed25519 { signature, .. } => {
+                assert_eq!(signature.0, [0u8; 64]);
+            }
+            _ => panic!("expected Ed25519"),
+        }
+    }
+
+    #[test]
+    fn test_no_account_authenticator_verify_and_derived_address_errors() {
+        let auth = AccountAuthenticator::NoAccountAuthenticator;
+        assert!(auth.verify(b"no-auth").is_err());
+        assert!(auth.derived_address().is_err());
+    }
+
+    #[cfg(feature = "keyless")]
+    #[test]
+    fn test_keyless_authenticator_verify_and_derived_address_not_enabled() {
+        let auth = AccountAuthenticator::keyless(vec![0x11; 32], vec![0x22; 64]);
+        assert!(auth.verify(b"keyless-local").is_err());
+        assert!(auth.derived_address().is_err());
     }
 
     #[test]
@@ -1103,6 +1411,28 @@ mod tests {
             serialized, expected,
             "MultiKey wire format must be variant tag + raw pubkey bytes + raw signature bytes"
         );
+    }
+
+    #[test]
+    fn test_multi_key_authenticator_bcs_rejects_keyless_public_key() {
+        let mk_pk = MultiKeyPublicKey::new(
+            vec![AnyPublicKey::new(
+                crate::crypto::AnyPublicKeyVariant::Keyless,
+                vec![],
+            )],
+            1,
+        )
+        .unwrap();
+        let mk_sig = MultiKeySignature::new(vec![(
+            0,
+            AnySignature::new(crate::crypto::AnyPublicKeyVariant::Ed25519, vec![0x66; 64]),
+        )])
+        .unwrap();
+        let auth = AccountAuthenticator::multi_key(mk_pk.to_bytes(), mk_sig.to_bytes());
+
+        let serialized = aptos_bcs::to_bytes(&auth).unwrap();
+        let result: Result<AccountAuthenticator, _> = aptos_bcs::from_bytes(&serialized);
+        assert!(result.is_err());
     }
 
     #[test]

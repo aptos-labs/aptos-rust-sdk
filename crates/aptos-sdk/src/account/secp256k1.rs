@@ -208,8 +208,8 @@ mod tests {
     fn test_public_key_bytes() {
         let account = Secp256k1Account::generate();
         let bytes = account.public_key_bytes();
-        // BCS(AnyPublicKey::Secp256k1Ecdsa) = variant(1) + ULEB128(65) + 65-byte
-        // SEC1 uncompressed (0x04 || X || Y). Total = 1 + 1 + 65 = 67 bytes.
+        // BCS(AnyPublicKey::Secp256k1Ecdsa): variant index 1 (wire byte 0x01) + ULEB128(65)
+        // + 65-byte SEC1 uncompressed (0x04 || X || Y). Total = 1 + 1 + 65 = 67 bytes.
         assert_eq!(bytes.len(), 67);
         assert_eq!(bytes[0], 0x01, "AnyPublicKey::Secp256k1Ecdsa variant tag");
         assert_eq!(bytes[1], 65, "ULEB128(65)");

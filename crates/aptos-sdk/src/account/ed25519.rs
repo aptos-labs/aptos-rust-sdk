@@ -551,7 +551,7 @@ mod tests {
     fn test_single_key_public_key_bytes() {
         let account = Ed25519SingleKeyAccount::generate();
         let bytes = account.public_key_bytes();
-        // BCS format: variant (1) + length (1) + pubkey (32) = 34 bytes
+        // BCS(AnyPublicKey::Ed25519): 1-byte variant (0x00) + ULEB128(32) + 32-byte key = 34 bytes
         assert_eq!(bytes.len(), 34);
         assert_eq!(bytes[0], 0x00); // Ed25519 variant
         assert_eq!(bytes[1], 32); // ULEB128(32)

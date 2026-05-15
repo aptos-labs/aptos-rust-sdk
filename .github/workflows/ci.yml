@@ -71,7 +71,11 @@ jobs:
 
       - uses: ./.github/actions/setup-rust
         with:
-          toolchain: ${{ matrix.rust }}
+          # `macos-latest` + rust-cache has intermittently restored a broken `cargo`
+          # shim (rustup-init with "unexpected argument 'build'"). Match MSRV and
+          # skip cache there; other OSes keep stable + cache.
+          toolchain: ${{ matrix.os == 'macos-latest' && '1.95' || matrix.rust }}
+          cache: ${{ matrix.os == 'macos-latest' && 'false' || 'true' }}
 
       - name: Build
         run: cargo build -p aptos-sdk --all-targets
@@ -117,7 +121,11 @@ jobs:
 
       - uses: ./.github/actions/setup-rust
         with:
-          toolchain: stable
+          # Match rust-toolchain.toml / MSRV jobs. `stable` on this runner has
+          # intermittently left a broken `cargo` shim (invoking rustup-init with
+          # "build"), especially after rust-cache restores a mismatched tree.
+          toolchain: "1.95"
+          cache: "false"
 
       - name: Build
         run: cargo build -p aptos-sdk --all-targets

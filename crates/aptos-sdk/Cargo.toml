@@ -12,6 +12,11 @@ rust-version.workspace = true
 readme = "README.md"
 keywords = ["aptos", "blockchain", "crypto", "sdk", "web3"]
 categories = ["cryptography", "api-bindings", "asynchronous"]
+# `cargo publish` ships `src/` plus any `[[example]]` binaries; integration tests live under
+# `tests/` in the repo. Precompiled Move bytecode is only needed for opt-in e2e runs, so we
+# exclude `*.mv` fixtures from the published tarball to keep downloads small (compile scripts
+# locally or in CI when running those tests).
+exclude = ["tests/e2e/move/**/*.mv"]
 
 [lints]
 workspace = true
