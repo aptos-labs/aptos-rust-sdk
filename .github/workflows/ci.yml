@@ -117,7 +117,11 @@ jobs:
 
       - uses: ./.github/actions/setup-rust
         with:
-          toolchain: stable
+          # Match rust-toolchain.toml / MSRV jobs. `stable` on this runner has
+          # intermittently left a broken `cargo` shim (invoking rustup-init with
+          # "build"), especially after rust-cache restores a mismatched tree.
+          toolchain: "1.95"
+          cache: "false"
 
       - name: Build
         run: cargo build -p aptos-sdk --all-targets
