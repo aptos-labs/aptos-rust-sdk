@@ -568,9 +568,10 @@ impl TransactionAuthenticator {
     ///
     /// Delegates nested [`AccountAuthenticator`] values to
     /// [`AccountAuthenticator::for_simulate_endpoint`]. Top-level legacy
-    /// [`TransactionAuthenticator::Ed25519`] / [`MultiEd25519`] variants keep their public
-    /// keys but zero signature bytes (there is no `NoAccountAuthenticator` slot in those
-    /// variants).
+    /// [`TransactionAuthenticator::Ed25519`] / [`TransactionAuthenticator::MultiEd25519`]
+    /// variants keep their public keys but zero signature bytes (there is no
+    /// [`AccountAuthenticator::NoAccountAuthenticator`] field in those top-level
+    /// authenticator shapes).
     #[must_use]
     pub fn for_simulate_endpoint(self) -> Self {
         match self {
@@ -664,7 +665,7 @@ impl AccountAuthenticator {
     /// calls so callers do not need to hand-replace authenticators.
     ///
     /// * [`SingleKey`](AccountAuthenticator::SingleKey) and [`Keyless`](AccountAuthenticator::Keyless)
-    ///   become [`NoAccountAuthenticator`], matching the common workaround for unified-key
+    ///   become [`AccountAuthenticator::NoAccountAuthenticator`], matching the common workaround for unified-key
     ///   accounts.
     /// * [`Ed25519`](AccountAuthenticator::Ed25519), [`MultiEd25519`](AccountAuthenticator::MultiEd25519),
     ///   and [`MultiKey`](AccountAuthenticator::MultiKey) keep their public key material but replace
