@@ -622,9 +622,7 @@ impl TransactionAuthenticator {
                     fee_payer_signer.for_simulate_endpoint(),
                 )
             }
-            Self::SingleSender { sender } => {
-                Self::single_sender(sender.for_simulate_endpoint())
-            }
+            Self::SingleSender { sender } => Self::single_sender(sender.for_simulate_endpoint()),
         }
     }
 }
