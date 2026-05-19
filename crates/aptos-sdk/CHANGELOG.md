@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [unreleased]
 
 ### Added
+- `api::AnsClient` scaffold (`api/ans.rs`) -- exposes `lookup(name)` and
+  `reverse_lookup(address)` method signatures so future ANS work has an
+  obvious landing spot. Both methods currently return
+  `AptosError::Internal("...not yet implemented...")` so callers fail
+  fast rather than silently treating placeholder addresses as real.
+  Reconciles the previous `AGENTS.md` reference to `api/ans.rs` with
+  reality (the file did not exist before this commit).
 - New behavioral test module `tests/behavioral/wire_format.rs` -- pins the
   exact BCS / signing-message byte layout for `RawTransaction` (sequenced
   and orderless prefixes), `AccountAuthenticator::Ed25519`,

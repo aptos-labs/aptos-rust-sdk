@@ -167,7 +167,9 @@ point:
   - `fullnode.rs` -- REST API client for fullnode interactions.
   - `indexer.rs` -- GraphQL indexer client.
   - `faucet.rs` -- faucet client for testnets / devnet.
-  - `ans.rs` -- Aptos Names Service integration.
+  - `ans.rs` -- Aptos Names Service client. **Scaffold only**: all
+    methods currently return `AptosError::Internal("not yet implemented")`.
+    Tracked as an audit follow-up; see the module docs for design notes.
 - **`transaction/`** -- transaction building and signing.
   - `builder.rs` -- fluent builder pattern.
   - `authenticator.rs` -- `TransactionAuthenticator` and
