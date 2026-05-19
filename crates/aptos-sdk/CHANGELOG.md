@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [unreleased]
 
 ### Added
+- `FullnodeClient::get_account_resources_paginated(address, start, limit)`
+  and `FullnodeClient::get_account_modules_paginated(address, start, limit)`
+  -- forward `start` / `limit` query parameters to the REST API so callers
+  can page through accounts that publish more resources / modules than the
+  default page size. The previous one-shot `get_account_resources` /
+  `get_account_modules` methods are preserved and delegate to the new
+  pagination methods with `None` for both arguments.
 - `account::DerivationPath` (and its `PathComponent`) — parses BIP-32 / BIP-44
   derivation path strings (`m/44'/637'/0'/0/0`, lowercase `h` also accepted as
   a hardened marker) and exposes `aptos_ed25519(idx)` / `aptos_secp256k1(idx)`

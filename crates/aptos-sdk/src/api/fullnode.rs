@@ -167,7 +167,11 @@ impl FullnodeClient {
             .map_err(|e| AptosError::Internal(format!("failed to parse sequence number: {e}")))
     }
 
-    /// Gets all resources for an account.
+    /// Gets all resources for an account in a single page (uses the
+    /// fullnode's default page size; large accounts may be truncated).
+    ///
+    /// For paginated access on accounts that hold many resources, use
+    /// [`get_account_resources_paginated`](Self::get_account_resources_paginated).
     ///
     /// # Errors
     ///
@@ -177,7 +181,32 @@ impl FullnodeClient {
         &self,
         address: AccountAddress,
     ) -> AptosResult<AptosResponse<Vec<Resource>>> {
-        let url = self.build_url(&format!("accounts/{address}/resources"));
+        self.get_account_resources_paginated(address, None, None)
+            .await
+    }
+
+    /// Gets resources for an account with explicit pagination cursors.
+    ///
+    /// * `start` -- opaque state-key cursor returned by the previous page
+    ///   (omit for the first page).
+    /// * `limit` -- maximum number of resources to return on this page.
+    ///   The fullnode caps this server-side; callers should not assume
+    ///   their requested limit is honored verbatim.
+    ///
+    /// Matches the TypeScript SDK's `getAccountResources({ start, limit })`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the HTTP request fails, the API returns an error status code,
+    /// or the response cannot be parsed as JSON.
+    pub async fn get_account_resources_paginated(
+        &self,
+        address: AccountAddress,
+        start: Option<u64>,
+        limit: Option<u16>,
+    ) -> AptosResult<AptosResponse<Vec<Resource>>> {
+        let mut url = self.build_url(&format!("accounts/{address}/resources"));
+        append_start_limit(&mut url, start, limit);
         self.get_json(url).await
     }
 
@@ -200,7 +229,12 @@ impl FullnodeClient {
         self.get_json(url).await
     }
 
-    /// Gets all modules for an account.
+    /// Gets all modules for an account in a single page (uses the
+    /// fullnode's default page size; accounts that publish many modules
+    /// may be truncated).
+    ///
+    /// For paginated access, use
+    /// [`get_account_modules_paginated`](Self::get_account_modules_paginated).
     ///
     /// # Errors
     ///
@@ -210,7 +244,28 @@ impl FullnodeClient {
         &self,
         address: AccountAddress,
     ) -> AptosResult<AptosResponse<Vec<MoveModule>>> {
-        let url = self.build_url(&format!("accounts/{address}/modules"));
+        self.get_account_modules_paginated(address, None, None)
+            .await
+    }
+
+    /// Gets modules for an account with explicit pagination cursors.
+    ///
+    /// See [`get_account_resources_paginated`](Self::get_account_resources_paginated)
+    /// for `start` / `limit` semantics; they are interpreted the same way
+    /// by the fullnode.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the HTTP request fails, the API returns an error status code,
+    /// or the response cannot be parsed as JSON.
+    pub async fn get_account_modules_paginated(
+        &self,
+        address: AccountAddress,
+        start: Option<u64>,
+        limit: Option<u16>,
+    ) -> AptosResult<AptosResponse<Vec<MoveModule>>> {
+        let mut url = self.build_url(&format!("accounts/{address}/modules"));
+        append_start_limit(&mut url, start, limit);
         self.get_json(url).await
     }
 
@@ -880,6 +935,23 @@ impl FullnodeClient {
     }
 }
 
+/// Appends `start` and `limit` query parameters to `url` when present.
+///
+/// Shared by paginated REST endpoints (`/accounts/{addr}/resources`,
+/// `/accounts/{addr}/modules`, ...) so the formatting stays consistent.
+fn append_start_limit(url: &mut Url, start: Option<u64>, limit: Option<u16>) {
+    if start.is_none() && limit.is_none() {
+        return;
+    }
+    let mut query = url.query_pairs_mut();
+    if let Some(start) = start {
+        query.append_pair("start", &start.to_string());
+    }
+    if let Some(limit) = limit {
+        query.append_pair("limit", &limit.to_string());
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -891,7 +963,7 @@ mod tests {
     use crate::types::ChainId;
     use wiremock::{
         Mock, MockServer, ResponseTemplate,
-        matchers::{method, path, path_regex},
+        matchers::{method, path, path_regex, query_param},
     };
 
     #[test]
@@ -1107,6 +1179,69 @@ mod tests {
 
         assert_eq!(result.data.len(), 1);
         assert!(result.data[0].abi.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_get_account_resources_paginated_sends_start_and_limit() {
+        let server = MockServer::start().await;
+
+        // Verify the SDK forwards both query params verbatim.
+        Mock::given(method("GET"))
+            .and(path_regex(r"/v1/accounts/0x[0-9a-f]+/resources"))
+            .and(query_param("start", "42"))
+            .and(query_param("limit", "9"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server);
+        let result = client
+            .get_account_resources_paginated(AccountAddress::ONE, Some(42), Some(9))
+            .await
+            .unwrap();
+        assert_eq!(result.data.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_get_account_resources_no_pagination_omits_query() {
+        let server = MockServer::start().await;
+
+        // When both args are None, no `start`/`limit` query params should
+        // be appended -- the fullnode default page applies.
+        Mock::given(method("GET"))
+            .and(path_regex(r"/v1/accounts/0x[0-9a-f]+/resources$"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server);
+        client
+            .get_account_resources(AccountAddress::ONE)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_get_account_modules_paginated_sends_limit_only() {
+        let server = MockServer::start().await;
+
+        // Only `limit` is sent when `start` is omitted -- caller is fetching
+        // the first page with a custom page size.
+        Mock::given(method("GET"))
+            .and(path_regex(r"/v1/accounts/0x[0-9a-f]+/modules"))
+            .and(query_param("limit", "25"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server);
+        client
+            .get_account_modules_paginated(AccountAddress::ONE, None, Some(25))
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
