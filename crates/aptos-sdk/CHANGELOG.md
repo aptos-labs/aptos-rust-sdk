@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [unreleased]
 
 ### Added
+- New behavioral test module `tests/behavioral/wire_format.rs` -- pins the
+  exact BCS / signing-message byte layout for `RawTransaction` (sequenced
+  and orderless prefixes), `AccountAuthenticator::Ed25519`,
+  `AccountAuthenticator::SingleKey(AnyPublicKey::Ed25519)`, and a nested
+  generic `TypeTag`. Inputs are fully deterministic (fixed Ed25519 key,
+  fixed expiration, fixed nonce) so the resulting bytes can be cross-checked
+  against the TypeScript SDK constructed with identical inputs.
 - `FullnodeClient::get_account_resources_paginated(address, start, limit)`
   and `FullnodeClient::get_account_modules_paginated(address, start, limit)`
   -- forward `start` / `limit` query parameters to the REST API so callers
