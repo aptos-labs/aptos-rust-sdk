@@ -247,6 +247,168 @@ fn account_authenticator_single_key_ed25519_bcs_layout_is_pinned() {
 }
 
 #[test]
+fn raw_transaction_full_bcs_hex_is_pinned() {
+    // Full hex pin so cross-SDK comparison reduces to a single equality
+    // check. The earlier `*_layout_is_reproducible` test asserts component
+    // substrings, which keeps the diagnostic readable when one field
+    // drifts; this one catches drift in any field but is harder to debug.
+    // Both are intentional: components for diagnosis, full hex for the
+    // single-line cross-SDK fixture comparison.
+    let raw = fixed_raw_transaction();
+    assert_eq!(
+        const_hex::encode(raw.to_bcs().unwrap()),
+        // sender(32) | seq(8) | payload_variant(1) | module_addr(32) |
+        //   module_name(uleb+13) | function(uleb+8) | type_args(uleb+0) |
+        //   args(uleb+2 + uleb+32 + 32B addr + uleb+8 + 8B amount) |
+        //   max_gas(8) | gas_price(8) | expiration(8) | chain_id(1)
+        "00000000000000000000000000000000000000000000000000000000000000012a000000000000000200000000000000000000000000000000000000000000000000000000000000010d6170746f735f6163636f756e74087472616e7366657200022000000000000000000000000000000000000000000000000000000000000000020840420f0000000000a0860100000000006400000000000000ffe30b540200000002",
+    );
+}
+
+#[cfg(feature = "ed25519")]
+#[test]
+fn account_authenticator_multi_ed25519_bcs_layout_is_pinned() {
+    // 2-of-3 MultiEd25519 with deterministic keys (seeds 1, 2, 3). The
+    // SDK signs with the first `threshold` private keys, so signatures 0
+    // and 1 are populated and the bitmap's two most-significant bits are
+    // set (`0b1100_0000` = 0xc0).
+    use aptos_sdk::account::MultiEd25519Account;
+    let keys: Vec<Ed25519PrivateKey> = (1u8..=3)
+        .map(|n| Ed25519PrivateKey::from_bytes(&[n; 32]).unwrap())
+        .collect();
+    let account = MultiEd25519Account::new(keys, 2).unwrap();
+
+    // Public-key bytes: pk0(32) || pk1(32) || pk2(32) || threshold(1)
+    //   = 32*3 + 1 = 97 bytes, NO length prefix (legacy MultiEd25519 wire format).
+    let pk_bytes = account.public_key().to_bytes();
+    assert_eq!(pk_bytes.len(), 32 * 3 + 1);
+    assert_eq!(
+        *pk_bytes.last().unwrap(),
+        2u8,
+        "trailing threshold byte must be 2",
+    );
+
+    // Signature bytes: sig0(64) || sig1(64) || bitmap(4)
+    //   = 64*2 + 4 = 132 bytes, NO length prefix.
+    let sig_bytes: Vec<u8> =
+        <MultiEd25519Account as Account>::sign(&account, b"fixture message").unwrap();
+    assert_eq!(sig_bytes.len(), 64 * 2 + 4);
+    let bitmap = &sig_bytes[sig_bytes.len() - 4..];
+    assert_eq!(
+        bitmap,
+        &[0xc0, 0x00, 0x00, 0x00],
+        "bitmap MSB-first: signers 0 and 1 only",
+    );
+
+    // The outer AccountAuthenticator::MultiEd25519 wraps each blob with a
+    // ULEB128 length prefix (it's a Vec<u8> from serde's perspective on
+    // this variant). Layout:
+    //   variant 1 || ULEB128(97) || pk_bytes(97) || ULEB128(132) || sig_bytes(132)
+    //   = 1 + 1 + 97 + 2 + 132 = 233 bytes (132 ULEB encodes as 2 bytes).
+    let auth = AccountAuthenticator::MultiEd25519 {
+        public_key: pk_bytes.clone(),
+        signature: sig_bytes.clone(),
+    };
+    let outer = aptos_bcs::to_bytes(&auth).unwrap();
+    let outer_hex = const_hex::encode(&outer);
+    // 233 bytes = 466 hex chars
+    assert_eq!(
+        outer.len(),
+        1 + 1 + 97 + 2 + 132,
+        "MultiEd25519 outer BCS length drifted: {outer_hex}",
+    );
+    // Variant tag 0x01 + ULEB128(97) = 0x61 -> hex prefix "0161"
+    assert!(
+        outer_hex.starts_with("0161"),
+        "MultiEd25519 variant(1) + ULEB(97) prefix drifted: {outer_hex}",
+    );
+    // ULEB128(132) = 0x84 0x01 -> starts at offset (1 + 1 + 97) * 2 = 198.
+    assert_eq!(
+        &outer_hex[198..202],
+        "8401",
+        "MultiEd25519 inner ULEB128(132) header drifted: {outer_hex}",
+    );
+}
+
+#[cfg(all(feature = "ed25519", feature = "secp256k1"))]
+#[test]
+fn account_authenticator_multi_key_bcs_layout_is_pinned() {
+    // 2-of-3 MultiKey: ed25519 + secp256k1 + ed25519 with deterministic
+    // seeds. We exercise mixed key types to verify AnyPublicKey variants
+    // are emitted with the correct discriminator bytes.
+    use aptos_sdk::account::{AnyPrivateKey, MultiKeyAccount};
+    use aptos_sdk::crypto::{Ed25519PrivateKey as EdK, Secp256k1PrivateKey};
+    let keys = vec![
+        AnyPrivateKey::ed25519(EdK::from_bytes(&[1u8; 32]).unwrap()),
+        AnyPrivateKey::secp256k1(Secp256k1PrivateKey::from_bytes(&[2u8; 32]).unwrap()),
+        AnyPrivateKey::ed25519(EdK::from_bytes(&[3u8; 32]).unwrap()),
+    ];
+    let account = MultiKeyAccount::new(keys, 2).unwrap();
+
+    // MultiKeyPublicKey BCS = ULEB128(n) || BCS(AnyPublicKey)0 || ... || threshold(1)
+    //   AnyPublicKey::Ed25519     = 0x00 || ULEB128(32) || 32B
+    //   AnyPublicKey::Secp256k1   = 0x01 || ULEB128(65) || 65B (SEC1 uncompressed)
+    //   Outer pk length = 1 (count) + 34 + 67 + 34 + 1 (threshold) = 137 bytes.
+    let pk_bytes = account.public_key().to_bytes();
+    assert_eq!(
+        pk_bytes.len(),
+        1 + (1 + 1 + 32) + (1 + 1 + 65) + (1 + 1 + 32) + 1,
+        "MultiKey public-key BCS length drifted",
+    );
+    assert_eq!(pk_bytes[0], 3u8, "leading ULEB128(3) public-key count");
+    assert_eq!(*pk_bytes.last().unwrap(), 2u8, "trailing threshold = 2");
+    // The first AnyPublicKey (Ed25519) begins immediately after the count.
+    assert_eq!(pk_bytes[1], 0x00, "first AnyPublicKey variant = Ed25519");
+    // The second AnyPublicKey (Secp256k1) begins at offset 1 + (1+1+32) = 35.
+    assert_eq!(
+        pk_bytes[35], 0x01,
+        "second AnyPublicKey variant = Secp256k1",
+    );
+
+    // MultiKeySignature BCS = ULEB128(n) || BCS(AnySignature)0 || ... ||
+    //   BitVec(4) = ULEB128(4) || 4 bytes
+    //   AnySignature::Ed25519   = 0x00 || ULEB128(64) || 64B
+    //   AnySignature::Secp256k1 = 0x01 || ULEB128(64) || 64B
+    //   For a 2-of-3 with signers at indices 0 and 1 (first two owned keys),
+    //   the bitmap is 0xc0 0x00 0x00 0x00 (MSB-first).
+    let sig_bytes: Vec<u8> =
+        <MultiKeyAccount as Account>::sign(&account, b"fixture message").unwrap();
+    let expected_sig_len = 1 + (1 + 1 + 64) + (1 + 1 + 64) + 1 + 4;
+    assert_eq!(
+        sig_bytes.len(),
+        expected_sig_len,
+        "MultiKey signature BCS length drifted",
+    );
+    assert_eq!(sig_bytes[0], 2u8, "leading ULEB128(2) signature count");
+    assert_eq!(sig_bytes[1], 0x00, "first signature variant = Ed25519");
+    // Second signature at offset 1 + (1+1+64) = 67
+    assert_eq!(sig_bytes[67], 0x01, "second signature variant = Secp256k1");
+    // BitVec at the end: ULEB128(4) || 4 bytes
+    let bitvec_offset = sig_bytes.len() - 5;
+    assert_eq!(sig_bytes[bitvec_offset], 4u8, "BitVec ULEB128(4) header");
+    assert_eq!(
+        &sig_bytes[bitvec_offset + 1..],
+        &[0xc0, 0x00, 0x00, 0x00],
+        "MultiKey bitmap MSB-first: signers 0 and 1 only",
+    );
+
+    // Outer AccountAuthenticator::MultiKey wraps each blob WITHOUT an
+    // extra length prefix (hand-rolled `serialize_account_auth_raw_pair`).
+    // Layout: variant 3 || pk_bytes || sig_bytes.
+    let auth = AccountAuthenticator::MultiKey {
+        public_key: pk_bytes.clone(),
+        signature: sig_bytes.clone(),
+    };
+    let outer = aptos_bcs::to_bytes(&auth).unwrap();
+    assert_eq!(
+        outer.len(),
+        1 + pk_bytes.len() + sig_bytes.len(),
+        "MultiKey outer length must NOT include extra ULEB prefixes",
+    );
+    assert_eq!(outer[0], 0x03, "MultiKey variant byte");
+}
+
+#[test]
 fn type_tag_nested_generic_bcs_embeds_inner_typetag() {
     let outer = TypeTag::from_str_strict("0x1::coin::Coin<0x1::aptos_coin::AptosCoin>").unwrap();
     let inner = TypeTag::aptos_coin();

@@ -1224,6 +1224,64 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_get_account_resources_paginated_sends_start_only() {
+        // Start without limit: caller is paging from a saved cursor and is
+        // happy with the fullnode default page size.
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path_regex(r"/v1/accounts/0x[0-9a-f]+/resources"))
+            .and(query_param("start", "1234"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server);
+        client
+            .get_account_resources_paginated(AccountAddress::ONE, Some(1234), None)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_get_account_modules_paginated_sends_start_and_limit() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path_regex(r"/v1/accounts/0x[0-9a-f]+/modules"))
+            .and(query_param("start", "7"))
+            .and(query_param("limit", "100"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server);
+        client
+            .get_account_modules_paginated(AccountAddress::ONE, Some(7), Some(100))
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_get_account_modules_no_pagination_omits_query() {
+        // Symmetric with the resources variant: no `start` / `limit` query
+        // params should be appended when both are None.
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path_regex(r"/v1/accounts/0x[0-9a-f]+/modules$"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server);
+        client
+            .get_account_modules(AccountAddress::ONE)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
     async fn test_get_account_modules_paginated_sends_limit_only() {
         let server = MockServer::start().await;
 

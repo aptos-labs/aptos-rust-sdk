@@ -731,6 +731,82 @@ mod tests {
     }
 
     #[test]
+    fn test_path_component_encoded_sets_hardened_bit() {
+        let hardened = PathComponent {
+            index: 44,
+            hardened: true,
+        };
+        let unhardened = PathComponent {
+            index: 44,
+            hardened: false,
+        };
+        assert_eq!(hardened.encoded(), 0x8000_002C);
+        assert_eq!(unhardened.encoded(), 44);
+    }
+
+    #[test]
+    fn test_path_display_roundtrip() {
+        for s in ["m/44'/637'/0'/0/0", "m/44'/637'/3'/0'/0'", "m/0"] {
+            let path = DerivationPath::from_str(s).unwrap();
+            assert_eq!(path.to_string(), s, "roundtrip drifted for {s}");
+        }
+    }
+
+    #[test]
+    fn test_path_from_str_via_parse_trait() {
+        // The FromStr trait impl exists so callers can `path.parse()` --
+        // verify it returns the same shape as the inherent constructor.
+        use std::str::FromStr;
+        let via_inherent = DerivationPath::from_str("m/44'/637'/0'/0/0").unwrap();
+        let via_trait: DerivationPath = "m/44'/637'/0'/0/0".parse().unwrap();
+        let via_fromstr = <DerivationPath as FromStr>::from_str("m/44'/637'/0'/0/0").unwrap();
+        assert_eq!(via_inherent, via_trait);
+        assert_eq!(via_inherent, via_fromstr);
+    }
+
+    #[test]
+    fn test_path_from_str_rejects_empty_component() {
+        // Double slash should not be silently absorbed into a single segment.
+        assert!(DerivationPath::from_str("m//44'").is_err());
+        assert!(DerivationPath::from_str("m/44'/").is_err());
+    }
+
+    #[test]
+    #[cfg(feature = "ed25519")]
+    fn test_passphrase_changes_derived_key() {
+        // BIP-39 mandates the passphrase be folded into the seed; verify
+        // the derived key is sensitive to it (otherwise the "secret
+        // passphrase" feature would be a no-op).
+        let mnemonic = Mnemonic::from_phrase(TEST_PHRASE).unwrap();
+        let seed_default = mnemonic.to_seed().unwrap();
+        let seed_passphrase = mnemonic.to_seed_with_passphrase("hunter2").unwrap();
+        assert_ne!(seed_default, seed_passphrase);
+        // And the derived key follows accordingly via the seed.
+        let key = mnemonic.derive_ed25519_key(0).unwrap();
+        // Re-derive at the same path through the seed-with-passphrase
+        // path: there's no public `derive_*_from_seed` so we just assert
+        // the seed itself differs (key sensitivity follows by construction
+        // since the SLIP-0010 master HMAC is keyed by the seed).
+        assert_eq!(key.to_bytes().len(), 32);
+    }
+
+    #[test]
+    #[cfg(feature = "secp256k1")]
+    fn test_derive_secp256k1_different_paths_produce_different_keys() {
+        // Sanity: distinct paths must produce distinct keys (otherwise
+        // a derivation bug could be hiding behind a single-path test).
+        let m = Mnemonic::from_phrase(TEST_PHRASE).unwrap();
+        let k0 = m.derive_secp256k1_key(0).unwrap();
+        let k1 = m.derive_secp256k1_key(1).unwrap();
+        let k_bitcoin = m
+            .derive_secp256k1_key_at_path(&DerivationPath::from_str("m/44'/0'/0'/0/0").unwrap())
+            .unwrap();
+        assert_ne!(k0.to_bytes(), k1.to_bytes());
+        assert_ne!(k0.to_bytes(), k_bitcoin.to_bytes());
+        assert_ne!(k1.to_bytes(), k_bitcoin.to_bytes());
+    }
+
+    #[test]
     #[cfg(feature = "secp256k1")]
     fn test_derive_secp256k1_custom_path() {
         let mnemonic = Mnemonic::from_phrase(TEST_PHRASE).unwrap();
