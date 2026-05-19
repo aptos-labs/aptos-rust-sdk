@@ -8,6 +8,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [unreleased]
 
 ### Added
+- `account::DerivationPath` (and its `PathComponent`) — parses BIP-32 / BIP-44
+  derivation path strings (`m/44'/637'/0'/0/0`, lowercase `h` also accepted as
+  a hardened marker) and exposes `aptos_ed25519(idx)` / `aptos_secp256k1(idx)`
+  for the canonical Aptos paths. The Ed25519 default is fully hardened
+  (`m/44'/637'/x'/0'/0'`); the Secp256k1 default uses the BIP-44 mixed form
+  (`m/44'/637'/x'/0/0`) to match the TypeScript SDK's `APTOS_BIP44_REGEX`.
+- `Mnemonic::derive_secp256k1_key(index)` — derives an Aptos Secp256k1 private
+  key via BIP-32 along the canonical Aptos path. Cross-validated against the
+  Bitcoin reference vector for the `abandon × 11 about` mnemonic at
+  `m/44'/0'/0'/0/0` so hardened + non-hardened child derivation are both
+  exercised by tests.
+- `Mnemonic::derive_ed25519_key_at_path(&path)` and
+  `Mnemonic::derive_secp256k1_key_at_path(&path)` — derive at a caller-supplied
+  derivation path. Ed25519 paths must be fully hardened (SLIP-0010) and a
+  non-hardened component returns `AptosError::KeyDerivation` instead of
+  producing an invalid key.
 - `FullnodeClient::simulate_transaction_with_options` — simulate with optional query parameters (`estimate_max_gas_amount`, `estimate_gas_unit_price`, `estimate_prioritized_gas_unit_price`). Existing `simulate_transaction` is unchanged (single-arg) and delegates to the new method with `None` for backward compatibility.
 - `Aptos::simulate_signed_with_options`, plus option-aware multi-signer simulation (`Aptos::simulate_multi_agent`, `Aptos::simulate_fee_payer`) for consistent high-level simulation APIs while preserving no-options usage.
 - `build_simulation_signed_multi_agent` and `build_simulation_signed_fee_payer` for constructing simulation-only signed transactions using `NoAccountAuthenticator` placeholders.
