@@ -187,8 +187,13 @@ impl FullnodeClient {
 
     /// Gets resources for an account with explicit pagination cursors.
     ///
-    /// * `start` -- opaque state-key cursor returned by the previous page
-    ///   (omit for the first page).
+    /// * `start` -- opaque cursor token returned by the previous page in
+    ///   the `x-aptos-cursor` header (and surfaced as
+    ///   [`AptosResponse::cursor`](super::response::AptosResponse#field.cursor)).
+    ///   The type is `Option<&str>` rather than `Option<u64>` so opaque
+    ///   non-numeric cursors round-trip losslessly. Pass `None` for the
+    ///   first page; for subsequent pages forward
+    ///   `previous_response.cursor.as_deref()`.
     /// * `limit` -- maximum number of resources to return on this page.
     ///   The fullnode caps this server-side; callers should not assume
     ///   their requested limit is honored verbatim.
@@ -202,7 +207,7 @@ impl FullnodeClient {
     pub async fn get_account_resources_paginated(
         &self,
         address: AccountAddress,
-        start: Option<u64>,
+        start: Option<&str>,
         limit: Option<u16>,
     ) -> AptosResult<AptosResponse<Vec<Resource>>> {
         let mut url = self.build_url(&format!("accounts/{address}/resources"));
@@ -261,7 +266,7 @@ impl FullnodeClient {
     pub async fn get_account_modules_paginated(
         &self,
         address: AccountAddress,
-        start: Option<u64>,
+        start: Option<&str>,
         limit: Option<u16>,
     ) -> AptosResult<AptosResponse<Vec<MoveModule>>> {
         let mut url = self.build_url(&format!("accounts/{address}/modules"));
@@ -939,13 +944,16 @@ impl FullnodeClient {
 ///
 /// Shared by paginated REST endpoints (`/accounts/{addr}/resources`,
 /// `/accounts/{addr}/modules`, ...) so the formatting stays consistent.
-fn append_start_limit(url: &mut Url, start: Option<u64>, limit: Option<u16>) {
+/// `start` is forwarded verbatim as a string so opaque pagination cursors
+/// returned in the `x-aptos-cursor` header round-trip losslessly (the
+/// fullnode does not promise numeric cursors).
+fn append_start_limit(url: &mut Url, start: Option<&str>, limit: Option<u16>) {
     if start.is_none() && limit.is_none() {
         return;
     }
     let mut query = url.query_pairs_mut();
     if let Some(start) = start {
-        query.append_pair("start", &start.to_string());
+        query.append_pair("start", start);
     }
     if let Some(limit) = limit {
         query.append_pair("limit", &limit.to_string());
@@ -1197,10 +1205,32 @@ mod tests {
 
         let client = create_mock_client(&server);
         let result = client
-            .get_account_resources_paginated(AccountAddress::ONE, Some(42), Some(9))
+            .get_account_resources_paginated(AccountAddress::ONE, Some("42"), Some(9))
             .await
             .unwrap();
         assert_eq!(result.data.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_get_account_resources_paginated_round_trips_opaque_cursor() {
+        // The `x-aptos-cursor` header is opaque (`Option<String>` on
+        // `AptosResponse`). A caller pulling page N+1 must be able to pass
+        // page N's cursor verbatim, even when it's not a decimal integer.
+        let server = MockServer::start().await;
+        let opaque = "0x0a1b2c3d_state_key_token";
+        Mock::given(method("GET"))
+            .and(path_regex(r"/v1/accounts/0x[0-9a-f]+/resources"))
+            .and(query_param("start", opaque))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server);
+        client
+            .get_account_resources_paginated(AccountAddress::ONE, Some(opaque), None)
+            .await
+            .unwrap();
     }
 
     #[tokio::test]
@@ -1238,7 +1268,7 @@ mod tests {
 
         let client = create_mock_client(&server);
         client
-            .get_account_resources_paginated(AccountAddress::ONE, Some(1234), None)
+            .get_account_resources_paginated(AccountAddress::ONE, Some("1234"), None)
             .await
             .unwrap();
     }
@@ -1257,7 +1287,7 @@ mod tests {
 
         let client = create_mock_client(&server);
         client
-            .get_account_modules_paginated(AccountAddress::ONE, Some(7), Some(100))
+            .get_account_modules_paginated(AccountAddress::ONE, Some("7"), Some(100))
             .await
             .unwrap();
     }

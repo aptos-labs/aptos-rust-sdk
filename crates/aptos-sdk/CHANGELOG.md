@@ -29,15 +29,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and `FullnodeClient::get_account_modules_paginated(address, start, limit)`
   -- forward `start` / `limit` query parameters to the REST API so callers
   can page through accounts that publish more resources / modules than the
-  default page size. The previous one-shot `get_account_resources` /
+  default page size. `start` is `Option<&str>` so opaque cursor tokens
+  surfaced through the `x-aptos-cursor` header (`AptosResponse::cursor`)
+  round-trip losslessly. The previous one-shot `get_account_resources` /
   `get_account_modules` methods are preserved and delegate to the new
   pagination methods with `None` for both arguments.
-- `account::DerivationPath` (and its `PathComponent`) — parses BIP-32 / BIP-44
-  derivation path strings (`m/44'/637'/0'/0/0`, lowercase `h` also accepted as
-  a hardened marker) and exposes `aptos_ed25519(idx)` / `aptos_secp256k1(idx)`
-  for the canonical Aptos paths. The Ed25519 default is fully hardened
-  (`m/44'/637'/x'/0'/0'`); the Secp256k1 default uses the BIP-44 mixed form
-  (`m/44'/637'/x'/0/0`) to match the TypeScript SDK's `APTOS_BIP44_REGEX`.
+- `account::DerivationPath` and `account::PathComponent` -- parse BIP-32 /
+  BIP-44 derivation path strings (`m/44'/637'/0'/0/0`, lowercase `h` also
+  accepted as a hardened marker) and expose
+  `aptos_ed25519(address_index) -> AptosResult<Self>` /
+  `aptos_secp256k1(address_index) -> AptosResult<Self>` builders for the
+  canonical Aptos paths. `address_index` lives in the BIP-44 5th
+  component to match the pre-existing `Mnemonic::derive_ed25519_key`
+  behavior; callers needing TS-SDK-style account-level indexing must
+  build the path explicitly via `DerivationPath::from_str`.
+  `PathComponent` fields are private; construct via
+  `PathComponent::try_new(index, hardened)` which rejects `index >= 2^31`
+  (the BIP-32 hardened bit).
 - `Mnemonic::derive_secp256k1_key(index)` — derives an Aptos Secp256k1 private
   key via BIP-32 along the canonical Aptos path. Cross-validated against the
   Bitcoin reference vector for the `abandon × 11 about` mnemonic at

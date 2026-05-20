@@ -5,17 +5,20 @@
 //! # Supported curves
 //!
 //! - **Ed25519** uses SLIP-0010 with the Aptos default path
-//!   `m/44'/637'/{account}'/{change}'/{address}'`. Every component MUST be
-//!   hardened because Ed25519 does not admit non-hardened child derivation
-//!   (no scalar homomorphism on Curve25519). The `from_str` parser will
-//!   reject non-hardened components when the resulting path is used with
-//!   Ed25519.
+//!   `m/44'/637'/0'/0'/{address_index}'`. Every component MUST be hardened
+//!   because Ed25519 does not admit non-hardened child derivation (no
+//!   scalar homomorphism on Curve25519). The `from_str` parser will reject
+//!   non-hardened components when the resulting path is used with Ed25519.
 //! - **Secp256k1** uses BIP-32 with the Aptos default path
-//!   `m/44'/637'/{account}'/0/0` -- the last two indices are non-hardened
-//!   to match the official TypeScript SDK (`isValidBIP44Path`).
+//!   `m/44'/637'/0'/0/{address_index}` -- the last two indices are
+//!   non-hardened, matching the TypeScript SDK's `APTOS_BIP44_REGEX`.
 //!
-//! Custom paths can be supplied via [`DerivationPath::from_str`] for both
-//! curves.
+//! `derive_ed25519_key(index)` and `derive_secp256k1_key(index)` place
+//! `index` in the **5th (address) component**, preserving the pre-PR Rust
+//! SDK semantics so existing addresses derived from a mnemonic do not
+//! shift between SDK versions. Callers needing to vary the BIP-44
+//! **account** index (the Petra / TS-SDK convention) should build the
+//! path explicitly via [`DerivationPath::from_str`].
 
 use crate::error::{AptosError, AptosResult};
 
@@ -30,16 +33,52 @@ const APTOS_COIN_TYPE: u32 = 637;
 ///
 /// Wraps a 31-bit numeric index plus a hardened flag. The encoded 32-bit
 /// value used during derivation is `index | 0x80000000` when hardened.
+///
+/// Fields are private to enforce the `index < 2^31` invariant: a value with
+/// the hardened bit already set would collide with an explicitly hardened
+/// component during BIP-32 derivation, producing an ambiguous key. Use
+/// [`Self::try_new`] to construct.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PathComponent {
     /// The 31-bit numeric index (without the hardened bit applied).
-    pub index: u32,
+    index: u32,
     /// Whether this component is hardened (denoted by a trailing apostrophe
     /// in path strings, e.g. `44'`).
-    pub hardened: bool,
+    hardened: bool,
 }
 
 impl PathComponent {
+    /// Constructs a path component, rejecting any `index` whose top bit is
+    /// set (i.e. `index >= 2^31 = 0x8000_0000`).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AptosError::KeyDerivation`] if `index` has its hardened
+    /// bit set; valid BIP-32 indices are confined to 31 bits and the
+    /// hardened bit is supplied via the `hardened` flag.
+    pub fn try_new(index: u32, hardened: bool) -> AptosResult<Self> {
+        if index & HARDENED_OFFSET != 0 {
+            return Err(AptosError::KeyDerivation(format!(
+                "derivation index {index} exceeds 2^31 - 1; the hardened bit \
+                 must come from the `hardened` flag, not the raw value"
+            )));
+        }
+        Ok(Self { index, hardened })
+    }
+
+    /// Returns the 31-bit numeric index without the hardened bit applied.
+    #[must_use]
+    pub fn index(self) -> u32 {
+        self.index
+    }
+
+    /// Returns `true` when this component is hardened (encoded as
+    /// `index | 0x80000000` during derivation).
+    #[must_use]
+    pub fn hardened(self) -> bool {
+        self.hardened
+    }
+
     /// Encodes this component as the 32-bit value passed to BIP-32 / SLIP-0010
     /// child-key derivation (i.e. with the hardened bit set when applicable).
     #[must_use]
@@ -74,73 +113,63 @@ impl DerivationPath {
     /// Ed25519 derivation rejects paths that are not fully hardened.
     #[must_use]
     pub fn is_fully_hardened(&self) -> bool {
-        self.components.iter().all(|c| c.hardened)
+        self.components.iter().all(|c| c.hardened())
     }
 
     /// Builds the canonical Aptos Ed25519 derivation path
-    /// `m/44'/637'/{account_index}'/0'/0'`.
+    /// `m/44'/637'/0'/0'/{address_index}'`.
     ///
-    /// This matches the TypeScript SDK's `APTOS_HARDENED_REGEX`.
-    #[must_use]
-    pub fn aptos_ed25519(account_index: u32) -> Self {
-        Self {
+    /// The `address_index` is placed in the final (address) BIP-44 component
+    /// for backward compatibility with the pre-existing
+    /// `Mnemonic::derive_ed25519_key(index)` behavior. Callers needing to
+    /// vary the BIP-44 *account* index (the Petra/TS-SDK convention) should
+    /// construct the path explicitly via [`Self::from_str`] and pass it to
+    /// [`Mnemonic::derive_ed25519_key_at_path`].
+    ///
+    /// All five components are hardened, matching the TypeScript SDK's
+    /// `APTOS_HARDENED_REGEX`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AptosError::KeyDerivation`] if `address_index >= 2^31`
+    /// (the top bit is reserved as the BIP-32 hardened flag).
+    pub fn aptos_ed25519(address_index: u32) -> AptosResult<Self> {
+        let h = |i| PathComponent::try_new(i, true);
+        Ok(Self {
             components: vec![
-                PathComponent {
-                    index: BIP44_PURPOSE,
-                    hardened: true,
-                },
-                PathComponent {
-                    index: APTOS_COIN_TYPE,
-                    hardened: true,
-                },
-                PathComponent {
-                    index: account_index,
-                    hardened: true,
-                },
-                PathComponent {
-                    index: 0,
-                    hardened: true,
-                },
-                PathComponent {
-                    index: 0,
-                    hardened: true,
-                },
+                h(BIP44_PURPOSE)?,
+                h(APTOS_COIN_TYPE)?,
+                h(0)?,
+                h(0)?,
+                h(address_index)?,
             ],
-        }
+        })
     }
 
     /// Builds the canonical Aptos Secp256k1 derivation path
-    /// `m/44'/637'/{account_index}'/0/0`.
+    /// `m/44'/637'/0'/0/{address_index}`.
     ///
-    /// The last two indices are intentionally **not** hardened, matching the
-    /// TypeScript SDK's `APTOS_BIP44_REGEX`. Hardened paths are also valid
-    /// for Secp256k1 but the Aptos default uses the mixed form.
-    #[must_use]
-    pub fn aptos_secp256k1(account_index: u32) -> Self {
-        Self {
+    /// The `address_index` is placed in the final (address) BIP-44 component
+    /// for symmetry with [`Self::aptos_ed25519`]. The last two indices are
+    /// non-hardened, matching the TypeScript SDK's `APTOS_BIP44_REGEX`.
+    /// Callers needing to vary the BIP-44 *account* index should construct
+    /// the path explicitly via [`Self::from_str`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AptosError::KeyDerivation`] if `address_index >= 2^31`.
+    pub fn aptos_secp256k1(address_index: u32) -> AptosResult<Self> {
+        let h = |i| PathComponent::try_new(i, true);
+        let u = |i| PathComponent::try_new(i, false);
+        Ok(Self {
             components: vec![
-                PathComponent {
-                    index: BIP44_PURPOSE,
-                    hardened: true,
-                },
-                PathComponent {
-                    index: APTOS_COIN_TYPE,
-                    hardened: true,
-                },
-                PathComponent {
-                    index: account_index,
-                    hardened: true,
-                },
-                PathComponent {
-                    index: 0,
-                    hardened: false,
-                },
-                PathComponent {
-                    index: 0,
-                    hardened: false,
-                },
+                h(BIP44_PURPOSE)?,
+                h(APTOS_COIN_TYPE)?,
+                h(0)?,
+                u(0)?,
+                u(address_index)?,
             ],
-        }
+        })
     }
 
     /// Parses a derivation path of the form `m/44'/637'/0'/0'/0'`.
@@ -197,13 +226,14 @@ impl std::str::FromStr for DerivationPath {
                 ))
             })?;
 
-            if index & HARDENED_OFFSET != 0 {
-                return Err(AptosError::KeyDerivation(format!(
-                    "derivation index {index} exceeds 2^31 - 1 in path: {path}"
-                )));
-            }
-
-            components.push(PathComponent { index, hardened });
+            components.push(
+                PathComponent::try_new(index, hardened).map_err(|e| match e {
+                    AptosError::KeyDerivation(msg) => {
+                        AptosError::KeyDerivation(format!("{msg} in path: {path}"))
+                    }
+                    other => other,
+                })?,
+            );
         }
 
         if components.is_empty() {
@@ -220,10 +250,10 @@ impl std::fmt::Display for DerivationPath {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("m")?;
         for c in &self.components {
-            if c.hardened {
-                write!(f, "/{}'", c.index)?;
+            if c.hardened() {
+                write!(f, "/{}'", c.index())?;
             } else {
-                write!(f, "/{}", c.index)?;
+                write!(f, "/{}", c.index())?;
             }
         }
         Ok(())
@@ -346,7 +376,7 @@ impl Mnemonic {
     /// Returns an error if key derivation fails or the derived key is invalid.
     #[cfg(feature = "ed25519")]
     pub fn derive_ed25519_key(&self, index: u32) -> AptosResult<crate::crypto::Ed25519PrivateKey> {
-        self.derive_ed25519_key_at_path(&DerivationPath::aptos_ed25519(index))
+        self.derive_ed25519_key_at_path(&DerivationPath::aptos_ed25519(index)?)
     }
 
     /// Derives an Ed25519 private key at a custom BIP-44 path.
@@ -396,7 +426,7 @@ impl Mnemonic {
         &self,
         index: u32,
     ) -> AptosResult<crate::crypto::Secp256k1PrivateKey> {
-        self.derive_secp256k1_key_at_path(&DerivationPath::aptos_secp256k1(index))
+        self.derive_secp256k1_key_at_path(&DerivationPath::aptos_secp256k1(index)?)
     }
 
     /// Derives a Secp256k1 private key at a custom BIP-32 path.
@@ -496,7 +526,7 @@ fn derive_secp256k1_at_path(seed: &[u8], path: &DerivationPath) -> AptosResult<[
 
     for component in path.components() {
         let encoded = component.encoded();
-        let data = if component.hardened {
+        let data = if component.hardened() {
             // 0x00 || ser_256(k_par) || ser_32(i)
             let mut buf = Vec::with_capacity(1 + 32 + 4);
             buf.push(0u8);
@@ -636,18 +666,34 @@ mod tests {
 
     #[test]
     fn test_aptos_default_paths() {
+        // `address_index` lives in the 5th BIP-44 component, matching the
+        // pre-PR `derive_ed25519_key(index)` behavior so existing addresses
+        // derived from a mnemonic do not silently shift between SDK versions.
         assert_eq!(
-            DerivationPath::aptos_ed25519(0).to_string(),
+            DerivationPath::aptos_ed25519(0).unwrap().to_string(),
             "m/44'/637'/0'/0'/0'"
         );
         assert_eq!(
-            DerivationPath::aptos_secp256k1(0).to_string(),
+            DerivationPath::aptos_secp256k1(0).unwrap().to_string(),
             "m/44'/637'/0'/0/0"
         );
         assert_eq!(
-            DerivationPath::aptos_ed25519(5).to_string(),
-            "m/44'/637'/5'/0'/0'"
+            DerivationPath::aptos_ed25519(5).unwrap().to_string(),
+            "m/44'/637'/0'/0'/5'",
+            "address_index belongs in the 5th component",
         );
+        assert_eq!(
+            DerivationPath::aptos_secp256k1(5).unwrap().to_string(),
+            "m/44'/637'/0'/0/5",
+            "address_index belongs in the 5th component (non-hardened)",
+        );
+    }
+
+    #[test]
+    fn test_aptos_default_paths_reject_oversize_index() {
+        // The 31-bit invariant surfaces as an error rather than panicking.
+        assert!(DerivationPath::aptos_ed25519(0x8000_0000).is_err());
+        assert!(DerivationPath::aptos_secp256k1(0x8000_0000).is_err());
     }
 
     #[test]
@@ -678,7 +724,7 @@ mod tests {
         let mnemonic = Mnemonic::from_phrase(TEST_PHRASE).unwrap();
         let via_index = mnemonic.derive_ed25519_key(3).unwrap();
         let via_path = mnemonic
-            .derive_ed25519_key_at_path(&DerivationPath::aptos_ed25519(3))
+            .derive_ed25519_key_at_path(&DerivationPath::aptos_ed25519(3).unwrap())
             .unwrap();
         assert_eq!(via_index.to_bytes(), via_path.to_bytes());
     }
@@ -732,16 +778,25 @@ mod tests {
 
     #[test]
     fn test_path_component_encoded_sets_hardened_bit() {
-        let hardened = PathComponent {
-            index: 44,
-            hardened: true,
-        };
-        let unhardened = PathComponent {
-            index: 44,
-            hardened: false,
-        };
+        let hardened = PathComponent::try_new(44, true).unwrap();
+        let unhardened = PathComponent::try_new(44, false).unwrap();
         assert_eq!(hardened.encoded(), 0x8000_002C);
         assert_eq!(unhardened.encoded(), 44);
+        assert_eq!(hardened.index(), 44);
+        assert!(hardened.hardened());
+        assert!(!unhardened.hardened());
+    }
+
+    #[test]
+    fn test_path_component_rejects_oversize_index() {
+        // Top bit reserved as the hardened flag in BIP-32; raw values
+        // with that bit already set would collide with hardened components
+        // and produce ambiguous derivations. `try_new` MUST reject them.
+        assert!(PathComponent::try_new(0x8000_0000, false).is_err());
+        assert!(PathComponent::try_new(0x8000_0000, true).is_err());
+        assert!(PathComponent::try_new(0xFFFF_FFFF, false).is_err());
+        // Boundary: 2^31 - 1 is the largest valid raw index.
+        assert!(PathComponent::try_new(0x7FFF_FFFF, true).is_ok());
     }
 
     #[test]
