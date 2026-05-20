@@ -200,6 +200,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   alignment improves domain separation from other ECDSA-over-SHA-256
   protocols; `Aptos::simulate` no longer routes private-key material
   through the gas-estimation path).
+- BIP-32 secp256k1 derivation now zeroizes the per-step HMAC input buffer
+  for hardened components, which transiently contains the parent private
+  key (`0x00 || ser_256(k_par) || ser_32(i)`). Previously that buffer
+  was dropped without scrubbing, leaving secret material on the heap
+  until reused.
+- Documented the deliberate deviation from BIP-32's "advance to index
+  i+1" retry rule when an intermediate `I_L` is `>= n` or the derived
+  child scalar is `0`. We return an error instead of silently producing
+  a key at a different path; the failure probability per component is
+  ~2^-127.
 - Hardened MultiKey decoding: `MultiKeyPublicKey`, `MultiKeySignature`, `AnyPublicKey`, and `AnySignature` now enforce bounded element counts and exact key/signature length checks during deserialization to reduce memory-amplification DoS risk.
 - Hardened authenticator address checks: multi-agent and fee-payer verification now enforces sender, secondary signer, and fee payer derived-address consistency.
 - Keyless variants continue to be rejected from MultiKey-only decoding paths (`AnyPublicKey` / `AnySignature`) where they are not valid inputs.

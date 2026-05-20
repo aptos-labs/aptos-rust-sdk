@@ -369,7 +369,8 @@ impl Mnemonic {
     }
 
     /// Derives an Ed25519 private key using the Aptos default path
-    /// `m/44'/637'/0'/0'/0'` with the given address index.
+    /// `m/44'/637'/0'/0'/{address_index}'`, where `index` selects the
+    /// 5th (address) component. Index `0` yields `m/44'/637'/0'/0'/0'`.
     ///
     /// # Errors
     ///
@@ -412,7 +413,8 @@ impl Mnemonic {
     }
 
     /// Derives a Secp256k1 private key using the Aptos default path
-    /// `m/44'/637'/0'/0/0` with the given address index.
+    /// `m/44'/637'/0'/0/{address_index}`, where `index` selects the 5th
+    /// (address) component. Index `0` yields `m/44'/637'/0'/0/0`.
     ///
     /// The last two indices are non-hardened by convention, matching the
     /// TypeScript SDK.
@@ -526,13 +528,13 @@ fn derive_secp256k1_at_path(seed: &[u8], path: &DerivationPath) -> AptosResult<[
 
     for component in path.components() {
         let encoded = component.encoded();
-        let data = if component.hardened() {
-            // 0x00 || ser_256(k_par) || ser_32(i)
+        let (mut data, hardened) = if component.hardened() {
+            // 0x00 || ser_256(k_par) || ser_32(i)  -- contains parent secret
             let mut buf = Vec::with_capacity(1 + 32 + 4);
             buf.push(0u8);
             buf.extend_from_slice(&parent.to_bytes());
             buf.extend_from_slice(&encoded.to_be_bytes());
-            buf
+            (buf, true)
         } else {
             // ser_P(K_par) || ser_32(i)  -- compressed public key (33 bytes)
             let pub_key: PublicKey = parent.public_key();
@@ -540,16 +542,25 @@ fn derive_secp256k1_at_path(seed: &[u8], path: &DerivationPath) -> AptosResult<[
             let mut buf = Vec::with_capacity(33 + 4);
             buf.extend_from_slice(encoded_point.as_bytes());
             buf.extend_from_slice(&encoded.to_be_bytes());
-            buf
+            (buf, false)
         };
 
         let mut mac = HmacSha512::new_from_slice(&chain_code)
             .map_err(|e| AptosError::KeyDerivation(e.to_string()))?;
         mac.update(&data);
         let result = mac.finalize().into_bytes();
+        if hardened {
+            // SECURITY: data contained the parent private key for hardened
+            // derivation; zeroize before dropping.
+            zeroize::Zeroize::zeroize(&mut data);
+        }
 
-        // Reject I_L >= n or I_L == 0 by requiring a valid NonZeroScalar.
-        // `NonZeroScalar::try_from(&[u8])` returns Err in both failure modes.
+        // BIP-32 spec note: if I_L >= n or the derived child scalar is zero,
+        // the spec recommends proceeding with index i+1. We deliberately
+        // error instead, matching the Rust `bip32` crate: silently advancing
+        // the index would change the path the caller asked for, and the
+        // probability of either failure is ~2^-127 per component. Callers
+        // that hit this can pick a different address index explicitly.
         let il_scalar = NonZeroScalar::try_from(&result[..32]).map_err(|e| {
             AptosError::KeyDerivation(format!(
                 "BIP-32 derivation produced invalid intermediate scalar: {e}"
@@ -831,18 +842,20 @@ mod tests {
     fn test_passphrase_changes_derived_key() {
         // BIP-39 mandates the passphrase be folded into the seed; verify
         // the derived key is sensitive to it (otherwise the "secret
-        // passphrase" feature would be a no-op).
+        // passphrase" feature would be a no-op). We compare derived key
+        // bytes directly rather than just the seeds.
         let mnemonic = Mnemonic::from_phrase(TEST_PHRASE).unwrap();
         let seed_default = mnemonic.to_seed().unwrap();
         let seed_passphrase = mnemonic.to_seed_with_passphrase("hunter2").unwrap();
         assert_ne!(seed_default, seed_passphrase);
-        // And the derived key follows accordingly via the seed.
-        let key = mnemonic.derive_ed25519_key(0).unwrap();
-        // Re-derive at the same path through the seed-with-passphrase
-        // path: there's no public `derive_*_from_seed` so we just assert
-        // the seed itself differs (key sensitivity follows by construction
-        // since the SLIP-0010 master HMAC is keyed by the seed).
-        assert_eq!(key.to_bytes().len(), 32);
+
+        let path = DerivationPath::aptos_ed25519(0).unwrap();
+        let key_default = derive_ed25519_at_path(&seed_default, &path).unwrap();
+        let key_passphrase = derive_ed25519_at_path(&seed_passphrase, &path).unwrap();
+        assert_ne!(
+            key_default, key_passphrase,
+            "BIP-39 passphrase must produce a distinct derived key"
+        );
     }
 
     #[test]
