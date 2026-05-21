@@ -55,7 +55,7 @@ pub use keyless::{
     KeylessSignature, OidcProvider, Pepper, PepperService, ProverService, ZkProof,
 };
 #[cfg(feature = "mnemonic")]
-pub use mnemonic::Mnemonic;
+pub use mnemonic::{DerivationPath, Mnemonic, PathComponent};
 #[cfg(feature = "ed25519")]
 pub use multi_ed25519::MultiEd25519Account;
 pub use multi_key::{AnyPrivateKey, MultiKeyAccount};

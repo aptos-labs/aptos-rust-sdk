@@ -8,6 +8,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [unreleased]
 
 ### Added
+- `api::AnsClient` scaffold (`api/ans.rs`) -- exposes `lookup(name)` and
+  `reverse_lookup(address)` method signatures so future ANS work has an
+  obvious landing spot. Both methods currently return
+  `AptosError::Internal("...not yet implemented...")` so callers fail
+  fast rather than silently treating placeholder addresses as real.
+  Reconciles the previous `AGENTS.md` reference to `api/ans.rs` with
+  reality (the file did not exist before this commit).
+- New behavioral test module `tests/behavioral/wire_format.rs` -- pins the
+  exact BCS / signing-message byte layout for `RawTransaction` (sequenced
+  full-hex pin and orderless prefix), `AccountAuthenticator::Ed25519`,
+  `AccountAuthenticator::SingleKey(AnyPublicKey::Ed25519)`,
+  `AccountAuthenticator::MultiEd25519` (variant 1, with bitmap layout),
+  `AccountAuthenticator::MultiKey` (variant 3, mixed Ed25519+Secp256k1
+  with BitVec bitmap), and a nested generic `TypeTag`. Inputs are fully
+  deterministic (fixed Ed25519 / Secp256k1 keys, fixed expiration, fixed
+  nonce) so the resulting bytes can be cross-checked against the
+  TypeScript SDK constructed with identical inputs.
+- `FullnodeClient::get_account_resources_paginated(address, start, limit)`
+  and `FullnodeClient::get_account_modules_paginated(address, start, limit)`
+  -- forward `start` / `limit` query parameters to the REST API so callers
+  can page through accounts that publish more resources / modules than the
+  default page size. `start` is `Option<&str>` so opaque cursor tokens
+  surfaced through the `x-aptos-cursor` header (`AptosResponse::cursor`)
+  round-trip losslessly. The previous one-shot `get_account_resources` /
+  `get_account_modules` methods are preserved and delegate to the new
+  pagination methods with `None` for both arguments.
+- `account::DerivationPath` and `account::PathComponent` -- parse BIP-32 /
+  BIP-44 derivation path strings (`m/44'/637'/0'/0/0`, lowercase `h` also
+  accepted as a hardened marker) and expose
+  `aptos_ed25519(address_index) -> AptosResult<Self>` /
+  `aptos_secp256k1(address_index) -> AptosResult<Self>` builders for the
+  canonical Aptos paths. `address_index` lives in the BIP-44 5th
+  component to match the pre-existing `Mnemonic::derive_ed25519_key`
+  behavior; callers needing TS-SDK-style account-level indexing must
+  build the path explicitly via `DerivationPath::from_str`.
+  `PathComponent` fields are private; construct via
+  `PathComponent::try_new(index, hardened)` which rejects `index >= 2^31`
+  (the BIP-32 hardened bit).
+- `Mnemonic::derive_secp256k1_key(index)` — derives an Aptos Secp256k1 private
+  key via BIP-32 along the canonical Aptos path. Cross-validated against the
+  Bitcoin reference vector for the `abandon × 11 about` mnemonic at
+  `m/44'/0'/0'/0/0` so hardened + non-hardened child derivation are both
+  exercised by tests.
+- `Mnemonic::derive_ed25519_key_at_path(&path)` and
+  `Mnemonic::derive_secp256k1_key_at_path(&path)` — derive at a caller-supplied
+  derivation path. Ed25519 paths must be fully hardened (SLIP-0010) and a
+  non-hardened component returns `AptosError::KeyDerivation` instead of
+  producing an invalid key.
 - `FullnodeClient::simulate_transaction_with_options` — simulate with optional query parameters (`estimate_max_gas_amount`, `estimate_gas_unit_price`, `estimate_prioritized_gas_unit_price`). Existing `simulate_transaction` is unchanged (single-arg) and delegates to the new method with `None` for backward compatibility.
 - `Aptos::simulate_signed_with_options`, plus option-aware multi-signer simulation (`Aptos::simulate_multi_agent`, `Aptos::simulate_fee_payer`) for consistent high-level simulation APIs while preserving no-options usage.
 - `build_simulation_signed_multi_agent` and `build_simulation_signed_fee_payer` for constructing simulation-only signed transactions using `NoAccountAuthenticator` placeholders.
@@ -152,6 +200,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   alignment improves domain separation from other ECDSA-over-SHA-256
   protocols; `Aptos::simulate` no longer routes private-key material
   through the gas-estimation path).
+- BIP-32 secp256k1 derivation now zeroizes the per-step HMAC input buffer
+  for hardened components, which transiently contains the parent private
+  key (`0x00 || ser_256(k_par) || ser_32(i)`). Previously that buffer
+  was dropped without scrubbing, leaving secret material on the heap
+  until reused.
+- Documented the deliberate deviation from BIP-32's "advance to index
+  i+1" retry rule when an intermediate `I_L` is `>= n` or the derived
+  child scalar is `0`. We return an error instead of silently producing
+  a key at a different path; the failure probability per component is
+  ~2^-127.
 - Hardened MultiKey decoding: `MultiKeyPublicKey`, `MultiKeySignature`, `AnyPublicKey`, and `AnySignature` now enforce bounded element counts and exact key/signature length checks during deserialization to reduce memory-amplification DoS risk.
 - Hardened authenticator address checks: multi-agent and fee-payer verification now enforces sender, secondary signer, and fee payer derived-address consistency.
 - Keyless variants continue to be rejected from MultiKey-only decoding paths (`AnyPublicKey` / `AnySignature`) where they are not valid inputs.

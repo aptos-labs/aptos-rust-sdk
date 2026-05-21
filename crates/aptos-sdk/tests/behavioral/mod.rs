@@ -4,6 +4,9 @@
 //! without requiring a live network.
 
 #[cfg(feature = "ed25519")]
+mod wire_format;
+
+#[cfg(feature = "ed25519")]
 mod crypto_tests {
     use aptos_sdk::crypto::Ed25519PrivateKey;
 
