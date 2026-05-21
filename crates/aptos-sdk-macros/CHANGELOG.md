@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+## [0.3.0] - 2026-05-21
+
+### Changed
+- **MSRV bumped from 1.90 to 1.95** (via workspace `rust-version`). Aligns
+  with `aptos-sdk` 0.5.0; downstream consumers need at least Rust 1.95.0
+  (released 2026-04-14).
+
 ## [0.2.1] - 2026-03-04
 
 ### Changed
@@ -33,5 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support for entry functions, view functions, and struct definitions
 - Move-to-Rust type mapping (primitives, vectors, options, objects)
 
+[0.3.0]: https://github.com/aptos-labs/aptos-rust-sdk/releases/tag/macros-v0.3.0
+[0.2.1]: https://github.com/aptos-labs/aptos-rust-sdk/releases/tag/macros-v0.2.1
 [0.2.0]: https://github.com/aptos-labs/aptos-rust-sdk/releases/tag/macros-v0.2.0
 [0.1.0]: https://github.com/aptos-labs/aptos-rust-sdk/releases/tag/macros-v0.1.0
