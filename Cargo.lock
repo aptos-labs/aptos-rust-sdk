@@ -79,7 +79,7 @@ dependencies = [
 
 [[package]]
 name = "aptos-sdk"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "aptos-bcs",
@@ -116,7 +116,7 @@ dependencies = [
 
 [[package]]
 name = "aptos-sdk-macros"
-version = "0.2.1"
+version = "0.3.0"
 dependencies = [
  "aptos-sdk",
  "proc-macro2",
