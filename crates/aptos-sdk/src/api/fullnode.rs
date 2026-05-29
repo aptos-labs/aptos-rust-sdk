@@ -1598,6 +1598,48 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_view_bcs_args_posts_bcs_request() {
+        let server = MockServer::start().await;
+
+        // Arguments are real BCS bytes; the request must be sent as a BCS
+        // `ViewRequest` body (Content-Type application/x.aptos.view_function+bcs),
+        // not JSON. Pin the exact body bytes to guard the wire format: it must
+        // equal the BCS of an `EntryFunction`-shaped `ViewRequest`.
+        let args = vec![aptos_bcs::to_bytes(&AccountAddress::ONE).unwrap()];
+        let expected_body = aptos_bcs::to_bytes(
+            &crate::transaction::EntryFunction::from_function_id(
+                "0x1::coin::balance",
+                vec![],
+                args.clone(),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+
+        Mock::given(method("POST"))
+            .and(path("/v1/view"))
+            .and(wiremock::matchers::header(
+                "content-type",
+                "application/x.aptos.view_function+bcs",
+            ))
+            .and(wiremock::matchers::body_bytes(expected_body))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!(["1000000"])))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server);
+        let result = client
+            .view_bcs_args("0x1::coin::balance", vec![], args)
+            .await
+            .unwrap()
+            .into_inner();
+
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].as_str().unwrap(), "1000000");
+    }
+
+    #[tokio::test]
     async fn test_simulate_transaction_with_estimate_gas_unit_price() {
         let server = MockServer::start().await;
 

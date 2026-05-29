@@ -1277,6 +1277,14 @@ mod tests {
         assert_eq!(aptos.chain_id(), ChainId::mainnet());
     }
 
+    #[test]
+    fn test_ans_accessor() {
+        // ans() returns a client bound to this client's network; mainnet has a
+        // built-in router contract address, so resolution succeeds.
+        let aptos = Aptos::mainnet().unwrap();
+        assert!(aptos.ans().router_address().is_ok());
+    }
+
     fn create_mock_aptos(server: &MockServer) -> Aptos {
         let url = format!("{}/v1", server.uri());
         let config = AptosConfig::custom(&url).unwrap().without_retry();

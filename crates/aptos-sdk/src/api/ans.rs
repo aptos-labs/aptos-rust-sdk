@@ -868,4 +868,76 @@ mod tests {
         assert_eq!(payload.function, "clear_primary_name");
         assert!(payload.args.is_empty());
     }
+
+    #[tokio::test]
+    async fn get_owner_address_resolves() {
+        let server = MockServer::start().await;
+        let addr = "0x0000000000000000000000000000000000000000000000000000000000000abc";
+        Mock::given(method("POST"))
+            .and(path("/v1/view"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!([{"vec": [addr]}])),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let ans = ans_for(&server);
+        let owner = ans.get_owner_address("alice.apt").await.unwrap();
+        assert_eq!(owner, Some(AccountAddress::from_hex(addr).unwrap()));
+    }
+
+    #[tokio::test]
+    async fn lookup_resolves_to_target_address() {
+        let server = MockServer::start().await;
+        let addr = "0x0000000000000000000000000000000000000000000000000000000000000abc";
+        Mock::given(method("POST"))
+            .and(path("/v1/view"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!([{"vec": [addr]}])),
+            )
+            .mount(&server)
+            .await;
+
+        let ans = ans_for(&server);
+        let resolved = ans.lookup("alice.apt").await.unwrap();
+        assert_eq!(resolved, AccountAddress::from_hex(addr).unwrap());
+    }
+
+    #[tokio::test]
+    async fn reverse_lookup_returns_primary_name() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v1/view"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!([{"vec": []}, {"vec": ["alice"]}])),
+            )
+            .mount(&server)
+            .await;
+
+        let ans = ans_for(&server);
+        let name = ans.reverse_lookup(AccountAddress::ONE).await.unwrap();
+        assert_eq!(name, Some("alice".to_string()));
+    }
+
+    #[test]
+    fn clear_target_address_payload_encodes_arguments() {
+        let router = AccountAddress::from_hex("0x1").unwrap();
+        let fullnode = FullnodeClient::new(AptosConfig::mainnet()).unwrap();
+        let ans = AnsClient::with_router_address(fullnode, router);
+
+        let payload = ans.clear_target_address_payload("alice.apt").unwrap();
+        assert_eq!(payload.function, "clear_target_addr");
+        // (domain "alice", subdomain Option<String>::None)
+        assert_eq!(payload.args.len(), 2);
+        assert_eq!(
+            payload.args[0],
+            aptos_bcs::to_bytes(&"alice".to_string()).unwrap()
+        );
+        assert_eq!(
+            payload.args[1],
+            aptos_bcs::to_bytes(&Option::<String>::None).unwrap()
+        );
+    }
 }
