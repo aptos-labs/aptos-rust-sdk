@@ -183,6 +183,15 @@ fn is_valid_segment(segment: &str) -> bool {
     bytes.iter().all(|&b| is_alnum(b) || b == b'-')
 }
 
+/// Builds the standard `(domain: String, subdomain: Option<String>)` argument
+/// pair used by most `router` functions.
+fn domain_subdomain_args(name: &AnsName) -> AptosResult<Vec<Vec<u8>>> {
+    Ok(vec![
+        bcs_string(name.domain())?,
+        bcs_option_string(name.subdomain())?,
+    ])
+}
+
 /// Client for the Aptos Names Service.
 ///
 /// Cheap to clone (wraps a [`FullnodeClient`]). See the [module docs](self) for
@@ -264,7 +273,7 @@ impl AnsClient {
     pub async fn get_target_address(&self, name: &str) -> AptosResult<Option<AccountAddress>> {
         let name = AnsName::parse(name)?;
         let values = self
-            .view_router("get_target_addr", self.domain_subdomain_args(&name)?)
+            .view_router("get_target_addr", domain_subdomain_args(&name)?)
             .await?;
         Ok(option_address(values.first()))
     }
@@ -279,7 +288,7 @@ impl AnsClient {
     pub async fn get_owner_address(&self, name: &str) -> AptosResult<Option<AccountAddress>> {
         let name = AnsName::parse(name)?;
         let values = self
-            .view_router("get_owner_addr", self.domain_subdomain_args(&name)?)
+            .view_router("get_owner_addr", domain_subdomain_args(&name)?)
             .await?;
         Ok(option_address(values.first()))
     }
@@ -319,7 +328,7 @@ impl AnsClient {
     /// the node (e.g. the name does not exist) is reported as `Ok(None)`.
     pub async fn get_expiration(&self, name: &str) -> AptosResult<Option<u64>> {
         let name = AnsName::parse(name)?;
-        let args = self.domain_subdomain_args(&name)?;
+        let args = domain_subdomain_args(&name)?;
         match self.view_router("get_expiration", args).await {
             Ok(values) => Ok(values.first().and_then(parse_u64)),
             // A missing name aborts in the Move view; the node surfaces that as
@@ -403,7 +412,7 @@ impl AnsClient {
     /// invalid, or argument encoding fails.
     pub fn set_primary_name_payload(&self, name: &str) -> AptosResult<EntryFunction> {
         let name = AnsName::parse(name)?;
-        self.router_entry("set_primary_name", self.domain_subdomain_args(&name)?)
+        self.router_entry("set_primary_name", domain_subdomain_args(&name)?)
     }
 
     /// Builds the payload to clear the sender's primary name.
@@ -428,7 +437,7 @@ impl AnsClient {
         address: AccountAddress,
     ) -> AptosResult<EntryFunction> {
         let name = AnsName::parse(name)?;
-        let mut args = self.domain_subdomain_args(&name)?;
+        let mut args = domain_subdomain_args(&name)?;
         args.push(bcs_address(address)?);
         self.router_entry("set_target_addr", args)
     }
@@ -441,19 +450,10 @@ impl AnsClient {
     /// invalid, or argument encoding fails.
     pub fn clear_target_address_payload(&self, name: &str) -> AptosResult<EntryFunction> {
         let name = AnsName::parse(name)?;
-        self.router_entry("clear_target_addr", self.domain_subdomain_args(&name)?)
+        self.router_entry("clear_target_addr", domain_subdomain_args(&name)?)
     }
 
     // === Internal helpers ===
-
-    /// Builds the standard `(domain: String, subdomain: Option<String>)`
-    /// argument pair used by most router functions.
-    fn domain_subdomain_args(&self, name: &AnsName) -> AptosResult<Vec<Vec<u8>>> {
-        Ok(vec![
-            bcs_string(name.domain())?,
-            bcs_option_string(name.subdomain())?,
-        ])
-    }
 
     /// Calls a `router::<function>` view function with BCS-encoded args.
     async fn view_router(
