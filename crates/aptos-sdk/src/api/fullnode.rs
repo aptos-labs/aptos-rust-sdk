@@ -119,6 +119,85 @@ impl FullnodeClient {
         self.config.fullnode_url()
     }
 
+    /// Returns the configuration backing this client.
+    pub fn config(&self) -> &AptosConfig {
+        &self.config
+    }
+
+    /// Calls a view function whose arguments are supplied as **BCS-encoded
+    /// bytes**, returning the JSON-decoded result values.
+    ///
+    /// This differs from [`view`](Self::view) (which takes JSON arguments) and
+    /// from [`view_bcs`](Self::view_bcs) (which hex-encodes BCS bytes into the
+    /// JSON body, and therefore only round-trips correctly for argument types
+    /// whose hex happens to coincide with their JSON form, e.g. addresses).
+    ///
+    /// Here the entire request is serialized as an on-wire `ViewRequest`
+    /// (identical BCS layout to [`crate::transaction::EntryFunction`]) and
+    /// posted with the `application/x.aptos.view_function+bcs` content type,
+    /// exactly like the TypeScript SDK's `view`. This is the only reliable way
+    /// to pass typed arguments such as `Option<String>`, `vector<u8>`, or
+    /// `String` to a view function. The response is requested as JSON and
+    /// returned as an array of [`serde_json::Value`], one entry per declared
+    /// return value.
+    ///
+    /// # Arguments
+    ///
+    /// * `function` - Fully qualified function id (e.g. `0x1::coin::balance`).
+    /// * `type_args` - Type arguments for generic functions.
+    /// * `args` - Each argument already BCS-encoded (e.g. via
+    ///   `aptos_bcs::to_bytes`).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the function id is malformed, the request cannot be
+    /// BCS-serialized, the HTTP request fails, or the API returns an error
+    /// status code.
+    pub async fn view_bcs_args(
+        &self,
+        function: &str,
+        type_args: Vec<crate::types::TypeTag>,
+        args: Vec<Vec<u8>>,
+    ) -> AptosResult<AptosResponse<Vec<serde_json::Value>>> {
+        // `Content-Type` for a request whose body is a BCS-serialized
+        // `ViewRequest` (as opposed to `application/x-bcs`, which is an `Accept`
+        // value asking the node to BCS-encode the *response*).
+        const BCS_VIEW_REQUEST_CONTENT_TYPE: &str = "application/x.aptos.view_function+bcs";
+
+        // A `ViewRequest`/`ViewFunction` is BCS-identical to an `EntryFunction`:
+        // `module: ModuleId, function: Identifier, ty_args: Vec<TypeTag>,
+        // args: Vec<Vec<u8>>`. Reusing `EntryFunction` keeps the wire format in
+        // one place and gives us the function-id parsing for free.
+        let view_fn =
+            crate::transaction::EntryFunction::from_function_id(function, type_args, args)?;
+        let body = aptos_bcs::to_bytes(&view_fn).map_err(AptosError::bcs)?;
+        let url = self.build_url("view");
+
+        let client = self.client.clone();
+        let retry_config = self.retry_config.clone();
+        let max_response_size = self.config.pool_config().max_response_size;
+
+        let executor = RetryExecutor::from_shared(retry_config);
+        executor
+            .execute(|| {
+                let client = client.clone();
+                let url = url.clone();
+                let body = body.clone();
+                async move {
+                    let response = client
+                        .post(url)
+                        .header(CONTENT_TYPE, BCS_VIEW_REQUEST_CONTENT_TYPE)
+                        .header(ACCEPT, JSON_CONTENT_TYPE)
+                        .body(body)
+                        .send()
+                        .await?;
+
+                    Self::handle_response_static(response, max_response_size).await
+                }
+            })
+            .await
+    }
+
     /// Returns the retry configuration.
     pub fn retry_config(&self) -> &RetryConfig {
         &self.retry_config

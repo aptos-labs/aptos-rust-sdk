@@ -151,6 +151,16 @@ impl Aptos {
         self.indexer.as_ref()
     }
 
+    /// Returns an Aptos Names Service (ANS) client bound to this client's
+    /// fullnode and network.
+    ///
+    /// ANS is only deployed on mainnet, testnet, and localnet; on other
+    /// networks the returned client's methods error unless you instead build
+    /// one with [`crate::api::AnsClient::with_router_address`].
+    pub fn ans(&self) -> crate::api::AnsClient {
+        crate::api::AnsClient::new((*self.fullnode).clone())
+    }
+
     // === Ledger Info ===
 
     /// Gets the current ledger information.
