@@ -1,0 +1,100 @@
+--- a/crates/aptos-sdk/src/api/ans.rs
++++ b/crates/aptos-sdk/src/api/ans.rs
+@@ -324,15 +324,21 @@
+     /// # Errors
+     ///
+-    /// Returns an error if the network has no ANS deployment, the name is
+-    /// invalid, or a non-recoverable transport error occurs. A Move abort from
+-    /// the node (e.g. the name does not exist) is reported as `Ok(None)`.
++    /// Returns an error if the network has no ANS deployment, the name is
++    /// invalid, or the view call fails. A missing name is reported as
++    /// `Ok(None)`, not an error: the Move view aborts, which the node surfaces
++    /// as an HTTP 400 carrying the abort code. Other API failures (rate limits,
++    /// 5xx, malformed requests) propagate so transient/operational problems are
++    /// not mistaken for an unregistered name.
+     pub async fn get_expiration(&self, name: &str) -> AptosResult<Option<u64>> {
+         let name = AnsName::parse(name)?;
+         let args = domain_subdomain_args(&name)?;
+         match self.view_router("get_expiration", args).await {
+             Ok(values) => Ok(values.first().and_then(parse_u64)),
+-            // A missing name aborts in the Move view; the node surfaces that as
+-            // a 4xx API error. Treat it as "no expiration" rather than failing.
+-            Err(AptosError::Api { .. }) => Ok(None),
++            // A missing name aborts in the Move view, which the node surfaces as
++            // an HTTP 400 carrying the Move abort code (`vm_error_code`). Treat
++            // *only* that as "no expiration"; propagate everything else (rate
++            // limits, 5xx, malformed requests) so operational failures are not
++            // mistaken for an unregistered name.
++            Err(AptosError::Api {
++                status_code: 400,
++                vm_error_code: Some(_),
++                ..
++            }) => Ok(None),
+             Err(e) => Err(e),
+         }
+     }
+@@ -384,1 +384,1 @@
+-    pub async fn register_domain_payload(
++    pub fn register_domain_payload(
+@@ -745,8 +745,9 @@
+         Mock::given(method("POST"))
+             .and(path("/v1/view"))
+             .respond_with(ResponseTemplate::new(400).set_body_json(serde_json::json!({
+                 "message": "Move abort",
+-                "error_code": "invalid_input"
++                "error_code": "invalid_input",
++                "vm_error_code": 196609
+             })))
+             .expect(1)
+             .mount(&server)
+@@ -821,11 +822,9 @@
+-    #[tokio::test]
+-    async fn register_domain_payload_rejects_subdomain() {
++    #[test]
++    fn register_domain_payload_rejects_subdomain() {
+         let fullnode = FullnodeClient::new(AptosConfig::mainnet()).unwrap();
+         let ans =
+             AnsClient::with_router_address(fullnode, AccountAddress::from_hex("0x1").unwrap());
+-        let result = ans
+-            .register_domain_payload("wallet.alice.apt", 31_536_000, None, None)
+-            .await;
++        let result = ans.register_domain_payload("wallet.alice.apt", 31_536_000, None, None);
+         assert!(matches!(result, Err(AptosError::Other(_))));
+     }
+ 
+-    #[tokio::test]
+-    async fn register_domain_payload_encodes_arguments() {
++    #[test]
++    fn register_domain_payload_encodes_arguments() {
+         let router = AccountAddress::from_hex("0x1").unwrap();
+         let target = AccountAddress::from_hex("0xabc").unwrap();
+         let fullnode = FullnodeClient::new(AptosConfig::mainnet()).unwrap();
+         let ans = AnsClient::with_router_address(fullnode, router);
+ 
+         let payload = ans
+             .register_domain_payload("alice.apt", 31_536_000, Some(target), None)
+-            .await
+             .unwrap();
+@@ -940,3 +940,21 @@
+             aptos_bcs::to_bytes(&Option::<String>::None).unwrap()
+         );
+     }
++
++    #[tokio::test]
++    async fn get_expiration_propagates_server_error() {
++        let server = MockServer::start().await;
++        Mock::given(method("POST"))
++            .and(path("/v1/view"))
++            .respond_with(ResponseTemplate::new(500).set_body_json(serde_json::json!({
++                "message": "internal error"
++            })))
++            .mount(&server)
++            .await;
++
++        let ans = ans_for(&server);
++        // A 5xx (or any non-abort API error) must surface as an error rather
++        // than being silently coerced to `None`.
++        let result = ans.get_expiration("alice.apt").await;
++        assert!(matches!(result, Err(AptosError::Api { status_code: 500, .. })));
++    }
+ }
