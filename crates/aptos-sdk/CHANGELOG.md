@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+### Added
+- `api::AnsClient` is now a working Aptos Names Service client instead of a
+  scaffold. It talks to the on-chain `router` module on mainnet / testnet /
+  localnet (router contract addresses are built in; use
+  `AnsClient::with_router_address` for devnet, custom, or privately deployed
+  ANS). New surface:
+  - Reads: `get_target_address(name)`, `get_owner_address(name)`,
+    `get_primary_name(address)`, `get_expiration(name)` (epoch **seconds**),
+    plus the convenience wrappers `lookup(name)` (errors with
+    `AptosError::NotFound` when a name does not resolve) and
+    `reverse_lookup(address)`. Previously `lookup` / `reverse_lookup` always
+    returned `AptosError::Internal("...not yet implemented...")`.
+  - Entry-function payload builders: `register_domain_payload`,
+    `set_primary_name_payload`, `clear_primary_name_payload`,
+    `set_target_address_payload`, `clear_target_address_payload`.
+  - `api::ans::AnsName` -- parses and validates `.apt` names (domain +
+    optional subdomain) per the ANS naming rules.
+  - `Aptos::ans()` returns an `AnsClient` bound to the client's fullnode and
+    network.
+- `FullnodeClient::view_bcs_args(function, type_args, args)` -- calls a view
+  function whose arguments are supplied as real BCS bytes (serialized as an
+  on-wire `ViewRequest`, like the TypeScript SDK's `view`) and returns the
+  JSON-decoded result values. Unlike `view_bcs`, this round-trips non-trivial
+  Move argument types such as `Option<String>` correctly, not just addresses.
+- `FullnodeClient::config()` -- exposes the `AptosConfig` backing the client.
+
 ## [0.5.0] - 2026-05-21
 
 ### Added
