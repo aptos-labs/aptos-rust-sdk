@@ -275,7 +275,7 @@ impl AnsClient {
         let values = self
             .view_router("get_target_addr", domain_subdomain_args(&name)?)
             .await?;
-        Ok(option_address(values.first()))
+        option_address(values.first())
     }
 
     /// Resolves the **owner address** of a name (the account that controls the
@@ -290,7 +290,7 @@ impl AnsClient {
         let values = self
             .view_router("get_owner_addr", domain_subdomain_args(&name)?)
             .await?;
-        Ok(option_address(values.first()))
+        option_address(values.first())
     }
 
     /// Returns the primary name registered to an address (as a fully qualified
@@ -333,7 +333,21 @@ impl AnsClient {
         let name = AnsName::parse(name)?;
         let args = domain_subdomain_args(&name)?;
         match self.view_router("get_expiration", args).await {
-            Ok(values) => Ok(values.first().and_then(parse_u64)),
+            // A successful response must carry exactly one `u64`. The missing-
+            // name case is handled by the Move-abort branch below, so an empty
+            // or non-`u64` *successful* response is a malformed reply, not "no
+            // expiration".
+            Ok(values) => {
+                let raw = values.first().ok_or_else(|| {
+                    AptosError::Internal("ANS get_expiration returned no value".into())
+                })?;
+                let secs = parse_u64(raw).ok_or_else(|| {
+                    AptosError::Internal(format!(
+                        "ANS get_expiration returned a non-u64 value: {raw}"
+                    ))
+                })?;
+                Ok(Some(secs))
+            }
             // A missing name aborts in the Move view, which the node surfaces as
             // an HTTP 400 carrying the Move abort code (`vm_error_code`). Treat
             // *only* that as "no expiration"; propagate everything else (rate
@@ -527,10 +541,27 @@ fn unwrap_option(value: &serde_json::Value) -> Option<&serde_json::Value> {
 }
 
 /// Decodes an `Option<address>` view result into an [`AccountAddress`].
-fn option_address(value: Option<&serde_json::Value>) -> Option<AccountAddress> {
-    let inner = unwrap_option(value?)?;
-    let s = inner.as_str()?;
-    AccountAddress::from_hex(s).ok()
+///
+/// A Move `Option::none()` (an unregistered or unset record) yields `Ok(None)`.
+/// A malformed reply -- a missing return value, a non-string entry, or an
+/// undecodable address -- is surfaced as an error rather than being silently
+/// treated as "not found".
+fn option_address(value: Option<&serde_json::Value>) -> AptosResult<Option<AccountAddress>> {
+    let value = value.ok_or_else(|| {
+        AptosError::Internal(
+            "ANS view returned no value where an Option<address> was expected".into(),
+        )
+    })?;
+    let Some(inner) = unwrap_option(value) else {
+        return Ok(None);
+    };
+    let s = inner.as_str().ok_or_else(|| {
+        AptosError::Internal(format!("ANS view returned a non-string address: {inner}"))
+    })?;
+    let address = AccountAddress::from_hex(s).map_err(|e| {
+        AptosError::Internal(format!("ANS view returned a malformed address '{s}': {e}"))
+    })?;
+    Ok(Some(address))
 }
 
 /// Decodes a non-empty `Option<String>` view result.
@@ -971,5 +1002,58 @@ mod tests {
                 ..
             })
         ));
+    }
+
+    #[tokio::test]
+    async fn get_target_address_errors_on_malformed_address() {
+        let server = MockServer::start().await;
+        // A present-but-undecodable address must surface as an error, not be
+        // silently treated as "unregistered" (which would let `lookup` report
+        // a spurious NotFound).
+        Mock::given(method("POST"))
+            .and(path("/v1/view"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!([{"vec": ["not-an-address"]}])),
+            )
+            .mount(&server)
+            .await;
+
+        let ans = ans_for(&server);
+        let err = ans.get_target_address("alice.apt").await.unwrap_err();
+        assert!(matches!(err, AptosError::Internal(_)));
+    }
+
+    #[tokio::test]
+    async fn get_expiration_errors_on_malformed_success() {
+        let server = MockServer::start().await;
+        // A successful response with no return value is malformed and must not
+        // be confused with a missing name (which arrives as a Move-abort 400).
+        Mock::given(method("POST"))
+            .and(path("/v1/view"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+            .mount(&server)
+            .await;
+
+        let ans = ans_for(&server);
+        let err = ans.get_expiration("alice.apt").await.unwrap_err();
+        assert!(matches!(err, AptosError::Internal(_)));
+    }
+
+    #[tokio::test]
+    async fn get_target_address_none_on_move_option_none() {
+        let server = MockServer::start().await;
+        // A genuine Move `Option::none()` (empty `vec`) is an unset record and
+        // must remain `Ok(None)`.
+        Mock::given(method("POST"))
+            .and(path("/v1/view"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!([{"vec": []}])),
+            )
+            .mount(&server)
+            .await;
+
+        let ans = ans_for(&server);
+        assert_eq!(ans.get_target_address("alice.apt").await.unwrap(), None);
     }
 }
