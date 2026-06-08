@@ -17,7 +17,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-aptos-sdk = "0.3"
+aptos-sdk = "0.5.0"
 ```
 
 Basic usage:
@@ -64,7 +64,7 @@ For the smallest possible binary:
 
 ```toml
 [dependencies]
-aptos-sdk = { version = "0.1", default-features = false, features = ["ed25519"] }
+aptos-sdk = { version = "0.5.0", default-features = false, features = ["ed25519"] }
 ```
 
 ### Full Build
@@ -73,7 +73,7 @@ For all features:
 
 ```toml
 [dependencies]
-aptos-sdk = { version = "0.1", features = ["full"] }
+aptos-sdk = { version = "0.5.0", features = ["full"] }
 ```
 
 ## Examples
@@ -230,4 +230,3 @@ cargo doc -p aptos-sdk --all-features --document-private-items
 ## License
 
 Apache-2.0
-

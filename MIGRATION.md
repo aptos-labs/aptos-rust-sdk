@@ -31,7 +31,7 @@ rustflags = ["--cfg", "tokio_unstable"]
 ```toml
 # Cargo.toml
 [dependencies]
-aptos-sdk = "0.1"
+aptos-sdk = "0.5.0"
 ```
 
 No `.cargo/config.toml` or patches required.
@@ -549,13 +549,13 @@ The new SDK uses feature flags for modular compilation. Only include what you ne
 ```toml
 [dependencies]
 # Default features (recommended for most users)
-aptos-sdk = "0.1"
+aptos-sdk = "0.5.0"
 
 # Minimal configuration (smaller binary)
-aptos-sdk = { version = "0.1", default-features = false, features = ["ed25519"] }
+aptos-sdk = { version = "0.5.0", default-features = false, features = ["ed25519"] }
 
 # Full features
-aptos-sdk = { version = "0.1", features = ["full"] }
+aptos-sdk = { version = "0.5.0", features = ["full"] }
 ```
 
 ### Available Features
@@ -578,7 +578,7 @@ For minimal binary size, disable default features:
 
 ```toml
 [dependencies]
-aptos-sdk = { version = "0.1", default-features = false, features = ["ed25519", "faucet"] }
+aptos-sdk = { version = "0.5.0", default-features = false, features = ["ed25519", "faucet"] }
 ```
 
 ---
@@ -627,7 +627,7 @@ Enable the required feature in `Cargo.toml`:
 
 ```toml
 [dependencies]
-aptos-sdk = { version = "0.1", features = ["ed25519", "secp256k1", "faucet"] }
+aptos-sdk = { version = "0.5.0", features = ["ed25519", "secp256k1", "faucet"] }
 ```
 
 **"Cannot find `CoinClient`/`FaucetClient`"**
