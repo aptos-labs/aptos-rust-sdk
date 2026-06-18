@@ -305,9 +305,17 @@ impl AnsClient {
         let args = vec![bcs_address(address)?];
         let values = self.view_router("get_primary_name", args).await?;
 
-        // The router returns (Option<String> subdomain, Option<String> domain).
-        let subdomain = option_string(values.first());
-        let domain = option_string(values.get(1));
+        // The router returns exactly (Option<String> subdomain, Option<String>
+        // domain). A shorter response is a malformed reply, not "no primary
+        // name", so surface it rather than masking a node/router bug.
+        if values.len() < 2 {
+            return Err(AptosError::Internal(format!(
+                "ANS get_primary_name returned {} value(s); expected 2 (subdomain, domain)",
+                values.len()
+            )));
+        }
+        let subdomain = option_string(&values[0])?;
+        let domain = option_string(&values[1])?;
 
         Ok(domain.map(|domain| match subdomain {
             Some(sub) => format!("{sub}.{domain}"),
@@ -529,30 +537,35 @@ fn bcs_u64(value: u64) -> AptosResult<Vec<u8>> {
 /// Unwraps a Move `Option<T>` from its JSON form.
 ///
 /// The node renders `0x1::option::Option<T>` as `{"vec": []}` (none) or
-/// `{"vec": [value]}` (some). A bare array is also accepted defensively.
-fn unwrap_option(value: &serde_json::Value) -> Option<&serde_json::Value> {
+/// `{"vec": [value]}` (some); a bare array is also accepted defensively.
+/// `Ok(None)` is a genuine `Option::none()`. A value that is not Option-shaped
+/// at all is a malformed reply and yields an error rather than being silently
+/// treated as "not found".
+fn unwrap_option(value: &serde_json::Value) -> AptosResult<Option<&serde_json::Value>> {
     if let Some(vec) = value.get("vec").and_then(serde_json::Value::as_array) {
-        return vec.first();
+        return Ok(vec.first());
     }
     if let Some(arr) = value.as_array() {
-        return arr.first();
+        return Ok(arr.first());
     }
-    None
+    Err(AptosError::Internal(format!(
+        "ANS view returned a value that is not a Move Option: {value}"
+    )))
 }
 
 /// Decodes an `Option<address>` view result into an [`AccountAddress`].
 ///
 /// A Move `Option::none()` (an unregistered or unset record) yields `Ok(None)`.
-/// A malformed reply -- a missing return value, a non-string entry, or an
-/// undecodable address -- is surfaced as an error rather than being silently
-/// treated as "not found".
+/// A malformed reply -- a missing return value, a non-Option value, a
+/// non-string entry, or an undecodable address -- is surfaced as an error
+/// rather than being silently treated as "not found".
 fn option_address(value: Option<&serde_json::Value>) -> AptosResult<Option<AccountAddress>> {
     let value = value.ok_or_else(|| {
         AptosError::Internal(
             "ANS view returned no value where an Option<address> was expected".into(),
         )
     })?;
-    let Some(inner) = unwrap_option(value) else {
+    let Some(inner) = unwrap_option(value)? else {
         return Ok(None);
     };
     let s = inner.as_str().ok_or_else(|| {
@@ -564,15 +577,22 @@ fn option_address(value: Option<&serde_json::Value>) -> AptosResult<Option<Accou
     Ok(Some(address))
 }
 
-/// Decodes a non-empty `Option<String>` view result.
-fn option_string(value: Option<&serde_json::Value>) -> Option<String> {
-    let inner = unwrap_option(value?)?;
-    let s = inner.as_str()?;
-    if s.is_empty() {
+/// Decodes an `Option<String>` view result, mapping an empty string to `None`.
+///
+/// A genuine `Option::none()` (or an empty string) yields `Ok(None)`; a
+/// non-Option or non-string value is a malformed reply and yields an error.
+fn option_string(value: &serde_json::Value) -> AptosResult<Option<String>> {
+    let Some(inner) = unwrap_option(value)? else {
+        return Ok(None);
+    };
+    let s = inner.as_str().ok_or_else(|| {
+        AptosError::Internal(format!("ANS view returned a non-string value: {inner}"))
+    })?;
+    Ok(if s.is_empty() {
         None
     } else {
         Some(s.to_string())
-    }
+    })
 }
 
 /// Parses a `u64` view result, which the node renders as a JSON string.
@@ -1055,5 +1075,58 @@ mod tests {
 
         let ans = ans_for(&server);
         assert_eq!(ans.get_target_address("alice.apt").await.unwrap(), None);
+    }
+
+    #[tokio::test]
+    async fn get_target_address_errors_on_non_option_value() {
+        let server = MockServer::start().await;
+        // A value that is not Move-Option-shaped (here a bare string instead of
+        // `{"vec": [...]}`) is a malformed reply and must error, not be coerced
+        // to "unregistered".
+        Mock::given(method("POST"))
+            .and(path("/v1/view"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!(["0x1"])))
+            .mount(&server)
+            .await;
+
+        let ans = ans_for(&server);
+        let err = ans.get_target_address("alice.apt").await.unwrap_err();
+        assert!(matches!(err, AptosError::Internal(_)));
+    }
+
+    #[tokio::test]
+    async fn get_primary_name_errors_on_short_response() {
+        let server = MockServer::start().await;
+        // The router view returns two values; a one-value response is malformed
+        // and must surface as an error rather than "no primary name".
+        Mock::given(method("POST"))
+            .and(path("/v1/view"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!([{"vec": ["alice"]}])),
+            )
+            .mount(&server)
+            .await;
+
+        let ans = ans_for(&server);
+        let err = ans.get_primary_name(AccountAddress::ONE).await.unwrap_err();
+        assert!(matches!(err, AptosError::Internal(_)));
+    }
+
+    #[tokio::test]
+    async fn get_primary_name_errors_on_non_string_value() {
+        let server = MockServer::start().await;
+        // A non-string inside the domain Option is a malformed reply.
+        Mock::given(method("POST"))
+            .and(path("/v1/view"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!([{"vec": []}, {"vec": [42]}])),
+            )
+            .mount(&server)
+            .await;
+
+        let ans = ans_for(&server);
+        let err = ans.get_primary_name(AccountAddress::ONE).await.unwrap_err();
+        assert!(matches!(err, AptosError::Internal(_)));
     }
 }
