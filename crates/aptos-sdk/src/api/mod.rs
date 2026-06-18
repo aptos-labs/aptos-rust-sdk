@@ -5,7 +5,7 @@
 //! - [`FullnodeClient`] - REST API client for fullnode operations
 //! - [`FaucetClient`] - Client for funding accounts on testnets (feature-gated)
 //! - [`IndexerClient`] - GraphQL client for indexed data (feature-gated)
-//! - [`AnsClient`] - Aptos Names Service client (scaffold; see `ans.rs`)
+//! - [`AnsClient`] - Aptos Names Service client (name resolution + records)
 
 pub mod ans;
 pub mod fullnode;
@@ -17,7 +17,7 @@ mod faucet;
 #[cfg(feature = "indexer")]
 mod indexer;
 
-pub use ans::AnsClient;
+pub use ans::{AnsClient, AnsName};
 pub use fullnode::FullnodeClient;
 pub use response::{AptosResponse, GasEstimation, LedgerInfo, PendingTransaction};
 

@@ -151,6 +151,16 @@ impl Aptos {
         self.indexer.as_ref()
     }
 
+    /// Returns an Aptos Names Service (ANS) client bound to this client's
+    /// fullnode and network.
+    ///
+    /// ANS is only deployed on mainnet, testnet, and localnet; on other
+    /// networks the returned client's methods error unless you instead build
+    /// one with [`crate::api::AnsClient::with_router_address`].
+    pub fn ans(&self) -> crate::api::AnsClient {
+        crate::api::AnsClient::new((*self.fullnode).clone())
+    }
+
     // === Ledger Info ===
 
     /// Gets the current ledger information.
@@ -1265,6 +1275,14 @@ mod tests {
 
         let aptos = Aptos::mainnet().unwrap();
         assert_eq!(aptos.chain_id(), ChainId::mainnet());
+    }
+
+    #[test]
+    fn test_ans_accessor() {
+        // ans() returns a client bound to this client's network; mainnet has a
+        // built-in router contract address, so resolution succeeds.
+        let aptos = Aptos::mainnet().unwrap();
+        assert!(aptos.ans().router_address().is_ok());
     }
 
     fn create_mock_aptos(server: &MockServer) -> Aptos {
