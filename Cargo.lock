@@ -79,7 +79,7 @@ dependencies = [
 
 [[package]]
 name = "aptos-sdk"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "aptos-bcs",
