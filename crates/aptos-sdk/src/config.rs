@@ -367,6 +367,43 @@ impl Network {
             Network::Custom => "custom",
         }
     }
+
+    /// Returns the default Aptos-hosted pepper service URL for this network.
+    ///
+    /// These endpoints match the TypeScript SDK's `NetworkToPepperAPI` table.
+    /// [`Network::Custom`] has no default and returns `None`.
+    ///
+    /// Used with [`crate::account::HttpPepperService`] when deriving a
+    /// [`crate::account::KeylessAccount`] (requires the `keyless` feature).
+    #[must_use]
+    pub fn pepper_url(self) -> Option<&'static str> {
+        match self {
+            Network::Mainnet => Some("https://api.mainnet.aptoslabs.com/keyless/pepper/v0"),
+            Network::Testnet => Some("https://api.testnet.aptoslabs.com/keyless/pepper/v0"),
+            Network::Devnet => Some("https://api.devnet.aptoslabs.com/keyless/pepper/v0"),
+            // Local development uses the devnet-hosted services, like the TS SDK.
+            Network::Local => Some("https://api.devnet.aptoslabs.com/keyless/pepper/v0"),
+            Network::Custom => None,
+        }
+    }
+
+    /// Returns the default Aptos-hosted prover service URL for this network.
+    ///
+    /// These endpoints match the TypeScript SDK's `NetworkToProverAPI` table.
+    /// [`Network::Custom`] has no default and returns `None`.
+    ///
+    /// Used with [`crate::account::HttpProverService`] when deriving a
+    /// [`crate::account::KeylessAccount`] (requires the `keyless` feature).
+    #[must_use]
+    pub fn prover_url(self) -> Option<&'static str> {
+        match self {
+            Network::Mainnet => Some("https://api.mainnet.aptoslabs.com/keyless/prover/v0"),
+            Network::Testnet => Some("https://api.testnet.aptoslabs.com/keyless/prover/v0"),
+            Network::Devnet => Some("https://api.devnet.aptoslabs.com/keyless/prover/v0"),
+            Network::Local => Some("https://api.devnet.aptoslabs.com/keyless/prover/v0"),
+            Network::Custom => None,
+        }
+    }
 }
 
 impl Default for AptosConfig {
@@ -872,6 +909,45 @@ mod tests {
         assert_eq!(Network::Devnet.as_str(), "devnet");
         assert_eq!(Network::Local.as_str(), "local");
         assert_eq!(Network::Custom.as_str(), "custom");
+    }
+
+    #[test]
+    fn test_network_keyless_service_urls() {
+        assert_eq!(
+            Network::Mainnet.pepper_url(),
+            Some("https://api.mainnet.aptoslabs.com/keyless/pepper/v0")
+        );
+        assert_eq!(
+            Network::Testnet.pepper_url(),
+            Some("https://api.testnet.aptoslabs.com/keyless/pepper/v0")
+        );
+        assert_eq!(
+            Network::Devnet.pepper_url(),
+            Some("https://api.devnet.aptoslabs.com/keyless/pepper/v0")
+        );
+        assert_eq!(
+            Network::Local.pepper_url(),
+            Some("https://api.devnet.aptoslabs.com/keyless/pepper/v0")
+        );
+        assert_eq!(Network::Custom.pepper_url(), None);
+
+        assert_eq!(
+            Network::Mainnet.prover_url(),
+            Some("https://api.mainnet.aptoslabs.com/keyless/prover/v0")
+        );
+        assert_eq!(
+            Network::Testnet.prover_url(),
+            Some("https://api.testnet.aptoslabs.com/keyless/prover/v0")
+        );
+        assert_eq!(
+            Network::Devnet.prover_url(),
+            Some("https://api.devnet.aptoslabs.com/keyless/prover/v0")
+        );
+        assert_eq!(
+            Network::Local.prover_url(),
+            Some("https://api.devnet.aptoslabs.com/keyless/prover/v0")
+        );
+        assert_eq!(Network::Custom.prover_url(), None);
     }
 
     #[test]
