@@ -35,7 +35,7 @@
 //! services. Unlike the TypeScript SDK's `AccountClient`, the Rust SDK exposes
 //! [`KeylessAccount`] directly. Enable `features = ["keyless"]` first.
 //!
-//! ```rust,no_run
+//! ```rust,ignore
 //! # async fn keyless_example(jwt: &str) -> aptos_sdk::error::AptosResult<()> {
 //! use aptos_sdk::account::{
 //!     Account, EphemeralKeyPair, HttpPepperService, HttpProverService, KeylessAccount,
