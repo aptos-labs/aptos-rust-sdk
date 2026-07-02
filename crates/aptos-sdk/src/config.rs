@@ -912,6 +912,45 @@ mod tests {
     }
 
     #[test]
+    fn test_network_keyless_service_urls() {
+        assert_eq!(
+            Network::Mainnet.pepper_url(),
+            Some("https://api.mainnet.aptoslabs.com/keyless/pepper/v0")
+        );
+        assert_eq!(
+            Network::Testnet.pepper_url(),
+            Some("https://api.testnet.aptoslabs.com/keyless/pepper/v0")
+        );
+        assert_eq!(
+            Network::Devnet.pepper_url(),
+            Some("https://api.devnet.aptoslabs.com/keyless/pepper/v0")
+        );
+        assert_eq!(
+            Network::Local.pepper_url(),
+            Some("https://api.devnet.aptoslabs.com/keyless/pepper/v0")
+        );
+        assert_eq!(Network::Custom.pepper_url(), None);
+
+        assert_eq!(
+            Network::Mainnet.prover_url(),
+            Some("https://api.mainnet.aptoslabs.com/keyless/prover/v0")
+        );
+        assert_eq!(
+            Network::Testnet.prover_url(),
+            Some("https://api.testnet.aptoslabs.com/keyless/prover/v0")
+        );
+        assert_eq!(
+            Network::Devnet.prover_url(),
+            Some("https://api.devnet.aptoslabs.com/keyless/prover/v0")
+        );
+        assert_eq!(
+            Network::Local.prover_url(),
+            Some("https://api.devnet.aptoslabs.com/keyless/prover/v0")
+        );
+        assert_eq!(Network::Custom.prover_url(), None);
+    }
+
+    #[test]
     fn test_aptos_config_getters() {
         let config = AptosConfig::testnet();
 
