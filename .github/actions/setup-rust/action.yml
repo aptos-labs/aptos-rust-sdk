@@ -17,11 +17,11 @@ runs:
   using: composite
   steps:
     - name: Install Rust ${{ inputs.toolchain }}
-      uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # master
+      uses: dtolnay/rust-toolchain@67ef31d5b988238dd797d409d6f9574278e20537 # master
       with:
         toolchain: ${{ inputs.toolchain }}
         components: ${{ inputs.components }}
 
     - name: Cache cargo
       if: inputs.cache == 'true'
-      uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
