@@ -1,4 +1,100 @@
 //! Keyless (OIDC-based) account support.
+//!
+//! Keyless accounts let users sign Aptos transactions with an OpenID Connect
+//! (OIDC) identity provider (Google, Apple, Microsoft, or a custom issuer)
+//! instead of managing a long-lived private key. The SDK derives a stable
+//! on-chain address from the JWT claims and a privacy-preserving pepper, then
+//! signs each transaction with a short-lived ephemeral Ed25519 key plus a
+//! zero-knowledge proof fetched from Aptos infrastructure.
+//!
+//! # Feature flag
+//!
+//! Enable the `keyless` feature (or the `full` meta-feature) in `Cargo.toml`:
+//!
+//! ```toml
+//! [dependencies]
+//! aptos-sdk = { version = "0.5", features = ["keyless"] }
+//! ```
+//!
+//! # Authentication flow
+//!
+//! 1. Generate an [`EphemeralKeyPair`] and read its [`EphemeralKeyPair::nonce`].
+//! 2. Redirect the user through your IdP OAuth flow, passing the nonce in the
+//!    `nonce` parameter so it is embedded in the returned ID token (JWT).
+//! 3. Call [`KeylessAccount::from_jwt`] with the JWT, the ephemeral key, and
+//!    pepper / prover service clients (see below).
+//! 4. Use the resulting [`KeylessAccount`] anywhere an [`Account`]
+//!    is accepted — e.g. [`crate::transaction::builder::sign_transaction`] and
+//!    [`crate::Aptos::submit_transaction`].
+//!
+//! The Aptos [Keyless integration guide](https://aptos.dev/build/guides/aptos-keyless/integration-guide)
+//! walks through IdP configuration and the browser-side OAuth redirect.
+//!
+//! # Pepper and prover services
+//!
+//! Account derivation and signing require two Aptos-hosted HTTP services:
+//!
+//! - **Pepper service** — returns a per-user pepper used in address derivation.
+//!   Use [`HttpPepperService`] or implement [`PepperService`] for custom backends.
+//! - **Prover service** — returns a Groth16 zero-knowledge proof binding the JWT
+//!   to the ephemeral public key. Use [`HttpProverService`] or [`ProverService`].
+//!
+//! Default endpoints mirror the TypeScript SDK (devnet shown):
+//!
+//! | Network | Pepper URL | Prover URL |
+//! |---------|------------|------------|
+//! | devnet  | `https://api.devnet.aptoslabs.com/keyless/pepper/v0` | `https://api.devnet.aptoslabs.com/keyless/prover/v0` |
+//! | testnet | `https://api.testnet.aptoslabs.com/keyless/pepper/v0` | `https://api.testnet.aptoslabs.com/keyless/prover/v0` |
+//! | mainnet | `https://api.mainnet.aptoslabs.com/keyless/pepper/v0` | `https://api.mainnet.aptoslabs.com/keyless/prover/v0` |
+//!
+//! [`Network::pepper_url`] and [`Network::prover_url`] return these URLs.
+//!
+//! # Example
+//!
+//! ```rust,no_run
+//! # async fn example(jwt: &str) -> aptos_sdk::error::AptosResult<()> {
+//! use aptos_sdk::{
+//!     Aptos, AptosConfig,
+//!     account::{Account, EphemeralKeyPair, HttpPepperService, HttpProverService, KeylessAccount},
+//!     config::Network,
+//!     transaction::{EntryFunction, TransactionBuilder, builder::sign_transaction},
+//! };
+//! use url::Url;
+//!
+//! // 1. Generate an ephemeral key before starting the OAuth redirect.
+//! let ephemeral = EphemeralKeyPair::generate(3600);
+//! println!("Use this nonce in your IdP login URL: {}", ephemeral.nonce());
+//!
+//! // 2. After the user returns with a JWT, wire up Aptos keyless services.
+//! let pepper = HttpPepperService::new(
+//!     Url::parse(Network::Devnet.pepper_url().expect("devnet pepper URL")).unwrap(),
+//! );
+//! let prover = HttpProverService::new(
+//!     Url::parse(Network::Devnet.prover_url().expect("devnet prover URL")).unwrap(),
+//! );
+//!
+//! let account = KeylessAccount::from_jwt(jwt, ephemeral, &pepper, &prover).await?;
+//! println!("Keyless address: {}", account.address());
+//!
+//! // 3. Sign and submit a transaction like any other account type.
+//! let aptos = Aptos::new(AptosConfig::devnet())?;
+//! let recipient = aptos_sdk::types::AccountAddress::from_hex("0x1").unwrap();
+//! let payload = EntryFunction::apt_transfer(recipient, 1_000)?;
+//! let raw_txn = TransactionBuilder::new()
+//!     .sender(account.address())
+//!     .sequence_number(aptos.get_sequence_number(account.address()).await?)
+//!     .payload(payload.into())
+//!     .chain_id(aptos.chain_id())
+//!     .expiration_from_now(600)
+//!     .build()?;
+//! let signed = sign_transaction(&raw_txn, &account)?;
+//! aptos.submit_transaction(&signed).await?;
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! See also the [`keyless_account`](https://docs.rs/aptos-sdk/latest/aptos_sdk/examples/keyless_account/index.html)
+//! example in this crate.
 
 use crate::account::account::{Account, AuthenticationKey};
 use crate::crypto::{Ed25519PrivateKey, Ed25519PublicKey, KEYLESS_SCHEME};

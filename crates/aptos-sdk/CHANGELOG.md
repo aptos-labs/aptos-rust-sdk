@@ -14,6 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `rand` 0.9.x (RUSTSEC-2026-0097, unsound with custom loggers).
 
 ### Added
+- Keyless (OIDC) documentation: expanded module-level docs on
+  [`account::keyless`](https://docs.rs/aptos-sdk/latest/aptos_sdk/account/keyless/index.html),
+  a `keyless_account` example, and [`Network::pepper_url`] /
+  [`Network::prover_url`] helpers that return the default Aptos-hosted service
+  endpoints (matching the TypeScript SDK). Corrected the outdated `KeylessAccount::new`
+  snippet in `MIGRATION.md`.
 - `api::AnsClient` is now a working Aptos Names Service client instead of a
   scaffold. It talks to the on-chain `router` module on mainnet / testnet /
   localnet (router contract addresses are built in; use

@@ -392,19 +392,35 @@ aptos.transfer_apt(&multi_key, recipient, amount).await?;
 
 ### Keyless Authentication (OIDC)
 
-Enable authentication via Google, Apple, or other OIDC providers:
+Enable authentication via Google, Apple, or other OIDC providers. The Rust SDK
+exposes [`KeylessAccount`](https://docs.rs/aptos-sdk/latest/aptos_sdk/account/struct.KeylessAccount.html)
+directly (there is no separate `AccountClient` type like in the TypeScript SDK).
 
 ```rust
 // Requires `keyless` feature
-use aptos_sdk::account::KeylessAccount;
+use aptos_sdk::{
+    account::{EphemeralKeyPair, HttpPepperService, HttpProverService, KeylessAccount},
+    config::Network,
+};
+use url::Url;
 
-let keyless = KeylessAccount::new(
-    jwt_token,
-    ephemeral_key_pair,
-    pepper,
-    uid_key,
-)?;
+// Generate before the OAuth redirect; embed ephemeral.nonce() in the login URL.
+let ephemeral = EphemeralKeyPair::generate(3600);
+
+let pepper = HttpPepperService::new(
+    Url::parse(Network::Devnet.pepper_url().unwrap()).unwrap(),
+);
+let prover = HttpProverService::new(
+    Url::parse(Network::Devnet.prover_url().unwrap()).unwrap(),
+);
+
+// `jwt` is the OIDC ID token returned after the user signs in.
+let account = KeylessAccount::from_jwt(&jwt, ephemeral, &pepper, &prover).await?;
 ```
+
+See the `keyless_account` example and the
+[Aptos Keyless integration guide](https://aptos.dev/build/guides/aptos-keyless/integration-guide)
+for IdP setup and the browser-side OAuth flow.
 
 ### Sponsored (Fee Payer) Transactions
 

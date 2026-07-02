@@ -227,6 +227,11 @@ name = "transaction_waiting"
 path = "examples/transaction_waiting.rs"
 required-features = ["ed25519", "faucet"]
 
+[[example]]
+name = "keyless_account"
+path = "examples/keyless_account.rs"
+required-features = ["keyless", "ed25519", "faucet"]
+
 [[bin]]
 name = "aptos-codegen"
 path = "src/bin/codegen.rs"

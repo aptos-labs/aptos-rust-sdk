@@ -97,6 +97,7 @@ See the [`examples/`](examples/) directory for complete working examples:
 - [`multi_key_account.rs`](examples/multi_key_account.rs) - Multi-key (mixed signature) accounts
 - [`multi_sig_account.rs`](examples/multi_sig_account.rs) - MultiEd25519 threshold accounts
 - [`multisig_v2.rs`](examples/multisig_v2.rs) - On-chain multisig (governance) accounts
+- [`keyless_account.rs`](examples/keyless_account.rs) - OIDC keyless accounts (Google / Apple / etc.)
 
 ### Smart Contracts
 - [`deploy_module.rs`](examples/deploy_module.rs) - Deploy a Move module
