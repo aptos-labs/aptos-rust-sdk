@@ -105,7 +105,7 @@ aptos-sdk-macros = { version = "0.3.0", path = "crates/aptos-sdk-macros" }
 
 # External crate dependencies.
 # Please do not add any test features here: they should be declared by the individual crate.
-anyhow = "1.0.101"
+anyhow = "1.0.103"
 arbitrary = { version = "1.4.1", features = ["derive"] }
 aptos-bcs = "0.1.4"
 aws-lc-sys = "0.39.0"
