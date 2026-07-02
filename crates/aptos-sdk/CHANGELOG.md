@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+### Security
+- Bumped transitive dependencies to clear `cargo audit` advisories:
+  `quinn-proto` (RUSTSEC-2026-0185, remote memory exhaustion),
+  `anyhow` (RUSTSEC-2026-0190, unsound `Error::downcast_mut()`), and
+  `rand` 0.9.x (RUSTSEC-2026-0097, unsound with custom loggers).
+
 ### Added
 - `api::AnsClient` is now a working Aptos Names Service client instead of a
   scaffold. It talks to the on-chain `router` module on mainnet / testnet /
