@@ -19,6 +19,8 @@
 //! # Authentication flow
 //!
 //! 1. Generate an [`EphemeralKeyPair`] and read its [`EphemeralKeyPair::nonce`].
+//!    Persist the pair across the IdP redirect with [`EphemeralKeyPair::to_snapshot`]
+//!    / [`EphemeralKeyPair::from_snapshot`] (the TypeScript SDK uses `localStorage`).
 //! 2. Redirect the user through your IdP OAuth flow, passing the nonce in the
 //!    `nonce` parameter so it is embedded in the returned ID token (JWT).
 //! 3. Call [`KeylessAccount::from_jwt`] with the JWT, the ephemeral key, and
@@ -174,6 +176,88 @@ impl EphemeralKeyPair {
     pub fn public_key(&self) -> &Ed25519PublicKey {
         &self.public_key
     }
+
+    /// Serializes this key pair for storage across an OAuth redirect.
+    ///
+    /// Production apps should encrypt the returned snapshot at rest (the
+    /// TypeScript SDK stores an equivalent structure in `localStorage`).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the expiry time cannot be represented as seconds
+    /// since the UNIX epoch.
+    pub fn to_snapshot(&self) -> AptosResult<EphemeralKeyPairSnapshot> {
+        let expiry_unix_secs = self
+            .expiry
+            .duration_since(UNIX_EPOCH)
+            .map_err(|_| AptosError::InvalidJwt("ephemeral key expiry before UNIX epoch".into()))?
+            .as_secs();
+        Ok(EphemeralKeyPairSnapshot {
+            private_key: self.private_key.to_bytes().to_vec(),
+            expiry_unix_secs,
+            nonce: self.nonce.clone(),
+        })
+    }
+
+    /// Restores an ephemeral key pair previously saved via [`Self::to_snapshot`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the private key bytes are invalid.
+    pub fn from_snapshot(snapshot: &EphemeralKeyPairSnapshot) -> AptosResult<Self> {
+        let private_key = Ed25519PrivateKey::from_bytes(&snapshot.private_key)?;
+        let public_key = private_key.public_key();
+        Ok(Self {
+            private_key,
+            public_key,
+            expiry: UNIX_EPOCH + Duration::from_secs(snapshot.expiry_unix_secs),
+            nonce: snapshot.nonce.clone(),
+        })
+    }
+
+    /// Persists this key pair as JSON at `path` for reload after an OAuth redirect.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if snapshot serialization or the file write fails.
+    pub fn save_to_file(&self, path: &std::path::Path) -> AptosResult<()> {
+        let snapshot = self.to_snapshot()?;
+        let json = serde_json::to_string_pretty(&snapshot)
+            .map_err(|e| AptosError::InvalidJwt(format!("failed to encode snapshot: {e}")))?;
+        std::fs::write(path, json).map_err(|e| {
+            AptosError::Internal(format!("failed to write ephemeral key file: {e}"))
+        })?;
+        Ok(())
+    }
+
+    /// Loads a key pair previously written by [`Self::save_to_file`].
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the file cannot be read, JSON parsing fails, or the
+    /// snapshot cannot be restored.
+    pub fn load_from_file(path: &std::path::Path) -> AptosResult<Self> {
+        let contents = std::fs::read_to_string(path)
+            .map_err(|e| AptosError::Internal(format!("failed to read ephemeral key file: {e}")))?;
+        let snapshot: EphemeralKeyPairSnapshot = serde_json::from_str(&contents)
+            .map_err(|e| AptosError::InvalidJwt(format!("failed to decode snapshot: {e}")))?;
+        Self::from_snapshot(&snapshot)
+    }
+}
+
+/// Serializable ephemeral key state for persisting across an OAuth redirect.
+///
+/// # Security
+///
+/// Contains a private key. Encrypt at rest in production applications.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EphemeralKeyPairSnapshot {
+    /// Ed25519 private key bytes (`Ed25519PrivateKey::to_bytes` format).
+    private_key: Vec<u8>,
+    /// Expiry as seconds since the UNIX epoch.
+    expiry_unix_secs: u64,
+    /// Nonce embedded in the OIDC login URL and JWT.
+    nonce: String,
 }
 
 impl fmt::Debug for EphemeralKeyPair {
@@ -1236,6 +1320,37 @@ mod tests {
         assert_eq!(decoded.iss.unwrap(), "https://accounts.google.com");
         assert_eq!(decoded.sub.unwrap(), "test-sub");
         assert_eq!(decoded.nonce.unwrap(), "test-nonce");
+    }
+
+    #[test]
+    fn test_ephemeral_key_pair_snapshot_roundtrip() {
+        let ephemeral = EphemeralKeyPair::generate(3600);
+        let snapshot = ephemeral.to_snapshot().unwrap();
+        let restored = EphemeralKeyPair::from_snapshot(&snapshot).unwrap();
+
+        assert_eq!(ephemeral.nonce(), restored.nonce());
+        assert_eq!(
+            ephemeral.public_key().to_bytes(),
+            restored.public_key().to_bytes()
+        );
+        assert_eq!(ephemeral.is_expired(), restored.is_expired());
+    }
+
+    #[test]
+    fn test_ephemeral_key_pair_file_roundtrip() {
+        let ephemeral = EphemeralKeyPair::generate(3600);
+        let path =
+            std::env::temp_dir().join(format!("aptos-sdk-ephemeral-{}.json", ephemeral.nonce()));
+
+        ephemeral.save_to_file(&path).unwrap();
+        let restored = EphemeralKeyPair::load_from_file(&path).unwrap();
+        let _ = std::fs::remove_file(&path);
+
+        assert_eq!(ephemeral.nonce(), restored.nonce());
+        assert_eq!(
+            ephemeral.public_key().to_bytes(),
+            restored.public_key().to_bytes()
+        );
     }
 
     #[test]

@@ -86,8 +86,8 @@ pub use ed25519::{Ed25519Account, Ed25519SingleKeyAccount};
 #[cfg(feature = "keyless")]
 #[cfg_attr(docsrs, doc(cfg(feature = "keyless")))]
 pub use keyless::{
-    EphemeralKeyPair, HttpPepperService, HttpProverService, JwkSet, KeylessAccount,
-    KeylessSignature, OidcProvider, Pepper, PepperService, ProverService, ZkProof,
+    EphemeralKeyPair, EphemeralKeyPairSnapshot, HttpPepperService, HttpProverService, JwkSet,
+    KeylessAccount, KeylessSignature, OidcProvider, Pepper, PepperService, ProverService, ZkProof,
 };
 #[cfg(feature = "mnemonic")]
 pub use mnemonic::{DerivationPath, Mnemonic, PathComponent};

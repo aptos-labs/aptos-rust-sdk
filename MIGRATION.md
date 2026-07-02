@@ -406,6 +406,8 @@ use url::Url;
 
 // Generate before the OAuth redirect; embed ephemeral.nonce() in the login URL.
 let ephemeral = EphemeralKeyPair::generate(3600);
+// Persist across the redirect (encrypt at rest in production).
+ephemeral.save_to_file(std::path::Path::new("/secure/ephemeral.json"))?;
 
 let pepper = HttpPepperService::new(
     Url::parse(Network::Devnet.pepper_url().unwrap()).unwrap(),
@@ -415,6 +417,7 @@ let prover = HttpProverService::new(
 );
 
 // `jwt` is the OIDC ID token returned after the user signs in.
+let ephemeral = EphemeralKeyPair::load_from_file(std::path::Path::new("/secure/ephemeral.json"))?;
 let account = KeylessAccount::from_jwt(&jwt, ephemeral, &pepper, &prover).await?;
 ```
 
