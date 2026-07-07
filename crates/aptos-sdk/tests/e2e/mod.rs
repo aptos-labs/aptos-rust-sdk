@@ -1930,3 +1930,257 @@ mod balance_tests {
         }
     }
 }
+
+// =============================================================================
+// Fungible Asset Tests
+// =============================================================================
+
+#[cfg(all(feature = "ed25519", feature = "faucet"))]
+mod fungible_asset_tests {
+    use super::*;
+    use aptos_sdk::account::Ed25519Account;
+    use aptos_sdk::types::AccountAddress;
+
+    /// Transfers APT *as a fungible asset* via
+    /// `0x1::primary_fungible_store::transfer`. APT is a coin-migrated FA whose
+    /// `Metadata` object lives at `0xa`, so every funded account holds it.
+    #[tokio::test]
+    #[ignore]
+    async fn e2e_transfer_fungible_asset_apt() {
+        let aptos = Aptos::new(get_test_config()).expect("failed to create client");
+
+        let sender = aptos
+            .create_funded_account(200_000_000)
+            .await
+            .expect("failed to create sender");
+        let recipient = Ed25519Account::generate();
+        println!(
+            "FA sender: {}, recipient: {}",
+            sender.address(),
+            recipient.address()
+        );
+
+        let apt_metadata = AccountAddress::from_hex("0xa").expect("valid address");
+
+        let result = aptos
+            .transfer_fungible_asset(&sender, apt_metadata, recipient.address(), 10_000_000)
+            .await
+            .expect("failed to transfer fungible asset");
+
+        let success = result
+            .data
+            .get("success")
+            .and_then(serde_json::Value::as_bool);
+        assert_eq!(success, Some(true), "FA transfer should succeed");
+
+        wait_for_finality().await;
+
+        let balance = aptos
+            .get_balance(recipient.address())
+            .await
+            .expect("failed to get balance");
+        assert_eq!(
+            balance, 10_000_000,
+            "recipient should have transferred FA amount"
+        );
+    }
+}
+
+// =============================================================================
+// Orderless Transaction Tests
+// =============================================================================
+
+#[cfg(all(feature = "ed25519", feature = "faucet"))]
+mod orderless_tests {
+    use super::*;
+    use aptos_sdk::account::Ed25519Account;
+    use aptos_sdk::transaction::EntryFunction;
+
+    /// Submits a nonce-based orderless transfer. Requires the node to have the
+    /// orderless-transactions feature enabled (default on recent localnets).
+    #[tokio::test]
+    #[ignore]
+    async fn e2e_orderless_transfer() {
+        let aptos = Aptos::new(get_test_config()).expect("failed to create client");
+
+        let sender = aptos
+            .create_funded_account(200_000_000)
+            .await
+            .expect("failed to create sender");
+        let recipient = Ed25519Account::generate();
+        println!(
+            "Orderless sender: {}, recipient: {}",
+            sender.address(),
+            recipient.address()
+        );
+
+        let payload = EntryFunction::apt_transfer(recipient.address(), 5_000_000)
+            .expect("failed to build payload");
+
+        // `None` nonce -> a fresh random nonce is generated.
+        let result = aptos
+            .sign_submit_and_wait_orderless(&sender, payload.into(), None, None)
+            .await
+            .expect("failed to submit orderless transaction");
+
+        let success = result
+            .data
+            .get("success")
+            .and_then(serde_json::Value::as_bool);
+        assert_eq!(success, Some(true), "orderless transfer should succeed");
+
+        // Committed orderless transactions carry sequence_number u64::MAX.
+        assert_eq!(
+            result.data.get("sequence_number").and_then(|v| v.as_str()),
+            Some(u64::MAX.to_string().as_str()),
+            "orderless txn should commit with sequence_number = u64::MAX",
+        );
+
+        wait_for_finality().await;
+
+        let balance = aptos
+            .get_balance(recipient.address())
+            .await
+            .expect("failed to get balance");
+        assert_eq!(
+            balance, 5_000_000,
+            "recipient should have transferred amount"
+        );
+    }
+}
+
+// =============================================================================
+// Fullnode Read-Endpoint Tests
+// =============================================================================
+
+#[cfg(all(feature = "ed25519", feature = "faucet"))]
+mod read_endpoint_tests {
+    use super::*;
+    use aptos_sdk::account::Ed25519Account;
+    use aptos_sdk::error::AptosError;
+    use aptos_sdk::types::AccountAddress;
+
+    /// Exercises `get_transactions`, `get_transaction_by_version`, and
+    /// `get_account_transactions` against real committed data.
+    #[tokio::test]
+    #[ignore]
+    async fn e2e_transaction_read_endpoints() {
+        let aptos = Aptos::new(get_test_config()).expect("failed to create client");
+
+        // Produce at least one transaction from a known sender.
+        let sender = aptos
+            .create_funded_account(200_000_000)
+            .await
+            .expect("failed to create sender");
+        let recipient = Ed25519Account::generate();
+        aptos
+            .transfer_apt(&sender, recipient.address(), 1_000_000)
+            .await
+            .expect("failed to transfer");
+        wait_for_finality().await;
+
+        // List recent transactions.
+        let txns = aptos
+            .fullnode()
+            .get_transactions(None, Some(5))
+            .await
+            .expect("failed to list transactions");
+        assert!(!txns.data.is_empty(), "expected at least one transaction");
+
+        // Fetch one of them by ledger version.
+        let version: u64 = txns
+            .data
+            .iter()
+            .find_map(|t| t.get("version").and_then(|v| v.as_str()))
+            .and_then(|v| v.parse().ok())
+            .expect("a listed transaction should carry a version");
+        let by_version = aptos
+            .fullnode()
+            .get_transaction_by_version(version)
+            .await
+            .expect("failed to get transaction by version");
+        assert_eq!(
+            by_version.data.get("version").and_then(|v| v.as_str()),
+            Some(version.to_string().as_str()),
+        );
+
+        // The sender's own transactions.
+        let account_txns = aptos
+            .fullnode()
+            .get_account_transactions(sender.address(), Some(0), Some(10))
+            .await
+            .expect("failed to get account transactions");
+        assert!(
+            !account_txns.data.is_empty(),
+            "sender should have at least one transaction",
+        );
+    }
+
+    /// Exercises `get_events_by_creation_number` against the framework account.
+    #[tokio::test]
+    #[ignore]
+    async fn e2e_get_events_by_creation_number() {
+        let aptos = Aptos::new(get_test_config()).expect("failed to create client");
+
+        // Creation number 0 exists for the framework account; the page may be
+        // empty but the call itself must succeed.
+        let events = aptos
+            .fullnode()
+            .get_events_by_creation_number(AccountAddress::ONE, 0, None, Some(5))
+            .await
+            .expect("failed to get events by creation number");
+        println!(
+            "framework account creation-number-0 events: {}",
+            events.data.len()
+        );
+    }
+
+    /// Exercises `get_table_item` against the on-chain governance voting forum.
+    #[tokio::test]
+    #[ignore]
+    async fn e2e_get_table_item() {
+        let aptos = Aptos::new(get_test_config()).expect("failed to create client");
+
+        let forum_type = "0x1::voting::VotingForum<0x1::governance_proposal::GovernanceProposal>";
+        let forum = match aptos
+            .fullnode()
+            .get_account_resource(AccountAddress::ONE, forum_type)
+            .await
+        {
+            Ok(forum) => forum,
+            // Some minimal localnets may not initialize governance; skip cleanly.
+            Err(AptosError::Api {
+                status_code: 404, ..
+            }) => {
+                println!("governance forum not present on this node; skipping");
+                return;
+            }
+            Err(e) => panic!("unexpected error reading forum: {e}"),
+        };
+
+        let handle = forum.data.data["proposals"]["handle"]
+            .as_str()
+            .expect("forum should expose a proposals table handle")
+            .to_string();
+
+        // Reading a possibly-absent key still exercises the endpoint: accept a
+        // successful read OR a 404 (no proposal 0 yet), but nothing else.
+        match aptos
+            .get_table_item(
+                &handle,
+                "u64",
+                "0x1::voting::Proposal<0x1::governance_proposal::GovernanceProposal>",
+                serde_json::json!("0"),
+            )
+            .await
+        {
+            Ok(item) => println!("read proposal #0: {item}"),
+            Err(AptosError::Api {
+                status_code: 404, ..
+            }) => {
+                println!("no proposal #0 yet; table-item endpoint reachable");
+            }
+            Err(e) => panic!("unexpected table-item error: {e}"),
+        }
+    }
+}

@@ -10,6 +10,8 @@ use serde::{Deserialize, Serialize};
 /// - 1: `ModuleBundle` (deprecated)
 /// - 2: `EntryFunction`
 /// - 3: Multisig
+/// - 4: `Payload` (unified executable + extra-config format; used for
+///   orderless transactions)
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TransactionPayload {
     /// Execute a script with bytecode (variant 0).
@@ -22,6 +24,108 @@ pub enum TransactionPayload {
     EntryFunction(EntryFunction),
     /// Multisig transaction payload (variant 3).
     Multisig(Multisig),
+    /// Unified payload format carrying an executable plus extra configuration
+    /// (variant 4).
+    ///
+    /// This is the format the chain uses for **orderless** transactions, where
+    /// replay protection is provided by a nonce (in the extra config) instead of
+    /// a sequence number. See [`TransactionPayloadInner`].
+    Payload(TransactionPayloadInner),
+}
+
+impl TransactionPayload {
+    /// Wraps an `EntryFunction` or `Script` payload as an orderless
+    /// [`Payload`](TransactionPayload::Payload) with the given replay-protection
+    /// `nonce`.
+    ///
+    /// The resulting payload must be sent in a [`RawTransaction`] whose
+    /// `sequence_number` is [`u64::MAX`], which is how the chain distinguishes
+    /// nonce-based (orderless) replay protection from sequence-number-based
+    /// replay protection.
+    ///
+    /// [`RawTransaction`]: crate::transaction::RawTransaction
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AptosError::Transaction`](crate::error::AptosError::Transaction)
+    /// if the payload is not an `EntryFunction` or `Script` (multisig, module
+    /// bundle, and already-wrapped `Payload` variants are not supported as
+    /// orderless executables).
+    pub fn into_orderless(self, nonce: u64) -> crate::error::AptosResult<Self> {
+        let executable = match self {
+            TransactionPayload::EntryFunction(ef) => TransactionExecutable::EntryFunction(ef),
+            TransactionPayload::Script(s) => TransactionExecutable::Script(s),
+            other => {
+                return Err(crate::error::AptosError::Transaction(format!(
+                    "orderless transactions support only entry-function or script payloads, got {}",
+                    other.variant_name()
+                )));
+            }
+        };
+        Ok(TransactionPayload::Payload(TransactionPayloadInner::V1 {
+            executable,
+            extra_config: TransactionExtraConfig::V1 {
+                multisig_address: None,
+                replay_protection_nonce: Some(nonce),
+            },
+        }))
+    }
+
+    /// Returns a human-readable name for the payload variant (for diagnostics).
+    fn variant_name(&self) -> &'static str {
+        match self {
+            TransactionPayload::Script(_) => "Script",
+            TransactionPayload::ModuleBundle(_) => "ModuleBundle",
+            TransactionPayload::EntryFunction(_) => "EntryFunction",
+            TransactionPayload::Multisig(_) => "Multisig",
+            TransactionPayload::Payload(_) => "Payload",
+        }
+    }
+}
+
+/// The inner, versioned body of a [`TransactionPayload::Payload`].
+///
+/// Variant index must be 0 (`V1`) to match Aptos core for BCS compatibility.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TransactionPayloadInner {
+    /// Version 1 (variant 0): an executable plus extra configuration.
+    V1 {
+        /// What to execute (entry function, script, or nothing).
+        executable: TransactionExecutable,
+        /// Extra configuration (multisig address, replay-protection nonce).
+        extra_config: TransactionExtraConfig,
+    },
+}
+
+/// The executable portion of a [`TransactionPayloadInner`].
+///
+/// Variant indices must match Aptos core for BCS compatibility:
+/// - 0: `Script`
+/// - 1: `EntryFunction`
+/// - 2: `Empty`
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TransactionExecutable {
+    /// Execute a script with bytecode (variant 0).
+    Script(Script),
+    /// Call an entry function on a module (variant 1).
+    EntryFunction(EntryFunction),
+    /// No executable (variant 2), e.g. a multisig transaction whose executable
+    /// is stored on chain.
+    Empty,
+}
+
+/// Extra configuration attached to a [`TransactionPayloadInner`].
+///
+/// Variant index must be 0 (`V1`) to match Aptos core for BCS compatibility.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TransactionExtraConfig {
+    /// Version 1 (variant 0).
+    V1 {
+        /// The multisig account address, when this is a multisig transaction.
+        multisig_address: Option<crate::types::AccountAddress>,
+        /// The replay-protection nonce, present for orderless transactions.
+        replay_protection_nonce: Option<u64>,
+    },
 }
 
 /// Deprecated module bundle payload.
@@ -311,6 +415,58 @@ mod tests {
         assert_eq!(entry_fn.function, "transfer");
         assert_eq!(entry_fn.type_args.len(), 1);
         assert_eq!(entry_fn.args.len(), 2);
+    }
+
+    #[test]
+    fn test_into_orderless_wraps_entry_function() {
+        let ef = EntryFunction::apt_transfer(AccountAddress::ONE, 1).unwrap();
+        let payload = TransactionPayload::EntryFunction(ef.clone())
+            .into_orderless(0xdead_beef)
+            .unwrap();
+
+        match payload {
+            TransactionPayload::Payload(TransactionPayloadInner::V1 {
+                executable: TransactionExecutable::EntryFunction(inner),
+                extra_config:
+                    TransactionExtraConfig::V1 {
+                        multisig_address,
+                        replay_protection_nonce,
+                    },
+            }) => {
+                assert_eq!(inner, ef);
+                assert_eq!(multisig_address, None);
+                assert_eq!(replay_protection_nonce, Some(0xdead_beef));
+            }
+            other => panic!("expected orderless Payload, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_into_orderless_wraps_script() {
+        let script = Script::new(vec![0x00], vec![], vec![]);
+        let payload = TransactionPayload::Script(script.clone())
+            .into_orderless(7)
+            .unwrap();
+
+        assert!(matches!(
+            payload,
+            TransactionPayload::Payload(TransactionPayloadInner::V1 {
+                executable: TransactionExecutable::Script(_),
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn test_into_orderless_rejects_multisig() {
+        let multisig = Multisig {
+            multisig_address: AccountAddress::ONE,
+            transaction_payload: None,
+        };
+        let err = TransactionPayload::Multisig(multisig)
+            .into_orderless(1)
+            .unwrap_err();
+        assert!(matches!(err, crate::error::AptosError::Transaction(_)));
     }
 
     #[test]
