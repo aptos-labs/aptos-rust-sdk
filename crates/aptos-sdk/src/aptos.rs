@@ -338,6 +338,101 @@ impl Aptos {
         self.fullnode.submit_and_wait(&signed, timeout).await
     }
 
+    /// Builds an orderless transaction for `sender`.
+    ///
+    /// Orderless transactions use a random replay-protection **nonce** instead
+    /// of the account's sequence number, so they can be submitted in any order
+    /// (or concurrently) within a short expiration window. On the wire the chain
+    /// encodes this by setting the transaction's sequence number to
+    /// [`u64::MAX`] and carrying the nonce in a
+    /// [`TransactionPayload::Payload`](crate::transaction::TransactionPayload::Payload)
+    /// (see [`TransactionPayload::into_orderless`](crate::transaction::TransactionPayload::into_orderless)).
+    ///
+    /// `payload` must be an entry-function or script payload. Pass `nonce` to
+    /// reuse a specific nonce or `None` to generate a fresh random one. The
+    /// expiration defaults to 60 seconds, the recommended short window for
+    /// nonce-based replay protection.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if fetching the gas price or chain ID fails, if
+    /// `payload` is not an entry-function or script payload, or if the
+    /// transaction builder fails.
+    pub async fn build_orderless_transaction<A: Account>(
+        &self,
+        sender: &A,
+        payload: TransactionPayload,
+        nonce: Option<u64>,
+    ) -> AptosResult<RawTransaction> {
+        // Orderless transactions do not consume a sequence number, so only the
+        // gas price and chain ID need to be fetched.
+        let (gas_estimation, chain_id) =
+            tokio::join!(self.fullnode.estimate_gas_price(), self.ensure_chain_id());
+        let gas_estimation = gas_estimation?;
+        let chain_id = chain_id?;
+
+        let nonce = nonce.unwrap_or_else(|| rand::RngCore::next_u64(&mut rand::rngs::OsRng));
+        let orderless_payload = payload.into_orderless(nonce)?;
+
+        TransactionBuilder::new()
+            .sender(sender.address())
+            .sequence_number(u64::MAX)
+            .payload(orderless_payload)
+            .gas_unit_price(gas_estimation.data.recommended())
+            .chain_id(chain_id)
+            .expiration_from_now(60)
+            .build()
+    }
+
+    /// Builds, signs, and submits an orderless transaction.
+    ///
+    /// See [`build_orderless_transaction`](Self::build_orderless_transaction)
+    /// for the meaning of `payload` and `nonce`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if building the transaction fails, signing fails, the
+    /// transaction cannot be serialized to BCS, the HTTP request fails, or the
+    /// API returns an error status code.
+    #[cfg(feature = "ed25519")]
+    pub async fn sign_and_submit_orderless<A: Account>(
+        &self,
+        account: &A,
+        payload: TransactionPayload,
+        nonce: Option<u64>,
+    ) -> AptosResult<AptosResponse<PendingTransaction>> {
+        let raw_txn = self
+            .build_orderless_transaction(account, payload, nonce)
+            .await?;
+        let signed = crate::transaction::builder::sign_transaction(&raw_txn, account)?;
+        self.fullnode.submit_transaction(&signed).await
+    }
+
+    /// Builds, signs, submits, and waits for an orderless transaction.
+    ///
+    /// See [`build_orderless_transaction`](Self::build_orderless_transaction)
+    /// for the meaning of `payload` and `nonce`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if building the transaction fails, signing fails,
+    /// submission fails, the transaction times out waiting for commitment, the
+    /// transaction execution fails, or any HTTP/API errors occur.
+    #[cfg(feature = "ed25519")]
+    pub async fn sign_submit_and_wait_orderless<A: Account>(
+        &self,
+        account: &A,
+        payload: TransactionPayload,
+        nonce: Option<u64>,
+        timeout: Option<Duration>,
+    ) -> AptosResult<AptosResponse<serde_json::Value>> {
+        let raw_txn = self
+            .build_orderless_transaction(account, payload, nonce)
+            .await?;
+        let signed = crate::transaction::builder::sign_transaction(&raw_txn, account)?;
+        self.fullnode.submit_and_wait(&signed, timeout).await
+    }
+
     /// Submits a pre-signed transaction.
     ///
     /// # Errors
@@ -689,6 +784,61 @@ impl Aptos {
         let payload = EntryFunction::coin_transfer(coin_type, recipient, amount)?;
         self.sign_submit_and_wait(sender, payload.into(), None)
             .await
+    }
+
+    /// Transfers a fungible asset (FA standard) from one account to another.
+    ///
+    /// Uses `0x1::primary_fungible_store::transfer`, moving `amount` units of
+    /// the asset identified by `metadata` (the address of its
+    /// `0x1::fungible_asset::Metadata` object) between the sender's and
+    /// recipient's primary stores, creating the recipient's store if needed.
+    /// This is the current-standard counterpart to [`transfer_coin`](Self::transfer_coin)
+    /// and matches the TypeScript SDK's `transferFungibleAsset`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if building the transfer payload fails (e.g. invalid
+    /// address), signing fails, submission fails, the transaction times out, or
+    /// the transaction execution fails.
+    #[cfg(feature = "ed25519")]
+    pub async fn transfer_fungible_asset<A: Account>(
+        &self,
+        sender: &A,
+        metadata: AccountAddress,
+        recipient: AccountAddress,
+        amount: u64,
+    ) -> AptosResult<AptosResponse<serde_json::Value>> {
+        let payload = crate::transaction::InputEntryFunctionData::transfer_fungible_asset(
+            metadata, recipient, amount,
+        )?;
+        self.sign_submit_and_wait(sender, payload, None).await
+    }
+
+    // === Tables ===
+
+    /// Reads an item from a Move table by its key.
+    ///
+    /// Thin wrapper over [`FullnodeClient::get_table_item`] returning the stored
+    /// value directly. See that method for the meaning of `handle`, `key_type`,
+    /// `value_type`, and `key`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the request fails, the API returns an error status
+    /// code (including 404 when the key is absent), or the response cannot be
+    /// parsed as JSON.
+    pub async fn get_table_item(
+        &self,
+        handle: &str,
+        key_type: &str,
+        value_type: &str,
+        key: serde_json::Value,
+    ) -> AptosResult<serde_json::Value> {
+        let response = self
+            .fullnode
+            .get_table_item(handle, key_type, value_type, key)
+            .await?;
+        Ok(response.into_inner())
     }
 
     // === View Functions ===

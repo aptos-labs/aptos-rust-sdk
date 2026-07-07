@@ -470,6 +470,77 @@ impl FullnodeClient {
         self.get_json(url).await
     }
 
+    /// Gets a committed transaction by its ledger version.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the HTTP request fails, the API returns an error status code,
+    /// the response cannot be parsed as JSON, or the transaction is not found (404).
+    pub async fn get_transaction_by_version(
+        &self,
+        version: u64,
+    ) -> AptosResult<AptosResponse<serde_json::Value>> {
+        let url = self.build_url(&format!("transactions/by_version/{version}"));
+        self.get_json(url).await
+    }
+
+    /// Lists committed transactions, most-recent first.
+    ///
+    /// `start` is the ledger version to begin at (defaults to the most recent
+    /// transactions when `None`); `limit` bounds the page size (the fullnode
+    /// caps this regardless of the requested value).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the HTTP request fails, the API returns an error status code,
+    /// or the response cannot be parsed as JSON.
+    pub async fn get_transactions(
+        &self,
+        start: Option<u64>,
+        limit: Option<u16>,
+    ) -> AptosResult<AptosResponse<Vec<serde_json::Value>>> {
+        let mut url = self.build_url("transactions");
+        {
+            let mut query = url.query_pairs_mut();
+            if let Some(start) = start {
+                query.append_pair("start", &start.to_string());
+            }
+            if let Some(limit) = limit {
+                query.append_pair("limit", &limit.to_string());
+            }
+        }
+        self.get_json(url).await
+    }
+
+    /// Lists transactions sent by a specific account, ordered by the account's
+    /// sequence number.
+    ///
+    /// `start` is the sequence number to begin at (defaults to `0` when `None`);
+    /// `limit` bounds the page size.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the HTTP request fails, the API returns an error status code,
+    /// or the response cannot be parsed as JSON.
+    pub async fn get_account_transactions(
+        &self,
+        address: AccountAddress,
+        start: Option<u64>,
+        limit: Option<u16>,
+    ) -> AptosResult<AptosResponse<Vec<serde_json::Value>>> {
+        let mut url = self.build_url(&format!("accounts/{address}/transactions"));
+        {
+            let mut query = url.query_pairs_mut();
+            if let Some(start) = start {
+                query.append_pair("start", &start.to_string());
+            }
+            if let Some(limit) = limit {
+                query.append_pair("limit", &limit.to_string());
+            }
+        }
+        self.get_json(url).await
+    }
+
     /// Waits for a transaction to be committed.
     ///
     /// Uses exponential backoff for polling, starting at 200ms and doubling up to 2s.
@@ -764,7 +835,80 @@ impl FullnodeClient {
             .await
     }
 
+    // === Tables ===
+
+    /// Reads an item from a Move table by its key.
+    ///
+    /// Table state is not addressable as a normal account resource, so the
+    /// fullnode exposes a dedicated `POST /tables/{handle}/item` endpoint that
+    /// takes the table's key/value Move types and the (JSON-encoded) key, and
+    /// returns the stored value. This mirrors the TypeScript SDK's
+    /// `getTableItem`.
+    ///
+    /// # Arguments
+    ///
+    /// * `handle` - The table handle (the address-like `0x…` identifier of the
+    ///   `Table` on chain, e.g. read from a resource field).
+    /// * `key_type` - The Move type of the key (e.g. `address`, `u64`,
+    ///   `0x1::string::String`).
+    /// * `value_type` - The Move type of the stored value.
+    /// * `key` - The key to look up, encoded as the fullnode expects it in JSON
+    ///   (e.g. `serde_json::json!("0x1")` for an `address` key).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the request cannot be serialized, the HTTP request
+    /// fails, the API returns an error status code (including 404 when the key
+    /// is absent from the table), or the response cannot be parsed as JSON.
+    pub async fn get_table_item(
+        &self,
+        handle: &str,
+        key_type: &str,
+        value_type: &str,
+        key: serde_json::Value,
+    ) -> AptosResult<AptosResponse<serde_json::Value>> {
+        let url = self.build_url(&format!("tables/{}/item", urlencoding::encode(handle)));
+        let body = serde_json::json!({
+            "key_type": key_type,
+            "value_type": value_type,
+            "key": key,
+        });
+        self.post_json(url, &body).await
+    }
+
     // === Events ===
+
+    /// Gets events emitted from an account by their creation number.
+    ///
+    /// Each `EventHandle` an account owns has a unique creation number; this
+    /// endpoint returns the events for one such handle without needing to know
+    /// the handle's Move struct type (unlike
+    /// [`get_events_by_event_handle`](Self::get_events_by_event_handle)). Mirrors
+    /// the TypeScript SDK's `getAccountEventsByCreationNumber`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the HTTP request fails, the API returns an error status code,
+    /// or the response cannot be parsed as JSON.
+    pub async fn get_events_by_creation_number(
+        &self,
+        address: AccountAddress,
+        creation_number: u64,
+        start: Option<u64>,
+        limit: Option<u64>,
+    ) -> AptosResult<AptosResponse<Vec<serde_json::Value>>> {
+        let mut url = self.build_url(&format!("accounts/{address}/events/{creation_number}"));
+        {
+            let mut query = url.query_pairs_mut();
+            if let Some(start) = start {
+                query.append_pair("start", &start.to_string());
+            }
+            if let Some(limit) = limit {
+                query.append_pair("limit", &limit.to_string());
+            }
+        }
+        self.get_json(url).await
+    }
 
     /// Gets events by event handle.
     ///
@@ -874,6 +1018,43 @@ impl FullnodeClient {
                     let response = client
                         .get(url)
                         .header(ACCEPT, JSON_CONTENT_TYPE)
+                        .send()
+                        .await?;
+
+                    Self::handle_response_static(response, max_response_size).await
+                }
+            })
+            .await
+    }
+
+    /// Posts a JSON body and deserializes the JSON response.
+    ///
+    /// Shares the retry/backoff and bounded-response handling with
+    /// [`get_json`](Self::get_json); used by read endpoints that require a
+    /// request body (e.g. table-item lookups). Retries are safe because these
+    /// endpoints are read-only and idempotent.
+    async fn post_json<B: serde::Serialize, T: for<'de> serde::Deserialize<'de>>(
+        &self,
+        url: Url,
+        body: &B,
+    ) -> AptosResult<AptosResponse<T>> {
+        let body = serde_json::to_vec(body)?;
+        let client = self.client.clone();
+        let retry_config = self.retry_config.clone();
+        let max_response_size = self.config.pool_config().max_response_size;
+
+        let executor = RetryExecutor::from_shared(retry_config);
+        executor
+            .execute(|| {
+                let client = client.clone();
+                let url = url.clone();
+                let body = body.clone();
+                async move {
+                    let response = client
+                        .post(url)
+                        .header(CONTENT_TYPE, JSON_CONTENT_TYPE)
+                        .header(ACCEPT, JSON_CONTENT_TYPE)
+                        .body(body)
                         .send()
                         .await?;
 
@@ -1772,5 +1953,156 @@ mod tests {
         let signed = create_minimal_signed_transaction();
         let result = client.simulate_transaction(&signed).await.unwrap();
         assert!(!result.data.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_get_table_item() {
+        let server = MockServer::start().await;
+
+        // The endpoint is POST /tables/{handle}/item with a JSON body carrying
+        // the key/value Move types and the key. Pin the body so the wire format
+        // is guarded.
+        Mock::given(method("POST"))
+            .and(path_regex(r"^/v1/tables/0x[0-9a-f]+/item$"))
+            .and(wiremock::matchers::body_json(serde_json::json!({
+                "key_type": "address",
+                "value_type": "u64",
+                "key": "0x1",
+            })))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!("42")))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server);
+        let result = client
+            .get_table_item(
+                "0x0000000000000000000000000000000000000000000000000000000000000abc",
+                "address",
+                "u64",
+                serde_json::json!("0x1"),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(result.data, serde_json::json!("42"));
+    }
+
+    #[tokio::test]
+    async fn test_get_table_item_missing_key_is_404() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path_regex(r"^/v1/tables/0x[0-9a-f]+/item$"))
+            .respond_with(ResponseTemplate::new(404).set_body_json(serde_json::json!({
+                "message": "Table item not found",
+                "error_code": "table_item_not_found"
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server);
+        let err = client
+            .get_table_item("0xabc", "address", "u64", serde_json::json!("0x2"))
+            .await
+            .unwrap_err();
+
+        assert!(matches!(
+            err,
+            AptosError::Api {
+                status_code: 404,
+                ..
+            }
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_get_transaction_by_version() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/v1/transactions/by_version/100"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "version": "100",
+                "hash": "0xdead",
+                "success": true
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server);
+        let result = client.get_transaction_by_version(100).await.unwrap();
+
+        assert_eq!(result.data.get("version").unwrap(), "100");
+    }
+
+    #[tokio::test]
+    async fn test_get_transactions_with_pagination() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/v1/transactions"))
+            .and(query_param("start", "10"))
+            .and(query_param("limit", "2"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                {"version": "10"},
+                {"version": "11"}
+            ])))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server);
+        let result = client.get_transactions(Some(10), Some(2)).await.unwrap();
+
+        assert_eq!(result.data.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_get_account_transactions() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path_regex(r"^/v1/accounts/0x[0-9a-f]+/transactions$"))
+            .and(query_param("start", "0"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                {"version": "5", "sender": "0x1"}
+            ])))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server);
+        let result = client
+            .get_account_transactions(AccountAddress::ONE, Some(0), None)
+            .await
+            .unwrap();
+
+        assert_eq!(result.data.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_get_events_by_creation_number() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path_regex(r"^/v1/accounts/0x[0-9a-f]+/events/7$"))
+            .and(query_param("limit", "25"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                {"sequence_number": "0", "type": "0x1::coin::DepositEvent"}
+            ])))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server);
+        let result = client
+            .get_events_by_creation_number(AccountAddress::ONE, 7, None, Some(25))
+            .await
+            .unwrap();
+
+        assert_eq!(result.data.len(), 1);
     }
 }

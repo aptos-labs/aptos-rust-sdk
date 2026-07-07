@@ -232,6 +232,21 @@ name = "keyless_account"
 path = "examples/keyless_account.rs"
 required-features = ["keyless", "ed25519", "faucet"]
 
+[[example]]
+name = "fungible_asset_transfer"
+path = "examples/fungible_asset_transfer.rs"
+required-features = ["ed25519", "faucet"]
+
+[[example]]
+name = "orderless_transaction"
+path = "examples/orderless_transaction.rs"
+required-features = ["ed25519", "faucet"]
+
+[[example]]
+name = "table_item"
+path = "examples/table_item.rs"
+required-features = ["ed25519"]
+
 [[bin]]
 name = "aptos-codegen"
 path = "src/bin/codegen.rs"

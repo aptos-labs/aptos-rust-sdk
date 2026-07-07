@@ -102,12 +102,17 @@ pub use input::{
     InputEntryFunctionData, InputEntryFunctionDataBuilder, IntoMoveArg, MoveI128, MoveI256,
     MoveU256, functions, move_none, move_some, move_string, move_vec, types as move_types,
 };
-pub use payload::{EntryFunction, Script, ScriptArgument, TransactionPayload};
+pub use payload::{
+    EntryFunction, Script, ScriptArgument, TransactionExecutable, TransactionExtraConfig,
+    TransactionPayload, TransactionPayloadInner,
+};
 pub use simulation::{
     SimulateQueryOptions, SimulatedEvent, SimulationOptions, SimulationResult, StateChange,
     VmError, VmErrorCategory,
 };
 pub use sponsored::{PartiallySigned, Sponsor, SponsoredTransactionBuilder, sponsor_transaction};
+#[allow(deprecated)]
+// re-export retains the deprecated orderless types for source compatibility
 pub use types::{
     FeePayerRawTransaction, MultiAgentRawTransaction, RawTransaction, RawTransactionOrderless,
     SignedTransaction, SignedTransactionOrderless, TransactionInfo,

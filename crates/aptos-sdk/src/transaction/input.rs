@@ -141,6 +141,40 @@ impl InputEntryFunctionData {
             .build()
     }
 
+    /// Builds a fungible-asset transfer payload.
+    ///
+    /// Calls `0x1::primary_fungible_store::transfer`, moving `amount` units of
+    /// the fungible asset identified by `metadata` (the address of its
+    /// `0x1::fungible_asset::Metadata` object) from the sender's primary store
+    /// to the recipient's primary store, creating the recipient's store if
+    /// needed. This is the current (FA standard) counterpart to
+    /// [`transfer_coin`](Self::transfer_coin) and matches the TypeScript SDK's
+    /// `transferFungibleAsset`.
+    ///
+    /// # Arguments
+    ///
+    /// * `metadata` - Address of the fungible asset's `Metadata` object (e.g.
+    ///   `0xa` for APT as a fungible asset).
+    /// * `recipient` - The recipient address.
+    /// * `amount` - Amount in the asset's smallest unit.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the function ID or type tag is invalid, or if BCS
+    /// encoding of arguments fails.
+    pub fn transfer_fungible_asset(
+        metadata: AccountAddress,
+        recipient: AccountAddress,
+        amount: u64,
+    ) -> AptosResult<TransactionPayload> {
+        InputEntryFunctionData::new("0x1::primary_fungible_store::transfer")
+            .type_arg("0x1::fungible_asset::Metadata")
+            .arg(metadata)
+            .arg(recipient)
+            .arg(amount)
+            .build()
+    }
+
     /// Builds an account creation payload.
     ///
     /// # Arguments
@@ -713,6 +747,29 @@ mod tests {
                 assert_eq!(ef.function, "transfer");
                 assert_eq!(ef.module.name.as_str(), "coin");
                 assert_eq!(ef.type_args.len(), 1);
+            }
+            _ => panic!("Expected EntryFunction"),
+        }
+    }
+
+    #[test]
+    fn test_transfer_fungible_asset_helper() {
+        let metadata = AccountAddress::from_hex("0xa").unwrap();
+        let recipient = AccountAddress::from_hex("0x789").unwrap();
+        let payload =
+            InputEntryFunctionData::transfer_fungible_asset(metadata, recipient, 1000).unwrap();
+
+        match payload {
+            TransactionPayload::EntryFunction(ef) => {
+                assert_eq!(ef.function, "transfer");
+                assert_eq!(ef.module.name.as_str(), "primary_fungible_store");
+                // One type argument: the Metadata object type.
+                assert_eq!(ef.type_args.len(), 1);
+                // Three args: metadata object address, recipient, amount.
+                assert_eq!(ef.args.len(), 3);
+                // The metadata `Object<Metadata>` is BCS-encoded as its address.
+                assert_eq!(ef.args[0], aptos_bcs::to_bytes(&metadata).unwrap());
+                assert_eq!(ef.args[2], aptos_bcs::to_bytes(&1000u64).unwrap());
             }
             _ => panic!("Expected EntryFunction"),
         }

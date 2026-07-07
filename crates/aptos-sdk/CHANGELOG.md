@@ -14,6 +14,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `rand` 0.9.x (RUSTSEC-2026-0097, unsound with custom loggers).
 
 ### Added
+- Fullnode table-item reads: `FullnodeClient::get_table_item(handle, key_type,
+  value_type, key)` and the convenience wrapper `Aptos::get_table_item(...)`
+  call `POST /tables/{handle}/item`, matching the TypeScript SDK's
+  `getTableItem`. This unblocks reading Move `Table` state, which is not exposed
+  as a normal account resource.
+- Additional fullnode read endpoints for TypeScript-SDK parity:
+  `FullnodeClient::get_transaction_by_version(version)`,
+  `get_transactions(start, limit)` (list committed transactions),
+  `get_account_transactions(address, start, limit)`, and
+  `get_events_by_creation_number(address, creation_number, start, limit)`
+  (`getAccountEventsByCreationNumber`).
+- Fungible Asset (FA standard) transfers:
+  `InputEntryFunctionData::transfer_fungible_asset(metadata, recipient, amount)`
+  (payload builder for `0x1::primary_fungible_store::transfer`) and the
+  high-level `Aptos::transfer_fungible_asset(sender, metadata, recipient,
+  amount)`, the current-standard counterpart to `transfer_coin` and match for
+  the TypeScript SDK's `transferFungibleAsset`.
+- Chain-compatible **orderless transactions** (replay protection via a nonce
+  instead of a sequence number). New `TransactionPayload::Payload` variant
+  (BCS index 4) with `TransactionPayloadInner`, `TransactionExecutable`, and
+  `TransactionExtraConfig`, plus `TransactionPayload::into_orderless(nonce)` and
+  the `Aptos` helpers `build_orderless_transaction`,
+  `sign_and_submit_orderless`, and `sign_submit_and_wait_orderless`. These
+  produce an ordinary `RawTransaction` with `sequence_number = u64::MAX` and a
+  `TransactionExtraConfig::V1 { replay_protection_nonce: Some(nonce), .. }`,
+  matching aptos-core's on-wire format (pinned by a BCS wire-format test).
 - Keyless (OIDC) documentation: expanded module-level docs on
   [`account::keyless`](https://docs.rs/aptos-sdk/latest/aptos_sdk/account/keyless/index.html),
   a `keyless_account` example, and [`Network::pepper_url`] /
@@ -48,6 +74,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   JSON-decoded result values. Unlike `view_bcs`, this round-trips non-trivial
   Move argument types such as `Option<String>` correctly, not just addresses.
 - `FullnodeClient::config()` -- exposes the `AptosConfig` backing the client.
+
+### Deprecated
+- `transaction::RawTransactionOrderless` and
+  `transaction::SignedTransactionOrderless` are deprecated. They are a
+  non-standard, homegrown orderless representation (32-byte nonce plus an
+  `APTOS::RawTransactionOrderless` signing-domain separator) that the Aptos
+  fullnode does **not** accept, so any transaction built with them would be
+  rejected. Use the chain-compatible orderless support added in this release:
+  `TransactionPayload::into_orderless` or the `Aptos::*_orderless` helpers.
 
 ## [0.5.0] - 2026-05-21
 

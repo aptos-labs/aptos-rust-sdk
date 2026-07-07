@@ -28,6 +28,8 @@ use aptos_sdk::transaction::authenticator::{
     Ed25519Signature as AuthEd25519Signature,
 };
 use aptos_sdk::transaction::payload::EntryFunction;
+#[allow(deprecated)]
+// `RawTransactionOrderless` is deprecated but still pinned by a test below
 use aptos_sdk::transaction::types::{RawTransaction, RawTransactionOrderless};
 use aptos_sdk::types::{AccountAddress, ChainId, TypeTag};
 
@@ -125,9 +127,13 @@ fn raw_transaction_bcs_layout_is_reproducible() {
 }
 
 #[test]
+#[allow(deprecated)] // pins the behavior of the deprecated homegrown orderless type
 fn orderless_signing_message_uses_distinct_prefix() {
-    // Orderless replay protection swaps the domain prefix; the nonce stays
-    // user-supplied so we use a fixed value to keep the message reproducible.
+    // NOTE: `RawTransactionOrderless` is the deprecated, non-standard orderless
+    // representation (kept for source compatibility). This test pins its own
+    // signing-message behavior; it is NOT the chain's orderless wire format.
+    // The chain-compatible path is `TransactionPayload::into_orderless` (see
+    // `orderless_payload_bcs_layout_is_pinned`).
     let raw = RawTransactionOrderless::with_nonce(
         AccountAddress::ONE,
         vec![0xde, 0xad, 0xbe, 0xef],
@@ -145,6 +151,80 @@ fn orderless_signing_message_uses_distinct_prefix() {
     // The orderless prefix MUST differ from the sequenced one -- a regression
     // that aliased them would let orderless txns replay forever.
     assert_ne!(expected_prefix, sha3_256(b"APTOS::RawTransaction"));
+}
+
+/// Full BCS layout of a **chain-compatible** orderless transaction: an ordinary
+/// `RawTransaction` with `sequence_number == u64::MAX` carrying a
+/// `TransactionPayload::Payload` whose extra config holds a replay-protection
+/// nonce. Variant indices are pinned to match aptos-core: `Payload` = 4,
+/// `TransactionPayloadInner::V1` = 0, `TransactionExecutable::EntryFunction` = 1,
+/// `TransactionExtraConfig::V1` = 0. A drift here means orderless transactions
+/// this SDK builds would be rejected (or mis-parsed) by the fullnode.
+#[test]
+fn orderless_payload_bcs_layout_is_pinned() {
+    const NONCE: u64 = 0xdead_beef;
+    let payload = fixed_apt_transfer_payload().into_orderless(NONCE).unwrap();
+    let raw = RawTransaction {
+        sender: AccountAddress::ONE,
+        sequence_number: u64::MAX,
+        payload,
+        max_gas_amount: 100_000,
+        gas_unit_price: 100,
+        expiration_timestamp_secs: FIXED_EXPIRATION,
+        chain_id: ChainId::testnet(),
+    };
+    let hex = const_hex::encode(raw.to_bcs().unwrap());
+
+    // sender (32B ..01) || seq = u64::MAX (ffffffffffffffff) || payload variant
+    // 4 (04) || inner V1 (00) || executable EntryFunction (01) ...
+    assert!(
+        hex.starts_with(
+            "0000000000000000000000000000000000000000000000000000000000000001\
+             ffffffffffffffff\
+             040001"
+                .split_whitespace()
+                .collect::<String>()
+                .as_str()
+        ),
+        "orderless leading bytes (sender / seq=MAX / payload=4 / inner=0 / exec=1) drifted: {hex}",
+    );
+
+    // Extra config: V1 (00) || multisig_address None (00) || nonce Some (01) ||
+    // nonce u64 LE. 0xdeadbeef -> efbeadde00000000.
+    assert!(
+        hex.contains("000001efbeadde00000000"),
+        "orderless extra-config / nonce encoding drifted: {hex}",
+    );
+
+    // Trailer: max_gas (a086010000000000) || gas_unit_price (6400000000000000)
+    // || expiration (ffe30b5402000000) || chain id testnet (02).
+    assert!(
+        hex.ends_with("a0860100000000006400000000000000ffe30b540200000002"),
+        "orderless trailer (gas / expiration / chain) drifted: {hex}",
+    );
+}
+
+/// The chain-compatible orderless path is an ordinary `RawTransaction`, so it
+/// signs under the standard `APTOS::RawTransaction` domain separator -- NOT the
+/// deprecated `APTOS::RawTransactionOrderless` prefix.
+#[test]
+fn orderless_transaction_uses_standard_signing_prefix() {
+    let payload = fixed_apt_transfer_payload().into_orderless(1).unwrap();
+    let raw = RawTransaction {
+        sender: AccountAddress::ONE,
+        sequence_number: u64::MAX,
+        payload,
+        max_gas_amount: 100_000,
+        gas_unit_price: 100,
+        expiration_timestamp_secs: FIXED_EXPIRATION,
+        chain_id: ChainId::testnet(),
+    };
+    let msg = raw.signing_message().unwrap();
+    assert_eq!(
+        &msg[..32],
+        &sha3_256(b"APTOS::RawTransaction")[..],
+        "orderless transactions must sign under the standard RawTransaction prefix",
+    );
 }
 
 #[test]

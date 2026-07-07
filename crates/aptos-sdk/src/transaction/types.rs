@@ -90,6 +90,13 @@ impl RawTransaction {
 /// Orderless transactions must be configured with a very short expiration time
 /// (recommended: 60 seconds or less) since the replay protection relies on
 /// the chain remembering recently seen transaction hashes.
+#[deprecated(
+    since = "0.6.0",
+    note = "This is a non-standard, homegrown orderless format (32-byte nonce + `APTOS::RawTransactionOrderless` \
+            domain separator) that the Aptos fullnode does NOT accept. Use the chain-compatible orderless \
+            support instead: `TransactionPayload::into_orderless` or \
+            `Aptos::{build_orderless_transaction, sign_and_submit_orderless, sign_submit_and_wait_orderless}`."
+)]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RawTransactionOrderless {
     /// Sender's address.
@@ -109,6 +116,7 @@ pub struct RawTransactionOrderless {
     pub chain_id: ChainId,
 }
 
+#[allow(deprecated)] // inherent impl of a deprecated (kept-for-compat) type
 impl RawTransactionOrderless {
     /// Creates a new orderless transaction with a random nonce.
     pub fn new(
@@ -180,6 +188,13 @@ impl RawTransactionOrderless {
 }
 
 /// A signed orderless transaction ready for submission.
+#[deprecated(
+    since = "0.6.0",
+    note = "This wraps the non-standard `RawTransactionOrderless` and is NOT accepted by the Aptos fullnode. \
+            Use the chain-compatible orderless support instead: `TransactionPayload::into_orderless` or \
+            `Aptos::{build_orderless_transaction, sign_and_submit_orderless, sign_submit_and_wait_orderless}`."
+)]
+#[allow(deprecated)] // the `raw_txn` field references the deprecated `RawTransactionOrderless`
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SignedTransactionOrderless {
     /// The orderless raw transaction.
@@ -188,6 +203,7 @@ pub struct SignedTransactionOrderless {
     pub authenticator: TransactionAuthenticator,
 }
 
+#[allow(deprecated)] // inherent impl of a deprecated (kept-for-compat) type
 impl SignedTransactionOrderless {
     /// Creates a new signed orderless transaction.
     pub fn new(raw_txn: RawTransactionOrderless, authenticator: TransactionAuthenticator) -> Self {
@@ -1003,6 +1019,7 @@ mod tests {
         );
     }
 
+    #[allow(deprecated)] // exercises the deprecated homegrown orderless types
     fn create_test_orderless_transaction() -> RawTransactionOrderless {
         RawTransactionOrderless::with_nonce(
             AccountAddress::ONE,
@@ -1024,6 +1041,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_orderless_transaction_with_nonce() {
         let nonce = vec![0xab; 32];
         let txn = RawTransactionOrderless::with_nonce(
@@ -1047,6 +1065,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_orderless_transaction_new_generates_random_nonce() {
         let txn1 = RawTransactionOrderless::new(
             AccountAddress::ONE,
@@ -1082,6 +1101,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_orderless_transaction_signing_message() {
         let txn = create_test_orderless_transaction();
         let message = txn.signing_message().unwrap();
@@ -1091,6 +1111,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_orderless_transaction_bcs() {
         let txn = create_test_orderless_transaction();
         let bcs = txn.to_bcs().unwrap();
@@ -1098,6 +1119,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_signed_orderless_transaction() {
         use crate::transaction::authenticator::{Ed25519PublicKey, Ed25519Signature};
         let txn = create_test_orderless_transaction();
@@ -1111,6 +1133,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_signed_orderless_transaction_bcs() {
         use crate::transaction::authenticator::{Ed25519PublicKey, Ed25519Signature};
         let txn = create_test_orderless_transaction();
@@ -1124,6 +1147,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_signed_orderless_transaction_hash() {
         use crate::transaction::authenticator::{Ed25519PublicKey, Ed25519Signature};
         let txn = create_test_orderless_transaction();
