@@ -2201,8 +2201,11 @@ mod digital_asset_tests {
     #[ignore]
     async fn e2e_create_mint_transfer_digital_asset() {
         let aptos = Aptos::new(get_test_config()).expect("failed to create client");
+        // Fund generously: the SDK reserves `max_gas_amount * gas_unit_price`
+        // (2_000_000 * 100 = 200M octas) as the per-transaction fee ceiling, so a
+        // sender must keep more than that free to submit several transactions.
         let creator = aptos
-            .create_funded_account(200_000_000)
+            .create_funded_account(500_000_000)
             .await
             .expect("failed to create creator");
 
@@ -2300,8 +2303,12 @@ mod rotation_tests {
     #[ignore]
     async fn e2e_rotate_auth_key() {
         let aptos = Aptos::new(get_test_config()).expect("failed to create client");
+        // Fund generously: the SDK reserves `max_gas_amount * gas_unit_price`
+        // (2_000_000 * 100 = 200M octas) as the per-transaction fee ceiling, so
+        // the account must keep more than that free to both rotate and then send
+        // a transaction with the rotated key.
         let account = aptos
-            .create_funded_account(200_000_000)
+            .create_funded_account(500_000_000)
             .await
             .expect("failed to create account");
         let address = account.address();
