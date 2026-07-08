@@ -73,6 +73,7 @@ mod mnemonic;
 #[cfg(feature = "ed25519")]
 mod multi_ed25519;
 mod multi_key;
+mod rotation;
 #[cfg(feature = "secp256k1")]
 mod secp256k1;
 #[cfg(feature = "secp256r1")]
@@ -94,6 +95,7 @@ pub use mnemonic::{DerivationPath, Mnemonic, PathComponent};
 #[cfg(feature = "ed25519")]
 pub use multi_ed25519::MultiEd25519Account;
 pub use multi_key::{AnyPrivateKey, MultiKeyAccount};
+pub use rotation::{RotationProofChallenge, build_rotate_auth_key_payload};
 #[cfg(feature = "secp256k1")]
 pub use secp256k1::Secp256k1Account;
 #[cfg(feature = "secp256r1")]

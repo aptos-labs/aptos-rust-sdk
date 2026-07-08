@@ -2184,3 +2184,170 @@ mod read_endpoint_tests {
         }
     }
 }
+
+// =============================================================================
+// Digital Asset (NFT) Tests
+// =============================================================================
+
+#[cfg(all(feature = "ed25519", feature = "faucet"))]
+mod digital_asset_tests {
+    use super::*;
+    use aptos_sdk::account::Ed25519Account;
+    use aptos_sdk::transaction::{CollectionConfig, InputEntryFunctionData};
+    use aptos_sdk::types::AccountAddress;
+
+    /// Creates a collection, mints a token, transfers it, then burns another.
+    #[tokio::test]
+    #[ignore]
+    async fn e2e_create_mint_transfer_digital_asset() {
+        let aptos = Aptos::new(get_test_config()).expect("failed to create client");
+        let creator = aptos
+            .create_funded_account(200_000_000)
+            .await
+            .expect("failed to create creator");
+
+        let collection_name = "E2E Collection";
+
+        // Create collection.
+        let create = InputEntryFunctionData::create_collection(
+            "e2e",
+            100,
+            collection_name,
+            "https://example.com/c",
+            CollectionConfig::default(),
+            0,
+            100,
+        )
+        .expect("build create_collection");
+        let created = aptos
+            .sign_submit_and_wait(&creator, create, None)
+            .await
+            .expect("create collection");
+        assert_eq!(
+            created
+                .data
+                .get("success")
+                .and_then(serde_json::Value::as_bool),
+            Some(true),
+        );
+
+        // Mint a token.
+        let mint = InputEntryFunctionData::mint_digital_asset(
+            collection_name,
+            "e2e token",
+            "Token #1",
+            "https://example.com/t/1",
+            vec![],
+            vec![],
+            vec![],
+        )
+        .expect("build mint");
+        let minted = aptos
+            .sign_submit_and_wait(&creator, mint, None)
+            .await
+            .expect("mint");
+        assert_eq!(
+            minted
+                .data
+                .get("success")
+                .and_then(serde_json::Value::as_bool),
+            Some(true),
+        );
+
+        // Extract the minted token object address from the events.
+        let token = minted
+            .data
+            .get("events")
+            .and_then(|e| e.as_array())
+            .and_then(|events| {
+                events.iter().find_map(|ev| {
+                    ev.get("data")
+                        .and_then(|d| d.get("token"))
+                        .and_then(|t| t.as_str())
+                        .and_then(|s| AccountAddress::from_hex(s).ok())
+                })
+            })
+            .expect("minted token address in events");
+        println!("Minted token: {token}");
+
+        // Transfer it to a new owner.
+        let recipient = Ed25519Account::generate();
+        let transferred = aptos
+            .transfer_digital_asset(&creator, token, recipient.address())
+            .await
+            .expect("transfer digital asset");
+        assert_eq!(
+            transferred
+                .data
+                .get("success")
+                .and_then(serde_json::Value::as_bool),
+            Some(true),
+        );
+    }
+}
+
+// =============================================================================
+// Authentication Key Rotation Tests
+// =============================================================================
+
+#[cfg(all(feature = "ed25519", feature = "faucet"))]
+mod rotation_tests {
+    use super::*;
+    use aptos_sdk::account::{Account, Ed25519Account};
+
+    /// Rotates an account's key and proves the new key controls the same address.
+    #[tokio::test]
+    #[ignore]
+    async fn e2e_rotate_auth_key() {
+        let aptos = Aptos::new(get_test_config()).expect("failed to create client");
+        let account = aptos
+            .create_funded_account(200_000_000)
+            .await
+            .expect("failed to create account");
+        let address = account.address();
+
+        let new_key = Ed25519Account::generate();
+        let rotate = aptos
+            .rotate_auth_key(&account, &new_key, None)
+            .await
+            .expect("rotation should succeed");
+        assert_eq!(
+            rotate
+                .data
+                .get("success")
+                .and_then(serde_json::Value::as_bool),
+            Some(true),
+        );
+
+        // The on-chain authentication key should now equal the new key's auth key.
+        let info = aptos
+            .fullnode()
+            .get_account(address)
+            .await
+            .expect("get account");
+        let onchain_bytes =
+            const_hex::decode(info.data.authentication_key.trim_start_matches("0x"))
+                .expect("auth key hex");
+        let expected: [u8; 32] = new_key.authentication_key().into();
+        assert_eq!(
+            onchain_bytes, expected,
+            "on-chain auth key should match the rotated-to key",
+        );
+
+        // The new key, paired with the original address, can now send transactions.
+        let rotated =
+            Ed25519Account::from_private_key(new_key.private_key().clone()).with_address(address);
+        let recipient = Ed25519Account::generate();
+        let result = aptos
+            .transfer_apt(&rotated, recipient.address(), 1_000_000)
+            .await
+            .expect("transfer with rotated key");
+        assert_eq!(
+            result
+                .data
+                .get("success")
+                .and_then(serde_json::Value::as_bool),
+            Some(true),
+        );
+    }
+}

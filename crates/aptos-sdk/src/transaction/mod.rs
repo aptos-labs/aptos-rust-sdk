@@ -99,8 +99,9 @@ pub use builder::{
     sign_transaction,
 };
 pub use input::{
-    InputEntryFunctionData, InputEntryFunctionDataBuilder, IntoMoveArg, MoveI128, MoveI256,
-    MoveU256, functions, move_none, move_some, move_string, move_vec, types as move_types,
+    CollectionConfig, InputEntryFunctionData, InputEntryFunctionDataBuilder, IntoMoveArg, MoveI128,
+    MoveI256, MoveU256, functions, move_none, move_some, move_string, move_vec,
+    types as move_types,
 };
 pub use payload::{
     EntryFunction, Script, ScriptArgument, TransactionExecutable, TransactionExtraConfig,

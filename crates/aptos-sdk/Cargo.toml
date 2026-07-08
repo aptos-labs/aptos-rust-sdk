@@ -247,6 +247,16 @@ name = "table_item"
 path = "examples/table_item.rs"
 required-features = ["ed25519"]
 
+[[example]]
+name = "digital_asset"
+path = "examples/digital_asset.rs"
+required-features = ["ed25519", "faucet"]
+
+[[example]]
+name = "rotate_auth_key"
+path = "examples/rotate_auth_key.rs"
+required-features = ["ed25519", "faucet"]
+
 [[bin]]
 name = "aptos-codegen"
 path = "src/bin/codegen.rs"

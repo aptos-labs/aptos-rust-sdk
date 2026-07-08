@@ -251,6 +251,354 @@ impl InputEntryFunctionData {
             .arg(code)
             .build()
     }
+
+    // === Objects ===
+
+    /// Builds a payload to transfer ownership of an object.
+    ///
+    /// Calls `0x1::object::transfer_call`, which moves the object at address
+    /// `object` to `to`. Works for any object (including digital assets); for a
+    /// typed transfer use [`transfer_digital_asset`](Self::transfer_digital_asset).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the function ID is invalid or if BCS encoding fails.
+    pub fn transfer_object(
+        object: AccountAddress,
+        to: AccountAddress,
+    ) -> AptosResult<TransactionPayload> {
+        InputEntryFunctionData::new("0x1::object::transfer_call")
+            .arg(object)
+            .arg(to)
+            .build()
+    }
+
+    // === Digital Assets (Token Objects) ===
+
+    /// Builds a payload to transfer a digital asset (NFT) to another address.
+    ///
+    /// Calls `0x1::object::transfer` with the `0x4::token::Token` type, matching
+    /// the TypeScript SDK's `transferDigitalAsset`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the function ID or type tag is invalid or if BCS
+    /// encoding fails.
+    pub fn transfer_digital_asset(
+        token: AccountAddress,
+        to: AccountAddress,
+    ) -> AptosResult<TransactionPayload> {
+        InputEntryFunctionData::new("0x1::object::transfer")
+            .type_arg("0x4::token::Token")
+            .arg(token)
+            .arg(to)
+            .build()
+    }
+
+    /// Builds a payload to create a digital-asset collection
+    /// (`0x4::aptos_token::create_collection`).
+    ///
+    /// `config` controls the collection/token mutability and burn/freeze
+    /// permissions ([`CollectionConfig::default`] enables all of them, matching
+    /// the most permissive TypeScript SDK defaults). `royalty_numerator /
+    /// royalty_denominator` express the royalty as a fraction (use `0 / 1` for
+    /// none).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the function ID is invalid or if BCS encoding fails.
+    #[allow(clippy::too_many_arguments)]
+    pub fn create_collection(
+        description: &str,
+        max_supply: u64,
+        name: &str,
+        uri: &str,
+        config: CollectionConfig,
+        royalty_numerator: u64,
+        royalty_denominator: u64,
+    ) -> AptosResult<TransactionPayload> {
+        InputEntryFunctionData::new("0x4::aptos_token::create_collection")
+            .arg(description)
+            .arg(max_supply)
+            .arg(name)
+            .arg(uri)
+            .arg(config.mutable_description)
+            .arg(config.mutable_royalty)
+            .arg(config.mutable_uri)
+            .arg(config.mutable_token_description)
+            .arg(config.mutable_token_name)
+            .arg(config.mutable_token_properties)
+            .arg(config.mutable_token_uri)
+            .arg(config.tokens_burnable_by_creator)
+            .arg(config.tokens_freezable_by_creator)
+            .arg(royalty_numerator)
+            .arg(royalty_denominator)
+            .build()
+    }
+
+    /// Builds a payload to mint a digital asset into a collection
+    /// (`0x4::aptos_token::mint`).
+    ///
+    /// The three property vectors must be equal length (a key, a Move type
+    /// string, and BCS-encoded value per property); pass empty vectors for no
+    /// properties.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the function ID is invalid or if BCS encoding fails.
+    pub fn mint_digital_asset(
+        collection: &str,
+        description: &str,
+        name: &str,
+        uri: &str,
+        property_keys: Vec<String>,
+        property_types: Vec<String>,
+        property_values: Vec<Vec<u8>>,
+    ) -> AptosResult<TransactionPayload> {
+        InputEntryFunctionData::new("0x4::aptos_token::mint")
+            .arg(collection)
+            .arg(description)
+            .arg(name)
+            .arg(uri)
+            .arg(property_keys)
+            .arg(property_types)
+            .arg(property_values)
+            .build()
+    }
+
+    /// Builds a payload to mint a soul-bound (non-transferable) digital asset
+    /// (`0x4::aptos_token::mint_soul_bound`), bound to `soul_bound_to`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the function ID is invalid or if BCS encoding fails.
+    pub fn mint_soul_bound_digital_asset(
+        collection: &str,
+        description: &str,
+        name: &str,
+        uri: &str,
+        property_keys: Vec<String>,
+        property_types: Vec<String>,
+        property_values: Vec<Vec<u8>>,
+        soul_bound_to: AccountAddress,
+    ) -> AptosResult<TransactionPayload> {
+        InputEntryFunctionData::new("0x4::aptos_token::mint_soul_bound")
+            .arg(collection)
+            .arg(description)
+            .arg(name)
+            .arg(uri)
+            .arg(property_keys)
+            .arg(property_types)
+            .arg(property_values)
+            .arg(soul_bound_to)
+            .build()
+    }
+
+    /// Builds a payload to burn a digital asset (`0x4::aptos_token::burn`).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the function ID or type tag is invalid or if BCS
+    /// encoding fails.
+    pub fn burn_digital_asset(token: AccountAddress) -> AptosResult<TransactionPayload> {
+        InputEntryFunctionData::new("0x4::aptos_token::burn")
+            .type_arg("0x4::token::Token")
+            .arg(token)
+            .build()
+    }
+
+    /// Builds a payload to freeze transfers of a digital asset
+    /// (`0x4::aptos_token::freeze_transfer`).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the function ID or type tag is invalid or if BCS
+    /// encoding fails.
+    pub fn freeze_digital_asset_transfer(token: AccountAddress) -> AptosResult<TransactionPayload> {
+        InputEntryFunctionData::new("0x4::aptos_token::freeze_transfer")
+            .type_arg("0x4::token::Token")
+            .arg(token)
+            .build()
+    }
+
+    /// Builds a payload to unfreeze transfers of a digital asset
+    /// (`0x4::aptos_token::unfreeze_transfer`).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the function ID or type tag is invalid or if BCS
+    /// encoding fails.
+    pub fn unfreeze_digital_asset_transfer(
+        token: AccountAddress,
+    ) -> AptosResult<TransactionPayload> {
+        InputEntryFunctionData::new("0x4::aptos_token::unfreeze_transfer")
+            .type_arg("0x4::token::Token")
+            .arg(token)
+            .build()
+    }
+
+    // === Staking (delegation pool) ===
+
+    /// Builds a payload to add stake to a delegation pool
+    /// (`0x1::delegation_pool::add_stake`).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the function ID is invalid or if BCS encoding fails.
+    pub fn delegation_add_stake(
+        pool_address: AccountAddress,
+        amount: u64,
+    ) -> AptosResult<TransactionPayload> {
+        InputEntryFunctionData::new("0x1::delegation_pool::add_stake")
+            .arg(pool_address)
+            .arg(amount)
+            .build()
+    }
+
+    /// Builds a payload to unlock stake from a delegation pool
+    /// (`0x1::delegation_pool::unlock`). Unlocked stake becomes withdrawable
+    /// after the pool's lockup expires.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the function ID is invalid or if BCS encoding fails.
+    pub fn delegation_unlock(
+        pool_address: AccountAddress,
+        amount: u64,
+    ) -> AptosResult<TransactionPayload> {
+        InputEntryFunctionData::new("0x1::delegation_pool::unlock")
+            .arg(pool_address)
+            .arg(amount)
+            .build()
+    }
+
+    /// Builds a payload to reactivate previously-unlocked stake
+    /// (`0x1::delegation_pool::reactivate_stake`).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the function ID is invalid or if BCS encoding fails.
+    pub fn delegation_reactivate_stake(
+        pool_address: AccountAddress,
+        amount: u64,
+    ) -> AptosResult<TransactionPayload> {
+        InputEntryFunctionData::new("0x1::delegation_pool::reactivate_stake")
+            .arg(pool_address)
+            .arg(amount)
+            .build()
+    }
+
+    /// Builds a payload to withdraw unlocked stake from a delegation pool
+    /// (`0x1::delegation_pool::withdraw`).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the function ID is invalid or if BCS encoding fails.
+    pub fn delegation_withdraw(
+        pool_address: AccountAddress,
+        amount: u64,
+    ) -> AptosResult<TransactionPayload> {
+        InputEntryFunctionData::new("0x1::delegation_pool::withdraw")
+            .arg(pool_address)
+            .arg(amount)
+            .build()
+    }
+
+    // === Account Abstraction (AIP-113) ===
+
+    /// Builds a payload to enable account abstraction by registering a custom
+    /// authentication function (`0x1::account_abstraction::add_authentication_function`).
+    ///
+    /// The function is identified by the module it lives in (`module_address` +
+    /// `module_name`) and its `function_name`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the function ID is invalid or if BCS encoding fails.
+    pub fn add_authentication_function(
+        module_address: AccountAddress,
+        module_name: &str,
+        function_name: &str,
+    ) -> AptosResult<TransactionPayload> {
+        InputEntryFunctionData::new("0x1::account_abstraction::add_authentication_function")
+            .arg(module_address)
+            .arg(module_name)
+            .arg(function_name)
+            .build()
+    }
+
+    /// Builds a payload to remove a previously-registered authentication
+    /// function (`0x1::account_abstraction::remove_authentication_function`).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the function ID is invalid or if BCS encoding fails.
+    pub fn remove_authentication_function(
+        module_address: AccountAddress,
+        module_name: &str,
+        function_name: &str,
+    ) -> AptosResult<TransactionPayload> {
+        InputEntryFunctionData::new("0x1::account_abstraction::remove_authentication_function")
+            .arg(module_address)
+            .arg(module_name)
+            .arg(function_name)
+            .build()
+    }
+
+    /// Builds a payload to fully disable account abstraction, removing all
+    /// registered authentication functions
+    /// (`0x1::account_abstraction::remove_authenticator`).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the function ID is invalid or if BCS encoding fails.
+    pub fn remove_authenticator() -> AptosResult<TransactionPayload> {
+        InputEntryFunctionData::new("0x1::account_abstraction::remove_authenticator").build()
+    }
+}
+
+/// Mutability and permission configuration for
+/// [`InputEntryFunctionData::create_collection`].
+///
+/// [`Default`] enables every mutability flag and both burn/freeze permissions,
+/// matching the most permissive collection configuration. Set individual fields
+/// to `false` to lock down a collection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CollectionConfig {
+    /// Whether the collection description can be changed later.
+    pub mutable_description: bool,
+    /// Whether the collection royalty can be changed later.
+    pub mutable_royalty: bool,
+    /// Whether the collection URI can be changed later.
+    pub mutable_uri: bool,
+    /// Whether token descriptions can be changed later.
+    pub mutable_token_description: bool,
+    /// Whether token names can be changed later.
+    pub mutable_token_name: bool,
+    /// Whether token properties can be changed later.
+    pub mutable_token_properties: bool,
+    /// Whether token URIs can be changed later.
+    pub mutable_token_uri: bool,
+    /// Whether the creator may burn tokens in this collection.
+    pub tokens_burnable_by_creator: bool,
+    /// Whether the creator may freeze token transfers in this collection.
+    pub tokens_freezable_by_creator: bool,
+}
+
+impl Default for CollectionConfig {
+    fn default() -> Self {
+        Self {
+            mutable_description: true,
+            mutable_royalty: true,
+            mutable_uri: true,
+            mutable_token_description: true,
+            mutable_token_name: true,
+            mutable_token_properties: true,
+            mutable_token_uri: true,
+            tokens_burnable_by_creator: true,
+            tokens_freezable_by_creator: true,
+        }
+    }
 }
 
 /// Builder for `InputEntryFunctionData`.
@@ -770,6 +1118,140 @@ mod tests {
                 // The metadata `Object<Metadata>` is BCS-encoded as its address.
                 assert_eq!(ef.args[0], aptos_bcs::to_bytes(&metadata).unwrap());
                 assert_eq!(ef.args[2], aptos_bcs::to_bytes(&1000u64).unwrap());
+            }
+            _ => panic!("Expected EntryFunction"),
+        }
+    }
+
+    #[test]
+    fn test_transfer_object_helper() {
+        let object = AccountAddress::from_hex("0xbeef").unwrap();
+        let to = AccountAddress::from_hex("0x789").unwrap();
+        let payload = InputEntryFunctionData::transfer_object(object, to).unwrap();
+        match payload {
+            TransactionPayload::EntryFunction(ef) => {
+                assert_eq!(ef.module.name.as_str(), "object");
+                assert_eq!(ef.function, "transfer_call");
+                assert_eq!(ef.args.len(), 2);
+                assert!(ef.type_args.is_empty());
+            }
+            _ => panic!("Expected EntryFunction"),
+        }
+    }
+
+    #[test]
+    fn test_transfer_digital_asset_helper() {
+        let token = AccountAddress::from_hex("0xdead").unwrap();
+        let to = AccountAddress::from_hex("0x789").unwrap();
+        let payload = InputEntryFunctionData::transfer_digital_asset(token, to).unwrap();
+        match payload {
+            TransactionPayload::EntryFunction(ef) => {
+                assert_eq!(ef.module.name.as_str(), "object");
+                assert_eq!(ef.function, "transfer");
+                assert_eq!(ef.type_args.len(), 1, "should carry the Token object type");
+                assert_eq!(ef.args.len(), 2);
+            }
+            _ => panic!("Expected EntryFunction"),
+        }
+    }
+
+    #[test]
+    fn test_create_collection_arg_shape() {
+        let payload = InputEntryFunctionData::create_collection(
+            "desc",
+            100,
+            "My Collection",
+            "https://example.com",
+            CollectionConfig::default(),
+            5,
+            100,
+        )
+        .unwrap();
+        match payload {
+            TransactionPayload::EntryFunction(ef) => {
+                assert_eq!(ef.module.address, AccountAddress::from_hex("0x4").unwrap());
+                assert_eq!(ef.module.name.as_str(), "aptos_token");
+                assert_eq!(ef.function, "create_collection");
+                // 4 leading fields + 9 config flags + 2 royalty = 15 args.
+                assert_eq!(ef.args.len(), 15);
+            }
+            _ => panic!("Expected EntryFunction"),
+        }
+    }
+
+    #[test]
+    fn test_mint_digital_asset_arg_shape() {
+        let payload = InputEntryFunctionData::mint_digital_asset(
+            "My Collection",
+            "desc",
+            "Token #1",
+            "https://example.com/1",
+            vec!["level".to_string()],
+            vec!["u64".to_string()],
+            vec![aptos_bcs::to_bytes(&1u64).unwrap()],
+        )
+        .unwrap();
+        match payload {
+            TransactionPayload::EntryFunction(ef) => {
+                assert_eq!(ef.function, "mint");
+                assert_eq!(ef.args.len(), 7);
+            }
+            _ => panic!("Expected EntryFunction"),
+        }
+    }
+
+    #[test]
+    fn test_delegation_helpers() {
+        let pool = AccountAddress::from_hex("0x5").unwrap();
+        for (payload, func) in [
+            (
+                InputEntryFunctionData::delegation_add_stake(pool, 1000).unwrap(),
+                "add_stake",
+            ),
+            (
+                InputEntryFunctionData::delegation_unlock(pool, 1000).unwrap(),
+                "unlock",
+            ),
+            (
+                InputEntryFunctionData::delegation_reactivate_stake(pool, 1000).unwrap(),
+                "reactivate_stake",
+            ),
+            (
+                InputEntryFunctionData::delegation_withdraw(pool, 1000).unwrap(),
+                "withdraw",
+            ),
+        ] {
+            match payload {
+                TransactionPayload::EntryFunction(ef) => {
+                    assert_eq!(ef.module.name.as_str(), "delegation_pool");
+                    assert_eq!(ef.function, func);
+                    assert_eq!(ef.args.len(), 2);
+                }
+                _ => panic!("Expected EntryFunction"),
+            }
+        }
+    }
+
+    #[test]
+    fn test_account_abstraction_helpers() {
+        let module = AccountAddress::from_hex("0x123").unwrap();
+        let add =
+            InputEntryFunctionData::add_authentication_function(module, "my_auth", "authenticate")
+                .unwrap();
+        match add {
+            TransactionPayload::EntryFunction(ef) => {
+                assert_eq!(ef.module.name.as_str(), "account_abstraction");
+                assert_eq!(ef.function, "add_authentication_function");
+                assert_eq!(ef.args.len(), 3);
+            }
+            _ => panic!("Expected EntryFunction"),
+        }
+
+        let remove_all = InputEntryFunctionData::remove_authenticator().unwrap();
+        match remove_all {
+            TransactionPayload::EntryFunction(ef) => {
+                assert_eq!(ef.function, "remove_authenticator");
+                assert!(ef.args.is_empty());
             }
             _ => panic!("Expected EntryFunction"),
         }

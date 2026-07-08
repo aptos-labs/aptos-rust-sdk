@@ -814,6 +814,95 @@ impl Aptos {
         self.sign_submit_and_wait(sender, payload, None).await
     }
 
+    // === Objects & Digital Assets ===
+
+    /// Transfers ownership of an object to another address
+    /// (`0x1::object::transfer_call`).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if building the payload fails, signing fails, submission
+    /// fails, the transaction times out, or execution fails.
+    #[cfg(feature = "ed25519")]
+    pub async fn transfer_object<A: Account>(
+        &self,
+        owner: &A,
+        object: AccountAddress,
+        to: AccountAddress,
+    ) -> AptosResult<AptosResponse<serde_json::Value>> {
+        let payload = crate::transaction::InputEntryFunctionData::transfer_object(object, to)?;
+        self.sign_submit_and_wait(owner, payload, None).await
+    }
+
+    /// Transfers a digital asset (NFT) to another address
+    /// (`0x1::object::transfer` with the `0x4::token::Token` type), matching the
+    /// TypeScript SDK's `transferDigitalAsset`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if building the payload fails, signing fails, submission
+    /// fails, the transaction times out, or execution fails.
+    #[cfg(feature = "ed25519")]
+    pub async fn transfer_digital_asset<A: Account>(
+        &self,
+        owner: &A,
+        token: AccountAddress,
+        to: AccountAddress,
+    ) -> AptosResult<AptosResponse<serde_json::Value>> {
+        let payload =
+            crate::transaction::InputEntryFunctionData::transfer_digital_asset(token, to)?;
+        self.sign_submit_and_wait(owner, payload, None).await
+    }
+
+    // === Authentication key rotation ===
+
+    /// Rotates `current`'s authentication key to `new_account`'s key.
+    ///
+    /// Builds and signs a [`RotationProofChallenge`](crate::account::RotationProofChallenge)
+    /// with both keys (proving control of the current account and ownership of
+    /// the new key), submits `0x1::account::rotate_authentication_key`, and waits
+    /// for it to commit. The account address is unchanged; only its
+    /// authentication key changes, so `new_account` must sign subsequent
+    /// transactions from this address.
+    ///
+    /// The transaction is sent (and signed) by `current`, using the same
+    /// sequence number embedded in the challenge.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if fetching the sequence number, gas price, or chain ID
+    /// fails; if either challenge signature cannot be produced; if the payload or
+    /// transaction cannot be built; or if submission/execution fails.
+    #[cfg(feature = "ed25519")]
+    pub async fn rotate_auth_key<A: Account, B: Account>(
+        &self,
+        current: &A,
+        new_account: &B,
+        timeout: Option<Duration>,
+    ) -> AptosResult<AptosResponse<serde_json::Value>> {
+        // The challenge's sequence number MUST match the transaction's, so fetch
+        // it once and reuse it for both.
+        let sequence_number = self.get_sequence_number(current.address()).await?;
+        let payload =
+            crate::account::build_rotate_auth_key_payload(current, new_account, sequence_number)?;
+
+        let (gas_estimation, chain_id) =
+            tokio::join!(self.fullnode.estimate_gas_price(), self.ensure_chain_id());
+        let gas_estimation = gas_estimation?;
+        let chain_id = chain_id?;
+
+        let raw_txn = TransactionBuilder::new()
+            .sender(current.address())
+            .sequence_number(sequence_number)
+            .payload(payload)
+            .gas_unit_price(gas_estimation.data.recommended())
+            .chain_id(chain_id)
+            .expiration_from_now(600)
+            .build()?;
+        let signed = crate::transaction::builder::sign_transaction(&raw_txn, current)?;
+        self.fullnode.submit_and_wait(&signed, timeout).await
+    }
+
     // === Tables ===
 
     /// Reads an item from a Move table by its key.
