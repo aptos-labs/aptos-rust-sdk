@@ -14,6 +14,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `rand` 0.9.x (RUSTSEC-2026-0097, unsound with custom loggers).
 
 ### Added
+- Object & digital-asset (NFT) write helpers for TypeScript-SDK parity:
+  `InputEntryFunctionData::transfer_object` (`0x1::object::transfer_call`),
+  `transfer_digital_asset`, `create_collection` (with a `CollectionConfig`
+  builder), `mint_digital_asset`, `mint_soul_bound_digital_asset`,
+  `burn_digital_asset`, `freeze_digital_asset_transfer`,
+  `unfreeze_digital_asset_transfer`, plus the high-level
+  `Aptos::transfer_object` and `Aptos::transfer_digital_asset`.
+- Staking (delegation pool) payload builders:
+  `InputEntryFunctionData::{delegation_add_stake, delegation_unlock,
+  delegation_reactivate_stake, delegation_withdraw}`
+  (`0x1::delegation_pool::*`).
+- Account Abstraction (AIP-113) payload builders:
+  `InputEntryFunctionData::{add_authentication_function,
+  remove_authentication_function, remove_authenticator}`
+  (`0x1::account_abstraction::*`).
+- Authentication-key rotation: `account::RotationProofChallenge` (BCS layout
+  pinned to `0x1::account::RotationProofChallenge`),
+  `account::build_rotate_auth_key_payload` (signs the challenge with both the
+  current and new keys), and the high-level `Aptos::rotate_auth_key`. Also
+  added `Ed25519Account::with_address` to build a signer for an account whose
+  on-chain address no longer matches its key (e.g. after a rotation).
 - Fullnode table-item reads: `FullnodeClient::get_table_item(handle, key_type,
   value_type, key)` and the convenience wrapper `Aptos::get_table_item(...)`
   call `POST /tables/{handle}/item`, matching the TypeScript SDK's

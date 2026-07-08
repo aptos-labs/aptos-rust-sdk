@@ -126,6 +126,20 @@ impl Ed25519Account {
         Ok((account, phrase))
     }
 
+    /// Overrides the account address, keeping this key.
+    ///
+    /// By default the address is derived from the key. Use this for an account
+    /// whose on-chain address no longer matches its key — most commonly after an
+    /// authentication-key **rotation**, where a new key controls an existing
+    /// address. [`authentication_key`](Account::authentication_key) still
+    /// reflects this key (which is what the chain stores post-rotation), while
+    /// [`address`](Self::address) returns the overridden value.
+    #[must_use]
+    pub fn with_address(mut self, address: AccountAddress) -> Self {
+        self.address = address;
+        self
+    }
+
     /// Returns the account address.
     pub fn address(&self) -> AccountAddress {
         self.address
