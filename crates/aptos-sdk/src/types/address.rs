@@ -194,7 +194,7 @@ impl AccountAddress {
 
     /// Returns the standard string representation following AIP-40.
     ///
-    /// - Special addresses (0x1 through 0xf) use SHORT format
+    /// - Special addresses (0x0 through 0xf) use SHORT format
     /// - Normal addresses use LONG format (full 64 hex characters)
     pub fn to_standard_string(&self) -> String {
         if self.is_special() {
@@ -210,15 +210,17 @@ impl AccountAddress {
         self == &Self::ZERO
     }
 
-    /// Returns true if this is a "special" address (the first 31 bytes are
-    /// zero, and the last byte is non-zero and less than 16).
+    /// Returns true if this is a "special" address per AIP-40: the first 31
+    /// bytes are zero and the last byte is less than 16 (i.e. one of
+    /// `0x0`..=`0xf`).
     ///
-    /// Special addresses include framework addresses like 0x1, 0x3, 0x4.
+    /// Special addresses include the zero address (`0x0`) and framework
+    /// addresses like `0x1`, `0x3`, `0x4`. This matches aptos-core's
+    /// `AccountAddress::is_special` and the TypeScript SDK, both of which
+    /// include `0x0`.
     #[inline]
     pub fn is_special(&self) -> bool {
-        self.0[..ADDRESS_LENGTH - 1].iter().all(|&b| b == 0)
-            && self.0[ADDRESS_LENGTH - 1] > 0
-            && self.0[ADDRESS_LENGTH - 1] < 16
+        self.0[..ADDRESS_LENGTH - 1].iter().all(|&b| b == 0) && self.0[ADDRESS_LENGTH - 1] < 16
     }
 }
 
@@ -236,7 +238,7 @@ impl fmt::Debug for AccountAddress {
 
 impl fmt::Display for AccountAddress {
     /// Formats the address following AIP-40:
-    /// - Special addresses (0x1 through 0xf) use SHORT format
+    /// - Special addresses (0x0 through 0xf) use SHORT format
     /// - Normal addresses use LONG format (full 64 hex characters)
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.to_standard_string())
@@ -334,11 +336,8 @@ mod tests {
         assert_eq!(AccountAddress::FOUR.to_string(), "0x4");
         assert_eq!(AccountAddress::A.to_string(), "0xa");
 
-        // ZERO is not special, so it uses LONG format
-        assert_eq!(
-            AccountAddress::ZERO.to_string(),
-            "0x0000000000000000000000000000000000000000000000000000000000000000"
-        );
+        // ZERO (0x0) is special per AIP-40, so Display uses SHORT format.
+        assert_eq!(AccountAddress::ZERO.to_string(), "0x0");
 
         // Explicit short/long methods
         assert_eq!(AccountAddress::ONE.to_short_string(), "0x1");
@@ -355,7 +354,8 @@ mod tests {
         assert!(AccountAddress::THREE.is_special());
         assert!(AccountAddress::FOUR.is_special());
         assert!(AccountAddress::A.is_special());
-        assert!(!AccountAddress::ZERO.is_special());
+        // 0x0 is special per AIP-40 (last byte < 16), matching aptos-core.
+        assert!(AccountAddress::ZERO.is_special());
     }
 
     #[test]
@@ -604,9 +604,9 @@ mod tests {
         let addr = AccountAddress::new(bytes);
         assert!(!addr.is_special());
 
-        // Address with last byte == 0 is NOT special (it's ZERO)
+        // The zero address (last byte == 0) IS special per AIP-40.
         let addr = AccountAddress::ZERO;
-        assert!(!addr.is_special());
+        assert!(addr.is_special());
     }
 
     #[test]

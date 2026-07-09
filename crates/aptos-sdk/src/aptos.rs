@@ -190,11 +190,14 @@ impl Aptos {
 
     /// Returns the current chain ID.
     ///
-    /// For known networks (mainnet, testnet, devnet, local), this returns the
-    /// well-known chain ID immediately. For custom networks, this returns
-    /// `ChainId(0)` until the chain ID is resolved via [`ensure_chain_id`](Self::ensure_chain_id)
+    /// For networks with a fixed, well-known chain ID (mainnet = 1,
+    /// testnet = 2, local = 4), this returns it immediately. For **devnet** and
+    /// **custom** networks the chain ID is not fixed, so this returns
+    /// `ChainId(0)` until it is resolved via [`ensure_chain_id`](Self::ensure_chain_id)
     /// or any method that makes a request to the node (e.g., [`build_transaction`](Self::build_transaction),
-    /// [`ledger_info`](Self::ledger_info)).
+    /// [`ledger_info`](Self::ledger_info)). Devnet is included here because it is
+    /// wiped and re-genesised regularly, so its chain ID changes over time and
+    /// must be discovered from the node rather than hardcoded.
     ///
     pub fn chain_id(&self) -> ChainId {
         ChainId::new(self.chain_id.load(Ordering::Relaxed))
@@ -202,10 +205,11 @@ impl Aptos {
 
     /// Resolves the chain ID from the node if it is unknown.
     ///
-    /// For known networks, this returns the chain ID immediately without
-    /// making a network request. For custom networks (chain ID 0), this
-    /// fetches the ledger info from the node to discover the actual chain ID
-    /// and caches it for future use.
+    /// For networks with a fixed chain ID (mainnet, testnet, local), this
+    /// returns it immediately without making a network request. For devnet and
+    /// custom networks (chain ID 0 until resolved), this fetches the ledger
+    /// info from the node to discover the actual chain ID and caches it for
+    /// future use.
     ///
     /// This is called automatically by [`build_transaction`](Self::build_transaction)
     /// and other transaction methods, so you typically don't need to call it

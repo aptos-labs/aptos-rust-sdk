@@ -624,11 +624,8 @@ mod types_tests {
         assert_eq!(AccountAddress::FOUR.to_string(), "0x4");
         assert_eq!(AccountAddress::A.to_string(), "0xa");
 
-        // ZERO is not special, uses LONG format
-        assert_eq!(
-            AccountAddress::ZERO.to_string(),
-            "0x0000000000000000000000000000000000000000000000000000000000000000"
-        );
+        // ZERO (0x0) is special per AIP-40, uses SHORT format.
+        assert_eq!(AccountAddress::ZERO.to_string(), "0x0");
 
         // Explicit short/long methods
         assert_eq!(AccountAddress::ONE.to_short_string(), "0x1");
@@ -643,7 +640,8 @@ mod types_tests {
         assert!(AccountAddress::ONE.is_special());
         assert!(AccountAddress::THREE.is_special());
         assert!(AccountAddress::FOUR.is_special());
-        assert!(!AccountAddress::ZERO.is_special());
+        // 0x0 is special per AIP-40 (last byte < 16), matching aptos-core.
+        assert!(AccountAddress::ZERO.is_special());
     }
 
     #[test]

@@ -18,8 +18,10 @@
 use crate::crypto::traits::{PublicKey, Signature, Signer, Verifier};
 use crate::error::{AptosError, AptosResult};
 use p256::ecdsa::{
-    Signature as P256Signature, SigningKey, VerifyingKey, signature::Signer as P256Signer,
+    Signature as P256Signature, SigningKey, VerifyingKey,
+    signature::Signer as P256Signer,
     signature::Verifier as P256Verifier,
+    signature::hazmat::{PrehashSigner, PrehashVerifier},
 };
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -144,10 +146,28 @@ impl Secp256r1PrivateKey {
 
     /// Signs a pre-hashed message directly and returns a low-S signature.
     ///
+    /// The 32-byte `hash` is signed as-is: it is treated as the ECDSA message
+    /// digest and is **not** hashed again. This uses the `PrehashSigner` hazmat
+    /// API (like the `secp256k1` equivalent); the ordinary `Signer::sign` path
+    /// would apply SHA-256 to its input, so signing a digest through it would
+    /// produce a signature over `SHA-256(hash)` that no external or on-chain
+    /// verifier could check against `hash`.
+    ///
     /// The signature is normalized to low-S form to match Aptos on-chain
     /// verification requirements.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if `p256::ecdsa::SigningKey::sign_prehash` returns `Err`,
+    /// which per the `signature::hazmat::PrehashSigner` contract for `secp256r1`
+    /// does not happen for a 32-byte digest (the field size is 32 bytes).
     pub fn sign_prehashed(&self, hash: &[u8; 32]) -> Secp256r1Signature {
-        let signature: P256Signature = self.inner.sign(hash);
+        // `p256::ecdsa::SigningKey::sign_prehash` returns `Err` only for a
+        // prehash shorter than the field size; a 32-byte digest is always valid.
+        let signature: P256Signature = self
+            .inner
+            .sign_prehash(hash)
+            .expect("32-byte digest is a valid ECDSA prehash");
         // SECURITY: Normalize to low-S to match Aptos on-chain verification.
         let normalized = signature.normalize_s().unwrap_or(signature);
         Secp256r1Signature { inner: normalized }
@@ -329,8 +349,11 @@ impl Secp256r1PublicKey {
         if signature.inner.normalize_s().is_some() {
             return Err(AptosError::SignatureVerificationFailed);
         }
+        // Verify against the digest directly via `verify_prehash`; the ordinary
+        // `Verifier::verify` would apply SHA-256 to `hash` again, which would
+        // reject a signature legitimately produced over the digest.
         self.inner
-            .verify(hash, &signature.inner)
+            .verify_prehash(hash, &signature.inner)
             .map_err(|_| AptosError::SignatureVerificationFailed)
     }
 
@@ -556,6 +579,49 @@ mod tests {
 
         let public_key = private_key.public_key();
         assert!(public_key.verify(wrong_message, &signature).is_err());
+    }
+
+    #[test]
+    fn test_sign_prehashed_and_verify_prehashed_roundtrip() {
+        let private_key = Secp256r1PrivateKey::generate();
+        let public_key = private_key.public_key();
+        let hash = crate::crypto::sha3_256(b"prehash roundtrip");
+
+        let signature = private_key.sign_prehashed(&hash);
+        public_key.verify_prehashed(&hash, &signature).unwrap();
+    }
+
+    #[test]
+    fn test_verify_prehashed_wrong_hash_fails() {
+        let private_key = Secp256r1PrivateKey::generate();
+        let public_key = private_key.public_key();
+        let hash = crate::crypto::sha3_256(b"prehash correct");
+        let wrong_hash = crate::crypto::sha3_256(b"prehash wrong");
+
+        let signature = private_key.sign_prehashed(&hash);
+        assert!(
+            public_key
+                .verify_prehashed(&wrong_hash, &signature)
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn test_sign_prehashed_signs_digest_directly_not_double_hashed() {
+        // The interop property that guards against double-hashing: signing the
+        // SHA-256 digest of a message via `sign_prehashed` must produce a
+        // signature the *message* verifier accepts, because `verify(message)`
+        // hashes the message with SHA-256 exactly once. If `sign_prehashed`
+        // hashed the digest again (the historical bug), this would fail.
+        let private_key = Secp256r1PrivateKey::generate();
+        let public_key = private_key.public_key();
+        let message = b"prehash must match single-hash signing";
+        let digest = crate::crypto::sha2_256(message);
+
+        let signature = private_key.sign_prehashed(&digest);
+        public_key
+            .verify(message, &signature)
+            .expect("signature over SHA-256(message) must verify against the message");
     }
 
     #[test]
