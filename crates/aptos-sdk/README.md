@@ -7,7 +7,7 @@ A user-friendly, idiomatic Rust SDK for the Aptos blockchain with feature parity
 - **Full Blockchain Interaction**: Connect, explore, and interact with the Aptos blockchain
 - **Multiple Signature Schemes**: Ed25519, Secp256k1, Secp256r1 (P-256), and BLS12-381
 - **Transaction Building**: Fluent builder pattern for constructing transactions
-- **Account Management**: Single-key, multi-sig, and keyless (OIDC) accounts
+- **Account Management**: Single-key and multi-sig accounts
 - **Type Safety**: Strong Rust type system for Move contract interactions
 - **Modular Design**: Feature flags to include only what you need
 
@@ -54,7 +54,6 @@ async fn main() -> anyhow::Result<()> {
 | `indexer` | ✓ | GraphQL indexer client |
 | `faucet` | ✓ | Faucet integration for testnets |
 | `bls` | | BLS12-381 signatures |
-| `keyless` | | OIDC-based keyless authentication |
 | `macros` | | Procedural macros for type-safe contract bindings |
 | `full` | | Enable all features |
 
@@ -97,7 +96,6 @@ See the [`examples/`](examples/) directory for complete working examples:
 - [`multi_key_account.rs`](examples/multi_key_account.rs) - Multi-key (mixed signature) accounts
 - [`multi_sig_account.rs`](examples/multi_sig_account.rs) - MultiEd25519 threshold accounts
 - [`multisig_v2.rs`](examples/multisig_v2.rs) - On-chain multisig (governance) accounts
-- [`keyless_account.rs`](examples/keyless_account.rs) - OIDC keyless accounts (Google / Apple / etc.)
 
 ### Smart Contracts
 - [`deploy_module.rs`](examples/deploy_module.rs) - Deploy a Move module

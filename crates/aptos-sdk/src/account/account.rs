@@ -103,7 +103,7 @@ impl From<AuthenticationKey> for AccountAddress {
 /// Trait for account types that can sign transactions.
 ///
 /// This trait provides a common interface for different account types
-/// (Ed25519, Secp256k1, multi-sig, keyless, etc.).
+/// (Ed25519, Secp256k1, multi-sig, etc.).
 pub trait Account: Send + Sync {
     /// Returns the account address.
     fn address(&self) -> AccountAddress;
@@ -134,13 +134,12 @@ pub trait Account: Send + Sync {
 /// Despite the name, `AnyAccount` does **not** cover every account type in
 /// this module. It holds exactly the following (feature-gated) variants:
 /// [`Ed25519`](AnyAccount::Ed25519), [`MultiEd25519`](AnyAccount::MultiEd25519),
-/// [`MultiKey`](AnyAccount::MultiKey), [`Keyless`](AnyAccount::Keyless), and
+/// [`MultiKey`](AnyAccount::MultiKey), and
 /// [`Secp256k1`](AnyAccount::Secp256k1). It cannot hold
 /// [`Ed25519SingleKeyAccount`](super::Ed25519SingleKeyAccount),
 /// [`Secp256r1Account`](super::Secp256r1Account), or
 /// [`WebAuthnAccount`](super::WebAuthnAccount).
 #[derive(Debug)]
-#[allow(clippy::large_enum_variant)] // Keyless account is intentionally large; boxing would complicate API
 pub enum AnyAccount {
     /// An Ed25519 account.
     #[cfg(feature = "ed25519")]
@@ -150,9 +149,6 @@ pub enum AnyAccount {
     MultiEd25519(super::MultiEd25519Account),
     /// A multi-key account (mixed signature types).
     MultiKey(super::MultiKeyAccount),
-    /// A Keyless account.
-    #[cfg(feature = "keyless")]
-    Keyless(super::KeylessAccount),
     /// A Secp256k1 account.
     #[cfg(feature = "secp256k1")]
     Secp256k1(super::Secp256k1Account),
@@ -166,8 +162,6 @@ impl Account for AnyAccount {
             #[cfg(feature = "ed25519")]
             AnyAccount::MultiEd25519(account) => account.address(),
             AnyAccount::MultiKey(account) => account.address(),
-            #[cfg(feature = "keyless")]
-            AnyAccount::Keyless(account) => account.address(),
             #[cfg(feature = "secp256k1")]
             AnyAccount::Secp256k1(account) => account.address(),
         }
@@ -180,8 +174,6 @@ impl Account for AnyAccount {
             #[cfg(feature = "ed25519")]
             AnyAccount::MultiEd25519(account) => account.authentication_key(),
             AnyAccount::MultiKey(account) => account.authentication_key(),
-            #[cfg(feature = "keyless")]
-            AnyAccount::Keyless(account) => account.authentication_key(),
             #[cfg(feature = "secp256k1")]
             AnyAccount::Secp256k1(account) => account.authentication_key(),
         }
@@ -194,8 +186,6 @@ impl Account for AnyAccount {
             #[cfg(feature = "ed25519")]
             AnyAccount::MultiEd25519(account) => Account::sign(account, message),
             AnyAccount::MultiKey(account) => Account::sign(account, message),
-            #[cfg(feature = "keyless")]
-            AnyAccount::Keyless(account) => Account::sign(account, message),
             #[cfg(feature = "secp256k1")]
             AnyAccount::Secp256k1(account) => Account::sign(account, message),
         }
@@ -208,8 +198,6 @@ impl Account for AnyAccount {
             #[cfg(feature = "ed25519")]
             AnyAccount::MultiEd25519(account) => account.public_key_bytes(),
             AnyAccount::MultiKey(account) => account.public_key_bytes(),
-            #[cfg(feature = "keyless")]
-            AnyAccount::Keyless(account) => account.public_key_bytes(),
             #[cfg(feature = "secp256k1")]
             AnyAccount::Secp256k1(account) => account.public_key_bytes(),
         }
@@ -222,8 +210,6 @@ impl Account for AnyAccount {
             #[cfg(feature = "ed25519")]
             AnyAccount::MultiEd25519(account) => account.signature_scheme(),
             AnyAccount::MultiKey(account) => account.signature_scheme(),
-            #[cfg(feature = "keyless")]
-            AnyAccount::Keyless(account) => account.signature_scheme(),
             #[cfg(feature = "secp256k1")]
             AnyAccount::Secp256k1(account) => account.signature_scheme(),
         }
@@ -241,13 +227,6 @@ impl From<super::Ed25519Account> for AnyAccount {
 impl From<super::MultiEd25519Account> for AnyAccount {
     fn from(account: super::MultiEd25519Account) -> Self {
         AnyAccount::MultiEd25519(account)
-    }
-}
-
-#[cfg(feature = "keyless")]
-impl From<super::KeylessAccount> for AnyAccount {
-    fn from(account: super::KeylessAccount) -> Self {
-        AnyAccount::Keyless(account)
     }
 }
 

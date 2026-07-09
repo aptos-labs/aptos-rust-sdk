@@ -243,15 +243,6 @@ fn make_transaction_authenticator(
                 AccountAuthenticator::single_key(public_key, signature),
             ))
         }
-        #[cfg(feature = "keyless")]
-        crate::crypto::KEYLESS_SCHEME => {
-            // Keyless accounts use SingleSender variant with AccountAuthenticator::SingleKey
-            // The public key is the ephemeral Ed25519 key, and the signature is a BCS-serialized
-            // KeylessSignature struct containing the ephemeral signature and ZK proof
-            Ok(TransactionAuthenticator::single_sender(
-                AccountAuthenticator::keyless(public_key, signature),
-            ))
-        }
         _ => Err(AptosError::InvalidSignature(format!(
             "unknown signature scheme: {scheme}"
         ))),
@@ -284,8 +275,6 @@ fn make_account_authenticator(
             let _ = MultiKeySignature::from_bytes(&signature)?;
             Ok(AccountAuthenticator::multi_key(public_key, signature))
         }
-        #[cfg(feature = "keyless")]
-        crate::crypto::KEYLESS_SCHEME => Ok(AccountAuthenticator::keyless(public_key, signature)),
         _ => Err(AptosError::InvalidSignature(format!(
             "unknown signature scheme: {scheme}"
         ))),

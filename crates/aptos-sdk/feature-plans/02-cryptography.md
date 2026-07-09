@@ -60,7 +60,8 @@ pub enum SignatureScheme {
     Secp256k1 = 2,
     Secp256r1 = 3,  // P-256 / WebAuthn
     // 4 reserved for MultiKey
-    // 5 reserved for Keyless
+    // Note: keyless has NO dedicated scheme byte -- it rides inside the
+    // SingleKey scheme (2). (Scheme 5 is Abstraction in aptos-core.)
 }
 ```
 

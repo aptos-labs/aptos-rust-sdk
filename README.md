@@ -13,7 +13,7 @@ A user-friendly, idiomatic Rust SDK for the [Aptos](https://aptos.dev) blockchai
 - **Full Blockchain Interaction** &mdash; Connect, explore, and transact on the Aptos blockchain
 - **Multiple Signature Schemes** &mdash; Ed25519, Secp256k1, Secp256r1 (P-256), and BLS12-381
 - **Transaction Building** &mdash; Fluent builder pattern for entry functions, scripts, and multi-agent transactions
-- **Account Management** &mdash; Single-key, multi-key, multi-sig, and keyless (OIDC) accounts
+- **Account Management** &mdash; Single-key, multi-key, and multi-sig accounts
 - **Type-Safe Contract Bindings** &mdash; Proc macros for generating Rust bindings from Move ABIs
 - **Modular Design** &mdash; Feature flags to include only what you need for minimal binary size
 - **Async / Await** &mdash; Built on `tokio` and `reqwest` for non-blocking I/O
@@ -73,12 +73,11 @@ async fn main() -> anyhow::Result<()> {
 | `indexer` | Yes | GraphQL indexer client |
 | `faucet` | Yes | Faucet integration for testnets |
 | `bls` | &mdash; | BLS12-381 signatures |
-| `keyless` | &mdash; | OIDC-based keyless authentication |
 | `macros` | &mdash; | Procedural macros for type-safe contract bindings |
 | `cli` | &mdash; | Enables the `aptos-codegen` binary for Move ABI code generation |
 | `e2e` | &mdash; | Enables end-to-end tests against a live network (`ed25519,secp256k1,faucet`) |
 | `fuzzing` | &mdash; | Enables `proptest`/`arbitrary` property-testing infrastructure |
-| `full` | &mdash; | Enable all signature/account/API features (`ed25519,secp256k1,secp256r1,bls,keyless,indexer,faucet,mnemonic`) |
+| `full` | &mdash; | Enable all signature/account/API features (`ed25519,secp256k1,secp256r1,bls,indexer,faucet,mnemonic`) |
 
 ### Minimal Build
 
@@ -132,7 +131,6 @@ Complete, runnable examples live in [`crates/aptos-sdk/examples/`](crates/aptos-
 | [`multi_key_account.rs`](crates/aptos-sdk/examples/multi_key_account.rs) | Multi-key (mixed signature) accounts |
 | [`multi_sig_account.rs`](crates/aptos-sdk/examples/multi_sig_account.rs) | MultiEd25519 threshold accounts |
 | [`multisig_v2.rs`](crates/aptos-sdk/examples/multisig_v2.rs) | On-chain multisig (governance) accounts |
-| [`keyless_account.rs`](crates/aptos-sdk/examples/keyless_account.rs) | OIDC-based keyless account &mdash; features: `keyless,ed25519,faucet` |
 | [`rotate_auth_key.rs`](crates/aptos-sdk/examples/rotate_auth_key.rs) | Rotate an account's authentication key &mdash; features: `ed25519,faucet` |
 
 ### Tokens & Digital Assets
@@ -201,7 +199,7 @@ cargo fmt -- --check
 crates/aptos-sdk/src/
 ├── aptos.rs            # Main entry point – combines all API capabilities
 ├── config.rs           # Network configuration (mainnet, testnet, devnet, localnet)
-├── account/            # Account types: Ed25519, Secp256k1, Secp256r1, MultiKey, Keyless
+├── account/            # Account types: Ed25519, Secp256k1, Secp256r1, MultiKey
 ├── api/                # REST fullnode, GraphQL indexer, faucet, and ANS clients
 ├── transaction/        # Builder, authenticator, sponsored & batched transactions
 ├── crypto/             # Signature schemes, hashing, and cryptographic traits

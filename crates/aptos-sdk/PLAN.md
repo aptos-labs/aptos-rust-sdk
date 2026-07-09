@@ -95,7 +95,7 @@ This document outlines the comprehensive plan for building `aptos-sdk`, a user-f
 - [x] Import from private key (hex/bytes)
 - [x] Import from mnemonic phrase
 - [x] Address derivation (auth key → address)
-- [x] Keyless accounts (OpenID Connect)
+- [ ] Keyless accounts (OpenID Connect) - removed (previous implementation was chain-incompatible); to be re-implemented per `feature-plans/09-keyless-accounts.md`
 
 ### 4.3 Multi-Signature Support ✅
 - [x] `MultiEd25519Account` - M-of-N multisig (Ed25519 only)
@@ -267,7 +267,6 @@ This document outlines the comprehensive plan for building `aptos-sdk`, a user-f
 | `secp256k1` | Secp256k1 ECDSA | ✅ Yes |
 | `secp256r1` | P-256/WebAuthn support | ❌ No |
 | `bls` | BLS12-381 signatures | ❌ No |
-| `keyless` | OIDC-based keyless authentication | ❌ No |
 | `faucet` | Faucet client | ❌ No |
 | `indexer` | Indexer GraphQL client | ❌ No |
 | `fuzzing` | Fuzzing utilities | ❌ No |

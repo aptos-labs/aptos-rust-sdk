@@ -23,7 +23,7 @@ workspace = true
 
 [features]
 default = ["ed25519", "secp256k1", "secp256r1", "indexer", "faucet", "mnemonic"]
-full = ["ed25519", "secp256k1", "secp256r1", "bls", "keyless", "indexer", "faucet", "mnemonic"]
+full = ["ed25519", "secp256k1", "secp256r1", "bls", "indexer", "faucet", "mnemonic"]
 
 # Cryptographic signature schemes
 ed25519 = ["dep:ed25519-dalek"]
@@ -33,9 +33,6 @@ bls = ["dep:blst"]
 
 # BIP-39 mnemonic phrase support
 mnemonic = ["dep:bip39", "dep:hmac"]
-
-# Account types
-keyless = ["dep:jsonwebtoken", "ed25519", "secp256r1"]
 
 # API clients
 indexer = []
@@ -90,9 +87,6 @@ ed25519-dalek = { version = "2.1", features = ["std", "rand_core", "zeroize"], o
 k256 = { version = "0.13", features = ["ecdsa", "sha256", "std"], optional = true }
 p256 = { version = "0.13", features = ["ecdsa", "sha256", "std"], optional = true }
 blst = { version = "0.3", optional = true }
-
-# Optional keyless dependencies
-jsonwebtoken = { version = "10.3", features = ["aws_lc_rs"], optional = true }
 
 # (indexer feature uses raw GraphQL queries via reqwest, no extra dep needed)
 
@@ -226,11 +220,6 @@ required-features = ["ed25519", "faucet"]
 name = "transaction_waiting"
 path = "examples/transaction_waiting.rs"
 required-features = ["ed25519", "faucet"]
-
-[[example]]
-name = "keyless_account"
-path = "examples/keyless_account.rs"
-required-features = ["keyless", "ed25519", "faucet"]
 
 [[example]]
 name = "fungible_asset_transfer"

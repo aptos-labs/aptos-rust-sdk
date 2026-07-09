@@ -22,7 +22,7 @@ These documents serve to:
 | [06-error-handling.md](./06-error-handling.md) | ✅ Implemented | P1 |
 | [07-testing-strategy.md](./07-testing-strategy.md) | ✅ Implemented | P1 |
 | [08-multi-signature.md](./08-multi-signature.md) | ✅ Implemented | P2 |
-| [09-keyless-accounts.md](./09-keyless-accounts.md) | ✅ Implemented | P2 |
+| [09-keyless-accounts.md](./09-keyless-accounts.md) | ❌ Removed (re-implementation planned) | P2 |
 | [10-advanced-features.md](./10-advanced-features.md) | 📋 Planned | P3 |
 | [11-multi-key-accounts.md](./11-multi-key-accounts.md) | ✅ Implemented | P2 |
 | [12-code-generation.md](./12-code-generation.md) | ✅ Implemented | P1 |

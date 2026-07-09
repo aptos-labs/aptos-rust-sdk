@@ -162,7 +162,9 @@ point:
     `WebAuthnAccount` (on-chain `secp256r1` via the WebAuthn envelope).
   - `MultiEd25519Account` for legacy M-of-N Ed25519.
   - `MultiKeyAccount` for M-of-N with mixed key types.
-  - `KeylessAccount` for OIDC-based keyless authentication.
+  - Keyless (OIDC) accounts are **not currently supported** -- the previous
+    implementation was removed as chain-incompatible; a correct re-implementation
+    is specified in `crates/aptos-sdk/feature-plans/09-keyless-accounts.md`.
 - **`api/`** -- API clients.
   - `fullnode.rs` -- REST API client for fullnode interactions.
   - `indexer.rs` -- GraphQL indexer client.
@@ -177,7 +179,7 @@ point:
 - **`transaction/`** -- transaction building and signing.
   - `builder.rs` -- fluent builder pattern.
   - `authenticator.rs` -- `TransactionAuthenticator` and
-    `AccountAuthenticator`. The SingleKey / MultiKey / Keyless variants
+    `AccountAuthenticator`. The SingleKey / MultiKey variants
     have a hand-rolled `Serialize` impl that matches the on-chain BCS
     layout; do **not** revert to derive without re-pinning the
     wire-format tests.
@@ -195,7 +197,7 @@ point:
 
 - **Feature flags**: cryptographic schemes and optional features sit
   behind feature flags (`ed25519`, `secp256k1`, `secp256r1`, `bls`,
-  `keyless`, `mnemonic`, `indexer`, `faucet`, `macros`, `cli`, ...).
+  `mnemonic`, `indexer`, `faucet`, `macros`, `cli`, ...).
   Anything that is only reachable behind a feature flag must be gated
   on the same flag, or `--no-default-features` clippy will flag it as
   dead code.

@@ -134,9 +134,6 @@ pub const SINGLE_KEY_SCHEME: u8 = 2;
 /// The authentication key scheme byte for multi-key accounts (unified).
 pub const MULTI_KEY_SCHEME: u8 = 3;
 
-/// The authentication key scheme byte for keyless accounts.
-pub const KEYLESS_SCHEME: u8 = 5;
-
 /// Derives an authentication key from a public key and scheme.
 ///
 /// The authentication key is SHA3-256(public_key_bytes || `scheme_byte`).

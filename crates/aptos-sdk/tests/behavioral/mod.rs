@@ -974,13 +974,12 @@ mod auth_key_tests {
     /// Test that scheme bytes are correct
     #[test]
     fn test_scheme_byte_values() {
-        use aptos_sdk::crypto::{KEYLESS_SCHEME, MULTI_ED25519_SCHEME, MULTI_KEY_SCHEME};
+        use aptos_sdk::crypto::{MULTI_ED25519_SCHEME, MULTI_KEY_SCHEME};
 
         assert_eq!(ED25519_SCHEME, 0, "Ed25519 scheme should be 0");
         assert_eq!(MULTI_ED25519_SCHEME, 1, "MultiEd25519 scheme should be 1");
         assert_eq!(SINGLE_KEY_SCHEME, 2, "SingleKey scheme should be 2");
         assert_eq!(MULTI_KEY_SCHEME, 3, "MultiKey scheme should be 3");
-        assert_eq!(KEYLESS_SCHEME, 5, "Keyless scheme should be 5");
     }
 
     /// Test that auth key derivation is deterministic
