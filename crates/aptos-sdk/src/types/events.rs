@@ -2,6 +2,13 @@
 //!
 //! Events are emitted by Move modules and can be used to track
 //! on-chain activity without reading full transaction data.
+//!
+//! These types deserialize the JSON shape returned by the Aptos REST
+//! (fullnode) API. In particular, the API encodes every `u64` value as a JSON
+//! string (e.g. `"42"`), and the on-chain event-handle GUID nests its fields
+//! under an `id` object (`{"id":{"addr":...,"creation_num":...}}`). The types
+//! here match those shapes; for convenience the string-encoded integers also
+//! accept a plain JSON number when deserializing.
 
 use crate::types::{AccountAddress, HashValue};
 use serde::{Deserialize, Serialize};
@@ -35,18 +42,49 @@ impl fmt::Display for EventKey {
 }
 
 /// A handle to an event stream stored on chain.
+///
+/// This matches the REST API shape of an on-chain `0x1::event::EventHandle`,
+/// where the `guid` is a `0x1::guid::GUID` nested under an `id` object:
+/// `{"counter":"N","guid":{"id":{"addr":"0x..","creation_num":"N"}}}`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EventHandle {
     /// The number of events that have been emitted to this handle.
+    #[serde(with = "crate::types::string_num")]
     pub counter: u64,
     /// The globally unique ID for this event stream.
-    pub guid: EventGuid,
+    pub guid: EventHandleGuid,
+}
+
+/// The GUID of an on-chain event handle.
+///
+/// Mirrors the REST API's `0x1::guid::GUID`, which wraps the identifying
+/// fields under an `id` object: `{"id":{"addr":...,"creation_num":...}}`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EventHandleGuid {
+    /// The inner identifier (address + creation number).
+    pub id: EventHandleGuidId,
+}
+
+/// The inner identifier of an [`EventHandleGuid`] (`0x1::guid::ID`).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EventHandleGuidId {
+    /// The account address that created the event stream.
+    pub addr: AccountAddress,
+    /// The creation number (unique within the creating account).
+    #[serde(with = "crate::types::string_num")]
+    pub creation_num: u64,
 }
 
 /// A globally unique identifier for an event stream.
+///
+/// This matches the shape used by the REST API for an emitted [`Event`]'s
+/// `guid` field (`{"creation_number":...,"account_address":...}`), which
+/// differs from the nested [`EventHandleGuid`] shape used inside on-chain
+/// event handles.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EventGuid {
     /// The creation number.
+    #[serde(with = "crate::types::string_num")]
     pub creation_number: u64,
     /// The account address.
     pub account_address: AccountAddress,
@@ -59,6 +97,7 @@ pub struct Event {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub guid: Option<EventGuid>,
     /// The sequence number of this event within its stream.
+    #[serde(with = "crate::types::string_num")]
     pub sequence_number: u64,
     /// The type of the event data.
     #[serde(rename = "type")]
@@ -88,6 +127,7 @@ impl Event {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VersionedEvent {
     /// The transaction version that emitted this event.
+    #[serde(with = "crate::types::string_num")]
     pub version: u64,
     /// The event itself.
     #[serde(flatten)]
@@ -174,17 +214,63 @@ mod tests {
 
     #[test]
     fn test_event_handle_deserialization() {
+        // Realistic fullnode shape: string-encoded integers and a nested
+        // `guid.id` object.
         let json = r#"{
-            "counter": 100,
+            "counter": "100",
             "guid": {
-                "creation_number": 5,
-                "account_address": "0x1"
+                "id": {
+                    "addr": "0x1",
+                    "creation_num": "5"
+                }
             }
         }"#;
 
         let handle: EventHandle = serde_json::from_str(json).unwrap();
         assert_eq!(handle.counter, 100);
-        assert_eq!(handle.guid.creation_number, 5);
+        assert_eq!(handle.guid.id.creation_num, 5);
+        assert_eq!(handle.guid.id.addr, AccountAddress::ONE);
+    }
+
+    #[test]
+    fn test_event_handle_roundtrips_to_api_shape() {
+        let handle = EventHandle {
+            counter: 7,
+            guid: EventHandleGuid {
+                id: EventHandleGuidId {
+                    addr: AccountAddress::ONE,
+                    creation_num: 3,
+                },
+            },
+        };
+        let json = serde_json::to_value(&handle).unwrap();
+        // Integers must serialize back as strings to match the API.
+        assert_eq!(json["counter"], serde_json::json!("7"));
+        assert_eq!(json["guid"]["id"]["creation_num"], serde_json::json!("3"));
+        let back: EventHandle = serde_json::from_value(json).unwrap();
+        assert_eq!(back, handle);
+    }
+
+    #[test]
+    fn test_event_deserialization_api_shape() {
+        // Realistic fullnode event: u64 fields are JSON strings and the guid
+        // uses the {creation_number, account_address} shape.
+        let json = r#"{
+            "guid": {
+                "creation_number": "2",
+                "account_address": "0x1"
+            },
+            "sequence_number": "42",
+            "type": "0x1::coin::DepositEvent",
+            "data": {"amount": "1000"}
+        }"#;
+
+        let event: Event = serde_json::from_str(json).unwrap();
+        assert_eq!(event.sequence_number, 42);
+        assert_eq!(event.typ, "0x1::coin::DepositEvent");
+        let guid = event.guid.expect("guid present");
+        assert_eq!(guid.creation_number, 2);
+        assert_eq!(guid.account_address, AccountAddress::ONE);
     }
 
     #[test]

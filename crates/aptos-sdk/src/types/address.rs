@@ -210,8 +210,8 @@ impl AccountAddress {
         self == &Self::ZERO
     }
 
-    /// Returns true if this is a "special" address (first 63 bytes are zero,
-    /// and the last byte is non-zero and less than 16).
+    /// Returns true if this is a "special" address (the first 31 bytes are
+    /// zero, and the last byte is non-zero and less than 16).
     ///
     /// Special addresses include framework addresses like 0x1, 0x3, 0x4.
     #[inline]

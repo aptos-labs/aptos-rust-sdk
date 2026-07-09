@@ -622,7 +622,10 @@ impl fmt::Display for MultiKeyPublicKey {
 pub struct MultiKeySignature {
     /// Individual signatures with their signer index.
     signatures: Vec<(u8, AnySignature)>,
-    /// Bitmap indicating which keys signed (little-endian, up to 4 bytes for 32 keys).
+    /// Bitmap indicating which keys signed (up to 4 bytes for 32 keys). Bits are
+    /// set MSB-first within each byte (big-endian bit order): signer index 0 is
+    /// bit 7 of byte 0, index 7 is bit 0 of byte 0, and so on. This matches
+    /// aptos-core's `aptos_bitvec::BitVec` (`0b1000_0000 >> pos`); see `new`.
     bitmap: [u8; 4],
 }
 
@@ -746,7 +749,8 @@ impl MultiKeySignature {
     /// # Errors
     ///
     /// Returns [`AptosError::InvalidSignature`] if:
-    /// - The bytes are too short (less than 5 bytes for `num_sigs` + bitmap)
+    /// - The bytes are too short (fewer than 6 bytes: 1 `num_sigs` byte + a
+    ///   1-byte `BitVec` ULEB128 length prefix + 4 bitmap bytes)
     /// - The number of signatures is invalid (0 or > 32)
     /// - The bitmap doesn't match the number of signatures
     /// - The bytes are too short for the expected structure

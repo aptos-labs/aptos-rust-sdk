@@ -337,7 +337,7 @@ impl<'a> ModuleGenerator<'a> {
         writeln!(output, "    error::{{AptosError, AptosResult}},")?;
         writeln!(
             output,
-            "    transaction::{{EntryFunction, TransactionPayload}},"
+            "    transaction::{{EntryFunction, MoveU256, TransactionPayload}},"
         )?;
         writeln!(output, "    types::{{AccountAddress, TypeTag}},")?;
         writeln!(output, "    Aptos,")?;
@@ -417,16 +417,16 @@ impl<'a> ModuleGenerator<'a> {
         )?;
 
         // Generic type parameters
-        if struct_def.generic_type_params.is_empty() {
+        let type_params: Vec<String> = struct_def
+            .generic_type_params
+            .iter()
+            .enumerate()
+            .map(|(i, _)| format!("T{i}"))
+            .collect();
+
+        if type_params.is_empty() {
             writeln!(output, "pub struct {rust_name} {{")?;
         } else {
-            let type_params: Vec<String> = struct_def
-                .generic_type_params
-                .iter()
-                .enumerate()
-                .map(|(i, _)| format!("T{i}"))
-                .collect();
-
             writeln!(
                 output,
                 "pub struct {}<{}> {{",
@@ -440,6 +440,25 @@ impl<'a> ModuleGenerator<'a> {
             self.write_struct_field(output, field)?;
         }
 
+        // Move generic parameters do not map onto a concrete Rust field, so a
+        // bare `struct Name<T0>` would fail to compile with E0392 ("parameter
+        // is never used"). A skipped `PhantomData` field ties every type
+        // parameter into the struct while staying invisible to serde/BCS.
+        if !type_params.is_empty() {
+            // A single parameter must not be wrapped in parentheses, otherwise
+            // the generated code trips the `unused_parens` lint.
+            let phantom_ty = if type_params.len() == 1 {
+                type_params[0].clone()
+            } else {
+                format!("({})", type_params.join(", "))
+            };
+            writeln!(output, "    #[serde(skip)]")?;
+            writeln!(
+                output,
+                "    _phantom: ::core::marker::PhantomData<{phantom_ty}>,"
+            )?;
+        }
+
         writeln!(output, "}}")?;
         writeln!(output)
     }
@@ -449,10 +468,12 @@ impl<'a> ModuleGenerator<'a> {
         let rust_type = self.config.type_mapper.map_type(&field.typ);
         let rust_name = to_snake_case(&field.name);
 
-        // Handle reserved Rust keywords
+        // Handle reserved Rust keywords. `self`/`Self`/`crate`/`super` cannot be
+        // written as raw identifiers, so they are escaped with a trailing
+        // underscore; the rest use the `r#` raw form.
         let rust_name = match rust_name.as_str() {
             "type" => "r#type".to_string(),
-            "self" => "r#self".to_string(),
+            "self" => "self_".to_string(),
             "move" => "r#move".to_string(),
             _ => rust_name,
         };
@@ -645,7 +666,8 @@ impl<'a> ModuleGenerator<'a> {
         let snake = to_snake_case(name);
         match snake.as_str() {
             "type" => "r#type".to_string(),
-            "self" => "r#self".to_string(),
+            // `self`, `crate`, `super` cannot be raw identifiers -> suffix them.
+            "self" => "self_".to_string(),
             "move" => "r#move".to_string(),
             "ref" => "r#ref".to_string(),
             "mut" => "r#mut".to_string(),
@@ -675,8 +697,8 @@ impl<'a> ModuleGenerator<'a> {
             "static" => "r#static".to_string(),
             "unsafe" => "r#unsafe".to_string(),
             "extern" => "r#extern".to_string(),
-            "crate" => "r#crate".to_string(),
-            "super" => "r#super".to_string(),
+            "crate" => "crate_".to_string(),
+            "super" => "super_".to_string(),
             "where" => "r#where".to_string(),
             "as" => "r#as".to_string(),
             "true" => "r#true".to_string(),

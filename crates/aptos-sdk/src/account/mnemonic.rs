@@ -768,6 +768,37 @@ mod tests {
         );
     }
 
+    /// REGRESSION PIN (self-consistency, NOT an externally-verified
+    /// cross-SDK vector): the abandon-test mnemonic derived at the canonical
+    /// Aptos Ed25519 path `m/44'/637'/0'/0'/0'` must produce this exact
+    /// address and public key. These constants were captured from the SDK's
+    /// own current SLIP-0010 output, not from an authoritative published
+    /// Aptos/TS-SDK vector. Their purpose is purely to catch silent drift in
+    /// the Ed25519 derivation path: if this test starts failing, the
+    /// derivation changed and any resulting address shift must be
+    /// investigated (and, ideally, cross-checked against the TypeScript SDK)
+    /// before the fixture is updated.
+    #[test]
+    #[cfg(feature = "ed25519")]
+    fn test_derive_ed25519_pinned_self_consistency() {
+        use crate::account::Ed25519Account;
+
+        let mnemonic = Mnemonic::from_phrase(TEST_PHRASE).unwrap();
+        let key = mnemonic.derive_ed25519_key(0).unwrap();
+        let account = Ed25519Account::from_private_key(key);
+
+        assert_eq!(
+            account.address().to_string(),
+            "0xeb663b681209e7087d681c5d3eed12aaa8e1915e7c87794542c3f96e94b3d3bf",
+            "Ed25519 SLIP-0010 derived address drifted (self-consistency pin)",
+        );
+        assert_eq!(
+            account.public_key().to_hex(),
+            "0xa686f0309ab80312979606cfccc10ea2740147ae6888351488d11c46f08fbf60",
+            "Ed25519 SLIP-0010 derived public key drifted (self-consistency pin)",
+        );
+    }
+
     /// Cross-validates the BIP-32 implementation against the well-known
     /// Bitcoin reference vector: the abandon-test mnemonic at
     /// `m/44'/0'/0'/0/0` (coin type 0, not Aptos) must yield the canonical

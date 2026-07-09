@@ -302,12 +302,15 @@ impl AptosError {
         // or other credentials not caught by keyword patterns above.
         // e.g., reqwest errors include the request URL.
         // Only redact when '?' appears within a URL token (after the scheme),
-        // not just anywhere in the message.
+        // not just anywhere in the message. Scan *every* URL occurrence: a
+        // message can contain several URLs of the same scheme and any one of
+        // them (not just the first) may carry a query string.
         for scheme in ["http://", "https://"] {
-            if let Some(scheme_pos) = lower.find(scheme) {
+            let mut search_from = 0;
+            while let Some(rel_pos) = lower[search_from..].find(scheme) {
+                let url_start = search_from + rel_pos;
                 // Look for '?' after the scheme, within the URL token
-                // (URLs end at whitespace or common delimiters)
-                let url_start = scheme_pos;
+                // (URLs end at whitespace or common delimiters).
                 let url_rest = &lower[url_start..];
                 let url_end = url_rest
                     .find(|c: char| c.is_whitespace() || c == '>' || c == '"' || c == '\'')
@@ -316,6 +319,8 @@ impl AptosError {
                 if url_token.contains('?') {
                     return "[REDACTED: message contained URL with query parameters]".into();
                 }
+                // Advance past this scheme match to find any subsequent URLs.
+                search_from = url_start + scheme.len();
             }
         }
 
@@ -599,6 +604,42 @@ mod tests {
         let err = AptosError::Internal("mnemonic phrase here".to_string());
         let sanitized = err.sanitized_message();
         assert!(sanitized.contains("REDACTED"));
+    }
+
+    #[test]
+    fn test_sanitized_message_redacts_url_with_query() {
+        // A single URL carrying a query string is redacted. Use a query
+        // parameter name that is *not* itself a sensitive keyword so this
+        // exercises the URL logic rather than the keyword scan.
+        let err = AptosError::api(
+            500,
+            "request to https://node.example.com/v1?trace=abc failed",
+        );
+        let sanitized = err.sanitized_message();
+        assert!(sanitized.contains("REDACTED"));
+        assert!(sanitized.contains("query parameters"));
+        assert!(!sanitized.contains("trace=abc"));
+    }
+
+    #[test]
+    fn test_sanitized_message_redacts_second_url_with_query() {
+        // The FIRST URL has no query; only the SECOND (same scheme) does.
+        // The redactor must scan every URL, not just the first occurrence.
+        let msg = "tried https://a.example.com/ok then https://b.example.com/p?ref=xyz";
+        let err = AptosError::api(502, msg);
+        let sanitized = err.sanitized_message();
+        assert!(sanitized.contains("REDACTED"));
+        assert!(sanitized.contains("query parameters"));
+        assert!(!sanitized.contains("ref=xyz"));
+    }
+
+    #[test]
+    fn test_sanitized_message_keeps_url_without_query() {
+        // A plain URL with no query string must not be redacted.
+        let err = AptosError::api(500, "request to https://node.example.com/v1 failed");
+        let sanitized = err.sanitized_message();
+        assert!(sanitized.contains("node.example.com"));
+        assert!(!sanitized.contains("REDACTED"));
     }
 
     #[test]

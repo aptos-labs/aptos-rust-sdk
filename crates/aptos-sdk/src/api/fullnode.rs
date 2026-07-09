@@ -484,11 +484,13 @@ impl FullnodeClient {
         self.get_json(url).await
     }
 
-    /// Lists committed transactions, most-recent first.
+    /// Lists committed transactions in ascending ledger-version order.
     ///
-    /// `start` is the ledger version to begin at (defaults to the most recent
-    /// transactions when `None`); `limit` bounds the page size (the fullnode
-    /// caps this regardless of the requested value).
+    /// `start` is the ledger version to begin at. When `None`, the fullnode
+    /// returns the most recent page (the last `limit` transactions) but the
+    /// transactions within that page are still ordered oldest-to-newest by
+    /// version. `limit` bounds the page size (the fullnode caps this
+    /// regardless of the requested value).
     ///
     /// # Errors
     ///

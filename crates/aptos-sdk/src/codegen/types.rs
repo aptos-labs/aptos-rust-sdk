@@ -108,7 +108,11 @@ impl MoveTypeMapper {
             "u32" => RustType::primitive("u32"),
             "u64" => RustType::primitive("u64"),
             "u128" => RustType::primitive("u128"),
-            "u256" => RustType::new("U256"),
+            // Move `u256` has no primitive Rust counterpart, so it maps to the
+            // SDK's `MoveU256` value type (imported from `aptos_sdk::transaction`),
+            // which round-trips in both BCS (32-byte little-endian) and JSON
+            // (decimal string, matching the Aptos API encoding).
+            "u256" => RustType::new("MoveU256"),
             "address" => RustType::new("AccountAddress"),
             "signer" | "&signer" => RustType::new("AccountAddress")
                 .with_doc("Signer address (automatically set to sender)"),
@@ -180,13 +184,15 @@ impl MoveTypeMapper {
         if !rust_type.needs_bcs {
             // Primitives that don't need special handling
             return format!(
-                "aptos_bcs::to_bytes(&{var_name}).map_err(|e| AptosError::Bcs(e.to_string()))?"
+                "::aptos_sdk::aptos_bcs::to_bytes(&{var_name}).map_err(|e| AptosError::Bcs(e.to_string()))?"
             );
         }
 
         // SECURITY: Use error propagation instead of .unwrap() to prevent
         // panics in generated code if BCS serialization fails.
-        format!("aptos_bcs::to_bytes(&{var_name}).map_err(|e| AptosError::Bcs(e.to_string()))?")
+        format!(
+            "::aptos_sdk::aptos_bcs::to_bytes(&{var_name}).map_err(|e| AptosError::Bcs(e.to_string()))?"
+        )
     }
 
     /// Determines if a parameter should be excluded from the function signature.
@@ -331,8 +337,10 @@ mod tests {
 
     #[test]
     fn test_mapper_u256() {
+        // Move u256 has no primitive Rust counterpart, so it maps to the SDK's
+        // `MoveU256` value type, which round-trips in both BCS and JSON.
         let mapper = MoveTypeMapper::new();
-        assert_eq!(mapper.map_type("u256").path, "U256");
+        assert_eq!(mapper.map_type("u256").path, "MoveU256");
     }
 
     #[test]

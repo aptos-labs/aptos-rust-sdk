@@ -276,7 +276,10 @@ impl<'de> Deserialize<'de> for MultiEd25519PublicKey {
 pub struct MultiEd25519Signature {
     /// Individual signatures with their signer index.
     signatures: Vec<(u8, Ed25519Signature)>,
-    /// Bitmap indicating which keys signed (little-endian).
+    /// Bitmap indicating which keys signed. Bits are set MSB-first within each
+    /// byte (big-endian bit order): signer index 0 is bit 7 of byte 0, index 7
+    /// is bit 0 of byte 0, index 8 is bit 7 of byte 1, and so on. This matches
+    /// aptos-core's `multi_ed25519` bitmap (`128 >> pos`); see `new`.
     bitmap: [u8; 4],
 }
 

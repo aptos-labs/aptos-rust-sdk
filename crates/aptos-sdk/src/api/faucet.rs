@@ -12,6 +12,14 @@ use url::Url;
 /// Maximum faucet response size: 1 MB (faucet responses are typically tiny).
 const MAX_FAUCET_RESPONSE_SIZE: usize = 1024 * 1024;
 
+/// Maximum faucet error-response body size: 8 KB.
+///
+/// Error bodies are only surfaced in diagnostics, so a small bound is
+/// sufficient and prevents a malicious/misbehaving faucet from exhausting
+/// memory via an unbounded error body (matching the fullnode client's
+/// `MAX_ERROR_BODY_SIZE`).
+const MAX_FAUCET_ERROR_BODY_SIZE: usize = 8 * 1024;
+
 /// Client for the Aptos faucet service.
 ///
 /// The faucet is only available on devnet and testnet. Requests are
@@ -157,7 +165,18 @@ impl FaucetClient {
                         Ok(faucet_response.into_hashes())
                     } else {
                         let status = response.status();
-                        let body = response.text().await.unwrap_or_default();
+                        // SECURITY: Bound the error-response body read the same
+                        // way the success path is bounded, so a misbehaving
+                        // faucet cannot exhaust memory via an unbounded error
+                        // body. Fall back to an empty string if the (bounded)
+                        // read fails or is oversized.
+                        let body = crate::config::read_response_bounded(
+                            response,
+                            MAX_FAUCET_ERROR_BODY_SIZE,
+                        )
+                        .await
+                        .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
+                        .unwrap_or_default();
                         Err(AptosError::api(status.as_u16(), body))
                     }
                 }
@@ -330,6 +349,31 @@ mod tests {
         let result = client.fund(AccountAddress::ONE, 100_000_000).await;
 
         assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_fund_error_body_is_bounded() {
+        let server = MockServer::start().await;
+
+        // Error body larger than MAX_FAUCET_ERROR_BODY_SIZE (8 KB). The bounded
+        // read must not buffer it all; the fund call still returns an error.
+        let huge_body = "x".repeat(MAX_FAUCET_ERROR_BODY_SIZE * 4);
+        Mock::given(method("POST"))
+            .and(path_regex(r"^/mint$"))
+            .respond_with(ResponseTemplate::new(500).set_body_string(huge_body))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = create_mock_faucet_client(&server);
+        let result = client.fund(AccountAddress::ONE, 100_000_000).await;
+
+        assert!(result.is_err());
+        // The surfaced message is bounded (oversized body falls back to empty),
+        // so the client never buffers the multi-KB error body.
+        if let Err(AptosError::Api { message, .. }) = result {
+            assert!(message.len() <= MAX_FAUCET_ERROR_BODY_SIZE);
+        }
     }
 
     #[cfg(feature = "ed25519")]

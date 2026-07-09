@@ -374,10 +374,40 @@ impl RetryExecutor {
     }
 }
 
-/// Extension trait for adding retry capability to futures.
+/// Extension trait for adding retry capability to async operations.
+///
+/// A single [`Future`] cannot be retried because it is consumed the first
+/// time it is polled to completion. Retrying therefore requires a *factory*
+/// closure that can produce a fresh future on every attempt, so this trait is
+/// implemented for `Fn() -> Future` operation factories rather than for bare
+/// futures.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use aptos_sdk::retry::{RetryConfig, RetryExt};
+///
+/// let config = RetryConfig::default();
+/// let result = (|| async { fetch_something().await }).with_retry(&config).await;
+/// ```
 pub trait RetryExt<T> {
-    /// Executes this future with the given retry config.
+    /// Executes this operation factory under the given retry config.
+    ///
+    /// The closure is invoked once per attempt, producing a fresh future each
+    /// time, and retried according to `config` while the returned error is
+    /// retryable.
     fn with_retry(self, config: &RetryConfig) -> impl Future<Output = AptosResult<T>>;
+}
+
+impl<F, Fut, T> RetryExt<T> for F
+where
+    F: Fn() -> Fut,
+    Fut: Future<Output = AptosResult<T>>,
+{
+    fn with_retry(self, config: &RetryConfig) -> impl Future<Output = AptosResult<T>> {
+        let executor = RetryExecutor::new(config.clone());
+        async move { executor.execute(self).await }
+    }
 }
 
 /// Convenience function to retry an operation with default config.
@@ -939,5 +969,68 @@ mod tests {
         let builder = RetryConfigBuilder::default();
         let debug = format!("{builder:?}");
         assert!(debug.contains("RetryConfigBuilder"));
+    }
+
+    #[tokio::test]
+    async fn test_retry_ext_with_retry_succeeds_after_failures() {
+        let config = RetryConfig::builder()
+            .max_retries(3)
+            .initial_delay_ms(1)
+            .jitter(false)
+            .build();
+        let counter = Arc::new(AtomicU32::new(0));
+        let counter_clone = counter.clone();
+
+        // Exercise the `.with_retry(...)` extension method on an operation factory.
+        let result = (move || {
+            let counter = counter_clone.clone();
+            async move {
+                let count = counter.fetch_add(1, Ordering::SeqCst);
+                if count < 2 {
+                    Err(AptosError::Api {
+                        status_code: 503,
+                        message: "Service Unavailable".to_string(),
+                        error_code: None,
+                        vm_error_code: None,
+                    })
+                } else {
+                    Ok(42)
+                }
+            }
+        })
+        .with_retry(&config)
+        .await;
+
+        assert_eq!(result.unwrap(), 42);
+        assert_eq!(counter.load(Ordering::SeqCst), 3); // 2 failures + 1 success
+    }
+
+    #[tokio::test]
+    async fn test_retry_ext_with_retry_no_retry_on_non_retryable() {
+        let config = RetryConfig::builder()
+            .max_retries(3)
+            .initial_delay_ms(1)
+            .jitter(false)
+            .build();
+        let counter = Arc::new(AtomicU32::new(0));
+        let counter_clone = counter.clone();
+
+        let result: AptosResult<i32> = (move || {
+            let counter = counter_clone.clone();
+            async move {
+                counter.fetch_add(1, Ordering::SeqCst);
+                Err(AptosError::Api {
+                    status_code: 400, // Bad Request - not retryable
+                    message: "Bad Request".to_string(),
+                    error_code: None,
+                    vm_error_code: None,
+                })
+            }
+        })
+        .with_retry(&config)
+        .await;
+
+        assert!(result.is_err());
+        assert_eq!(counter.load(Ordering::SeqCst), 1); // No retries
     }
 }

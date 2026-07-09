@@ -27,11 +27,14 @@ const DST: &[u8] = b"BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_";
 const DST_POP: &[u8] = b"BLS_POP_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_";
 
 /// A BLS12-381 private key.
+///
+/// The secret key material is cleared from memory when the key is dropped, and
+/// can also be wiped eagerly with [`zeroize::Zeroize::zeroize`]: the inner
+/// `blst::min_pk::SecretKey` implements `Zeroize`, so unlike the other SDK key
+/// types this one supports explicit zeroization.
 #[derive(Clone, Zeroize)]
 #[zeroize(drop)]
 pub struct Bls12381PrivateKey {
-    #[zeroize(skip)]
-    #[allow(unused)] // Field is used; lint false positive from Zeroize derive
     inner: SecretKey,
 }
 
@@ -358,8 +361,13 @@ impl Bls12381Signature {
 impl Bls12381Signature {
     /// Aggregates multiple signatures into a single aggregated signature.
     ///
-    /// The aggregated signature can be verified against an aggregated public key
-    /// for the same message, or against individual public keys for different messages.
+    /// The resulting signature can be verified with [`Bls12381PublicKey::verify`]
+    /// against the aggregate public key (see [`Bls12381PublicKey::aggregate`])
+    /// when every signer signed the **same** message.
+    ///
+    /// Note: this SDK does not expose an aggregate-verify API for the case where
+    /// the signers signed *different* messages, so only the shared-message
+    /// aggregation described above is supported here.
     ///
     /// # Errors
     ///
@@ -841,5 +849,19 @@ mod tests {
         let bytes = Signature::to_bytes(&signature);
         let restored = Bls12381Signature::from_bytes(&bytes).unwrap();
         assert_eq!(signature, restored);
+    }
+
+    #[test]
+    fn test_zeroize_clears_secret_bytes() {
+        use zeroize::Zeroize;
+
+        let mut private_key = Bls12381PrivateKey::from_seed(&[7u8; 32]).unwrap();
+        // Sanity: before zeroizing, the key material is non-zero.
+        assert_ne!(private_key.to_bytes(), [0u8; BLS12381_PRIVATE_KEY_LENGTH]);
+
+        private_key.zeroize();
+
+        // After zeroizing, the underlying secret scalar is cleared.
+        assert_eq!(private_key.to_bytes(), [0u8; BLS12381_PRIVATE_KEY_LENGTH]);
     }
 }

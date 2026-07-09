@@ -32,7 +32,7 @@
 use crate::error::{AptosError, AptosResult};
 use crate::transaction::{EntryFunction, TransactionPayload};
 use crate::types::{AccountAddress, EntryFunctionId, MoveModuleId, TypeTag};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// A type-safe builder for entry function payloads.
 ///
@@ -860,20 +860,36 @@ pub struct MoveU256(pub [u8; 32]);
 impl MoveU256 {
     /// Creates a `MoveU256` from a decimal string.
     ///
+    /// Supports the full unsigned 256-bit range (`0..=2^256 - 1`), matching how
+    /// the Aptos JSON API encodes `u256` values (as a decimal string).
+    ///
     /// # Errors
     ///
-    /// Returns an error if the string cannot be parsed as a u256 value.
+    /// Returns an error if `s` is empty, contains a non-digit character, or
+    /// represents a value that does not fit in 256 bits.
     pub fn parse(s: &str) -> AptosResult<Self> {
-        // Parse as big integer and convert to little-endian bytes
-        let mut bytes = [0u8; 32];
-
-        // Simple parsing for small values
-        if let Ok(val) = s.parse::<u128>() {
-            bytes[..16].copy_from_slice(&val.to_le_bytes());
-            return Ok(Self(bytes));
+        let s = s.trim();
+        if s.is_empty() || !s.bytes().all(|b| b.is_ascii_digit()) {
+            return Err(AptosError::Transaction(format!("Invalid u256: {s}")));
         }
 
-        Err(AptosError::Transaction(format!("Invalid u256: {s}")))
+        // Accumulate the value in a little-endian byte array: acc = acc * 10 + digit.
+        let mut bytes = [0u8; 32];
+        for digit in s.bytes().map(|b| b - b'0') {
+            let mut carry = u16::from(digit);
+            for byte in &mut bytes {
+                let v = u16::from(*byte) * 10 + carry;
+                *byte = (v & 0xff) as u8;
+                carry = v >> 8;
+            }
+            if carry != 0 {
+                return Err(AptosError::Transaction(format!(
+                    "u256 overflow: {s} exceeds 2^256 - 1"
+                )));
+            }
+        }
+
+        Ok(Self(bytes))
     }
 
     /// Creates a `MoveU256` from a u128.
@@ -887,6 +903,37 @@ impl MoveU256 {
     pub fn from_le_bytes(bytes: [u8; 32]) -> Self {
         Self(bytes)
     }
+
+    /// Returns the value as a decimal string (matching the Aptos JSON encoding).
+    pub fn to_decimal_string(&self) -> String {
+        if self.0.iter().all(|&b| b == 0) {
+            return "0".to_string();
+        }
+
+        // Repeatedly divide the big-endian representation by 10, collecting remainders.
+        // Each remainder is 0..=9, so we push it straight into a String as an ASCII
+        // digit -- no fallible UTF-8 conversion (and therefore no panic path).
+        let mut be = self.0;
+        be.reverse();
+        let mut digits = String::with_capacity(78);
+        while be.iter().any(|&b| b != 0) {
+            let mut rem = 0u16;
+            for byte in &mut be {
+                let cur = (rem << 8) | u16::from(*byte);
+                *byte = (cur / 10) as u8;
+                rem = cur % 10;
+            }
+            digits.push(char::from(b'0' + rem as u8));
+        }
+        // Digits were produced least-significant first; reverse for normal order.
+        digits.chars().rev().collect()
+    }
+}
+
+impl std::fmt::Display for MoveU256 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.to_decimal_string())
+    }
 }
 
 impl Serialize for MoveU256 {
@@ -894,13 +941,57 @@ impl Serialize for MoveU256 {
     where
         S: serde::Serializer,
     {
-        // BCS serializes u256 as 32 little-endian bytes (as a tuple of bytes, not a vec)
-        use serde::ser::SerializeTuple;
-        let mut tuple = serializer.serialize_tuple(32)?;
-        for byte in &self.0 {
-            tuple.serialize_element(byte)?;
+        if serializer.is_human_readable() {
+            // JSON (and other human-readable formats): the Aptos API encodes
+            // u256 as a decimal string.
+            serializer.serialize_str(&self.to_decimal_string())
+        } else {
+            // BCS serializes u256 as 32 little-endian bytes (a fixed tuple of
+            // bytes, not a length-prefixed vector).
+            use serde::ser::SerializeTuple;
+            let mut tuple = serializer.serialize_tuple(32)?;
+            for byte in &self.0 {
+                tuple.serialize_element(byte)?;
+            }
+            tuple.end()
         }
-        tuple.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for MoveU256 {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        if deserializer.is_human_readable() {
+            struct HrVisitor;
+            impl serde::de::Visitor<'_> for HrVisitor {
+                type Value = MoveU256;
+
+                fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    f.write_str("a u256 as a decimal string or unsigned integer")
+                }
+
+                fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<MoveU256, E> {
+                    MoveU256::parse(v).map_err(E::custom)
+                }
+
+                fn visit_u64<E: serde::de::Error>(self, v: u64) -> Result<MoveU256, E> {
+                    Ok(MoveU256::from_u128(u128::from(v)))
+                }
+
+                fn visit_u128<E: serde::de::Error>(self, v: u128) -> Result<MoveU256, E> {
+                    Ok(MoveU256::from_u128(v))
+                }
+            }
+            // Human-readable formats are self-describing, so `deserialize_any`
+            // dispatches to the string or integer visitor above.
+            deserializer.deserialize_any(HrVisitor)
+        } else {
+            // BCS: 32 little-endian bytes, matching the tuple serialization above.
+            let bytes = <[u8; 32]>::deserialize(deserializer)?;
+            Ok(Self(bytes))
+        }
     }
 }
 
@@ -1357,10 +1448,63 @@ mod tests {
     }
 
     #[test]
-    fn test_move_u256_parse_invalid() {
-        // Value larger than u128 currently returns error
-        let result = MoveU256::parse("999999999999999999999999999999999999999999999");
-        assert!(result.is_err());
+    fn test_move_u256_parse_large_value_beyond_u128() {
+        // A value larger than u128 (39+ digits) but within u256 range now parses.
+        // 2^128 = 340282366920938463463374607431768211456
+        let two_pow_128 = MoveU256::parse("340282366920938463463374607431768211456").unwrap();
+        let mut expected = [0u8; 32];
+        expected[16] = 1; // 2^128 sets the byte at little-endian offset 16
+        assert_eq!(two_pow_128.0, expected);
+    }
+
+    #[test]
+    fn test_move_u256_parse_max_and_overflow() {
+        // u256 max = 2^256 - 1 parses to all-0xff bytes.
+        let max = "115792089237316195423570985008687907853269984665640564039457584007913129639935";
+        assert_eq!(MoveU256::parse(max).unwrap().0, [0xff; 32]);
+
+        // One past the max overflows.
+        let over = "115792089237316195423570985008687907853269984665640564039457584007913129639936";
+        assert!(MoveU256::parse(over).is_err());
+
+        // Non-digit and empty inputs are rejected.
+        assert!(MoveU256::parse("12x3").is_err());
+        assert!(MoveU256::parse("").is_err());
+    }
+
+    #[test]
+    fn test_move_u256_bcs_roundtrip() {
+        let val = MoveU256::parse("340282366920938463463374607431768211457").unwrap();
+        let bytes = aptos_bcs::to_bytes(&val).unwrap();
+        assert_eq!(bytes.len(), 32);
+        let back: MoveU256 = aptos_bcs::from_bytes(&bytes).unwrap();
+        assert_eq!(back, val);
+    }
+
+    #[test]
+    fn test_move_u256_json_roundtrip_as_string() {
+        let val = MoveU256::parse("340282366920938463463374607431768211457").unwrap();
+        // Human-readable (JSON) encoding is the decimal string, matching the API.
+        let json = serde_json::to_string(&val).unwrap();
+        assert_eq!(json, "\"340282366920938463463374607431768211457\"");
+        let back: MoveU256 = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, val);
+        // The API sometimes sends small values as JSON numbers, too.
+        let from_num: MoveU256 = serde_json::from_str("12345").unwrap();
+        assert_eq!(from_num, MoveU256::from_u128(12345));
+    }
+
+    #[test]
+    fn test_move_u256_to_decimal_string() {
+        assert_eq!(MoveU256::from_u128(0).to_decimal_string(), "0");
+        assert_eq!(
+            MoveU256::from_u128(12_345_678_901_234_567_890).to_decimal_string(),
+            "12345678901234567890"
+        );
+        assert_eq!(
+            MoveU256([0xff; 32]).to_decimal_string(),
+            "115792089237316195423570985008687907853269984665640564039457584007913129639935"
+        );
     }
 
     #[test]

@@ -14,9 +14,14 @@ use std::fmt;
 /// # Known Chain IDs
 ///
 /// - Mainnet: 1
-/// - Testnet: 2  
-/// - Devnet: varies (typically 165)
-/// - Local: 4 (default for local testing)
+/// - Testnet: 2
+/// - Devnet: not fixed -- devnet is reset periodically and its chain ID
+///   changes on each reset, so it must be fetched from the network rather
+///   than hardcoded.
+/// - Localnet: typically 4, but depends on how the local node was configured.
+///
+/// Note: [`ChainId::default()`] returns testnet (`2`), not a local or devnet
+/// value.
 ///
 /// # Example
 ///

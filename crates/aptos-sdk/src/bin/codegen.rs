@@ -90,7 +90,7 @@ struct Args {
     #[arg(long)]
     no_structs: bool,
 
-    /// Use builder pattern for entry functions
+    /// Use builder pattern for entry functions (not yet implemented; currently a no-op)
     #[arg(long)]
     builder: bool,
 }

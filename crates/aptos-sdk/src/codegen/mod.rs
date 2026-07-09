@@ -79,10 +79,11 @@
 //!
 //! # Generate from on-chain module with Move source
 //! aptos-codegen --module 0x1::coin --network testnet --source coin.move --output src/
-//!
-//! # Generate from a directory of ABIs
-//! aptos-codegen --input-dir abi/ --output src/generated/
 //! ```
+//!
+//! The CLI processes a single ABI (`--input`) or a single on-chain module
+//! (`--module`) per invocation. To generate from a whole directory of ABI
+//! files, use [`build_helper::generate_from_directory`] from a `build.rs`.
 
 pub mod build_helper;
 mod generator;

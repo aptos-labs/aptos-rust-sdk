@@ -75,7 +75,10 @@ async fn main() -> anyhow::Result<()> {
 | `bls` | &mdash; | BLS12-381 signatures |
 | `keyless` | &mdash; | OIDC-based keyless authentication |
 | `macros` | &mdash; | Procedural macros for type-safe contract bindings |
-| `full` | &mdash; | Enable all features |
+| `cli` | &mdash; | Enables the `aptos-codegen` binary for Move ABI code generation |
+| `e2e` | &mdash; | Enables end-to-end tests against a live network (`ed25519,secp256k1,faucet`) |
+| `fuzzing` | &mdash; | Enables `proptest`/`arbitrary` property-testing infrastructure |
+| `full` | &mdash; | Enable all signature/account/API features (`ed25519,secp256k1,secp256r1,bls,keyless,indexer,faucet,mnemonic`) |
 
 ### Minimal Build
 
@@ -119,6 +122,7 @@ Complete, runnable examples live in [`crates/aptos-sdk/examples/`](crates/aptos-
 | [`multi_agent.rs`](crates/aptos-sdk/examples/multi_agent.rs) | Multi-signer transactions |
 | [`transaction_waiting.rs`](crates/aptos-sdk/examples/transaction_waiting.rs) | Transaction waiting strategies |
 | [`advanced_transactions.rs`](crates/aptos-sdk/examples/advanced_transactions.rs) | Complex transaction combinations |
+| [`orderless_transaction.rs`](crates/aptos-sdk/examples/orderless_transaction.rs) | Orderless (nonce-based) transactions &mdash; features: `ed25519,faucet` |
 
 ### Account Types
 
@@ -128,6 +132,15 @@ Complete, runnable examples live in [`crates/aptos-sdk/examples/`](crates/aptos-
 | [`multi_key_account.rs`](crates/aptos-sdk/examples/multi_key_account.rs) | Multi-key (mixed signature) accounts |
 | [`multi_sig_account.rs`](crates/aptos-sdk/examples/multi_sig_account.rs) | MultiEd25519 threshold accounts |
 | [`multisig_v2.rs`](crates/aptos-sdk/examples/multisig_v2.rs) | On-chain multisig (governance) accounts |
+| [`keyless_account.rs`](crates/aptos-sdk/examples/keyless_account.rs) | OIDC-based keyless account &mdash; features: `keyless,ed25519,faucet` |
+| [`rotate_auth_key.rs`](crates/aptos-sdk/examples/rotate_auth_key.rs) | Rotate an account's authentication key &mdash; features: `ed25519,faucet` |
+
+### Tokens & Digital Assets
+
+| Example | Description |
+|---|---|
+| [`fungible_asset_transfer.rs`](crates/aptos-sdk/examples/fungible_asset_transfer.rs) | Transfer a fungible asset (FA standard) &mdash; features: `ed25519,faucet` |
+| [`digital_asset.rs`](crates/aptos-sdk/examples/digital_asset.rs) | Digital Asset (NFT) operations &mdash; features: `ed25519,faucet` |
 
 ### Smart Contracts
 
@@ -136,6 +149,7 @@ Complete, runnable examples live in [`crates/aptos-sdk/examples/`](crates/aptos-
 | [`deploy_module.rs`](crates/aptos-sdk/examples/deploy_module.rs) | Deploy a Move module |
 | [`call_contract.rs`](crates/aptos-sdk/examples/call_contract.rs) | Call contract entry functions |
 | [`read_contract_state.rs`](crates/aptos-sdk/examples/read_contract_state.rs) | Read contract state |
+| [`table_item.rs`](crates/aptos-sdk/examples/table_item.rs) | Read on-chain table items &mdash; features: `ed25519` |
 | [`nft_operations.rs`](crates/aptos-sdk/examples/nft_operations.rs) | NFT / Digital Asset interactions |
 | [`codegen.rs`](crates/aptos-sdk/examples/codegen.rs) | Contract binding generation |
 | [`contract_bindings.rs`](crates/aptos-sdk/examples/contract_bindings.rs) | Using generated type-safe bindings |

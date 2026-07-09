@@ -13,20 +13,23 @@
 //! # Example
 //!
 //! ```rust,ignore
-//! use aptos_sdk::transaction::batch::TransactionBatch;
+//! use aptos_sdk::transaction::batch::TransactionBatchBuilder;
 //!
-//! let batch = TransactionBatch::new(&aptos, &sender)
-//!     .add(payload1)
-//!     .add(payload2)
-//!     .add(payload3)
-//!     .build()
-//!     .await?;
+//! // Build and sign a batch of transactions.
+//! let batch = TransactionBatchBuilder::new()
+//!     .sender(account.address())
+//!     .starting_sequence_number(seq_num)
+//!     .chain_id(ChainId::testnet())
+//!     .add_payload(payload1)
+//!     .add_payload(payload2)
+//!     .add_payload(payload3)
+//!     .build_and_sign(&account)?;
 //!
-//! // Submit all transactions in parallel
-//! let results = batch.submit_all().await;
+//! // Submit all transactions in parallel (returns immediately).
+//! let results = batch.submit_all(&fullnode).await;
 //!
-//! // Or submit and wait for all to complete
-//! let results = batch.submit_and_wait_all().await;
+//! // Or submit and wait for all to complete.
+//! let results = batch.submit_and_wait_all(&fullnode, None).await;
 //! ```
 
 use crate::account::Account;
@@ -109,9 +112,15 @@ impl BatchTransactionStatus {
 /// Builder for creating a batch of transactions.
 ///
 /// This builder handles:
-/// - Automatic sequence number management
-/// - Gas estimation
+/// - Automatic sequence number management (incrementing from a starting value)
 /// - Transaction signing
+///
+/// Gas parameters use fixed defaults (a `gas_unit_price` of 100 octas and a
+/// `max_gas_amount` of 2,000,000) unless overridden via
+/// [`gas_unit_price`](Self::gas_unit_price) / [`max_gas_amount`](Self::max_gas_amount).
+/// This builder does **not** query the network for a recommended gas price;
+/// live gas-price estimation happens one level up in [`BatchOperations::build`],
+/// which fetches the estimate and passes it to this builder.
 ///
 /// # Example
 ///

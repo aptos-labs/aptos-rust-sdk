@@ -55,12 +55,12 @@
 //! let payload = EntryFunction::apt_transfer(recipient, 1000)?;
 //!
 //! let signed_txn = SponsoredTransactionBuilder::new()
-//!     .sender(&user_account)
+//!     .sender(user_account.address())
 //!     .sequence_number(0)
-//!     .fee_payer(&sponsor_account)
+//!     .fee_payer(sponsor_account.address())
 //!     .payload(payload.into())
 //!     .chain_id(ChainId::testnet())
-//!     .build_and_sign()?;
+//!     .build_and_sign(&user_account, &[], &sponsor_account)?;
 //! ```
 //!
 //! # Example: Batch Transactions

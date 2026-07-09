@@ -340,8 +340,7 @@ let value: MyType = aptos_bcs::from_bytes(&bytes)?;
 Move types are available in the new SDK:
 
 ```rust
-use aptos_sdk::types::move_types::{MoveStructTag, MoveType};
-use aptos_sdk::types::TypeTag;
+use aptos_sdk::types::{MoveStructTag, MoveType, TypeTag};
 ```
 
 ---
@@ -352,8 +351,16 @@ The new SDK includes features not available in the old SDK:
 
 ### Multiple Signature Schemes
 
+> **⚠️ Secp256r1 caveat:** `Secp256r1Account` is **deprecated for on-chain
+> transaction signing** and is retained for off-chain use only (raw P-256
+> sign/verify, key interop). Bare `secp256r1` signatures are rejected by Aptos
+> validators because the on-chain `AnySignature` variant 2 is `WebAuthn`, not
+> bare `Secp256r1Ecdsa`. For WebAuthn/passkey (P-256) signing of Aptos
+> transactions, use [`WebAuthnAccount`] instead — it reuses the same key
+> material and emits the correct WebAuthn-envelope wire format.
+
 ```rust
-use aptos_sdk::account::{Ed25519Account, Secp256k1Account, Secp256r1Account};
+use aptos_sdk::account::{Ed25519Account, Secp256k1Account, WebAuthnAccount};
 
 // Ed25519 (default, most common)
 let ed25519_account = Ed25519Account::generate();
@@ -361,8 +368,9 @@ let ed25519_account = Ed25519Account::generate();
 // Secp256k1 (Ethereum-compatible)
 let secp256k1_account = Secp256k1Account::generate();
 
-// Secp256r1 / P-256 (WebAuthn/passkey compatible)
-let secp256r1_account = Secp256r1Account::generate();
+// Secp256r1 / P-256 for on-chain signing: use WebAuthnAccount (the supported
+// path). `Secp256r1Account` is deprecated for transactions (off-chain only).
+let webauthn_account = WebAuthnAccount::generate();
 ```
 
 ### MultiKeyAccount (Mixed Signature Schemes)
@@ -506,8 +514,11 @@ Query indexed blockchain data via GraphQL:
 ```rust
 // Requires `indexer` feature (default)
 if let Some(indexer) = aptos.indexer() {
-    // Use GraphQL queries
-    let result = indexer.query(my_query).await?;
+    // `query::<T>(query: &str, variables: Option<serde_json::Value>)` returns
+    // the deserialized `data` payload. Pass a type annotation so `T` is known,
+    // borrow the query string, and supply optional GraphQL variables.
+    let my_query = r#"query { ledger_infos { chain_id } }"#;
+    let result: serde_json::Value = indexer.query(my_query, None).await?;
 }
 ```
 

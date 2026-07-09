@@ -28,9 +28,23 @@
 //!
 //! ## Key Material Protection
 //!
-//! Private key types implement `Zeroize` and `ZeroizeOnDrop` to clear sensitive
-//! key material from memory when dropped. The underlying cryptographic libraries
-//! (ed25519-dalek, k256, p256) also implement secure key handling.
+//! Private key types clear their secret key material from memory when they are
+//! dropped. The SDK wrappers hold the underlying key types directly
+//! (`ed25519_dalek::SigningKey`, the `k256`/`p256` `SigningKey`, and
+//! `blst::min_pk::SecretKey`), each of which zeroizes its own secret on drop
+//! (`ed25519-dalek` / `k256` / `p256` implement `ZeroizeOnDrop`; `blst`
+//! zeroizes its `SecretKey` on drop). The secret is therefore wiped when the
+//! wrapper goes out of scope.
+//!
+//! The BLS private key (`Bls12381PrivateKey`) additionally implements
+//! `Zeroize`, so it can be wiped eagerly via `zeroize()`. For the Ed25519,
+//! Secp256k1, and Secp256r1 keys the underlying types do not expose `Zeroize`,
+//! so eager zeroization is delegated to drop rather than an explicit
+//! `zeroize()` call.
+//!
+//! Note: secret bytes copied out via `to_bytes()`, `to_hex()`, or `Clone` are
+//! independent copies that this mechanism does not track; callers must wipe
+//! those themselves.
 //!
 //! # Example
 //!

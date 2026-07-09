@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+### Fixed
+- `aptos_contract!` no longer emits uncompilable code for generic Move structs
+  (E0392 "parameter is never used"); a skipped `PhantomData` marker is now
+  generated for each unused type parameter.
+- Move `u256` now maps to `aptos_sdk::transaction::MoveU256` (which round-trips
+  as 32-byte little-endian in BCS and as a decimal string in JSON) instead of
+  the nonexistent `aptos_sdk::types::U256`, which failed to compile.
+- Generated entry-function code now uses fully-qualified paths
+  (`::aptos_sdk::aptos_bcs`, `::aptos_sdk::error`, `::aptos_sdk::transaction`,
+  `::aptos_sdk::types`) so it compiles in crates depending only on `aptos-sdk`.
+- Parameter/struct/function names equal to `self`/`Self`/`crate`/`super` no
+  longer panic the macro (`Ident::new_raw` panics on them); they are escaped
+  with a trailing underscore.
+
 ## [0.3.0] - 2026-05-21
 
 ### Changed
