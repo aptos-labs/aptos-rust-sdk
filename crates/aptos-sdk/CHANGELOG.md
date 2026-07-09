@@ -18,6 +18,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   memory.
 
 ### Fixed
+- `Secp256r1PrivateKey::sign_prehashed` / `Secp256r1PublicKey::verify_prehashed`
+  double-hashed their input: they went through `p256`'s ordinary `Signer`/
+  `Verifier`, which applies SHA-256 internally, so a signature was produced over
+  `SHA-256(digest)` rather than over the supplied 32-byte `digest`. Such
+  signatures never verified against the digest by any external or on-chain
+  verifier (only the SDK's own equally-wrong verifier accepted them). Both now
+  use the `PrehashSigner`/`PrehashVerifier` hazmat API and operate on the digest
+  directly, matching the `secp256k1` equivalents.
 - `crypto::signing_message` produced a chain-incompatible message: it hashed
   `SHA3-256(domain || bcs_bytes)` (a single digest returning `[u8; 32]`) instead
   of the real Aptos construction `SHA3-256(domain) || bcs_bytes`. Signing with
@@ -71,6 +79,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   are format-aware: 32-byte little-endian in BCS, decimal string in JSON.
 
 ### Changed
+- `AccountAddress` now treats the zero address (`0x0`) as a special address per
+  AIP-40: `is_special()` returns `true` for it and `Display`/`to_standard_string`
+  render it as `"0x0"` (short form) instead of the full 64-character long form.
+  This matches aptos-core's `AccountAddress::is_special` and the TypeScript SDK.
+  BCS and JSON serialization are unchanged (JSON still uses the long hex form).
 - `RetryExt` is now a usable extension trait: a blanket impl for
   `Fn() -> Future<Output = AptosResult<T>>` operation factories was added, so
   `.with_retry(&config)` actually runs the operation under the retry executor.
@@ -91,6 +104,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   updated for the previously-omitted examples, the `cli` feature, the `config`/
   `error`/`retry` modules, and the orderless `TransactionPayload::Payload`
   variant.
+- `Aptos::chain_id` / `Aptos::ensure_chain_id` docs corrected: devnet does **not**
+  have a fixed, immediately-known chain ID (it is `0` until resolved from the
+  node, like a custom network), because devnet is re-genesised regularly. Only
+  mainnet (1), testnet (2), and local (4) return their chain ID without a
+  network request.
 
 ## [0.6.0] - 2026-07-08
 
