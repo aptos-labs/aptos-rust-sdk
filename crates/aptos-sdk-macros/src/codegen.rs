@@ -87,14 +87,27 @@ fn is_rust_keyword(name: &str) -> bool {
     )
 }
 
+/// Returns true for keywords that cannot be turned into raw identifiers.
+///
+/// `proc_macro2::Ident::new_raw` (and Rust's `r#` syntax) reject `self`,
+/// `Self`, `crate`, and `super`, so these must be escaped with a trailing
+/// underscore instead of being wrapped as raw identifiers.
+fn is_non_raw_keyword(name: &str) -> bool {
+    matches!(name, "crate" | "self" | "Self" | "super")
+}
+
 /// Safely creates an `Ident` from a string, returning a compile error if invalid.
 ///
-/// Uses raw identifiers (`r#name`) for Rust keywords to avoid panics.
+/// Uses raw identifiers (`r#name`) for most Rust keywords to avoid panics, and
+/// falls back to a trailing-underscore suffix for the keywords that cannot be
+/// expressed as raw identifiers (`self`, `Self`, `crate`, `super`).
 fn safe_format_ident(name: &str) -> Result<proc_macro2::Ident, TokenStream> {
     if let Err(e) = validate_rust_ident(name) {
         return Err(syn::Error::new(proc_macro2::Span::call_site(), e).to_compile_error());
     }
-    if is_rust_keyword(name) {
+    if is_non_raw_keyword(name) {
+        Ok(format_ident!("{}_", name))
+    } else if is_rust_keyword(name) {
         Ok(proc_macro2::Ident::new_raw(
             name,
             proc_macro2::Span::call_site(),
@@ -259,11 +272,25 @@ fn generate_struct(struct_def: &MoveStructDef) -> TokenStream {
             }
         }
     } else {
+        // Move generic parameters do not always map onto a Rust field (the
+        // field types resolve to concrete Rust types), so without a marker the
+        // generated `struct Name<T0, ..>` fails to compile with E0392
+        // ("parameter is never used"). A skipped `PhantomData` field ties every
+        // type parameter into the struct while staying invisible to serde/BCS.
+        // A single parameter must not be wrapped in parentheses (`unused_parens`).
+        let phantom_ty = if type_params.len() == 1 {
+            let only = &type_params[0];
+            quote! { ::core::marker::PhantomData<#only> }
+        } else {
+            quote! { ::core::marker::PhantomData<(#(#type_params),*)> }
+        };
         quote! {
             #[doc = #doc]
             #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
             pub struct #name<#(#type_params),*> {
-                #(#fields),*
+                #(#fields,)*
+                #[serde(skip)]
+                _phantom: #phantom_ty,
             }
         }
     }
@@ -311,13 +338,15 @@ fn generate_entry_function(
         })
         .collect();
 
-    // Build BCS encoding for args
+    // Build BCS encoding for args.
+    // Fully-qualified paths (`::aptos_sdk::...`) so the generated code compiles
+    // in any downstream crate that depends only on `aptos-sdk`.
     let arg_encodings: Vec<_> = params
         .iter()
         .map(|(name, _, _)| {
             quote! {
-                aptos_bcs::to_bytes(&#name)
-                    .map_err(|e| aptos_sdk::error::AptosError::Bcs(e.to_string()))?
+                ::aptos_sdk::aptos_bcs::to_bytes(&#name)
+                    .map_err(|e| ::aptos_sdk::error::AptosError::Bcs(e.to_string()))?
             }
         })
         .collect();
@@ -329,7 +358,7 @@ fn generate_entry_function(
         .unwrap_or_default();
 
     let type_args_param = if has_type_params {
-        quote! { , type_args: Vec<aptos_sdk::types::TypeTag> }
+        quote! { , type_args: Vec<::aptos_sdk::types::TypeTag> }
     } else {
         quote! {}
     };
@@ -349,19 +378,19 @@ fn generate_entry_function(
 
     quote! {
         #[doc = #full_doc]
-        pub fn #fn_name(&self, #(#param_defs),* #type_args_param) -> aptos_sdk::error::AptosResult<aptos_sdk::transaction::TransactionPayload> {
+        pub fn #fn_name(&self, #(#param_defs),* #type_args_param) -> ::aptos_sdk::error::AptosResult<::aptos_sdk::transaction::TransactionPayload> {
             let args = vec![
                 #(#arg_encodings),*
             ];
 
             let function_id = format!("{}::{}::{}", self.address(), Self::MODULE, #func_name_str);
-            let entry_fn = aptos_sdk::transaction::EntryFunction::from_function_id(
+            let entry_fn = ::aptos_sdk::transaction::EntryFunction::from_function_id(
                 &function_id,
                 #type_args_use,
                 args,
             )?;
 
-            Ok(aptos_sdk::transaction::TransactionPayload::EntryFunction(entry_fn))
+            Ok(::aptos_sdk::transaction::TransactionPayload::EntryFunction(entry_fn))
         }
     }
 }
@@ -551,8 +580,12 @@ fn move_type_to_rust(move_type: &str) -> TokenStream {
         "u32" => quote! { u32 },
         "u64" => quote! { u64 },
         "u128" => quote! { u128 },
-        "u256" => quote! { aptos_sdk::types::U256 },
-        "address" | "&signer" | "signer" => quote! { aptos_sdk::types::AccountAddress },
+        // Move `u256` has no primitive Rust counterpart, so it maps to the SDK's
+        // `MoveU256` value type, which round-trips correctly in both BCS (32-byte
+        // little-endian, for entry-function arguments) and JSON (decimal string,
+        // matching the Aptos API encoding).
+        "u256" => quote! { ::aptos_sdk::transaction::MoveU256 },
+        "address" | "&signer" | "signer" => quote! { ::aptos_sdk::types::AccountAddress },
         t if t.starts_with("vector<u8>") => quote! { Vec<u8> },
         t if t.starts_with("vector<") => {
             // Extract inner type
@@ -573,7 +606,7 @@ fn move_type_to_rust(move_type: &str) -> TokenStream {
             }
             quote! { serde_json::Value }
         }
-        t if t.contains("::object::Object<") => quote! { aptos_sdk::types::AccountAddress },
+        t if t.contains("::object::Object<") => quote! { ::aptos_sdk::types::AccountAddress },
         _ => quote! { serde_json::Value },
     }
 }
@@ -621,15 +654,107 @@ fn to_snake_case(s: &str) -> String {
 }
 
 /// Makes an identifier safe for Rust.
+///
+/// The result is fed to `format_ident!`, which cannot build raw identifiers, so
+/// every Rust keyword is escaped with a trailing underscore (`type` -> `type_`,
+/// `self` -> `self_`) rather than a `r#` prefix. This also avoids panicking on
+/// the keywords that cannot be raw identifiers at all (`self`, `crate`, ...).
 fn safe_ident(name: &str) -> String {
     let snake = to_snake_case(name);
-    match snake.as_str() {
-        "type" | "self" | "move" | "ref" | "mut" | "fn" | "mod" | "use" | "pub" | "let" | "if"
-        | "else" | "match" | "loop" | "while" | "for" | "in" | "return" | "break" | "continue"
-        | "async" | "await" | "struct" | "enum" | "trait" | "impl" | "dyn" | "const" | "static"
-        | "unsafe" | "extern" | "crate" | "super" | "where" | "as" | "true" | "false" => {
-            format!("r#{snake}")
+    if is_rust_keyword(&snake) {
+        format!("{snake}_")
+    } else {
+        snake
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn safe_ident_suffixes_keywords() {
+        // Non-raw-able keywords must be suffixed (never `r#`).
+        assert_eq!(safe_ident("self"), "self_");
+        assert_eq!(safe_ident("crate"), "crate_");
+        assert_eq!(safe_ident("super"), "super_");
+        assert_eq!(safe_ident("Self"), "self_");
+        // Regular keywords are also suffixed (format_ident! cannot build raw idents).
+        assert_eq!(safe_ident("type"), "type_");
+        assert_eq!(safe_ident("move"), "move_");
+        // Non-keywords pass through unchanged.
+        assert_eq!(safe_ident("amount"), "amount");
+    }
+
+    #[test]
+    fn safe_format_ident_never_panics_on_non_raw_keywords() {
+        // These would panic in `Ident::new_raw`; they must be suffixed instead.
+        for kw in ["self", "Self", "crate", "super"] {
+            let ident = safe_format_ident(kw).expect("should not error");
+            assert_eq!(ident.to_string(), format!("{kw}_"));
         }
-        _ => snake,
+        // A raw-able keyword becomes a raw identifier.
+        let ident = safe_format_ident("type").expect("should not error");
+        assert_eq!(ident.to_string(), "r#type");
+    }
+
+    fn parse_abi(json: &str) -> MoveModuleABI {
+        serde_json::from_str(json).expect("valid ABI")
+    }
+
+    #[test]
+    fn generated_contract_impl_is_valid_rust() {
+        // Generic struct + u256 field/arg/return, previously uncompilable.
+        let abi = parse_abi(
+            r#"{
+                "address": "0x1",
+                "name": "test_mod",
+                "exposed_functions": [
+                    {"name": "deposit", "visibility": "public", "is_entry": true,
+                     "is_view": false, "generic_type_params": [],
+                     "params": ["&signer", "address", "u256"], "return": []},
+                    {"name": "supply", "visibility": "public", "is_entry": false,
+                     "is_view": true, "generic_type_params": [],
+                     "params": [], "return": ["u256"]}
+                ],
+                "structs": [
+                    {"name": "Coin", "is_native": false, "abilities": ["store"],
+                     "generic_type_params": [{"constraints": []}],
+                     "fields": [{"name": "value", "type": "u256"}]},
+                    {"name": "Pair", "is_native": false, "abilities": ["store"],
+                     "generic_type_params": [{"constraints": []}, {"constraints": []}],
+                     "fields": [{"name": "amount", "type": "u64"}]}
+                ]
+            }"#,
+        );
+
+        let name = format_ident!("TestModule");
+        let tokens = generate_contract_impl(&name, &abi, None);
+        let code = tokens.to_string();
+
+        // Must parse as valid Rust items.
+        syn::parse2::<syn::File>(tokens)
+            .unwrap_or_else(|e| panic!("generated code is not valid Rust: {e}\n---\n{code}"));
+
+        // Generic structs are marked with PhantomData (fixes E0392).
+        assert!(
+            code.contains("PhantomData"),
+            "expected PhantomData:\n{code}"
+        );
+        // u256 maps to the real `MoveU256` value type, not the nonexistent
+        // `types::U256` the macro used to emit.
+        assert!(
+            !code.contains("types :: U256"),
+            "u256 must not map to the nonexistent types::U256:\n{code}"
+        );
+        assert!(
+            code.contains(":: aptos_sdk :: transaction :: MoveU256"),
+            "u256 must map to MoveU256:\n{code}"
+        );
+        // BCS paths are fully qualified.
+        assert!(
+            code.contains(":: aptos_sdk :: aptos_bcs :: to_bytes"),
+            "BCS calls must be fully qualified:\n{code}"
+        );
     }
 }

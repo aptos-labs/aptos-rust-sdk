@@ -5,25 +5,26 @@ This doc goes into the required features for an SDK, and what they should suppor
 ## Binary Canonical Serialization (BCS)
 
 It should support serialization and deserialization of:
-- [ ] unsigned integers u8, u16, u32, u64, u128, u256
-- [ ] signed integers i8, i16, i32, i64, i128, i256
-- [ ] booleans bool
-- [ ] vectors
-- [ ] tuples
-- [ ] fixed length vectors (and addresses)
+- [x] unsigned integers u8, u16, u32, u64, u128, u256
+- [ ] signed integers i8, i16, i32, i64, i128, i256 (Move/Aptos has no signed
+  integer types; not implemented)
+- [x] booleans bool
+- [x] vectors
+- [x] tuples
+- [x] fixed length vectors (and addresses)
 
 Serialization should be provided as the native way for the language of the SDK.  More details of the specification can be found [here](https://github.com/aptos-labs/bcs)
 
 ## Transaction Signing
 
 Transactions should be able to be signed and authorized with the following key types:
-- [ ] Ed25519 (standalone) - `TransactionAuthenticator::Ed25519` (variant 0)
-- [ ] MultiEd25519 - `TransactionAuthenticator::MultiEd25519` (variant 1)
-- [ ] Ed25519 (Single Key) - `TransactionAuthenticator::SingleSender` > `AccountAuthenticator::SingleKey` > `AnyPublicKey::Ed25519` (variant 0)
-- [ ] Secp256k1 (Single Key) - `TransactionAuthenticator::SingleSender` > `AccountAuthenticator::SingleKey` > `AnyPublicKey::Secp256k1Ecdsa` (variant 1)
-- [ ] Secp256r1 (Single Key) - `TransactionAuthenticator::SingleSender` > `AccountAuthenticator::SingleKey` > `AnyPublicKey::Secp256r1Ecdsa` (variant 2)
-- [ ] MultiKey - `TransactionAuthenticator::SingleSender` > `AccountAuthenticator::MultiKey` (variant 3)
-- [ ] (Optional) Keyless - `TransactionAuthenticator::SingleSender` > `AccountAuthenticator::SingleKey` > `AnyPublicKey::Keyless` (variant 3)
+- [x] Ed25519 (standalone) - `TransactionAuthenticator::Ed25519` (variant 0)
+- [x] MultiEd25519 - `TransactionAuthenticator::MultiEd25519` (variant 1)
+- [x] Ed25519 (Single Key) - `TransactionAuthenticator::SingleSender` > `AccountAuthenticator::SingleKey` > `AnyPublicKey::Ed25519` (variant 0)
+- [x] Secp256k1 (Single Key) - `TransactionAuthenticator::SingleSender` > `AccountAuthenticator::SingleKey` > `AnyPublicKey::Secp256k1Ecdsa` (variant 1)
+- [x] Secp256r1 (Single Key) - `TransactionAuthenticator::SingleSender` > `AccountAuthenticator::SingleKey` > `AnyPublicKey::Secp256r1Ecdsa` (variant 2)
+- [x] MultiKey - `TransactionAuthenticator::SingleSender` > `AccountAuthenticator::MultiKey` (variant 3)
+- [x] (Optional) Keyless - `TransactionAuthenticator::SingleSender` > `AccountAuthenticator::SingleKey` > `AnyPublicKey::Keyless` (variant 3)
 
 ### Transaction Signing Process
 
@@ -90,13 +91,13 @@ Transactions should be able to be signed and authorized with the following key t
 ## Authentication Keys
 
 Authentication keys must be able to be created for accounts that use:
-- [ ] Ed25519 (standalone): `auth_key = SHA3-256(public_key || 0x00)` (scheme_id = 0)
-- [ ] MultiEd25519: `auth_key = SHA3-256(serialized_multi_public_key || 0x01)` (scheme_id = 1)
-- [ ] Ed25519 (Single Key): `auth_key = SHA3-256(BCS(AnyPublicKey::Ed25519) || 0x02)` (scheme_id = 2)
-- [ ] Secp256k1 (Single Key): `auth_key = SHA3-256(BCS(AnyPublicKey::Secp256k1) || 0x02)` (scheme_id = 2)
-- [ ] Secp256r1 (Single Key): `auth_key = SHA3-256(BCS(AnyPublicKey::Secp256r1) || 0x02)` (scheme_id = 2)
-- [ ] MultiKey: `auth_key = SHA3-256(BCS(MultiKey) || 0x03)` (scheme_id = 3)
-- [ ] (Optional) Keyless: `auth_key = SHA3-256(BCS(AnyPublicKey::Keyless) || 0x02)` (scheme_id = 2)
+- [x] Ed25519 (standalone): `auth_key = SHA3-256(public_key || 0x00)` (scheme_id = 0)
+- [x] MultiEd25519: `auth_key = SHA3-256(serialized_multi_public_key || 0x01)` (scheme_id = 1)
+- [x] Ed25519 (Single Key): `auth_key = SHA3-256(BCS(AnyPublicKey::Ed25519) || 0x02)` (scheme_id = 2)
+- [x] Secp256k1 (Single Key): `auth_key = SHA3-256(BCS(AnyPublicKey::Secp256k1) || 0x02)` (scheme_id = 2)
+- [x] Secp256r1 (Single Key): `auth_key = SHA3-256(BCS(AnyPublicKey::Secp256r1) || 0x02)` (scheme_id = 2)
+- [x] MultiKey: `auth_key = SHA3-256(BCS(MultiKey) || 0x03)` (scheme_id = 3)
+- [x] (Optional) Keyless: `auth_key = SHA3-256(BCS(AnyPublicKey::Keyless) || 0x02)` (scheme_id = 2)
 
 **Important**: The same key using different authenticator formats (e.g., Ed25519 standalone vs SingleKey(Ed25519)) will produce **different addresses** due to different scheme IDs.
 
@@ -123,24 +124,24 @@ Authentication keys must be able to be created for accounts that use:
 ## Key Types
 
 Must support the following key types
-- [ ] Ed25519 - 32-byte public key, 64-byte signature (EdDSA over Curve25519)
-- [ ] Secp256k1 - 65-byte uncompressed public key (04 || x || y), 64-byte signature (r || s)
-- [ ] Secp256r1 - 65-byte uncompressed public key (04 || x || y), WebAuthn signatures
+- [x] Ed25519 - 32-byte public key, 64-byte signature (EdDSA over Curve25519)
+- [x] Secp256k1 - 65-byte uncompressed public key (04 || x || y), 64-byte signature (r || s)
+- [x] Secp256r1 - 65-byte uncompressed public key (04 || x || y), WebAuthn signatures
 
 All keys must support reading and outputting in AIP-80 format.
 
 ## Transaction Types
 
 Transactions must be able to use the following replay protectors (not at the same time)
-- [ ] Sequence Number - u64 field in RawTransaction, must equal on-chain sequence number
-- [ ] Orderless (hash for 60s)
+- [x] Sequence Number - u64 field in RawTransaction, must equal on-chain sequence number
+- [x] Orderless (hash for 60s)
 
 Transactions also must support the following types:
-- [ ] Standard (Single sender) - Uses `TransactionAuthenticator::Ed25519` or `TransactionAuthenticator::SingleSender`
-- [ ] Multiagent - Uses `TransactionAuthenticator::MultiAgent` (variant 2)
-- [ ] Multisig - Uses `TransactionPayload::Multisig` (variant 3)
-- [ ] Fee Payer (Sponsored) - Uses `TransactionAuthenticator::FeePayer` (variant 3)
-- [ ] Multiagent fee payer - Combines MultiAgent and FeePayer patterns
+- [x] Standard (Single sender) - Uses `TransactionAuthenticator::Ed25519` or `TransactionAuthenticator::SingleSender`
+- [x] Multiagent - Uses `TransactionAuthenticator::MultiAgent` (variant 2)
+- [x] Multisig - Uses `TransactionPayload::Multisig` (variant 3)
+- [x] Fee Payer (Sponsored) - Uses `TransactionAuthenticator::FeePayer` (variant 3)
+- [x] Multiagent fee payer - Combines MultiAgent and FeePayer patterns
 
 ### TransactionPayload Enum Variants
 
@@ -150,6 +151,7 @@ Transactions also must support the following types:
 | ModuleBundle | 1 | **Deprecated** - Do not use |
 | EntryFunction | 2 | Call an entry function (most common) |
 | Multisig | 3 | Execute via multisig account |
+| Payload | 4 | Unified payload (executable + extra config); used for **orderless** (nonce-based) transactions |
 
 ### EntryFunction Payload Structure
 
@@ -193,8 +195,9 @@ Transactions are signed by BCS serializing the transaction payload.
 ## Account Addresses
 
 Must support account addresses that are
-- [ ] Parsable from string (hex format with or without 0x prefix)
-- [ ] Outputs in AIP-40 format (LONG format: 64 hex characters with 0x prefix, lowercase, no trimming of leading zeros)
+- [x] Parsable from string (hex format with or without 0x prefix)
+- [x] Outputs in AIP-40 format (LONG format for standard addresses; special
+  addresses such as `0x1` use the AIP-40 SHORT form)
 
 ### Account Address Format
 

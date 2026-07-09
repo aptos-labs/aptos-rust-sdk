@@ -172,13 +172,15 @@ impl SponsoredTransactionBuilder {
     }
 
     /// Sets the expiration time relative to now.
+    ///
+    /// Uses saturating arithmetic to handle edge cases like system time going backwards.
     #[must_use]
     pub fn expiration_from_now(mut self, seconds: u64) -> Self {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs();
-        self.expiration_timestamp_secs = Some(now + seconds);
+        self.expiration_timestamp_secs = Some(now.saturating_add(seconds));
         self
     }
 

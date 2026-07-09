@@ -511,6 +511,70 @@ impl From<Ed25519Authenticator> for AccountAuthenticator {
     }
 }
 
+/// Zeroes the Ed25519 signature scalars in a BCS-encoded `MultiEd25519Signature`
+/// blob while preserving the trailing 4-byte signer bitmap (and therefore the
+/// signer count implied by it).
+///
+/// The legacy `MultiEd25519Signature` wire layout is
+/// `sig_0(64) || .. || sig_{m-1}(64) || bitmap(4)` with no per-signature tags, so
+/// keeping the final four bytes intact yields a structurally valid signature whose
+/// signer count and bitmap match the input but whose signature scalars are all
+/// zero. This is what the `/transactions/simulate` endpoint expects: an
+/// authenticator that deserializes correctly but carries an (intentionally)
+/// invalid signature. Zeroing the whole blob -- as a naive length-preserving
+/// zeroing would -- destroys the bitmap and makes the byte length disagree with
+/// the implied signer count, so the fullnode rejects the request at
+/// deserialization instead of accepting it as an invalid signature.
+fn zeroed_multi_ed25519_signature(signature: &[u8]) -> Vec<u8> {
+    let mut out = signature.to_vec();
+    match out.len().checked_sub(4) {
+        // Zero every signature scalar byte, keep the 4-byte bitmap intact.
+        Some(sig_bytes_len) => {
+            for byte in &mut out[..sig_bytes_len] {
+                *byte = 0;
+            }
+        }
+        // Malformed / too short to contain a bitmap: fall back to zeroing the
+        // whole (length-preserving) blob. SDK-produced authenticators never hit
+        // this branch.
+        None => out.iter_mut().for_each(|byte| *byte = 0),
+    }
+    out
+}
+
+/// Rebuilds a BCS-encoded `MultiKeySignature` blob with every inner `AnySignature`
+/// payload zeroed, while preserving the signature count (leading ULEB128), each
+/// signature's variant tag and length framing, and the trailing `BitVec` bitmap.
+///
+/// The `MultiKeySignature` wire layout is
+/// `ULEB128(num_sigs) || (variant || ULEB128(len) || payload).. || ULEB128(4) || bitmap(4)`.
+/// A naive length-preserving zeroing of the whole blob destroys the signature
+/// count, the per-signature variant tags/length prefixes, and the bitmap, so the
+/// fullnode cannot parse it back into a `MultiKeySignature`. Here we parse the
+/// structure, zero only the signature payload bytes (keeping each variant and
+/// byte length), and re-serialize so the result still deserializes into a valid
+/// `MultiKeySignature` with the same signer count and bitmap.
+fn zeroed_multi_key_signature(signature: &[u8]) -> Vec<u8> {
+    use crate::crypto::{AnySignature, MultiKeySignature};
+
+    let Ok(parsed) = MultiKeySignature::from_bytes(signature) else {
+        // Not SDK-produced / unparseable: preserve length as a last resort.
+        return vec![0u8; signature.len()];
+    };
+    let rebuilt: Vec<(u8, AnySignature)> = parsed
+        .signatures()
+        .iter()
+        .map(|(index, sig)| {
+            (
+                *index,
+                AnySignature::new(sig.variant, vec![0u8; sig.bytes.len()]),
+            )
+        })
+        .collect();
+    MultiKeySignature::new(rebuilt)
+        .map_or_else(|_| vec![0u8; signature.len()], |sig| sig.to_bytes())
+}
+
 impl TransactionAuthenticator {
     /// Creates an Ed25519 authenticator.
     pub fn ed25519(public_key: Vec<u8>, signature: Vec<u8>) -> Self {
@@ -587,7 +651,7 @@ impl TransactionAuthenticator {
                 signature,
             } => Self::MultiEd25519 {
                 public_key,
-                signature: vec![0u8; signature.len()],
+                signature: zeroed_multi_ed25519_signature(&signature),
             },
             Self::MultiAgent {
                 sender,
@@ -669,7 +733,10 @@ impl AccountAuthenticator {
     ///   accounts.
     /// * [`Ed25519`](AccountAuthenticator::Ed25519), [`MultiEd25519`](AccountAuthenticator::MultiEd25519),
     ///   and [`MultiKey`](AccountAuthenticator::MultiKey) keep their public key material but replace
-    ///   signature bytes with zeros (preserving `MultiEd25519` / `MultiKey` vector lengths).
+    ///   only the signature bytes with zeros. For `MultiEd25519` / `MultiKey` the surrounding
+    ///   framing (signer count, per-signature variant tags/lengths, and the bitmap/`BitVec`) is
+    ///   preserved so the rewritten authenticator still deserializes into a valid
+    ///   `MultiEd25519Signature` / `MultiKeySignature` on the fullnode.
     #[must_use]
     pub fn for_simulate_endpoint(self) -> Self {
         match self {
@@ -686,7 +753,7 @@ impl AccountAuthenticator {
                 signature,
             } => Self::MultiEd25519 {
                 public_key,
-                signature: vec![0u8; signature.len()],
+                signature: zeroed_multi_ed25519_signature(&signature),
             },
             Self::SingleKey { .. } => Self::NoAccountAuthenticator,
             Self::MultiKey {
@@ -694,7 +761,7 @@ impl AccountAuthenticator {
                 signature,
             } => Self::MultiKey {
                 public_key,
-                signature: vec![0u8; signature.len()],
+                signature: zeroed_multi_key_signature(&signature),
             },
             #[cfg(feature = "keyless")]
             Self::Keyless { .. } => Self::NoAccountAuthenticator,
@@ -1465,5 +1532,152 @@ mod tests {
         bytes.extend_from_slice(&[0xab; 32]); // Only 32 bytes
         let result: Result<Ed25519Signature, _> = aptos_bcs::from_bytes(&bytes);
         assert!(result.is_err());
+    }
+
+    #[cfg(feature = "ed25519")]
+    #[test]
+    fn test_account_authenticator_for_simulate_endpoint_multi_ed25519_stays_valid() {
+        use crate::account::{Account, MultiEd25519Account};
+        use crate::crypto::{Ed25519PrivateKey, MultiEd25519Signature};
+
+        let account = MultiEd25519Account::new(
+            vec![
+                Ed25519PrivateKey::generate(),
+                Ed25519PrivateKey::generate(),
+                Ed25519PrivateKey::generate(),
+            ],
+            2,
+        )
+        .unwrap();
+        let message = b"multi-ed25519 simulate test";
+        let original_sig_bytes = account.sign(message).unwrap().to_bytes();
+        let original = MultiEd25519Signature::from_bytes(&original_sig_bytes).unwrap();
+
+        let auth = AccountAuthenticator::MultiEd25519 {
+            public_key: account.public_key_bytes(),
+            signature: original_sig_bytes.clone(),
+        };
+
+        let AccountAuthenticator::MultiEd25519 { signature, .. } = auth.for_simulate_endpoint()
+        else {
+            panic!("expected MultiEd25519 after simulate rewrite");
+        };
+
+        // Same total blob length as the input.
+        assert_eq!(signature.len(), original_sig_bytes.len());
+
+        // The rewritten blob must still deserialize into a valid
+        // MultiEd25519Signature with the SAME signer count and SAME bitmap.
+        let rewritten = MultiEd25519Signature::from_bytes(&signature).unwrap();
+        assert_eq!(rewritten.num_signatures(), original.num_signatures());
+        assert_eq!(rewritten.bitmap(), original.bitmap());
+
+        // Every signature scalar byte is zero (only the 4-byte bitmap survives).
+        assert!(signature[..signature.len() - 4].iter().all(|b| *b == 0));
+        for (_, sig) in rewritten.signatures() {
+            let sig_bytes = sig.to_bytes();
+            assert_eq!(sig_bytes.len(), 64);
+            assert!(sig_bytes.iter().all(|b| *b == 0));
+        }
+    }
+
+    #[cfg(feature = "ed25519")]
+    #[test]
+    fn test_account_authenticator_for_simulate_endpoint_multi_key_stays_valid() {
+        use crate::crypto::{
+            AnyPublicKey, AnySignature, Ed25519PrivateKey, MultiKeyPublicKey, MultiKeySignature,
+        };
+
+        let sk0 = Ed25519PrivateKey::generate();
+        let sk1 = Ed25519PrivateKey::generate();
+        let sk2 = Ed25519PrivateKey::generate();
+        let pk = MultiKeyPublicKey::new(
+            vec![
+                AnyPublicKey::ed25519(&sk0.public_key()),
+                AnyPublicKey::ed25519(&sk1.public_key()),
+                AnyPublicKey::ed25519(&sk2.public_key()),
+            ],
+            2,
+        )
+        .unwrap();
+        let message = b"multi-key simulate test";
+        let original = MultiKeySignature::new(vec![
+            (0, AnySignature::ed25519(&sk0.sign(message))),
+            (2, AnySignature::ed25519(&sk2.sign(message))),
+        ])
+        .unwrap();
+        let original_sig_bytes = original.to_bytes();
+
+        let auth = AccountAuthenticator::multi_key(pk.to_bytes(), original_sig_bytes.clone());
+        let AccountAuthenticator::MultiKey { signature, .. } = auth.for_simulate_endpoint() else {
+            panic!("expected MultiKey after simulate rewrite");
+        };
+
+        // Same total blob length as the input.
+        assert_eq!(signature.len(), original_sig_bytes.len());
+
+        // The rewritten blob must still deserialize into a valid MultiKeySignature
+        // with the SAME signer count and SAME bitmap, but zeroed signature bytes.
+        let rewritten = MultiKeySignature::from_bytes(&signature).unwrap();
+        assert_eq!(rewritten.num_signatures(), original.num_signatures());
+        assert_eq!(rewritten.bitmap(), original.bitmap());
+        for ((idx_r, sig_r), (idx_o, sig_o)) in
+            rewritten.signatures().iter().zip(original.signatures())
+        {
+            assert_eq!(idx_r, idx_o);
+            assert_eq!(sig_r.variant, sig_o.variant);
+            assert_eq!(sig_r.bytes.len(), sig_o.bytes.len());
+            assert!(sig_r.bytes.iter().all(|b| *b == 0));
+        }
+    }
+
+    #[test]
+    fn test_zeroed_multi_ed25519_signature_wire_layout_pinned() {
+        // Fixed input: two 64-byte signatures for signers {0, 2}. Aptos MSB-first
+        // bitmap for {0, 2} is 0b1010_0000 in byte 0.
+        let mut input = Vec::new();
+        input.extend_from_slice(&[0x11u8; 64]);
+        input.extend_from_slice(&[0x22u8; 64]);
+        input.extend_from_slice(&[0b1010_0000, 0x00, 0x00, 0x00]);
+
+        let out = zeroed_multi_ed25519_signature(&input);
+
+        // Expected: all 128 signature bytes zeroed, 4-byte bitmap preserved.
+        let mut expected = vec![0u8; 128];
+        expected.extend_from_slice(&[0b1010_0000, 0x00, 0x00, 0x00]);
+        assert_eq!(out, expected);
+    }
+
+    #[test]
+    fn test_zeroed_multi_key_signature_wire_layout_pinned() {
+        // Fixed input: two Ed25519 AnySignatures for signers {0, 1}.
+        // Layout: ULEB(num_sigs=2) || (0x00 0x40 payload)*2 || ULEB(4) || bitmap.
+        // MSB-first bitmap for {0, 1} is 0b1100_0000.
+        let mut input = vec![0x02u8]; // num_sigs = 2
+        input.extend_from_slice(&[0x00, 0x40]); // Ed25519 variant + ULEB128(64)
+        input.extend_from_slice(&[0xaa; 64]);
+        input.extend_from_slice(&[0x00, 0x40]);
+        input.extend_from_slice(&[0xbb; 64]);
+        input.push(0x04); // BCS BitVec length prefix
+        input.extend_from_slice(&[0b1100_0000, 0x00, 0x00, 0x00]);
+
+        let out = zeroed_multi_key_signature(&input);
+
+        let mut expected = vec![0x02u8];
+        expected.extend_from_slice(&[0x00, 0x40]);
+        expected.extend_from_slice(&[0u8; 64]);
+        expected.extend_from_slice(&[0x00, 0x40]);
+        expected.extend_from_slice(&[0u8; 64]);
+        expected.push(0x04);
+        expected.extend_from_slice(&[0b1100_0000, 0x00, 0x00, 0x00]);
+        assert_eq!(
+            out, expected,
+            "simulate-rewritten MultiKey signature wire layout drifted"
+        );
+
+        // And it still deserializes into a valid MultiKeySignature.
+        let parsed = crate::crypto::MultiKeySignature::from_bytes(&out).unwrap();
+        assert_eq!(parsed.num_signatures(), 2);
+        assert_eq!(parsed.bitmap(), &[0b1100_0000, 0x00, 0x00, 0x00]);
     }
 }

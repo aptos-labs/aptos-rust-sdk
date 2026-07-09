@@ -160,16 +160,17 @@ impl Account for Secp256r1Account {
     fn sign(&self, message: &[u8]) -> crate::error::AptosResult<Vec<u8>> {
         // Return BCS-serialized `AnySignature::Secp256r1` (variant=2, len=64, bytes).
         //
-        // NOTE: At the time of writing (devnet, ledger version ~49M, 2026-05),
-        // raw `AnySignature::Secp256r1Ecdsa` may not be honored as a
+        // NOTE: Raw `AnySignature::Secp256r1Ecdsa` is NOT honored as a
         // single-key transaction authenticator -- the on-chain variant 2 in
         // `AnySignature` is the `WebAuthn` wrapper, which carries an
         // `AssertionSignature` plus a `client_data_json` and authenticator
         // data, not a bare ECDSA signature. This signing path produces a wire
         // format consistent with the SDK's address-derivation, but submitting
-        // such transactions on-chain may fail at signature verification until
-        // the SDK adds a `WebAuthnAccount` wrapper. Use `Ed25519SingleKeyAccount`
-        // or `Secp256k1Account` for end-to-end transaction flows.
+        // such transactions on-chain fails at signature verification. For
+        // on-chain P-256 signing use [`WebAuthnAccount`](super::WebAuthnAccount),
+        // which already exists and emits the correct WebAuthn-envelope wire
+        // format; `Ed25519SingleKeyAccount` or `Secp256k1Account` also work for
+        // end-to-end transaction flows.
         let sig = self.private_key.sign(message).to_bytes().to_vec();
         debug_assert_eq!(
             sig.len(),

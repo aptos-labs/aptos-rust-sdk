@@ -179,11 +179,18 @@ pub struct Secp256r1PublicKey {
 }
 
 impl Secp256r1PublicKey {
-    /// Creates a public key from compressed bytes (33 bytes).
+    /// Creates a public key from bytes in any accepted encoding.
+    ///
+    /// Accepts all of the following:
+    /// - 33-byte SEC1 compressed (`0x02`/`0x03` prefix)
+    /// - 65-byte SEC1 uncompressed (`0x04` prefix)
+    /// - 64-byte raw `X || Y` affine coordinates (the Aptos on-chain encoding,
+    ///   with the leading `0x04` marker dropped)
     ///
     /// # Errors
     ///
-    /// Returns [`AptosError::InvalidPublicKey`] if the bytes do not represent a valid Secp256r1 compressed public key.
+    /// Returns [`AptosError::InvalidPublicKey`] if the bytes do not decode to a
+    /// valid Secp256r1 public key in one of the accepted encodings.
     pub fn from_bytes(bytes: &[u8]) -> AptosResult<Self> {
         // Accept SEC1-style encodings (33 compressed, 65 uncompressed) *and*
         // the raw 64-byte `(X || Y)` Aptos on-chain encoding.
@@ -207,7 +214,9 @@ impl Secp256r1PublicKey {
     /// # Errors
     ///
     /// Returns [`AptosError::Hex`] if the hex string is invalid.
-    /// Returns [`AptosError::InvalidPublicKey`] if the decoded bytes do not represent a valid Secp256r1 compressed public key.
+    /// Returns [`AptosError::InvalidPublicKey`] if the decoded bytes do not represent a valid
+    /// Secp256r1 public key in one of the encodings accepted by [`Self::from_bytes`]
+    /// (33-byte compressed, 65-byte SEC1 uncompressed, or 64-byte raw `X || Y`).
     pub fn from_hex(hex_str: &str) -> AptosResult<Self> {
         let bytes = const_hex::decode(hex_str)?;
         Self::from_bytes(&bytes)
@@ -879,5 +888,14 @@ mod tests {
         let public_key = private_key.public_key();
         assert!(public_key.verify(b"test", &sig1).is_ok());
         assert!(public_key.verify(b"test", &sig2).is_ok());
+    }
+
+    /// The documented drop-clearing guarantee relies on the inner `p256`
+    /// `SigningKey` zeroizing its secret on drop. This compile-time assertion
+    /// pins that contract so the `crypto/mod.rs` docs stay truthful.
+    #[test]
+    fn test_inner_key_zeroizes_on_drop() {
+        fn assert_zeroize_on_drop<T: zeroize::ZeroizeOnDrop>() {}
+        assert_zeroize_on_drop::<SigningKey>();
     }
 }

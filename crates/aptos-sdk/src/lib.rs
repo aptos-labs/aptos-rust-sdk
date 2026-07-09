@@ -44,6 +44,7 @@
 //! | `bls` | No | BLS12-381 signatures |
 //! | `keyless` | No | OIDC-based keyless authentication |
 //! | `macros` | No | Proc macros for type-safe contract bindings |
+//! | `cli` | No | Enables the `aptos-codegen` binary for Move ABI codegen |
 //!
 //! ## Keyless accounts
 //!
@@ -63,6 +64,9 @@
 //! - [`api`] - REST and GraphQL API clients
 //! - [`types`] - Core Aptos types
 //! - [`codegen`] - Code generation from Move ABIs
+//! - [`config`] - Network and client configuration ([`AptosConfig`])
+//! - [`error`] - Error types ([`AptosError`], [`AptosResult`])
+//! - [`retry`] - Retry / backoff configuration for network requests
 
 // docs.rs parity: stabilise the `doc_cfg` feature so feature-gated items
 // render as such on docs.rs. All other lint configuration now lives in

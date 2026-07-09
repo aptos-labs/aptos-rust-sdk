@@ -126,10 +126,19 @@ pub trait Account: Send + Sync {
     fn signature_scheme(&self) -> u8;
 }
 
-/// An enum that can hold any account type.
+/// An enum over a fixed subset of account types.
 ///
 /// This is useful when you need to store different account types
 /// in the same collection or pass them around generically.
+///
+/// Despite the name, `AnyAccount` does **not** cover every account type in
+/// this module. It holds exactly the following (feature-gated) variants:
+/// [`Ed25519`](AnyAccount::Ed25519), [`MultiEd25519`](AnyAccount::MultiEd25519),
+/// [`MultiKey`](AnyAccount::MultiKey), [`Keyless`](AnyAccount::Keyless), and
+/// [`Secp256k1`](AnyAccount::Secp256k1). It cannot hold
+/// [`Ed25519SingleKeyAccount`](super::Ed25519SingleKeyAccount),
+/// [`Secp256r1Account`](super::Secp256r1Account), or
+/// [`WebAuthnAccount`](super::WebAuthnAccount).
 #[derive(Debug)]
 #[allow(clippy::large_enum_variant)] // Keyless account is intentionally large; boxing would complicate API
 pub enum AnyAccount {

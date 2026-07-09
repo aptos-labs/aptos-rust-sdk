@@ -37,12 +37,13 @@ impl Identifier {
     ///
     /// # Security
     ///
-    /// This function enforces a length limit of 128 characters to prevent
-    /// denial-of-service attacks via excessive memory allocation.
+    /// This function enforces a length limit of 128 bytes to prevent
+    /// denial-of-service attacks via excessive memory allocation. Identifiers
+    /// are ASCII, so this equals 128 characters.
     ///
     /// # Errors
     ///
-    /// Returns an error if the identifier is empty, exceeds 128 characters, does not start
+    /// Returns an error if the identifier is empty, exceeds 128 bytes, does not start
     /// with a letter or underscore, or contains characters that are not alphanumeric or underscore.
     pub fn new(s: impl Into<String>) -> AptosResult<Self> {
         let s = s.into();
@@ -276,8 +277,15 @@ pub enum TypeTag {
     U32,
     /// 256-bit unsigned integer (variant 10, added later)
     U256,
-    // Signed integer types (added for completeness - may not be supported on all networks)
-    /// 8-bit signed integer (variant 11)
+    // Signed integer types (BCS indices 11-16).
+    //
+    // NOTE: Move has no signed integer types today. No current Aptos network
+    // (mainnet, testnet, devnet, or localnet) supports these, and no node can
+    // deserialize BCS variant indices 11-16, so they will never appear in a
+    // real transaction or resource. They are kept only so the variant indices
+    // of the unsigned/reference types above stay stable; removing them would
+    // be a breaking change. Do not rely on them.
+    /// 8-bit signed integer (variant 11; not supported by any Aptos network)
     I8,
     /// 16-bit signed integer (variant 12)
     I16,
@@ -322,7 +330,7 @@ impl TypeTag {
     ///
     /// # Errors
     ///
-    /// Returns an error if the type tag string exceeds 1024 characters, has excessive nesting
+    /// Returns an error if the type tag string exceeds 1024 bytes, has excessive nesting
     /// depth (more than 8 levels), contains invalid syntax, or any component (address, module,
     /// struct name, or type arguments) is invalid.
     ///
@@ -379,9 +387,10 @@ impl TypeTag {
             _ => {}
         }
 
-        // Check for vector type
+        // Check for vector type. Trim the inner type so whitespace is handled
+        // consistently with struct type arguments (e.g. `vector< u8 >`).
         if s.starts_with("vector<") && s.ends_with('>') {
-            let inner = &s[7..s.len() - 1];
+            let inner = s[7..s.len() - 1].trim();
             let inner_tag = Self::parse_type_tag_with_depth(inner, depth + 1)?;
             return Ok(TypeTag::Vector(Box::new(inner_tag)));
         }
@@ -434,35 +443,43 @@ impl TypeTag {
     }
 
     /// Parses comma-separated type arguments with depth tracking.
+    ///
+    /// This is only called when a generic argument list (`<...>`) is present,
+    /// so every entry between the angle brackets must be a non-empty type. An
+    /// empty list (`<>`), an empty entry between commas (`<u8,,u16>`), a
+    /// leading comma (`<,u8>`), or a trailing comma (`<u8,>`) is rejected as
+    /// malformed rather than silently dropped.
     fn parse_type_args_with_depth(s: &str, depth: usize) -> AptosResult<Vec<TypeTag>> {
-        if s.trim().is_empty() {
-            return Ok(vec![]);
-        }
-
         let mut result = Vec::new();
-        let mut bracket_depth = 0;
+        let mut bracket_depth: i32 = 0;
         let mut start = 0;
+
+        // Parse and push a single (trimmed) argument, rejecting empty entries.
+        let push_arg = |arg: &str, result: &mut Vec<TypeTag>| -> AptosResult<()> {
+            let arg = arg.trim();
+            if arg.is_empty() {
+                return Err(AptosError::InvalidTypeTag(
+                    "empty type argument in generic type".into(),
+                ));
+            }
+            result.push(Self::parse_type_tag_with_depth(arg, depth + 1)?);
+            Ok(())
+        };
 
         for (i, c) in s.char_indices() {
             match c {
                 '<' => bracket_depth += 1,
                 '>' => bracket_depth -= 1,
                 ',' if bracket_depth == 0 => {
-                    let arg = s[start..i].trim();
-                    if !arg.is_empty() {
-                        result.push(Self::parse_type_tag_with_depth(arg, depth + 1)?);
-                    }
+                    push_arg(&s[start..i], &mut result)?;
                     start = i + 1;
                 }
                 _ => {}
             }
         }
 
-        // Handle the last argument
-        let last_arg = s[start..].trim();
-        if !last_arg.is_empty() {
-            result.push(Self::parse_type_tag_with_depth(last_arg, depth + 1)?);
-        }
+        // Handle the final argument (also catches empty `<>` and trailing `,`).
+        push_arg(&s[start..], &mut result)?;
 
         Ok(result)
     }
@@ -1225,6 +1242,42 @@ mod tests {
             assert!(s.type_args.is_empty());
         } else {
             panic!("Expected Struct");
+        }
+    }
+
+    #[test]
+    fn test_type_tag_rejects_empty_type_args() {
+        // Empty generic list.
+        assert!(TypeTag::from_str_strict("0x1::a::B<>").is_err());
+        // Empty entry between commas.
+        assert!(TypeTag::from_str_strict("0x1::a::B<,>").is_err());
+        assert!(TypeTag::from_str_strict("0x1::a::B<u8,,u16>").is_err());
+        // Leading comma.
+        assert!(TypeTag::from_str_strict("0x1::a::B<,u8>").is_err());
+        // Trailing comma.
+        assert!(TypeTag::from_str_strict("0x1::a::B<u8,>").is_err());
+        // Empty vector element.
+        assert!(TypeTag::from_str_strict("vector<>").is_err());
+    }
+
+    #[test]
+    fn test_type_tag_whitespace_consistency() {
+        // Whitespace inside generics and vectors is trimmed consistently.
+        let a = TypeTag::from_str_strict("0x1::a::B< u8 >").unwrap();
+        let b = TypeTag::from_str_strict("0x1::a::B<u8>").unwrap();
+        assert_eq!(a, b);
+
+        let v1 = TypeTag::from_str_strict("vector< u8 >").unwrap();
+        let v2 = TypeTag::from_str_strict("vector<u8>").unwrap();
+        assert_eq!(v1, v2);
+        assert_eq!(v1, TypeTag::vector(TypeTag::U8));
+
+        // Whitespace around multiple args.
+        let t = TypeTag::from_str_strict("0x1::table::Table< address , u64 >").unwrap();
+        if let TypeTag::Struct(s) = t {
+            assert_eq!(s.type_args, vec![TypeTag::Address, TypeTag::U64]);
+        } else {
+            panic!("expected struct");
         }
     }
 

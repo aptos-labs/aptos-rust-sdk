@@ -7,15 +7,17 @@ use sha2::Digest as Sha2Digest;
 /// Available hash functions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HashFunction {
-    /// SHA2-256 (used for Secp256k1 ECDSA)
+    /// SHA2-256. General-purpose; **not** used for Aptos signature hashing.
     Sha2_256,
-    /// SHA3-256 (used for Ed25519 and authentication keys)
+    /// SHA3-256 (used for Ed25519, Secp256k1 ECDSA, and authentication keys).
     Sha3_256,
 }
 
 /// Computes the SHA2-256 hash of the input.
 ///
-/// This is used for Secp256k1 ECDSA message hashing.
+/// This is a general-purpose SHA2-256 helper. Note that Aptos Secp256k1 ECDSA
+/// signing hashes the message with **SHA3-256**, not SHA2-256, so this function
+/// is not part of the signing path.
 ///
 /// # Example
 ///
@@ -72,13 +74,25 @@ where
     output
 }
 
-/// Computes a domain-separated hash for transaction signing.
+/// Builds the signing message for an Aptos transaction preimage.
 ///
-/// This is used to create the signing message for transactions:
-/// SHA3-256(domain_separator || `bcs_bytes`)
+/// Aptos does **not** hash the whole `domain || bcs_bytes` blob into a single
+/// digest. The signing message is the SHA3-256 hash of the domain separator
+/// **concatenated with** the raw (unhashed) BCS bytes:
+///
+/// `SHA3-256(b"APTOS::{domain}") || bcs_bytes`
+///
+/// This matches the on-wire construction produced by
+/// [`crate::transaction::types::RawTransaction::signing_message`]. Signing a
+/// single hash taken over the concatenation (the previous behaviour of this
+/// helper) yields a message the chain rejects with `INVALID_SIGNATURE`.
 #[allow(dead_code)] // Public API for users
-pub fn signing_message(domain: &str, bcs_bytes: &[u8]) -> [u8; 32] {
-    sha3_256_of([format!("APTOS::{domain}").as_bytes(), bcs_bytes])
+pub fn signing_message(domain: &str, bcs_bytes: &[u8]) -> Vec<u8> {
+    let prefix = sha3_256(format!("APTOS::{domain}").as_bytes());
+    let mut message = Vec::with_capacity(prefix.len() + bcs_bytes.len());
+    message.extend_from_slice(&prefix);
+    message.extend_from_slice(bcs_bytes);
+    message
 }
 
 #[cfg(test)]
@@ -114,7 +128,31 @@ mod tests {
 
     #[test]
     fn test_signing_message() {
-        let msg = signing_message("RawTransaction", b"transaction_bytes");
-        assert_eq!(msg.len(), 32);
+        let bcs_bytes = b"transaction_bytes";
+        let msg = signing_message("RawTransaction", bcs_bytes);
+
+        // Must be `SHA3-256(domain) || bcs_bytes` (hashed prefix CONCATENATED
+        // with raw BCS bytes), NOT a single hash over the concatenation.
+        let expected_prefix = sha3_256(b"APTOS::RawTransaction");
+        assert_eq!(msg.len(), 32 + bcs_bytes.len());
+        assert_eq!(&msg[..32], &expected_prefix[..]);
+        assert_eq!(&msg[32..], bcs_bytes);
+
+        // It must NOT equal the (incorrect) single hash of the whole blob.
+        let single_hash = sha3_256_of([b"APTOS::RawTransaction".as_slice(), bcs_bytes]);
+        assert_ne!(&msg[..32], &single_hash[..]);
+    }
+
+    #[test]
+    fn test_signing_message_known_bytes() {
+        // Hardcoded expected bytes for a small fixed input. The 32-byte prefix
+        // is SHA3-256("APTOS::RawTransaction"); the two trailing bytes are the
+        // raw BCS payload appended verbatim.
+        let expected = const_hex::decode(
+            "b5e97db07fa0bd0e5598aa3643a9bc6f6693bddc1a9fec9e674a461eaa00b193aabb",
+        )
+        .unwrap();
+        let msg = signing_message("RawTransaction", &[0xaa, 0xbb]);
+        assert_eq!(msg, expected);
     }
 }

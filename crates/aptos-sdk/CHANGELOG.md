@@ -7,6 +7,91 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+### Security
+- `AptosError::sanitized_message()` now redacts **all** URLs carrying query
+  strings in an error message, not just the first per scheme. A second URL with
+  a query string (e.g. `?api_key=...`) was previously left unredacted and could
+  leak credentials into logs.
+- `FaucetClient::fund` now bounds the error-response body read (8 KiB cap),
+  matching the success path and the fullnode client. Previously a misbehaving or
+  malicious faucet could return an unbounded error body and exhaust client
+  memory.
+
+### Fixed
+- `crypto::signing_message` produced a chain-incompatible message: it hashed
+  `SHA3-256(domain || bcs_bytes)` (a single digest returning `[u8; 32]`) instead
+  of the real Aptos construction `SHA3-256(domain) || bcs_bytes`. Signing with
+  the old output would have been rejected on-chain with `INVALID_SIGNATURE`. The
+  helper now returns the correct `Vec<u8>` message.
+- The simulate-endpoint authenticator rewrite (`for_simulate_endpoint`) now
+  produces node-parseable BCS for MultiEd25519 and MultiKey authenticators.
+  Previously the entire signature blob was zeroed, destroying the MultiEd25519
+  bitmap and the MultiKey signature count / per-signature variant tags / `BitVec`
+  framing, so `/transactions/simulate` requests were rejected at deserialization
+  instead of being accepted as an invalid signature. Signature bytes are now
+  zeroed while the signer count and bitmap framing are preserved.
+- `types::resources` and `types::events` now deserialize real Aptos fullnode
+  (REST) JSON. Deserializing an account/coin-store resource or event previously
+  failed with `invalid type: string "42", expected u64` because the API encodes
+  every u64/u128 as a JSON string; these fields now parse the string shape (and
+  a plain number) and round-trip back to strings. The on-chain event-handle GUID
+  is now read from its actual `{"id":{"addr","creation_num"}}` shape.
+- `TypeTag::from_str_strict` now rejects malformed generic type arguments
+  (`<>`, `<,>`, `0x1::a::B<u8,,u16>`, leading/trailing commas) which previously
+  parsed successfully with the empty arguments silently dropped. Whitespace
+  inside generics and `vector<...>` is now trimmed consistently.
+- BLS12-381 private keys now clear their secret on `Zeroize::zeroize()` (the
+  inner `blst::SecretKey` field was previously `#[zeroize(skip)]`, making
+  `.zeroize()` a silent no-op).
+- `SponsoredTransactionBuilder::expiration_from_now` now uses saturating
+  addition, matching `TransactionBuilder` and avoiding a potential debug-mode
+  overflow panic.
+- Code generation (`ModuleGenerator` and the `aptos-codegen` CLI) now emits
+  compilable bindings for generic Move structs (adds a skipped `PhantomData`
+  marker instead of leaving type parameters unused, which failed with E0392),
+  escapes the `self`/`Self`/`crate`/`super` keywords with a trailing underscore
+  (previously emitted the invalid `r#self`), and fully-qualifies BCS calls
+  through `::aptos_sdk::aptos_bcs` so generated code compiles in downstream
+  crates.
+- Move `u256` in generated bindings now maps to `MoveU256` (round-trips as a
+  32-byte little-endian value in BCS and as a decimal string in JSON) instead of
+  the nonexistent `aptos_sdk::types::U256` (which did not compile) or a plain
+  `String` (which produced wrong on-wire bytes for `u256` entry-function
+  arguments).
+- Documentation: corrected the MIGRATION.md BCS example (public `aptos_sdk::types`
+  import path) and indexer example (`IndexerClient::query(&str, Option<Value>)`
+  arity), the `FullnodeClient::get_transactions` ordering note (ascending
+  ledger-version order), the `AnyAccount` and `Secp256r1Account` docs, and the
+  stale `Secp256r1Account` migration guidance (now points at `WebAuthnAccount`).
+
+### Added
+- `MoveU256` now implements `Deserialize` and `Display`, its `parse` accepts the
+  full unsigned 256-bit range (previously only values up to `u128`), and
+  `to_decimal_string` returns the canonical decimal form. `Serialize`/`Deserialize`
+  are format-aware: 32-byte little-endian in BCS, decimal string in JSON.
+
+### Changed
+- `RetryExt` is now a usable extension trait: a blanket impl for
+  `Fn() -> Future<Output = AptosResult<T>>` operation factories was added, so
+  `.with_retry(&config)` actually runs the operation under the retry executor.
+  Previously the trait had no implementations and could not be called.
+- `AptosConfig::with_max_retries` now modifies only `max_retries`, preserving any
+  customized `retryable_status_codes` and `jitter_factor`. Previously it silently
+  reset those fields to defaults.
+- Corrected numerous `crypto` doc comments to match behaviour (key-material
+  zeroization guarantees, Secp256k1/Secp256r1 `from_bytes` accepted encodings,
+  Multi* bitmap bit-order, `SECP256K1_SIGNATURE_LENGTH`, `MultiKeySignature`
+  minimum length, `LENGTH = 0` variable-length sentinel, Ed25519 `from_bytes`
+  length-only validation, the BLS aggregate note, and the SHA2/SHA3 comments) and
+  various `types` docs (`AccountAddress::is_special`, signed-integer `TypeTag`
+  variants, identifier/type-tag length units, `ChainId` known-network values).
+- `aptos-codegen` docs: removed the nonexistent `--input-dir` flag (directory
+  generation is `build_helper::generate_from_directory`); `--builder` is
+  documented as not-yet-implemented. README/`lib.rs`/`REQUIRED_FEATURES.md`
+  updated for the previously-omitted examples, the `cli` feature, the `config`/
+  `error`/`retry` modules, and the orderless `TransactionPayload::Payload`
+  variant.
+
 ## [0.6.0] - 2026-07-08
 
 ### Security

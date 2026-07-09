@@ -32,6 +32,10 @@ pub trait Verifier {
 /// A trait for public key types.
 pub trait PublicKey: Clone + Sized {
     /// The length of the public key in bytes.
+    ///
+    /// A value of `0` is a sentinel meaning "variable length": schemes whose
+    /// serialized size is not fixed (e.g. the multi-key / multi-Ed25519
+    /// aggregates) set `LENGTH = 0` rather than a concrete byte count.
     const LENGTH: usize;
 
     /// Creates a public key from bytes.
@@ -56,6 +60,10 @@ pub trait Signature: Clone + Sized {
     type PublicKey: PublicKey;
 
     /// The length of the signature in bytes.
+    ///
+    /// A value of `0` is a sentinel meaning "variable length": schemes whose
+    /// serialized size is not fixed (e.g. the multi-key / multi-Ed25519
+    /// aggregates) set `LENGTH = 0` rather than a concrete byte count.
     const LENGTH: usize;
 
     /// Creates a signature from bytes.

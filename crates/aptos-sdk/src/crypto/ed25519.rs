@@ -358,11 +358,16 @@ pub struct Ed25519Signature {
 impl Ed25519Signature {
     /// Creates a signature from raw bytes.
     ///
+    /// Only the length is validated here. `ed25519-dalek` 2.x parses the 64
+    /// bytes into an `(R, s)` pair without checking that they form a
+    /// cryptographically valid signature; whether the signature actually
+    /// verifies against a given key and message is determined later at
+    /// verification time (see [`Ed25519PublicKey::verify`]).
+    ///
     /// # Errors
     ///
-    /// Returns [`AptosError::InvalidSignature`] if:
-    /// - The byte slice length is not exactly 64 bytes
-    /// - The bytes do not represent a valid Ed25519 signature
+    /// Returns [`AptosError::InvalidSignature`] if the byte slice length is not
+    /// exactly 64 bytes.
     pub fn from_bytes(bytes: &[u8]) -> AptosResult<Self> {
         if bytes.len() != ED25519_SIGNATURE_LENGTH {
             return Err(AptosError::InvalidSignature(format!(
@@ -381,7 +386,9 @@ impl Ed25519Signature {
     /// # Errors
     ///
     /// Returns [`AptosError::Hex`] if the hex string is invalid.
-    /// Returns [`AptosError::InvalidSignature`] if the decoded bytes are not exactly 64 bytes or do not represent a valid Ed25519 signature.
+    /// Returns [`AptosError::InvalidSignature`] if the decoded bytes are not exactly 64 bytes.
+    /// (As with [`Self::from_bytes`], only the length is validated; cryptographic validity is
+    /// checked at verification time.)
     pub fn from_hex(hex_str: &str) -> AptosResult<Self> {
         let bytes = const_hex::decode(hex_str)?;
         Self::from_bytes(&bytes)
@@ -744,5 +751,16 @@ mod tests {
 
         let different = Ed25519PrivateKey::generate().public_key();
         assert_ne!(pk1, different);
+    }
+
+    /// The documented drop-clearing guarantee relies on the inner
+    /// `ed25519_dalek::SigningKey` zeroizing its secret on drop. This
+    /// compile-time assertion pins that contract: if the underlying type ever
+    /// stopped implementing `ZeroizeOnDrop`, the docs in `crypto/mod.rs` and on
+    /// `Ed25519PrivateKey` would become false and this test would fail to build.
+    #[test]
+    fn test_inner_key_zeroizes_on_drop() {
+        fn assert_zeroize_on_drop<T: zeroize::ZeroizeOnDrop>() {}
+        assert_zeroize_on_drop::<ed25519_dalek::SigningKey>();
     }
 }

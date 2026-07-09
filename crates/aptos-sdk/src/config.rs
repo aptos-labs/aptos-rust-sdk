@@ -598,16 +598,13 @@ impl AptosConfig {
 
     /// Sets the maximum number of retries for transient failures.
     ///
-    /// This is a convenience method that modifies the retry config.
+    /// This is a convenience method that modifies *only* the `max_retries`
+    /// field of the current retry config, preserving every other field
+    /// (delays, exponential base, jitter settings, and any customized
+    /// `retryable_status_codes`).
     #[must_use]
     pub fn with_max_retries(mut self, max_retries: u32) -> Self {
-        self.retry_config = RetryConfig::builder()
-            .max_retries(max_retries)
-            .initial_delay_ms(self.retry_config.initial_delay_ms)
-            .max_delay_ms(self.retry_config.max_delay_ms)
-            .exponential_base(self.retry_config.exponential_base)
-            .jitter(self.retry_config.jitter)
-            .build();
+        self.retry_config.max_retries = max_retries;
         self
     }
 
@@ -777,6 +774,38 @@ mod tests {
         assert_eq!(config.timeout, Duration::from_mins(1));
         assert_eq!(config.retry_config.max_retries, 5);
         assert_eq!(config.api_key, Some("test-key".to_string()));
+    }
+
+    #[test]
+    fn test_with_max_retries_preserves_other_fields() {
+        // Start from a retry config with fully customized fields.
+        let custom_retry = RetryConfig::builder()
+            .max_retries(2)
+            .initial_delay_ms(321)
+            .max_delay_ms(54_321)
+            .exponential_base(1.75)
+            .jitter(false)
+            .jitter_factor(0.125)
+            .retryable_status_codes([418, 599])
+            .build();
+
+        let config = AptosConfig::testnet()
+            .with_retry(custom_retry)
+            .with_max_retries(9);
+
+        let retry = config.retry_config();
+        // max_retries changed as requested.
+        assert_eq!(retry.max_retries, 9);
+        // Every other field survives untouched.
+        assert_eq!(retry.initial_delay_ms, 321);
+        assert_eq!(retry.max_delay_ms, 54_321);
+        assert!((retry.exponential_base - 1.75).abs() < f64::EPSILON);
+        assert!(!retry.jitter);
+        assert!((retry.jitter_factor - 0.125).abs() < f64::EPSILON);
+        assert!(retry.is_retryable_status(418));
+        assert!(retry.is_retryable_status(599));
+        // The custom set replaced the defaults, so 500 is no longer retryable.
+        assert!(!retry.is_retryable_status(500));
     }
 
     #[test]
