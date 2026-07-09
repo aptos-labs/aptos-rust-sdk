@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+### Removed
+- The `keyless` feature and the entire keyless (OIDC) account surface have been
+  removed because the previous implementation was chain-incompatible on every
+  axis. Removed items:
+  - the `keyless` Cargo feature (and its entry in the `full` feature set), plus
+    the now-unused `jsonwebtoken` dependency;
+  - the `account::keyless` module and everything it re-exported:
+    `KeylessAccount`, `KeylessSignature`, `EphemeralKeyPair`,
+    `EphemeralKeyPairSnapshot`, `HttpPepperService`, `HttpProverService`,
+    `PepperService`, `ProverService`, `Pepper`, `OidcProvider`, `JwkSet`, and
+    `ZkProof`;
+  - the `AnyAccount::Keyless` variant and its `From<KeylessAccount>` conversion;
+  - `crypto::KEYLESS_SCHEME` (the constant was wrong -- aptos-core has no auth-key
+    scheme `5`; scheme `5` is `Abstraction`);
+  - the `AccountAuthenticator::Keyless` variant (it used variant tag `5`, which
+    the chain parses as `Abstraction`) and its `AccountAuthenticator::keyless`
+    constructor;
+  - `Network::pepper_url` and `Network::prover_url`;
+  - the `keyless_account` example.
+
+  Rationale: the implementation used a non-existent auth-key scheme byte (`5`
+  instead of the SingleKey scheme `2`), a wrong top-level authenticator variant
+  tag, a non-AIP-61 address derivation, an incorrect on-chain `KeylessSignature`
+  struct, and pepper/prover service request/response shapes that did not match
+  the real Aptos services. None of it could have produced transactions the chain
+  would accept. Keyless will be re-added correctly per the re-implementation
+  guide in `crates/aptos-sdk/feature-plans/09-keyless-accounts.md`. The
+  protocol-level `AnyPublicKey::Keyless` tag (variant `3`), used only for MultiKey
+  parsing, is retained and unaffected.
+
 ### Security
 - `AptosError::sanitized_message()` now redacts **all** URLs carrying query
   strings in an error message, not just the first per scheme. A second URL with

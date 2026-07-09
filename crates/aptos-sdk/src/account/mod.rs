@@ -18,7 +18,6 @@
 //!   envelope; the supported path for signing Aptos transactions with a P-256 key
 //!   (requires `secp256r1` feature)
 //! - [`MultiKeyAccount`] - M-of-N multi-signature account with mixed key types
-//! - [`KeylessAccount`] - OIDC-based keyless account (requires `keyless` feature)
 //!
 //! # Ed25519 example
 //!
@@ -33,46 +32,10 @@
 //! let private_key_hex = "0x...";
 //! let account = Ed25519Account::from_private_key_hex(private_key_hex).unwrap();
 //! ```
-//!
-//! # Keyless (OIDC) example
-//!
-//! Keyless accounts are built from an OIDC JWT plus Aptos pepper / prover
-//! services. Unlike the TypeScript SDK's `AccountClient`, the Rust SDK exposes
-//! [`KeylessAccount`] directly. Enable `features = ["keyless"]` first.
-//!
-//! ```rust,ignore
-//! # async fn keyless_example(jwt: &str) -> aptos_sdk::error::AptosResult<()> {
-//! use aptos_sdk::account::{
-//!     Account, EphemeralKeyPair, HttpPepperService, HttpProverService, KeylessAccount,
-//! };
-//! use aptos_sdk::config::Network;
-//! use url::Url;
-//!
-//! // Generate before redirecting the user to your IdP; embed ephemeral.nonce() in the login URL.
-//! let ephemeral = EphemeralKeyPair::generate(3600);
-//!
-//! let pepper = HttpPepperService::new(
-//!     Url::parse(Network::Devnet.pepper_url().expect("devnet pepper URL")).unwrap(),
-//! );
-//! let prover = HttpProverService::new(
-//!     Url::parse(Network::Devnet.prover_url().expect("devnet prover URL")).unwrap(),
-//! );
-//!
-//! let account = KeylessAccount::from_jwt(jwt, ephemeral, &pepper, &prover).await?;
-//! println!("Address: {}", account.address());
-//! # Ok(())
-//! # }
-//! ```
-//!
-//! Full walkthrough: the [`keyless`] module docs and the
-//! `keyless_account` binary example.
 
 mod account;
 #[cfg(feature = "ed25519")]
 mod ed25519;
-#[cfg(feature = "keyless")]
-#[cfg_attr(docsrs, doc(cfg(feature = "keyless")))]
-pub mod keyless;
 #[cfg(feature = "mnemonic")]
 mod mnemonic;
 #[cfg(feature = "ed25519")]
@@ -89,12 +52,6 @@ mod webauthn;
 pub use account::{Account, AnyAccount, AuthenticationKey};
 #[cfg(feature = "ed25519")]
 pub use ed25519::{Ed25519Account, Ed25519SingleKeyAccount};
-#[cfg(feature = "keyless")]
-#[cfg_attr(docsrs, doc(cfg(feature = "keyless")))]
-pub use keyless::{
-    EphemeralKeyPair, EphemeralKeyPairSnapshot, HttpPepperService, HttpProverService, JwkSet,
-    KeylessAccount, KeylessSignature, OidcProvider, Pepper, PepperService, ProverService, ZkProof,
-};
 #[cfg(feature = "mnemonic")]
 pub use mnemonic::{DerivationPath, Mnemonic, PathComponent};
 #[cfg(feature = "ed25519")]

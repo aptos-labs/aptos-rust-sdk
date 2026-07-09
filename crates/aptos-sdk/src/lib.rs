@@ -42,19 +42,8 @@
 //! | `indexer` | Yes | GraphQL indexer client |
 //! | `faucet` | Yes | Faucet integration for testnets |
 //! | `bls` | No | BLS12-381 signatures |
-//! | `keyless` | No | OIDC-based keyless authentication |
 //! | `macros` | No | Proc macros for type-safe contract bindings |
 //! | `cli` | No | Enables the `aptos-codegen` binary for Move ABI codegen |
-//!
-//! ## Keyless accounts
-//!
-//! Keyless (OIDC) accounts are available behind the `keyless` feature. Users
-//! authenticate with an identity provider (Google, Apple, etc.) and the SDK
-//! derives a stable address from the JWT. See [`account::KeylessAccount`] and
-//! the [`account::keyless`] module for the full flow, pepper / prover service
-//! URLs, and a signing example. The `keyless_account` example under
-//! `examples/` demonstrates end-to-end usage when a JWT is supplied via the
-//! `APTOS_KEYLESS_JWT` environment variable.
 //!
 //! ## Modules
 //!

@@ -34,7 +34,7 @@ pub enum AnyPublicKeyVariant {
     Ed25519 = 0,
     Secp256k1 = 1,
     Secp256r1 = 2,
-    Keyless = 3,
+    Keyless = 3, // protocol tag retained for MultiKey parsing; keyless *account* support is not yet implemented (see 09-keyless-accounts.md)
 }
 
 /// A public key that can be any supported signature scheme.

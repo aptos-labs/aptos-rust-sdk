@@ -24,7 +24,7 @@ Transactions should be able to be signed and authorized with the following key t
 - [x] Secp256k1 (Single Key) - `TransactionAuthenticator::SingleSender` > `AccountAuthenticator::SingleKey` > `AnyPublicKey::Secp256k1Ecdsa` (variant 1)
 - [x] Secp256r1 (Single Key) - `TransactionAuthenticator::SingleSender` > `AccountAuthenticator::SingleKey` > `AnyPublicKey::Secp256r1Ecdsa` (variant 2)
 - [x] MultiKey - `TransactionAuthenticator::SingleSender` > `AccountAuthenticator::MultiKey` (variant 3)
-- [x] (Optional) Keyless - `TransactionAuthenticator::SingleSender` > `AccountAuthenticator::SingleKey` > `AnyPublicKey::Keyless` (variant 3)
+- [ ] (Optional) Keyless - **not yet supported** (the previous implementation was removed as chain-incompatible). When re-added it must ride inside `TransactionAuthenticator::SingleSender` > `AccountAuthenticator::SingleKey` > `AnyPublicKey::Keyless` (variant 3); see `crates/aptos-sdk/feature-plans/09-keyless-accounts.md`.
 
 ### Transaction Signing Process
 
@@ -97,7 +97,7 @@ Authentication keys must be able to be created for accounts that use:
 - [x] Secp256k1 (Single Key): `auth_key = SHA3-256(BCS(AnyPublicKey::Secp256k1) || 0x02)` (scheme_id = 2)
 - [x] Secp256r1 (Single Key): `auth_key = SHA3-256(BCS(AnyPublicKey::Secp256r1) || 0x02)` (scheme_id = 2)
 - [x] MultiKey: `auth_key = SHA3-256(BCS(MultiKey) || 0x03)` (scheme_id = 3)
-- [x] (Optional) Keyless: `auth_key = SHA3-256(BCS(AnyPublicKey::Keyless) || 0x02)` (scheme_id = 2)
+- [ ] (Optional) Keyless: **not yet supported** (removed as chain-incompatible). When re-added the correct derivation is `auth_key = SHA3-256(BCS(AnyPublicKey::Keyless) || 0x02)` (scheme_id = 2, the SingleKey scheme -- keyless has no dedicated scheme byte); see `crates/aptos-sdk/feature-plans/09-keyless-accounts.md`.
 
 **Important**: The same key using different authenticator formats (e.g., Ed25519 standalone vs SingleKey(Ed25519)) will produce **different addresses** due to different scheme IDs.
 

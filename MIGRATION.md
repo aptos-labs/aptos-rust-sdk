@@ -400,38 +400,13 @@ aptos.transfer_apt(&multi_key, recipient, amount).await?;
 
 ### Keyless Authentication (OIDC)
 
-Enable authentication via Google, Apple, or other OIDC providers. The Rust SDK
-exposes [`KeylessAccount`](https://docs.rs/aptos-sdk/latest/aptos_sdk/account/struct.KeylessAccount.html)
-directly (there is no separate `AccountClient` type like in the TypeScript SDK).
-
-```rust
-// Requires `keyless` feature
-use aptos_sdk::{
-    account::{EphemeralKeyPair, HttpPepperService, HttpProverService, KeylessAccount},
-    config::Network,
-};
-use url::Url;
-
-// Generate before the OAuth redirect; embed ephemeral.nonce() in the login URL.
-let ephemeral = EphemeralKeyPair::generate(3600);
-// Persist across the redirect (encrypt at rest in production).
-ephemeral.save_to_file(std::path::Path::new("/secure/ephemeral.json"))?;
-
-let pepper = HttpPepperService::new(
-    Url::parse(Network::Devnet.pepper_url().unwrap()).unwrap(),
-);
-let prover = HttpProverService::new(
-    Url::parse(Network::Devnet.prover_url().unwrap()).unwrap(),
-);
-
-// `jwt` is the OIDC ID token returned after the user signs in.
-let ephemeral = EphemeralKeyPair::load_from_file(std::path::Path::new("/secure/ephemeral.json"))?;
-let account = KeylessAccount::from_jwt(&jwt, ephemeral, &pepper, &prover).await?;
-```
-
-See the `keyless_account` example and the
-[Aptos Keyless integration guide](https://aptos.dev/build/guides/aptos-keyless/integration-guide)
-for IdP setup and the browser-side OAuth flow.
+> **Not currently available.** Keyless (OIDC) account support was removed from
+> the Rust SDK because the previous implementation was chain-incompatible (wrong
+> auth-key scheme, wrong authenticator variant tag, non-AIP-61 address
+> derivation, and a service-API mismatch). It will be re-added once implemented
+> correctly. Track the design in
+> `crates/aptos-sdk/feature-plans/09-keyless-accounts.md`. If you need keyless
+> today, use the TypeScript SDK.
 
 ### Sponsored (Fee Payer) Transactions
 
@@ -599,7 +574,6 @@ aptos-sdk = { version = "0.6.0", features = ["full"] }
 | `indexer` | Yes | GraphQL indexer client |
 | `faucet` | Yes | Testnet faucet integration |
 | `bls` | No | BLS12-381 signatures |
-| `keyless` | No | OIDC-based keyless authentication |
 | `macros` | No | Proc macros for type-safe contract bindings |
 
 ### Reducing Binary Size

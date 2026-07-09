@@ -7,7 +7,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 /// Helpers for emitting/consuming raw, length-prefix-free byte runs inside
 /// BCS-serialized structures.
 ///
-/// The Aptos on-chain `AccountAuthenticator::{SingleKey, MultiKey, Keyless}` variants
+/// The Aptos on-chain `AccountAuthenticator::{SingleKey, MultiKey}` variants
 /// carry typed fields (e.g. `AnyPublicKey`, `AnySignature`, `MultiKeyPublicKey`,
 /// `MultiKeySignature`, `SingleKeyAuthenticator`) whose BCS encodings already begin
 /// with their own enum/struct tags. When the SDK represents those fields as
@@ -216,9 +216,9 @@ pub enum TransactionAuthenticator {
 
 /// An authenticator for a single account (not the full transaction).
 ///
-/// The on-chain BCS schema for the `SingleKey`, `MultiKey`, and `Keyless`
+/// The on-chain BCS schema for the `SingleKey` and `MultiKey`
 /// variants wraps the public key and signature in typed Aptos-core structs
-/// (`SingleKeyAuthenticator`, `MultiKeyAuthenticator`, `KeylessSignature`)
+/// (`SingleKeyAuthenticator`, `MultiKeyAuthenticator`)
 /// whose BCS encodings already begin with their own enum/struct tags.
 /// Internally we still hold pre-encoded `Vec<u8>` (callers produce those via the
 /// `AnyPublicKey`/`AnySignature`/`MultiKeyPublicKey`/`MultiKeySignature` helpers).
@@ -257,15 +257,6 @@ pub enum AccountAuthenticator {
     },
     /// No account authenticator used for simulation only (variant 4).
     NoAccountAuthenticator,
-    /// Keyless (OIDC-based) authentication (variant 5).
-    /// Uses ephemeral keys and ZK proofs for authentication.
-    #[cfg(feature = "keyless")]
-    Keyless {
-        /// The ephemeral public key bytes.
-        public_key: Vec<u8>,
-        /// The BCS-serialized `KeylessSignature` containing ephemeral signature and ZK proof.
-        signature: Vec<u8>,
-    },
 }
 
 // Tag values must match the order of the on-chain Rust enum, exactly.
@@ -274,8 +265,6 @@ const ACCOUNT_AUTH_TAG_MULTI_ED25519: u32 = 1;
 const ACCOUNT_AUTH_TAG_SINGLE_KEY: u32 = 2;
 const ACCOUNT_AUTH_TAG_MULTI_KEY: u32 = 3;
 const ACCOUNT_AUTH_TAG_NO_ACCOUNT: u32 = 4;
-#[cfg(feature = "keyless")]
-const ACCOUNT_AUTH_TAG_KEYLESS: u32 = 5;
 
 impl Serialize for AccountAuthenticator {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
@@ -349,17 +338,6 @@ impl Serialize for AccountAuthenticator {
                     0,
                 )
                 .and_then(SerializeTupleVariant::end),
-            #[cfg(feature = "keyless")]
-            AccountAuthenticator::Keyless {
-                public_key,
-                signature,
-            } => serialize_account_auth_raw_pair(
-                serializer,
-                ACCOUNT_AUTH_TAG_KEYLESS,
-                "Keyless",
-                public_key,
-                signature,
-            ),
         }
     }
 }
@@ -392,7 +370,7 @@ fn serialize_account_auth_raw_pair<S: Serializer>(
 
 impl<'de> Deserialize<'de> for AccountAuthenticator {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        // The chain wire format for SingleKey/MultiKey/Keyless does not include
+        // The chain wire format for SingleKey/MultiKey does not include
         // explicit length prefixes for the inner public_key/signature byte runs
         // (they are typed BCS structs whose total length is parser-recoverable from
         // their content). This makes a length-agnostic deserializer non-trivial
@@ -403,7 +381,7 @@ impl<'de> Deserialize<'de> for AccountAuthenticator {
         // For tests that round-trip the SDK's own representation we deserialize
         // a stable internal layout that matches the prior derive-based Serialize
         // implementation: ULEB128(len)-prefixed Vec<u8> fields for the
-        // SingleKey/MultiKey/Keyless variants. This is sufficient for the
+        // SingleKey/MultiKey variants. This is sufficient for the
         // existing test_account_authenticator_*_bcs_roundtrip tests, which
         // serialize *and* deserialize entirely inside the SDK.
         #[derive(Deserialize)]
@@ -425,11 +403,6 @@ impl<'de> Deserialize<'de> for AccountAuthenticator {
                 signature: Vec<u8>,
             },
             NoAccountAuthenticator,
-            #[cfg(feature = "keyless")]
-            Keyless {
-                public_key: Vec<u8>,
-                signature: Vec<u8>,
-            },
         }
 
         Compat::deserialize(deserializer).map(|c| match c {
@@ -462,14 +435,6 @@ impl<'de> Deserialize<'de> for AccountAuthenticator {
                 signature,
             },
             Compat::NoAccountAuthenticator => AccountAuthenticator::NoAccountAuthenticator,
-            #[cfg(feature = "keyless")]
-            Compat::Keyless {
-                public_key,
-                signature,
-            } => AccountAuthenticator::Keyless {
-                public_key,
-                signature,
-            },
         })
     }
 }
@@ -728,8 +693,8 @@ impl AccountAuthenticator {
     /// signature"). The SDK applies this transform automatically before simulate HTTP
     /// calls so callers do not need to hand-replace authenticators.
     ///
-    /// * [`SingleKey`](AccountAuthenticator::SingleKey) and [`Keyless`](AccountAuthenticator::Keyless)
-    ///   become [`AccountAuthenticator::NoAccountAuthenticator`], matching the common workaround for unified-key
+    /// * [`SingleKey`](AccountAuthenticator::SingleKey)
+    ///   becomes [`AccountAuthenticator::NoAccountAuthenticator`], matching the common workaround for unified-key
     ///   accounts.
     /// * [`Ed25519`](AccountAuthenticator::Ed25519), [`MultiEd25519`](AccountAuthenticator::MultiEd25519),
     ///   and [`MultiKey`](AccountAuthenticator::MultiKey) keep their public key material but replace
@@ -763,22 +728,6 @@ impl AccountAuthenticator {
                 public_key,
                 signature: zeroed_multi_key_signature(&signature),
             },
-            #[cfg(feature = "keyless")]
-            Self::Keyless { .. } => Self::NoAccountAuthenticator,
-        }
-    }
-
-    /// Creates a keyless account authenticator.
-    ///
-    /// # Arguments
-    ///
-    /// * `public_key` - The ephemeral public key bytes
-    /// * `signature` - The BCS-serialized `KeylessSignature`
-    #[cfg(feature = "keyless")]
-    pub fn keyless(public_key: Vec<u8>, signature: Vec<u8>) -> Self {
-        Self::Keyless {
-            public_key,
-            signature,
         }
     }
 
@@ -834,10 +783,6 @@ impl AccountAuthenticator {
             Self::NoAccountAuthenticator => Err(crate::error::AptosError::InvalidSignature(
                 "no account authenticator cannot be verified".into(),
             )),
-            #[cfg(feature = "keyless")]
-            Self::Keyless { .. } => Err(crate::error::AptosError::FeatureNotEnabled(
-                "local keyless verification".into(),
-            )),
         }
     }
 
@@ -878,10 +823,6 @@ impl AccountAuthenticator {
             }
             Self::NoAccountAuthenticator => Err(crate::error::AptosError::InvalidSignature(
                 "no account authenticator has no derived address".into(),
-            )),
-            #[cfg(feature = "keyless")]
-            Self::Keyless { .. } => Err(crate::error::AptosError::FeatureNotEnabled(
-                "local keyless address derivation".into(),
             )),
         }
     }
@@ -1276,14 +1217,6 @@ mod tests {
     fn test_no_account_authenticator_verify_and_derived_address_errors() {
         let auth = AccountAuthenticator::NoAccountAuthenticator;
         assert!(auth.verify(b"no-auth").is_err());
-        assert!(auth.derived_address().is_err());
-    }
-
-    #[cfg(feature = "keyless")]
-    #[test]
-    fn test_keyless_authenticator_verify_and_derived_address_not_enabled() {
-        let auth = AccountAuthenticator::keyless(vec![0x11; 32], vec![0x22; 64]);
-        assert!(auth.verify(b"keyless-local").is_err());
         assert!(auth.derived_address().is_err());
     }
 
