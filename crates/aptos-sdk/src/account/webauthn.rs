@@ -466,6 +466,106 @@ mod tests {
         assert!(s.contains(r#""crossOrigin":false"#));
     }
 
+    #[test]
+    fn test_base64url_url_safe_underscore() {
+        // 0xFF -> high six bits are `111111 = 63`, the 64th alphabet char,
+        // which is '_' in the url-safe alphabet (vs '/' in standard base64).
+        let out = base64url_no_pad(&[0xFFu8]);
+        assert!(out.starts_with('_'));
+    }
+
+    #[test]
+    fn test_from_private_key_bytes_valid_and_invalid() {
+        let account = WebAuthnAccount::from_private_key_bytes(&[5u8; 32]).unwrap();
+        assert!(!account.address().is_zero());
+
+        // Wrong length is rejected by the underlying P-256 scalar parser.
+        assert!(WebAuthnAccount::from_private_key_bytes(&[5u8; 16]).is_err());
+    }
+
+    #[test]
+    fn test_from_parts_custom_origin_reflected() {
+        let key = Secp256r1PrivateKey::from_bytes(&[8u8; 32]).unwrap();
+        let origin = "https://example.com";
+        let account = WebAuthnAccount::from_parts(key, "my-rp", origin);
+        let signed = account.sign(b"custom origin message").unwrap();
+
+        // Reach the client_data_json field and confirm the origin round-trips.
+        let paar = &signed[1..];
+        let mut off = 1 + 1 + 64 + 1 + 37;
+        let (client_len, prefix_len) = decode_uleb128(&paar[off..]);
+        off += prefix_len;
+        let json = std::str::from_utf8(&paar[off..off + client_len]).unwrap();
+        assert!(json.contains(&format!("\"origin\":\"{origin}\"")));
+    }
+
+    #[test]
+    fn test_from_parts_origin_json_escaping() {
+        // Origin containing a double-quote, backslash, and control char must be
+        // escaped so the resulting client_data_json stays valid JSON.
+        let key = Secp256r1PrivateKey::from_bytes(&[11u8; 32]).unwrap();
+        let origin = "a\"b\\c\u{0001}d";
+        let account = WebAuthnAccount::from_parts(key, "rp", origin);
+        let signed = account.sign(b"escaping message").unwrap();
+
+        let paar = &signed[1..];
+        let mut off = 1 + 1 + 64 + 1 + 37;
+        let (client_len, prefix_len) = decode_uleb128(&paar[off..]);
+        off += prefix_len;
+        let json = std::str::from_utf8(&paar[off..off + client_len]).unwrap();
+        assert!(json.contains("a\\\"b\\\\c\\u0001d"));
+        // Round-trips as valid JSON with the unescaped origin.
+        let parsed: serde_json::Value = serde_json::from_str(json).unwrap();
+        assert_eq!(parsed["origin"], origin);
+    }
+
+    #[test]
+    fn test_accessors_public_and_private_key() {
+        let key = Secp256r1PrivateKey::from_bytes(&[13u8; 32]).unwrap();
+        let account = WebAuthnAccount::from_private_key(key.clone());
+        assert_eq!(account.public_key().to_bytes(), key.public_key().to_bytes());
+        assert_eq!(account.private_key().to_bytes(), key.to_bytes());
+    }
+
+    #[test]
+    fn test_authentication_key_matches_address() {
+        let account = WebAuthnAccount::from_private_key(
+            Secp256r1PrivateKey::from_bytes(&[17u8; 32]).unwrap(),
+        );
+        let auth_key = account.authentication_key();
+        // Auth key equals the address for single-key accounts.
+        assert_eq!(auth_key.as_bytes(), &account.address().to_bytes());
+    }
+
+    #[test]
+    fn test_public_key_bytes_layout() {
+        let account = WebAuthnAccount::from_private_key(
+            Secp256r1PrivateKey::from_bytes(&[19u8; 32]).unwrap(),
+        );
+        let bytes = account.public_key_bytes();
+        assert_eq!(bytes.len(), 1 + 1 + 65);
+        assert_eq!(bytes[0], 0x02, "AnyPublicKey::Secp256r1Ecdsa variant");
+        assert_eq!(bytes[1], 65, "ULEB128(65) length prefix");
+    }
+
+    #[test]
+    fn test_signature_scheme_is_single_key() {
+        let account = WebAuthnAccount::generate();
+        assert_eq!(account.signature_scheme(), SINGLE_KEY_SCHEME);
+    }
+
+    #[test]
+    fn test_debug_omits_private_key() {
+        let account = WebAuthnAccount::from_private_key(
+            Secp256r1PrivateKey::from_bytes(&[23u8; 32]).unwrap(),
+        );
+        let debug = format!("{account:?}");
+        assert!(debug.contains("WebAuthnAccount"));
+        assert!(debug.contains("address"));
+        assert!(debug.contains("origin"));
+        assert!(!debug.contains("private_key"));
+    }
+
     /// Tiny in-test ULEB128 decoder so we don't have to plumb the
     /// `crate::crypto::multi_key::uleb128_decode` private helper through
     /// this module's tests.

@@ -2107,4 +2107,603 @@ mod tests {
 
         assert_eq!(result.data.len(), 1);
     }
+
+    // === Simple accessors ===
+
+    #[test]
+    fn test_base_url_and_config_accessors() {
+        let config = AptosConfig::testnet();
+        let expected = config.fullnode_url().clone();
+        let client = FullnodeClient::new(config).unwrap();
+
+        // `base_url` returns the configured fullnode URL.
+        assert_eq!(client.base_url(), &expected);
+        // `config` exposes the same URL through the backing config.
+        assert_eq!(client.config().fullnode_url(), &expected);
+    }
+
+    #[test]
+    fn test_retry_config_accessor() {
+        // A client built with a custom max_retries should surface it verbatim.
+        let config = AptosConfig::testnet().with_max_retries(7);
+        let client = FullnodeClient::new(config).unwrap();
+        assert_eq!(client.retry_config().max_retries, 7);
+
+        // `without_retry` disables retries entirely.
+        let client = FullnodeClient::new(AptosConfig::testnet().without_retry()).unwrap();
+        assert_eq!(client.retry_config().max_retries, 0);
+    }
+
+    // === get_sequence_number ===
+
+    #[tokio::test]
+    async fn test_get_sequence_number() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path_regex(r"^/v1/accounts/0x[0-9a-f]+$"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "sequence_number": "99",
+                "authentication_key": "0x0000000000000000000000000000000000000000000000000000000000000001"
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server);
+        let seq = client
+            .get_sequence_number(AccountAddress::ONE)
+            .await
+            .unwrap();
+        assert_eq!(seq, 99);
+    }
+
+    #[tokio::test]
+    async fn test_get_sequence_number_unparseable_is_internal_error() {
+        let server = MockServer::start().await;
+
+        // A non-numeric sequence number must surface as an Internal error
+        // rather than panicking.
+        Mock::given(method("GET"))
+            .and(path_regex(r"^/v1/accounts/0x[0-9a-f]+$"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "sequence_number": "not-a-number",
+                "authentication_key": "0x0000000000000000000000000000000000000000000000000000000000000001"
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server);
+        let err = client
+            .get_sequence_number(AccountAddress::ONE)
+            .await
+            .unwrap_err();
+        assert!(matches!(err, AptosError::Internal(_)));
+    }
+
+    // === get_account_module ===
+
+    #[tokio::test]
+    async fn test_get_account_module() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path_regex(r"^/v1/accounts/0x[0-9a-f]+/module/coin$"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "bytecode": "0xdeadbeef",
+                "abi": {
+                    "address": "0x1",
+                    "name": "coin",
+                    "exposed_functions": [],
+                    "structs": []
+                }
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server);
+        let result = client
+            .get_account_module(AccountAddress::ONE, "coin")
+            .await
+            .unwrap();
+
+        assert_eq!(result.data.bytecode, "0xdeadbeef");
+        assert!(result.data.abi.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_get_account_module_not_found() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path_regex(r"^/v1/accounts/0x[0-9a-f]+/module/.*$"))
+            .respond_with(ResponseTemplate::new(404).set_body_json(serde_json::json!({
+                "message": "Module not found",
+                "error_code": "module_not_found"
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server);
+        let err = client
+            .get_account_module(AccountAddress::ONE, "missing")
+            .await
+            .unwrap_err();
+        assert!(err.is_not_found());
+    }
+
+    // === get_account_balance ===
+
+    #[tokio::test]
+    async fn test_get_account_balance() {
+        let server = MockServer::start().await;
+
+        // Balance is fetched via the 0x1::coin::balance view function, which
+        // returns a single-element array holding a stringified u64.
+        Mock::given(method("POST"))
+            .and(path("/v1/view"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!(["1234567"])))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server);
+        let balance = client
+            .get_account_balance(AccountAddress::ONE)
+            .await
+            .unwrap();
+        assert_eq!(balance, 1_234_567);
+    }
+
+    #[tokio::test]
+    async fn test_get_account_balance_unparseable_is_internal_error() {
+        let server = MockServer::start().await;
+
+        // An empty view result cannot be parsed into a balance.
+        Mock::given(method("POST"))
+            .and(path("/v1/view"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([])))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server);
+        let err = client
+            .get_account_balance(AccountAddress::ONE)
+            .await
+            .unwrap_err();
+        assert!(matches!(err, AptosError::Internal(_)));
+    }
+
+    // === submit_transaction ===
+
+    fn pending_transaction_json() -> serde_json::Value {
+        serde_json::json!({
+            "hash": "0x0000000000000000000000000000000000000000000000000000000000000001",
+            "sender": "0x1",
+            "sequence_number": "0",
+            "max_gas_amount": "100000",
+            "gas_unit_price": "100",
+            "expiration_timestamp_secs": "1000000"
+        })
+    }
+
+    #[tokio::test]
+    async fn test_submit_transaction_success() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/v1/transactions"))
+            .and(wiremock::matchers::header(
+                "content-type",
+                "application/x.aptos.signed_transaction+bcs",
+            ))
+            .respond_with(ResponseTemplate::new(202).set_body_json(pending_transaction_json()))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server);
+        let signed = create_minimal_signed_transaction();
+        let result = client.submit_transaction(&signed).await.unwrap();
+
+        assert_eq!(result.data.sequence_number, "0");
+        assert_eq!(result.data.sender(), "0x1");
+    }
+
+    #[tokio::test]
+    async fn test_submit_transaction_rejected_is_api_error() {
+        let server = MockServer::start().await;
+
+        // A rejected submission (e.g. invalid signature) returns HTTP 400 with
+        // an API error body; the SDK must surface it as a non-retryable Api error.
+        Mock::given(method("POST"))
+            .and(path("/v1/transactions"))
+            .respond_with(ResponseTemplate::new(400).set_body_json(serde_json::json!({
+                "message": "Invalid transaction",
+                "error_code": "invalid_transaction_update"
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server);
+        let signed = create_minimal_signed_transaction();
+        let err = client.submit_transaction(&signed).await.unwrap_err();
+
+        match err {
+            AptosError::Api {
+                status_code,
+                error_code,
+                ..
+            } => {
+                assert_eq!(status_code, 400);
+                assert_eq!(error_code.as_deref(), Some("invalid_transaction_update"));
+            }
+            other => panic!("expected Api error, got {other:?}"),
+        }
+        // 400 must not be treated as retryable.
+        assert!(
+            !AptosError::api(400, "x").is_retryable(),
+            "sanity: 4xx not retryable"
+        );
+    }
+
+    // === submit_and_wait ===
+
+    #[tokio::test]
+    async fn test_submit_and_wait_success() {
+        let server = MockServer::start().await;
+
+        // First the submit (POST), then wait_for_transaction polls by hash (GET).
+        Mock::given(method("POST"))
+            .and(path("/v1/transactions"))
+            .respond_with(ResponseTemplate::new(202).set_body_json(pending_transaction_json()))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        Mock::given(method("GET"))
+            .and(path_regex(r"^/v1/transactions/by_hash/0x[0-9a-f]+$"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "type": "user_transaction",
+                "version": "555",
+                "hash": "0x0000000000000000000000000000000000000000000000000000000000000001",
+                "success": true,
+                "vm_status": "Executed successfully"
+            })))
+            .expect(1..)
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server);
+        let signed = create_minimal_signed_transaction();
+        let result = client
+            .submit_and_wait(&signed, Some(Duration::from_secs(5)))
+            .await
+            .unwrap();
+
+        assert_eq!(result.data.get("version").unwrap(), "555");
+    }
+
+    // === wait_for_transaction error paths ===
+
+    #[tokio::test]
+    async fn test_wait_for_transaction_execution_failed() {
+        let server = MockServer::start().await;
+
+        // A committed-but-failed transaction (success == false) must produce an
+        // ExecutionFailed error carrying the vm_status.
+        Mock::given(method("GET"))
+            .and(path_regex(r"^/v1/transactions/by_hash/0x[0-9a-f]+$"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "type": "user_transaction",
+                "version": "12345",
+                "hash": "0x0000000000000000000000000000000000000000000000000000000000000001",
+                "success": false,
+                "vm_status": "Move abort: 0x1"
+            })))
+            .expect(1..)
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server);
+        let hash = HashValue::from_hex(
+            "0x0000000000000000000000000000000000000000000000000000000000000001",
+        )
+        .unwrap();
+        let err = client
+            .wait_for_transaction(&hash, Some(Duration::from_secs(5)))
+            .await
+            .unwrap_err();
+
+        match err {
+            AptosError::ExecutionFailed { vm_status } => {
+                assert_eq!(vm_status, "Move abort: 0x1");
+            }
+            other => panic!("expected ExecutionFailed, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_wait_for_transaction_times_out() {
+        let server = MockServer::start().await;
+
+        // The transaction never commits (perpetual 404); with a tiny timeout the
+        // poll loop must give up and return a TransactionTimeout error.
+        Mock::given(method("GET"))
+            .and(path_regex(r"^/v1/transactions/by_hash/0x[0-9a-f]+$"))
+            .respond_with(ResponseTemplate::new(404).set_body_json(serde_json::json!({
+                "message": "Transaction not found",
+                "error_code": "transaction_not_found"
+            })))
+            .expect(1..)
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server);
+        let hash = HashValue::from_hex(
+            "0x0000000000000000000000000000000000000000000000000000000000000002",
+        )
+        .unwrap();
+        let err = client
+            .wait_for_transaction(&hash, Some(Duration::from_millis(1)))
+            .await
+            .unwrap_err();
+
+        assert!(err.is_timeout());
+        match err {
+            AptosError::TransactionTimeout { timeout_secs, .. } => {
+                assert_eq!(timeout_secs, 0);
+            }
+            other => panic!("expected TransactionTimeout, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_wait_for_transaction_propagates_non_404_error() {
+        let server = MockServer::start().await;
+
+        // A non-404 polling error (e.g. 500) must be propagated immediately
+        // rather than being swallowed as "not committed yet".
+        Mock::given(method("GET"))
+            .and(path_regex(r"^/v1/transactions/by_hash/0x[0-9a-f]+$"))
+            .respond_with(ResponseTemplate::new(500).set_body_json(serde_json::json!({
+                "message": "boom"
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server);
+        let hash = HashValue::from_hex(
+            "0x0000000000000000000000000000000000000000000000000000000000000003",
+        )
+        .unwrap();
+        let err = client
+            .wait_for_transaction(&hash, Some(Duration::from_secs(5)))
+            .await
+            .unwrap_err();
+
+        assert!(matches!(
+            err,
+            AptosError::Api {
+                status_code: 500,
+                ..
+            }
+        ));
+    }
+
+    // === view_bcs ===
+
+    #[tokio::test]
+    async fn test_view_bcs_returns_raw_bytes() {
+        let server = MockServer::start().await;
+
+        // The response is opaque BCS bytes; view_bcs must return them verbatim
+        // without JSON decoding.
+        let raw = vec![1u8, 2, 3, 4, 5];
+        Mock::given(method("POST"))
+            .and(path("/v1/view"))
+            .and(wiremock::matchers::header("accept", "application/x-bcs"))
+            .respond_with(ResponseTemplate::new(200).set_body_bytes(raw.clone()))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server);
+        let result = client
+            .view_bcs(
+                "0x1::coin::balance",
+                vec!["0x1::aptos_coin::AptosCoin".to_string()],
+                vec![aptos_bcs::to_bytes(&AccountAddress::ONE).unwrap()],
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(result.data, raw);
+    }
+
+    #[tokio::test]
+    async fn test_view_bcs_error_status_is_api_error() {
+        let server = MockServer::start().await;
+
+        // view_bcs has its own error-handling branch (it reads raw bytes on
+        // success); a non-2xx status must still map to an Api error.
+        Mock::given(method("POST"))
+            .and(path("/v1/view"))
+            .respond_with(ResponseTemplate::new(400).set_body_string("bad view request"))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server);
+        let err = client
+            .view_bcs("0x1::coin::balance", vec![], vec![])
+            .await
+            .unwrap_err();
+
+        match err {
+            AptosError::Api {
+                status_code,
+                message,
+                ..
+            } => {
+                assert_eq!(status_code, 400);
+                assert!(message.contains("bad view request"));
+            }
+            other => panic!("expected Api error, got {other:?}"),
+        }
+    }
+
+    // === get_events_by_event_handle ===
+
+    #[tokio::test]
+    async fn test_get_events_by_event_handle() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path_regex(
+                r"^/v1/accounts/0x[0-9a-f]+/events/.+/withdraw_events$",
+            ))
+            .and(query_param("start", "0"))
+            .and(query_param("limit", "10"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                {"sequence_number": "0", "type": "0x1::coin::WithdrawEvent"}
+            ])))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server);
+        let result = client
+            .get_events_by_event_handle(
+                AccountAddress::ONE,
+                "0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>",
+                "withdraw_events",
+                Some(0),
+                Some(10),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(result.data.len(), 1);
+    }
+
+    // === get_block_by_version ===
+
+    #[tokio::test]
+    async fn test_get_block_by_version() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/v1/blocks/by_version/200"))
+            .and(query_param("with_transactions", "true"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "block_height": "50",
+                "block_hash": "0xfeed",
+                "block_timestamp": "1234567890",
+                "first_version": "180",
+                "last_version": "220"
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server);
+        let result = client.get_block_by_version(200, true).await.unwrap();
+
+        assert_eq!(result.data.get("block_height").unwrap(), "50");
+    }
+
+    // === Error-body parsing in handle_response ===
+
+    #[tokio::test]
+    async fn test_api_error_parses_error_code_and_vm_error_code() {
+        let server = MockServer::start().await;
+
+        // Exercise the error branch of handle_response_static: a 400 body that
+        // carries message, error_code, and vm_error_code must all be surfaced.
+        Mock::given(method("GET"))
+            .and(path("/v1"))
+            .respond_with(ResponseTemplate::new(400).set_body_json(serde_json::json!({
+                "message": "VM execution error",
+                "error_code": "vm_error",
+                "vm_error_code": 4004
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server);
+        let err = client.get_ledger_info().await.unwrap_err();
+
+        match err {
+            AptosError::Api {
+                status_code,
+                message,
+                error_code,
+                vm_error_code,
+            } => {
+                assert_eq!(status_code, 400);
+                assert_eq!(message, "VM execution error");
+                assert_eq!(error_code.as_deref(), Some("vm_error"));
+                assert_eq!(vm_error_code, Some(4004));
+            }
+            other => panic!("expected Api error, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_api_error_non_json_body_uses_default_message() {
+        let server = MockServer::start().await;
+
+        // When the error body is not valid JSON, the SDK falls back to the
+        // "Unknown error" message and leaves the optional fields empty.
+        Mock::given(method("GET"))
+            .and(path("/v1"))
+            .respond_with(ResponseTemplate::new(403).set_body_string("Forbidden (plain text)"))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server);
+        let err = client.get_ledger_info().await.unwrap_err();
+
+        match err {
+            AptosError::Api {
+                status_code,
+                message,
+                error_code,
+                vm_error_code,
+            } => {
+                assert_eq!(status_code, 403);
+                assert_eq!(message, "Unknown error");
+                assert!(error_code.is_none());
+                assert!(vm_error_code.is_none());
+            }
+            other => panic!("expected Api error, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_success_with_invalid_json_body_is_json_error() {
+        let server = MockServer::start().await;
+
+        // A 200 response whose body cannot be deserialized into the expected
+        // type must surface as a Json (deserialization) error, not a panic.
+        Mock::given(method("GET"))
+            .and(path("/v1"))
+            .respond_with(ResponseTemplate::new(200).set_body_string("this is not json"))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server);
+        let err = client.get_ledger_info().await.unwrap_err();
+        assert!(matches!(err, AptosError::Json(_)));
+    }
 }

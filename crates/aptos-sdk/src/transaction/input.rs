@@ -1830,4 +1830,233 @@ mod tests {
         let val2 = val1;
         assert_eq!(val1, val2);
     }
+
+    #[test]
+    fn test_create_account_helper() {
+        let auth_key = AccountAddress::from_hex("0x123").unwrap();
+        let ef = payload_as_entry_function(
+            InputEntryFunctionData::create_account(auth_key).expect("create_account should build"),
+        );
+        assert_eq!(ef.module.name.as_str(), "aptos_account");
+        assert_eq!(ef.function, "create_account");
+        assert_eq!(ef.args.len(), 1);
+        assert_eq!(ef.args[0], aptos_bcs::to_bytes(&auth_key).unwrap());
+    }
+
+    #[test]
+    fn test_register_coin_helper() {
+        let ef = payload_as_entry_function(
+            InputEntryFunctionData::register_coin("0x1::aptos_coin::AptosCoin")
+                .expect("register_coin should build"),
+        );
+        assert_eq!(ef.module.name.as_str(), "managed_coin");
+        assert_eq!(ef.function, "register");
+        assert_eq!(ef.type_args.len(), 1);
+        assert!(ef.args.is_empty());
+    }
+
+    #[test]
+    fn test_register_coin_invalid_type() {
+        let result = InputEntryFunctionData::register_coin("not a type");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_publish_package_helper() {
+        let metadata = vec![1u8, 2, 3];
+        let code = vec![vec![4u8, 5], vec![6u8]];
+        let ef = payload_as_entry_function(
+            InputEntryFunctionData::publish_package(metadata.clone(), code.clone())
+                .expect("publish_package should build"),
+        );
+        assert_eq!(ef.module.name.as_str(), "code");
+        assert_eq!(ef.function, "publish_package_txn");
+        assert_eq!(ef.args.len(), 2);
+        assert_eq!(ef.args[0], aptos_bcs::to_bytes(&metadata).unwrap());
+        assert_eq!(ef.args[1], aptos_bcs::to_bytes(&code).unwrap());
+    }
+
+    #[test]
+    fn test_mint_soul_bound_digital_asset_helper() {
+        let soul_bound_to = AccountAddress::from_hex("0xabc").unwrap();
+        let ef = payload_as_entry_function(
+            InputEntryFunctionData::mint_soul_bound_digital_asset(
+                "My Collection",
+                "desc",
+                "Token #1",
+                "https://example.com/1",
+                vec!["level".to_string()],
+                vec!["u64".to_string()],
+                vec![aptos_bcs::to_bytes(&1u64).unwrap()],
+                soul_bound_to,
+            )
+            .expect("mint_soul_bound should build"),
+        );
+        assert_eq!(ef.module.name.as_str(), "aptos_token");
+        assert_eq!(ef.function, "mint_soul_bound");
+        // 4 leading fields + 3 property vectors + soul_bound_to = 8 args.
+        assert_eq!(ef.args.len(), 8);
+        assert_eq!(
+            ef.args[7],
+            aptos_bcs::to_bytes(&soul_bound_to).unwrap(),
+            "final arg is the soul-bound recipient"
+        );
+    }
+
+    #[test]
+    fn test_burn_digital_asset_helper() {
+        let token = AccountAddress::from_hex("0xdead").unwrap();
+        let ef = payload_as_entry_function(
+            InputEntryFunctionData::burn_digital_asset(token).expect("burn should build"),
+        );
+        assert_eq!(ef.module.name.as_str(), "aptos_token");
+        assert_eq!(ef.function, "burn");
+        assert_eq!(ef.type_args.len(), 1);
+        assert_eq!(ef.args.len(), 1);
+    }
+
+    #[test]
+    fn test_freeze_and_unfreeze_digital_asset_transfer_helpers() {
+        let token = AccountAddress::from_hex("0xbeef").unwrap();
+
+        let freeze = payload_as_entry_function(
+            InputEntryFunctionData::freeze_digital_asset_transfer(token)
+                .expect("freeze should build"),
+        );
+        assert_eq!(freeze.function, "freeze_transfer");
+        assert_eq!(freeze.type_args.len(), 1);
+        assert_eq!(freeze.args.len(), 1);
+
+        let unfreeze = payload_as_entry_function(
+            InputEntryFunctionData::unfreeze_digital_asset_transfer(token)
+                .expect("unfreeze should build"),
+        );
+        assert_eq!(unfreeze.function, "unfreeze_transfer");
+        assert_eq!(unfreeze.type_args.len(), 1);
+        assert_eq!(unfreeze.args.len(), 1);
+    }
+
+    #[test]
+    fn test_remove_authentication_function_helper() {
+        let module = AccountAddress::from_hex("0x123").unwrap();
+        let ef = payload_as_entry_function(
+            InputEntryFunctionData::remove_authentication_function(
+                module,
+                "my_auth",
+                "authenticate",
+            )
+            .expect("remove_authentication_function should build"),
+        );
+        assert_eq!(ef.module.name.as_str(), "account_abstraction");
+        assert_eq!(ef.function, "remove_authentication_function");
+        assert_eq!(ef.args.len(), 3);
+    }
+
+    #[test]
+    fn test_arg_serialization_error_is_reported() {
+        // BCS cannot serialize floats, so `.arg` records the failure and `build`
+        // surfaces it as an error.
+        let result = InputEntryFunctionData::new("0x1::coin::transfer")
+            .arg(1.5f64)
+            .build();
+        let err = result.unwrap_err();
+        assert!(
+            err.to_string().contains("Failed to serialize argument"),
+            "unexpected error: {err}"
+        );
+    }
+
+    #[test]
+    fn test_build_entry_function_reports_accumulated_errors() {
+        // An invalid type argument is accumulated and reported by
+        // build_entry_function (not just build).
+        let result = InputEntryFunctionData::new("0x1::coin::transfer")
+            .type_arg("not a valid type")
+            .build_entry_function();
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("type argument"));
+    }
+
+    #[test]
+    fn test_build_entry_function_reports_invalid_module() {
+        // An invalid function ID makes the module a stored error, surfaced by
+        // build_entry_function.
+        let result = InputEntryFunctionData::new("invalid").build_entry_function();
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("Invalid function ID")
+        );
+    }
+
+    #[test]
+    fn test_into_move_arg_success() {
+        let bytes = 42u64.into_move_arg().unwrap();
+        assert_eq!(bytes, aptos_bcs::to_bytes(&42u64).unwrap());
+
+        let addr_bytes = AccountAddress::ONE.into_move_arg().unwrap();
+        assert_eq!(
+            addr_bytes,
+            aptos_bcs::to_bytes(&AccountAddress::ONE).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_into_move_arg_error() {
+        // Floats are unsupported by BCS; the mapped error must be surfaced.
+        let result = 1.5f64.into_move_arg();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_move_vec_helper() {
+        let items = [100u64, 200u64, 300u64];
+        let encoded = move_vec(&items);
+        assert_eq!(encoded, aptos_bcs::to_bytes(&items.as_slice()).unwrap());
+        assert!(!encoded.is_empty());
+    }
+
+    #[test]
+    fn test_move_string_helper() {
+        assert_eq!(move_string("Alice"), "Alice".to_string());
+        assert_eq!(move_string(""), String::new());
+    }
+
+    #[test]
+    fn test_move_u256_display() {
+        assert_eq!(format!("{}", MoveU256::from_u128(12345)), "12345");
+        assert_eq!(format!("{}", MoveU256::from_u128(0)), "0");
+        assert_eq!(
+            MoveU256([0xff; 32]).to_string(),
+            "115792089237316195423570985008687907853269984665640564039457584007913129639935"
+        );
+    }
+
+    #[test]
+    fn test_move_u256_deserialize_from_string() {
+        // Exercises the human-readable visit_str path.
+        let val: MoveU256 = serde_json::from_str("\"999\"").unwrap();
+        assert_eq!(val, MoveU256::from_u128(999));
+    }
+
+    #[test]
+    fn test_move_u256_deserialize_from_u64() {
+        // Exercises the human-readable visit_u64 path.
+        let val: MoveU256 = serde_json::from_str("42").unwrap();
+        assert_eq!(val, MoveU256::from_u128(42));
+    }
+
+    #[test]
+    fn test_move_u256_deserialize_invalid_type_uses_expecting() {
+        // A JSON bool is not a valid u256; the resulting error message must
+        // include the visitor's `expecting` description.
+        let result: Result<MoveU256, _> = serde_json::from_str("true");
+        let err = result.unwrap_err();
+        assert!(
+            err.to_string().contains("u256"),
+            "expecting message should mention u256, got: {err}"
+        );
+    }
 }

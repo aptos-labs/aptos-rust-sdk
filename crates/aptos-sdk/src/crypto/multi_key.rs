@@ -1381,4 +1381,331 @@ mod tests {
         let result = multi_pk.verify(message, &multi_sig);
         assert!(result.is_err());
     }
+
+    // ---- AnyPublicKey::from_bcs_bytes ----
+
+    #[test]
+    fn test_any_public_key_from_bcs_bytes_roundtrip() {
+        let pk = AnyPublicKey::new(AnyPublicKeyVariant::Ed25519, vec![0x7c; 32]);
+        let wire = pk.to_bcs_bytes();
+        let parsed = AnyPublicKey::from_bcs_bytes(&wire).unwrap();
+        assert_eq!(parsed, pk);
+    }
+
+    #[test]
+    fn test_any_public_key_from_bcs_bytes_empty() {
+        let err = AnyPublicKey::from_bcs_bytes(&[]).unwrap_err();
+        assert!(matches!(err, AptosError::InvalidPublicKey(_)));
+        assert!(err.to_string().contains("empty"));
+    }
+
+    #[test]
+    fn test_any_public_key_from_bcs_bytes_bad_variant() {
+        let err = AnyPublicKey::from_bcs_bytes(&[9, 0]).unwrap_err();
+        assert!(matches!(err, AptosError::InvalidPublicKey(_)));
+        assert!(err.to_string().contains("unknown public key variant"));
+    }
+
+    #[test]
+    fn test_any_public_key_from_bcs_bytes_invalid_length_prefix() {
+        // 0x80 is an unterminated ULEB128 continuation byte.
+        let err = AnyPublicKey::from_bcs_bytes(&[0, 0x80]).unwrap_err();
+        assert!(err.to_string().contains("invalid length prefix"));
+    }
+
+    #[test]
+    fn test_any_public_key_from_bcs_bytes_length_overflow() {
+        // variant byte + ULEB128(usize::MAX): start (1 + len_bytes) + len overflows.
+        let mut wire = vec![0u8];
+        wire.extend(uleb128_encode(usize::MAX));
+        let err = AnyPublicKey::from_bcs_bytes(&wire).unwrap_err();
+        assert!(err.to_string().contains("length overflow"));
+    }
+
+    #[test]
+    fn test_any_public_key_from_bcs_bytes_truncated() {
+        // declares 64 bytes but only 2 present.
+        let err = AnyPublicKey::from_bcs_bytes(&[0, 0x40, 1, 2]).unwrap_err();
+        assert!(err.to_string().contains("truncated"));
+    }
+
+    #[test]
+    fn test_any_public_key_from_bcs_bytes_trailing() {
+        // declares 1 byte but 2 payload bytes present.
+        let err = AnyPublicKey::from_bcs_bytes(&[0, 0x01, 0xaa, 0xbb]).unwrap_err();
+        assert!(err.to_string().contains("trailing"));
+    }
+
+    // ---- AnyPublicKey::verify additional paths ----
+
+    #[test]
+    #[cfg(feature = "secp256r1")]
+    fn test_any_public_key_verify_secp256r1_ok() {
+        use crate::crypto::Secp256r1PrivateKey;
+
+        let sk = Secp256r1PrivateKey::from_bytes(&[9u8; 32]).unwrap();
+        let pk = AnyPublicKey::secp256r1(&sk.public_key());
+        let message = b"secp256r1 verify path";
+        let sig = AnySignature::secp256r1(&sk.sign(message));
+        assert!(pk.verify(message, &sig).is_ok());
+        assert!(pk.verify(b"different", &sig).is_err());
+    }
+
+    #[test]
+    fn test_any_public_key_verify_keyless_unsupported() {
+        // Keyless has no verification arm; matching variants still hit the
+        // "verification not supported" fallthrough.
+        let pk = AnyPublicKey::new(AnyPublicKeyVariant::Keyless, vec![0u8; 32]);
+        let sig = AnySignature::new(AnyPublicKeyVariant::Keyless, vec![0u8; 64]);
+        let err = pk.verify(b"msg", &sig).unwrap_err();
+        assert!(err.to_string().contains("verification not supported"));
+    }
+
+    #[test]
+    fn test_any_public_key_display() {
+        let pk = AnyPublicKey::new(AnyPublicKeyVariant::Secp256r1, vec![0xab; 4]);
+        let display = format!("{pk}");
+        assert_eq!(display, "Secp256r1:0xabababab");
+    }
+
+    // ---- AnySignature::from_bcs_bytes ----
+
+    #[test]
+    fn test_any_signature_from_bcs_bytes_empty() {
+        let err = AnySignature::from_bcs_bytes(&[]).unwrap_err();
+        assert!(matches!(err, AptosError::InvalidSignature(_)));
+        assert!(err.to_string().contains("empty"));
+    }
+
+    #[test]
+    fn test_any_signature_from_bcs_bytes_bad_variant() {
+        let err = AnySignature::from_bcs_bytes(&[9, 0]).unwrap_err();
+        assert!(err.to_string().contains("bad variant"));
+    }
+
+    #[test]
+    fn test_any_signature_from_bcs_bytes_invalid_length_prefix() {
+        let err = AnySignature::from_bcs_bytes(&[0, 0x80]).unwrap_err();
+        assert!(err.to_string().contains("invalid length prefix"));
+    }
+
+    #[test]
+    fn test_any_signature_from_bcs_bytes_length_overflow() {
+        let mut wire = vec![0u8];
+        wire.extend(uleb128_encode(usize::MAX));
+        let err = AnySignature::from_bcs_bytes(&wire).unwrap_err();
+        assert!(err.to_string().contains("length overflow"));
+    }
+
+    #[test]
+    fn test_any_signature_from_bcs_bytes_truncated() {
+        let err = AnySignature::from_bcs_bytes(&[0, 0x40, 1, 2]).unwrap_err();
+        assert!(err.to_string().contains("truncated"));
+    }
+
+    #[test]
+    fn test_any_signature_from_bcs_bytes_trailing() {
+        let err = AnySignature::from_bcs_bytes(&[0, 0x01, 0xaa, 0xbb]).unwrap_err();
+        assert!(err.to_string().contains("trailing"));
+    }
+
+    // ---- uleb128_decode error branches ----
+
+    #[test]
+    fn test_uleb128_decode_overflow() {
+        // Ten continuation bytes push the shift past 64 bits.
+        assert_eq!(uleb128_decode(&[0x80; 10]), None);
+    }
+
+    #[test]
+    fn test_uleb128_decode_unterminated() {
+        // A single continuation byte with no terminator exhausts the slice.
+        assert_eq!(uleb128_decode(&[0x80]), None);
+    }
+
+    #[test]
+    fn test_uleb128_decode_roundtrip_multibyte() {
+        let (value, consumed) = uleb128_decode(&uleb128_encode(300)).unwrap();
+        assert_eq!(value, 300);
+        assert_eq!(consumed, 2);
+    }
+
+    // ---- MultiKeyPublicKey::new bounds ----
+
+    #[test]
+    fn test_multi_key_public_key_too_many_keys() {
+        let keys: Vec<_> = (0..=MAX_NUM_OF_KEYS)
+            .map(|_| AnyPublicKey::new(AnyPublicKeyVariant::Ed25519, vec![0u8; 32]))
+            .collect();
+        let err = MultiKeyPublicKey::new(keys, 1).unwrap_err();
+        assert!(err.to_string().contains("at most"));
+    }
+
+    // ---- MultiKeyPublicKey::from_bytes error branches ----
+
+    #[test]
+    fn test_multi_key_public_key_from_bytes_empty() {
+        let err = MultiKeyPublicKey::from_bytes(&[]).unwrap_err();
+        assert!(err.to_string().contains("empty bytes"));
+    }
+
+    #[test]
+    fn test_multi_key_public_key_from_bytes_zero_keys() {
+        let err = MultiKeyPublicKey::from_bytes(&[0]).unwrap_err();
+        assert!(err.to_string().contains("invalid number of keys"));
+    }
+
+    #[test]
+    fn test_multi_key_public_key_from_bytes_too_many_keys() {
+        let err = MultiKeyPublicKey::from_bytes(&[33]).unwrap_err();
+        assert!(err.to_string().contains("invalid number of keys"));
+    }
+
+    #[test]
+    fn test_multi_key_public_key_from_bytes_too_short_for_key_header() {
+        // Declares 1 key but no bytes follow the count.
+        let err = MultiKeyPublicKey::from_bytes(&[1]).unwrap_err();
+        assert!(err.to_string().contains("bytes too short"));
+    }
+
+    #[test]
+    fn test_multi_key_public_key_from_bytes_bad_variant() {
+        let err = MultiKeyPublicKey::from_bytes(&[1, 9]).unwrap_err();
+        assert!(err.to_string().contains("unknown public key variant"));
+    }
+
+    #[test]
+    fn test_multi_key_public_key_from_bytes_invalid_uleb() {
+        let err = MultiKeyPublicKey::from_bytes(&[1, 0, 0x80]).unwrap_err();
+        assert!(err.to_string().contains("invalid ULEB128"));
+    }
+
+    #[test]
+    fn test_multi_key_public_key_from_bytes_key_too_large() {
+        // ULEB128(200) exceeds the 128-byte MAX_KEY_SIZE cap.
+        let mut wire = vec![1u8, 0u8];
+        wire.extend(uleb128_encode(200));
+        let err = MultiKeyPublicKey::from_bytes(&wire).unwrap_err();
+        assert!(err.to_string().contains("exceeds maximum"));
+    }
+
+    #[test]
+    fn test_multi_key_public_key_from_bytes_too_short_for_key() {
+        // Declares a 64-byte key but no payload follows.
+        let err = MultiKeyPublicKey::from_bytes(&[1, 0, 0x40]).unwrap_err();
+        assert!(err.to_string().contains("bytes too short for key"));
+    }
+
+    #[test]
+    fn test_multi_key_public_key_from_bytes_too_short_for_threshold() {
+        // A single zero-length key parses, but no threshold byte remains.
+        let err = MultiKeyPublicKey::from_bytes(&[1, 0, 0]).unwrap_err();
+        assert!(err.to_string().contains("bytes too short for threshold"));
+    }
+
+    // ---- MultiKeyPublicKey::verify index out of bounds ----
+
+    #[test]
+    fn test_multi_key_verify_signer_index_out_of_bounds() {
+        let pk = AnyPublicKey::new(AnyPublicKeyVariant::Ed25519, vec![0u8; 32]);
+        let multi_pk = MultiKeyPublicKey::new(vec![pk], 1).unwrap();
+        // A signature claiming signer index 5 while only one key exists.
+        let sig = AnySignature::new(AnyPublicKeyVariant::Ed25519, vec![0u8; 64]);
+        let multi_sig = MultiKeySignature::new(vec![(5, sig)]).unwrap();
+        let err = multi_pk.verify(b"msg", &multi_sig).unwrap_err();
+        assert!(err.to_string().contains("out of bounds"));
+    }
+
+    // ---- MultiKeySignature::new / has_signature bounds ----
+
+    #[test]
+    fn test_multi_key_signature_too_many_signatures() {
+        let sigs: Vec<_> = (0..=MAX_NUM_OF_KEYS)
+            .map(|i| {
+                (
+                    i as u8,
+                    AnySignature::new(AnyPublicKeyVariant::Ed25519, vec![0u8; 64]),
+                )
+            })
+            .collect();
+        let err = MultiKeySignature::new(sigs).unwrap_err();
+        assert!(err.to_string().contains("too many signatures"));
+    }
+
+    #[test]
+    fn test_multi_key_signature_has_signature_out_of_bounds() {
+        let sig = AnySignature::new(AnyPublicKeyVariant::Ed25519, vec![0u8; 64]);
+        let multi_sig = MultiKeySignature::new(vec![(0, sig)]).unwrap();
+        assert!(!multi_sig.has_signature(255));
+        assert!(!multi_sig.has_signature(MAX_NUM_OF_KEYS as u8));
+    }
+
+    // ---- MultiKeySignature::from_bytes error branches ----
+
+    #[test]
+    fn test_multi_key_signature_from_bytes_too_short() {
+        let err = MultiKeySignature::from_bytes(&[1, 2, 3]).unwrap_err();
+        assert!(err.to_string().contains("bytes too short"));
+    }
+
+    #[test]
+    fn test_multi_key_signature_from_bytes_zero_sigs() {
+        let err = MultiKeySignature::from_bytes(&[0, 4, 0, 0, 0, 0]).unwrap_err();
+        assert!(err.to_string().contains("invalid number of signatures"));
+    }
+
+    #[test]
+    fn test_multi_key_signature_from_bytes_too_many_sigs() {
+        let err = MultiKeySignature::from_bytes(&[33, 4, 0, 0, 0, 0]).unwrap_err();
+        assert!(err.to_string().contains("invalid number of signatures"));
+    }
+
+    #[test]
+    fn test_multi_key_signature_from_bytes_bad_bitvec_prefix() {
+        // BitVec length prefix must be 4; here it is 5.
+        let err = MultiKeySignature::from_bytes(&[1, 5, 0, 0, 0, 0]).unwrap_err();
+        assert!(err.to_string().contains("BitVec length prefix"));
+    }
+
+    #[test]
+    fn test_multi_key_signature_from_bytes_bitmap_mismatch() {
+        // Declares 2 signatures but the bitmap has no bits set.
+        let err = MultiKeySignature::from_bytes(&[2, 4, 0, 0, 0, 0]).unwrap_err();
+        assert!(err.to_string().contains("bitmap doesn't match"));
+    }
+
+    #[test]
+    fn test_multi_key_signature_from_bytes_too_short_for_sig() {
+        // num_sigs=1, bitmap bit 0 set, but no room for the signature body.
+        let err = MultiKeySignature::from_bytes(&[1, 4, 0x80, 0, 0, 0]).unwrap_err();
+        assert!(err.to_string().contains("bytes too short"));
+    }
+
+    #[test]
+    fn test_multi_key_signature_from_bytes_bad_sig_variant() {
+        // [num_sigs=1][variant=9][len=0][bitvec prefix=4][bitmap index0]
+        let err = MultiKeySignature::from_bytes(&[1, 9, 0, 4, 0x80, 0, 0, 0]).unwrap_err();
+        assert!(err.to_string().contains("unknown public key variant"));
+    }
+
+    #[test]
+    fn test_multi_key_signature_from_bytes_invalid_sig_uleb() {
+        // [num_sigs=1][variant=0][0x80 unterminated][prefix=4][bitmap]
+        let err = MultiKeySignature::from_bytes(&[1, 0, 0x80, 4, 0x80, 0, 0, 0]).unwrap_err();
+        assert!(err.to_string().contains("invalid ULEB128"));
+    }
+
+    #[test]
+    fn test_multi_key_signature_from_bytes_sig_too_large() {
+        // ULEB128(200) exceeds the 128-byte MAX_SIGNATURE_SIZE cap.
+        let err = MultiKeySignature::from_bytes(&[1, 0, 0xC8, 0x01, 4, 0x80, 0, 0, 0]).unwrap_err();
+        assert!(err.to_string().contains("exceeds maximum"));
+    }
+
+    #[test]
+    fn test_multi_key_signature_from_bytes_too_short_for_sig_body() {
+        // Declares a 64-byte signature but the body is absent.
+        let err = MultiKeySignature::from_bytes(&[1, 0, 0x40, 4, 0x80, 0, 0, 0]).unwrap_err();
+        assert!(err.to_string().contains("bytes too short for signature"));
+    }
 }

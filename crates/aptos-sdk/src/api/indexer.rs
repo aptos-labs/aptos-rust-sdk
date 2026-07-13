@@ -989,6 +989,591 @@ impl IndexerClient {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use wiremock::{Mock, MockServer, ResponseTemplate, matchers::method};
+
+    /// Builds an [`IndexerClient`] pointed at a wiremock server.
+    fn mock_client(server: &MockServer) -> IndexerClient {
+        IndexerClient::with_url(&server.uri()).unwrap()
+    }
+
+    /// Mounts a single mock returning `body` as a 200 JSON response to any POST.
+    async fn mount_json(server: &MockServer, body: serde_json::Value) {
+        Mock::given(method("POST"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(body))
+            .expect(1)
+            .mount(server)
+            .await;
+    }
+
+    #[tokio::test]
+    async fn test_get_fungible_asset_balances() {
+        let server = MockServer::start().await;
+        mount_json(
+            &server,
+            serde_json::json!({
+                "data": {
+                    "current_fungible_asset_balances": [
+                        {
+                            "asset_type": "0x1::aptos_coin::AptosCoin",
+                            "amount": "1000000",
+                            "metadata": {
+                                "name": "Aptos Coin",
+                                "symbol": "APT",
+                                "decimals": 8
+                            }
+                        }
+                    ]
+                }
+            }),
+        )
+        .await;
+
+        let client = mock_client(&server);
+        let balances = client
+            .get_fungible_asset_balances(AccountAddress::ONE)
+            .await
+            .unwrap();
+
+        assert_eq!(balances.len(), 1);
+        assert_eq!(balances[0].asset_type, "0x1::aptos_coin::AptosCoin");
+        assert_eq!(balances[0].amount, "1000000");
+        let metadata = balances[0].metadata.as_ref().unwrap();
+        assert_eq!(metadata.name, "Aptos Coin");
+        assert_eq!(metadata.symbol, "APT");
+        assert_eq!(metadata.decimals, 8);
+    }
+
+    #[tokio::test]
+    async fn test_get_account_tokens() {
+        let server = MockServer::start().await;
+        mount_json(
+            &server,
+            serde_json::json!({
+                "data": {
+                    "current_token_ownerships_v2": [
+                        {
+                            "token_data_id": "0xabc",
+                            "amount": "1",
+                            "current_token_data": {
+                                "token_name": "Cool NFT",
+                                "description": "A cool token",
+                                "token_uri": "https://example.com/1",
+                                "current_collection": {
+                                    "collection_name": "Cool Collection"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }),
+        )
+        .await;
+
+        let client = mock_client(&server);
+        let tokens = client
+            .get_account_tokens(AccountAddress::ONE)
+            .await
+            .unwrap();
+
+        assert_eq!(tokens.len(), 1);
+        assert_eq!(tokens[0].token_data_id, "0xabc");
+        assert_eq!(tokens[0].amount, "1");
+        let data = tokens[0].current_token_data.as_ref().unwrap();
+        assert_eq!(data.token_name, "Cool NFT");
+        assert_eq!(data.description, "A cool token");
+        assert_eq!(data.token_uri, "https://example.com/1");
+        assert_eq!(
+            data.current_collection.as_ref().unwrap().collection_name,
+            "Cool Collection"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_get_account_transactions() {
+        let server = MockServer::start().await;
+        mount_json(
+            &server,
+            serde_json::json!({
+                "data": {
+                    "account_transactions": [
+                        {
+                            "transaction_version": "12345",
+                            "coin_activities": [
+                                {
+                                    "activity_type": "0x1::coin::WithdrawEvent",
+                                    "amount": "500",
+                                    "coin_type": "0x1::aptos_coin::AptosCoin"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }),
+        )
+        .await;
+
+        let client = mock_client(&server);
+        let txns = client
+            .get_account_transactions(AccountAddress::ONE, Some(10))
+            .await
+            .unwrap();
+
+        assert_eq!(txns.len(), 1);
+        assert_eq!(txns[0].transaction_version, "12345");
+        assert_eq!(txns[0].coin_activities.len(), 1);
+        let activity = &txns[0].coin_activities[0];
+        assert_eq!(activity.activity_type, "0x1::coin::WithdrawEvent");
+        assert_eq!(activity.amount.as_deref(), Some("500"));
+        assert_eq!(activity.coin_type, "0x1::aptos_coin::AptosCoin");
+    }
+
+    #[tokio::test]
+    async fn test_get_account_tokens_paginated_has_more() {
+        let server = MockServer::start().await;
+        mount_json(
+            &server,
+            serde_json::json!({
+                "data": {
+                    "current_token_ownerships_v2": [
+                        {
+                            "token_data_id": "0x1",
+                            "amount": "1",
+                            "current_token_data": null
+                        },
+                        {
+                            "token_data_id": "0x2",
+                            "amount": "1",
+                            "current_token_data": null
+                        }
+                    ],
+                    "current_token_ownerships_v2_aggregate": {
+                        "aggregate": { "count": 5 }
+                    }
+                }
+            }),
+        )
+        .await;
+
+        let client = mock_client(&server);
+        let page = client
+            .get_account_tokens_paginated(AccountAddress::ONE, Some(PaginationParams::new(2, 0)))
+            .await
+            .unwrap();
+
+        assert_eq!(page.items.len(), 2);
+        assert_eq!(page.total_count, Some(5));
+        // offset 0 + 2 items < 5 => more pages remain.
+        assert!(page.has_more);
+    }
+
+    #[tokio::test]
+    async fn test_get_account_tokens_paginated_no_more() {
+        let server = MockServer::start().await;
+        mount_json(
+            &server,
+            serde_json::json!({
+                "data": {
+                    "current_token_ownerships_v2": [
+                        {
+                            "token_data_id": "0x1",
+                            "amount": "1",
+                            "current_token_data": null
+                        }
+                    ],
+                    "current_token_ownerships_v2_aggregate": {
+                        "aggregate": { "count": 1 }
+                    }
+                }
+            }),
+        )
+        .await;
+
+        let client = mock_client(&server);
+        // Default pagination (None) is used here.
+        let page = client
+            .get_account_tokens_paginated(AccountAddress::ONE, None)
+            .await
+            .unwrap();
+
+        assert_eq!(page.items.len(), 1);
+        assert_eq!(page.total_count, Some(1));
+        assert!(!page.has_more);
+    }
+
+    #[tokio::test]
+    async fn test_get_account_transactions_paginated() {
+        let server = MockServer::start().await;
+        mount_json(
+            &server,
+            serde_json::json!({
+                "data": {
+                    "account_transactions": [
+                        {
+                            "transaction_version": "100",
+                            "coin_activities": []
+                        }
+                    ],
+                    "account_transactions_aggregate": {
+                        "aggregate": { "count": 3 }
+                    }
+                }
+            }),
+        )
+        .await;
+
+        let client = mock_client(&server);
+        let page = client
+            .get_account_transactions_paginated(
+                AccountAddress::ONE,
+                Some(PaginationParams::first(1)),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(page.items.len(), 1);
+        assert_eq!(page.items[0].transaction_version, "100");
+        assert_eq!(page.total_count, Some(3));
+        assert!(page.has_more);
+    }
+
+    #[tokio::test]
+    async fn test_get_events_by_type() {
+        let server = MockServer::start().await;
+        mount_json(
+            &server,
+            serde_json::json!({
+                "data": {
+                    "events": [
+                        {
+                            "sequence_number": "7",
+                            "type": "0x1::coin::DepositEvent",
+                            "data": { "amount": "42" },
+                            "transaction_version": "9001",
+                            "account_address": "0x1",
+                            "creation_number": "3"
+                        }
+                    ]
+                }
+            }),
+        )
+        .await;
+
+        let client = mock_client(&server);
+        let events = client
+            .get_events_by_type("0x1::coin::DepositEvent", Some(5))
+            .await
+            .unwrap();
+
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].sequence_number, "7");
+        assert_eq!(events[0].event_type, "0x1::coin::DepositEvent");
+        assert_eq!(events[0].data["amount"], "42");
+        assert_eq!(events[0].transaction_version.as_deref(), Some("9001"));
+        assert_eq!(events[0].account_address.as_deref(), Some("0x1"));
+        assert_eq!(events[0].creation_number.as_deref(), Some("3"));
+    }
+
+    #[tokio::test]
+    async fn test_get_events_by_account() {
+        let server = MockServer::start().await;
+        mount_json(
+            &server,
+            serde_json::json!({
+                "data": {
+                    "events": [
+                        {
+                            "sequence_number": "1",
+                            "type": "0x1::account::CoinRegisterEvent",
+                            "data": {},
+                            "transaction_version": null,
+                            "account_address": null,
+                            "creation_number": null
+                        }
+                    ]
+                }
+            }),
+        )
+        .await;
+
+        let client = mock_client(&server);
+        let events = client
+            .get_events_by_account(AccountAddress::ONE, None)
+            .await
+            .unwrap();
+
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].event_type, "0x1::account::CoinRegisterEvent");
+        assert!(events[0].transaction_version.is_none());
+        assert!(events[0].account_address.is_none());
+        assert!(events[0].creation_number.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_get_collection() {
+        let server = MockServer::start().await;
+        mount_json(
+            &server,
+            serde_json::json!({
+                "data": {
+                    "current_collections_v2": [
+                        {
+                            "collection_id": "0xcol",
+                            "collection_name": "My Collection",
+                            "creator_address": "0x1",
+                            "current_supply": "10",
+                            "max_supply": "100",
+                            "uri": "https://example.com/collection",
+                            "description": "A test collection"
+                        }
+                    ]
+                }
+            }),
+        )
+        .await;
+
+        let client = mock_client(&server);
+        let collection = client.get_collection(AccountAddress::ONE).await.unwrap();
+
+        assert_eq!(collection.collection_id, "0xcol");
+        assert_eq!(collection.collection_name, "My Collection");
+        assert_eq!(collection.creator_address, "0x1");
+        assert_eq!(collection.current_supply, "10");
+        assert_eq!(collection.max_supply.as_deref(), Some("100"));
+        assert_eq!(collection.uri, "https://example.com/collection");
+        assert_eq!(collection.description, "A test collection");
+    }
+
+    #[tokio::test]
+    async fn test_get_collection_not_found() {
+        let server = MockServer::start().await;
+        mount_json(
+            &server,
+            serde_json::json!({
+                "data": { "current_collections_v2": [] }
+            }),
+        )
+        .await;
+
+        let client = mock_client(&server);
+        let result = client.get_collection(AccountAddress::ONE).await;
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().is_not_found());
+    }
+
+    #[tokio::test]
+    async fn test_get_collection_tokens() {
+        let server = MockServer::start().await;
+        mount_json(
+            &server,
+            serde_json::json!({
+                "data": {
+                    "current_token_ownerships_v2": [
+                        {
+                            "token_data_id": "0xt1",
+                            "amount": "1",
+                            "current_token_data": null
+                        },
+                        {
+                            "token_data_id": "0xt2",
+                            "amount": "1",
+                            "current_token_data": null
+                        }
+                    ]
+                }
+            }),
+        )
+        .await;
+
+        let client = mock_client(&server);
+        let page = client
+            .get_collection_tokens(AccountAddress::ONE, Some(PaginationParams::new(2, 0)))
+            .await
+            .unwrap();
+
+        assert_eq!(page.items.len(), 2);
+        assert_eq!(page.total_count, None);
+        // items_count == limit => there may be more pages.
+        assert!(page.has_more);
+    }
+
+    #[tokio::test]
+    async fn test_get_coin_balances() {
+        let server = MockServer::start().await;
+        mount_json(
+            &server,
+            serde_json::json!({
+                "data": {
+                    "current_coin_balances": [
+                        {
+                            "coin_type": "0x1::aptos_coin::AptosCoin",
+                            "amount": "9999"
+                        }
+                    ]
+                }
+            }),
+        )
+        .await;
+
+        let client = mock_client(&server);
+        let balances = client.get_coin_balances(AccountAddress::ONE).await.unwrap();
+
+        assert_eq!(balances.len(), 1);
+        assert_eq!(balances[0].coin_type, "0x1::aptos_coin::AptosCoin");
+        assert_eq!(balances[0].amount, "9999");
+    }
+
+    #[tokio::test]
+    async fn test_get_coin_activities() {
+        let server = MockServer::start().await;
+        mount_json(
+            &server,
+            serde_json::json!({
+                "data": {
+                    "coin_activities": [
+                        {
+                            "activity_type": "0x1::coin::DepositEvent",
+                            "amount": "250",
+                            "coin_type": "0x1::aptos_coin::AptosCoin"
+                        }
+                    ]
+                }
+            }),
+        )
+        .await;
+
+        let client = mock_client(&server);
+        let activities = client
+            .get_coin_activities(AccountAddress::ONE, Some(50))
+            .await
+            .unwrap();
+
+        assert_eq!(activities.len(), 1);
+        assert_eq!(activities[0].activity_type, "0x1::coin::DepositEvent");
+        assert_eq!(activities[0].amount.as_deref(), Some("250"));
+        assert_eq!(activities[0].coin_type, "0x1::aptos_coin::AptosCoin");
+    }
+
+    #[tokio::test]
+    async fn test_get_processor_status() {
+        let server = MockServer::start().await;
+        mount_json(
+            &server,
+            serde_json::json!({
+                "data": {
+                    "processor_status": [
+                        {
+                            "processor": "default_processor",
+                            "last_success_version": 12345,
+                            "last_updated": "2024-01-01T00:00:00Z"
+                        }
+                    ]
+                }
+            }),
+        )
+        .await;
+
+        let client = mock_client(&server);
+        let statuses = client.get_processor_status().await.unwrap();
+
+        assert_eq!(statuses.len(), 1);
+        assert_eq!(statuses[0].processor, "default_processor");
+        assert_eq!(statuses[0].last_success_version, 12345);
+        assert_eq!(
+            statuses[0].last_updated.as_deref(),
+            Some("2024-01-01T00:00:00Z")
+        );
+    }
+
+    #[tokio::test]
+    async fn test_get_indexer_version() {
+        let server = MockServer::start().await;
+        mount_json(
+            &server,
+            serde_json::json!({
+                "data": {
+                    "processor_status": [
+                        { "processor": "a", "last_success_version": 100, "last_updated": null },
+                        { "processor": "b", "last_success_version": 250, "last_updated": null }
+                    ]
+                }
+            }),
+        )
+        .await;
+
+        let client = mock_client(&server);
+        let version = client.get_indexer_version().await.unwrap();
+
+        // Returns the maximum last_success_version across processors.
+        assert_eq!(version, 250);
+    }
+
+    #[tokio::test]
+    async fn test_check_indexer_lag() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": {
+                    "processor_status": [
+                        { "processor": "a", "last_success_version": 900, "last_updated": null }
+                    ]
+                }
+            })))
+            .mount(&server)
+            .await;
+
+        let client = mock_client(&server);
+        // reference 1000, indexer at 900 => lag of 100.
+        assert!(client.check_indexer_lag(1000, 200).await.unwrap());
+        assert!(!client.check_indexer_lag(1000, 50).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_query_graphql_error() {
+        let server = MockServer::start().await;
+        mount_json(
+            &server,
+            serde_json::json!({
+                "errors": [
+                    { "message": "field not found" },
+                    { "message": "syntax error" }
+                ]
+            }),
+        )
+        .await;
+
+        let client = mock_client(&server);
+        let result = client.get_coin_balances(AccountAddress::ONE).await;
+
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            AptosError::Api {
+                status_code,
+                message,
+                error_code,
+                ..
+            } => {
+                assert_eq!(status_code, 400);
+                assert_eq!(error_code.as_deref(), Some("GRAPHQL_ERROR"));
+                // Multiple errors are joined with "; ".
+                assert_eq!(message, "field not found; syntax error");
+            }
+            other => panic!("expected Api error, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_query_missing_data() {
+        let server = MockServer::start().await;
+        // Neither `data` nor `errors` present => Internal error.
+        mount_json(&server, serde_json::json!({})).await;
+
+        let client = mock_client(&server);
+        let result = client.get_coin_balances(AccountAddress::ONE).await;
+
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), AptosError::Internal(_)));
+    }
 
     #[test]
     fn test_indexer_client_creation() {
