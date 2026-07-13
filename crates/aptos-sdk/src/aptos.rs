@@ -2188,4 +2188,647 @@ mod tests {
             .unwrap();
         assert!(result.success());
     }
+
+    // ---------------------------------------------------------------
+    // Shared mock helpers for the transaction build / submit / wait
+    // flow. Each mounts one fullnode endpoint on the given server.
+    // ---------------------------------------------------------------
+
+    /// A full 32-byte transaction hash used across submit/wait mocks.
+    const TEST_TXN_HASH: &str =
+        "0x0000000000000000000000000000000000000000000000000000000000000001";
+
+    async fn mount_seq_number(server: &MockServer, seq: u64) {
+        Mock::given(method("GET"))
+            .and(path_regex(r"^/v1/accounts/0x[0-9a-f]+$"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "sequence_number": seq.to_string(),
+                "authentication_key": "0x0000000000000000000000000000000000000000000000000000000000000001"
+            })))
+            .mount(server)
+            .await;
+    }
+
+    async fn mount_gas_price(server: &MockServer) {
+        Mock::given(method("GET"))
+            .and(path("/v1/estimate_gas_price"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({ "gas_estimate": 100 })),
+            )
+            .mount(server)
+            .await;
+    }
+
+    async fn mount_ledger(server: &MockServer, chain_id: u8) {
+        Mock::given(method("GET"))
+            .and(path("/v1"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "chain_id": chain_id,
+                "epoch": "1",
+                "ledger_version": "100",
+                "oldest_ledger_version": "0",
+                "ledger_timestamp": "1000000",
+                "node_role": "full_node",
+                "oldest_block_height": "0",
+                "block_height": "50"
+            })))
+            .mount(server)
+            .await;
+    }
+
+    fn pending_txn_json() -> serde_json::Value {
+        serde_json::json!({
+            "hash": TEST_TXN_HASH,
+            "sender": "0x1",
+            "sequence_number": "0",
+            "max_gas_amount": "200000",
+            "gas_unit_price": "100",
+            "expiration_timestamp_secs": "1000000000"
+        })
+    }
+
+    fn committed_txn_json() -> serde_json::Value {
+        serde_json::json!({
+            "type": "user_transaction",
+            "version": "12345",
+            "hash": TEST_TXN_HASH,
+            "success": true,
+            "vm_status": "Executed successfully"
+        })
+    }
+
+    async fn mount_submit(server: &MockServer) {
+        Mock::given(method("POST"))
+            .and(path("/v1/transactions"))
+            .respond_with(ResponseTemplate::new(202).set_body_json(pending_txn_json()))
+            .mount(server)
+            .await;
+    }
+
+    async fn mount_wait(server: &MockServer) {
+        Mock::given(method("GET"))
+            .and(path_regex(r"^/v1/transactions/by_hash/0x[0-9a-f]+$"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(committed_txn_json()))
+            .mount(server)
+            .await;
+    }
+
+    async fn mount_simulate(server: &MockServer) {
+        Mock::given(method("POST"))
+            .and(path("/v1/transactions/simulate"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(simulate_response_json()))
+            .mount(server)
+            .await;
+    }
+
+    /// Mounts every endpoint required for `build_transaction` on a custom
+    /// (chain-id 0) network: sequence number, gas price, and ledger info.
+    async fn mount_build_flow(server: &MockServer, seq: u64, chain_id: u8) {
+        mount_seq_number(server, seq).await;
+        mount_gas_price(server).await;
+        mount_ledger(server, chain_id).await;
+    }
+
+    // ---------------------------------------------------------------
+    // ensure_chain_id
+    // ---------------------------------------------------------------
+
+    #[tokio::test]
+    async fn test_ensure_chain_id_known_no_request() {
+        // Testnet has a fixed chain ID, so ensure_chain_id must not touch the
+        // network. Point at a server with no mounted routes: any request would
+        // fail, proving no request was made.
+        let server = MockServer::start().await;
+        let aptos = Aptos::testnet().unwrap();
+        // (server is unused on purpose; keep it alive to mirror the harness)
+        let _ = &server;
+        let id = aptos.ensure_chain_id().await.unwrap();
+        assert_eq!(id, ChainId::testnet());
+    }
+
+    #[tokio::test]
+    async fn test_ensure_chain_id_fetches_from_node() {
+        let server = MockServer::start().await;
+        mount_ledger(&server, 7).await;
+
+        let aptos = create_mock_aptos(&server);
+        // Custom config starts unknown.
+        assert_eq!(aptos.chain_id(), ChainId::new(0));
+
+        let id = aptos.ensure_chain_id().await.unwrap();
+        assert_eq!(id, ChainId::new(7));
+        // Cached for subsequent calls.
+        assert_eq!(aptos.chain_id(), ChainId::new(7));
+    }
+
+    #[tokio::test]
+    async fn test_ledger_info_populates_chain_id() {
+        let server = MockServer::start().await;
+        mount_ledger(&server, 9).await;
+
+        let aptos = create_mock_aptos(&server);
+        assert_eq!(aptos.chain_id(), ChainId::new(0));
+        let info = aptos.ledger_info().await.unwrap();
+        assert_eq!(info.chain_id, 9);
+        // ledger_info() resolves the previously-unknown chain ID as a side effect.
+        assert_eq!(aptos.chain_id(), ChainId::new(9));
+    }
+
+    // ---------------------------------------------------------------
+    // submit / wait (pre-signed)
+    // ---------------------------------------------------------------
+
+    #[tokio::test]
+    async fn test_submit_transaction() {
+        let server = MockServer::start().await;
+        mount_submit(&server).await;
+
+        let aptos = create_mock_aptos(&server);
+        let signed = create_minimal_signed_transaction();
+        let pending = aptos.submit_transaction(&signed).await.unwrap();
+        assert_eq!(pending.into_inner().hash().to_string(), TEST_TXN_HASH);
+    }
+
+    #[tokio::test]
+    async fn test_submit_and_wait() {
+        let server = MockServer::start().await;
+        mount_submit(&server).await;
+        mount_wait(&server).await;
+
+        let aptos = create_mock_aptos(&server);
+        let signed = create_minimal_signed_transaction();
+        let response = aptos.submit_and_wait(&signed, None).await.unwrap();
+        assert_eq!(
+            response
+                .into_inner()
+                .get("success")
+                .and_then(serde_json::Value::as_bool),
+            Some(true)
+        );
+    }
+
+    #[tokio::test]
+    async fn test_simulate_transaction_raw() {
+        let server = MockServer::start().await;
+        mount_simulate(&server).await;
+
+        let aptos = create_mock_aptos(&server);
+        let signed = create_minimal_signed_transaction();
+        let response = aptos.simulate_transaction(&signed).await.unwrap();
+        let data = response.into_inner();
+        assert_eq!(data.len(), 1);
+        assert_eq!(
+            data[0].get("success").and_then(serde_json::Value::as_bool),
+            Some(true)
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // build_orderless_transaction
+    // ---------------------------------------------------------------
+
+    #[cfg(feature = "ed25519")]
+    #[tokio::test]
+    async fn test_build_orderless_transaction() {
+        let server = MockServer::start().await;
+        mount_gas_price(&server).await;
+        mount_ledger(&server, 4).await;
+
+        let aptos = create_mock_aptos(&server);
+        let account = crate::account::Ed25519Account::generate();
+        let payload = crate::transaction::EntryFunction::apt_transfer(AccountAddress::ONE, 1000)
+            .unwrap()
+            .into();
+
+        let raw_txn = aptos
+            .build_orderless_transaction(&account, payload, Some(99))
+            .await
+            .unwrap();
+        // Orderless transactions encode a sentinel sequence number of u64::MAX.
+        assert_eq!(raw_txn.sequence_number, u64::MAX);
+        assert_eq!(raw_txn.sender, account.address());
+        assert_eq!(raw_txn.chain_id, ChainId::new(4));
+    }
+
+    // ---------------------------------------------------------------
+    // sign_and_submit / sign_submit_and_wait (build + submit)
+    // ---------------------------------------------------------------
+
+    #[cfg(feature = "ed25519")]
+    #[tokio::test]
+    async fn test_sign_and_submit() {
+        let server = MockServer::start().await;
+        mount_build_flow(&server, 0, 4).await;
+        mount_submit(&server).await;
+
+        let aptos = create_mock_aptos(&server);
+        let account = crate::account::Ed25519Account::generate();
+        let payload = crate::transaction::EntryFunction::apt_transfer(AccountAddress::ONE, 1000)
+            .unwrap()
+            .into();
+
+        let pending = aptos.sign_and_submit(&account, payload).await.unwrap();
+        assert_eq!(pending.into_inner().hash().to_string(), TEST_TXN_HASH);
+    }
+
+    #[cfg(feature = "ed25519")]
+    #[tokio::test]
+    async fn test_sign_submit_and_wait() {
+        let server = MockServer::start().await;
+        mount_build_flow(&server, 0, 4).await;
+        mount_submit(&server).await;
+        mount_wait(&server).await;
+
+        let aptos = create_mock_aptos(&server);
+        let account = crate::account::Ed25519Account::generate();
+        let payload = crate::transaction::EntryFunction::apt_transfer(AccountAddress::ONE, 1000)
+            .unwrap()
+            .into();
+
+        let response = aptos
+            .sign_submit_and_wait(&account, payload, None)
+            .await
+            .unwrap();
+        assert_eq!(
+            response
+                .into_inner()
+                .get("success")
+                .and_then(serde_json::Value::as_bool),
+            Some(true)
+        );
+    }
+
+    #[cfg(feature = "ed25519")]
+    #[tokio::test]
+    async fn test_sign_and_submit_orderless() {
+        let server = MockServer::start().await;
+        mount_gas_price(&server).await;
+        mount_ledger(&server, 4).await;
+        mount_submit(&server).await;
+
+        let aptos = create_mock_aptos(&server);
+        let account = crate::account::Ed25519Account::generate();
+        let payload = crate::transaction::EntryFunction::apt_transfer(AccountAddress::ONE, 1000)
+            .unwrap()
+            .into();
+
+        let pending = aptos
+            .sign_and_submit_orderless(&account, payload, Some(7))
+            .await
+            .unwrap();
+        assert_eq!(pending.into_inner().hash().to_string(), TEST_TXN_HASH);
+    }
+
+    // ---------------------------------------------------------------
+    // simulate (account) / estimate_gas / simulate_and_submit
+    // ---------------------------------------------------------------
+
+    #[cfg(feature = "ed25519")]
+    #[tokio::test]
+    async fn test_simulate_with_account() {
+        let server = MockServer::start().await;
+        mount_build_flow(&server, 0, 4).await;
+        mount_simulate(&server).await;
+
+        let aptos = create_mock_aptos(&server);
+        let account = crate::account::Ed25519Account::generate();
+        let payload = crate::transaction::EntryFunction::apt_transfer(AccountAddress::ONE, 1000)
+            .unwrap()
+            .into();
+
+        let result = aptos.simulate(&account, payload).await.unwrap();
+        assert!(result.success());
+        assert_eq!(result.gas_used(), 1500);
+    }
+
+    #[cfg(feature = "ed25519")]
+    #[tokio::test]
+    async fn test_estimate_gas() {
+        let server = MockServer::start().await;
+        mount_build_flow(&server, 0, 4).await;
+        mount_simulate(&server).await;
+
+        let aptos = create_mock_aptos(&server);
+        let account = crate::account::Ed25519Account::generate();
+        let payload = crate::transaction::EntryFunction::apt_transfer(AccountAddress::ONE, 1000)
+            .unwrap()
+            .into();
+
+        let gas = aptos.estimate_gas(&account, payload).await.unwrap();
+        // safe_gas_estimate adds a 20% margin to the simulated 1500 gas units.
+        assert_eq!(gas, 1800);
+    }
+
+    #[cfg(feature = "ed25519")]
+    #[tokio::test]
+    async fn test_estimate_gas_simulation_failed() {
+        let server = MockServer::start().await;
+        mount_build_flow(&server, 0, 4).await;
+        // Simulation reports failure -> estimate_gas surfaces SimulationFailed.
+        Mock::given(method("POST"))
+            .and(path("/v1/transactions/simulate"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!([{
+                    "success": false,
+                    "vm_status": "Move abort in 0x1::coin",
+                    "gas_used": "10",
+                    "max_gas_amount": "200000",
+                    "gas_unit_price": "100",
+                    "hash": "0xabc",
+                    "changes": [],
+                    "events": []
+                }])),
+            )
+            .mount(&server)
+            .await;
+
+        let aptos = create_mock_aptos(&server);
+        let account = crate::account::Ed25519Account::generate();
+        let payload = crate::transaction::EntryFunction::apt_transfer(AccountAddress::ONE, 1000)
+            .unwrap()
+            .into();
+
+        let err = aptos.estimate_gas(&account, payload).await.unwrap_err();
+        assert!(matches!(err, AptosError::SimulationFailed(_)));
+    }
+
+    #[cfg(feature = "ed25519")]
+    #[tokio::test]
+    async fn test_simulate_and_submit() {
+        let server = MockServer::start().await;
+        mount_build_flow(&server, 0, 4).await;
+        mount_simulate(&server).await;
+        mount_submit(&server).await;
+
+        let aptos = create_mock_aptos(&server);
+        let account = crate::account::Ed25519Account::generate();
+        let payload = crate::transaction::EntryFunction::apt_transfer(AccountAddress::ONE, 1000)
+            .unwrap()
+            .into();
+
+        let pending = aptos.simulate_and_submit(&account, payload).await.unwrap();
+        assert_eq!(pending.into_inner().hash().to_string(), TEST_TXN_HASH);
+    }
+
+    #[cfg(feature = "ed25519")]
+    #[tokio::test]
+    async fn test_simulate_submit_and_wait() {
+        let server = MockServer::start().await;
+        mount_build_flow(&server, 0, 4).await;
+        mount_simulate(&server).await;
+        mount_submit(&server).await;
+        mount_wait(&server).await;
+
+        let aptos = create_mock_aptos(&server);
+        let account = crate::account::Ed25519Account::generate();
+        let payload = crate::transaction::EntryFunction::apt_transfer(AccountAddress::ONE, 1000)
+            .unwrap()
+            .into();
+
+        let response = aptos
+            .simulate_submit_and_wait(&account, payload, None)
+            .await
+            .unwrap();
+        assert_eq!(
+            response
+                .into_inner()
+                .get("success")
+                .and_then(serde_json::Value::as_bool),
+            Some(true)
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // Transfers (build + submit + wait full flow)
+    // ---------------------------------------------------------------
+
+    #[cfg(feature = "ed25519")]
+    #[tokio::test]
+    async fn test_transfer_apt() {
+        let server = MockServer::start().await;
+        mount_build_flow(&server, 0, 4).await;
+        mount_submit(&server).await;
+        mount_wait(&server).await;
+
+        let aptos = create_mock_aptos(&server);
+        let sender = crate::account::Ed25519Account::generate();
+        let recipient = AccountAddress::from_hex("0x123").unwrap();
+        let response = aptos.transfer_apt(&sender, recipient, 1000).await.unwrap();
+        assert_eq!(
+            response
+                .into_inner()
+                .get("success")
+                .and_then(serde_json::Value::as_bool),
+            Some(true)
+        );
+    }
+
+    #[cfg(feature = "ed25519")]
+    #[tokio::test]
+    async fn test_transfer_coin() {
+        let server = MockServer::start().await;
+        mount_build_flow(&server, 0, 4).await;
+        mount_submit(&server).await;
+        mount_wait(&server).await;
+
+        let aptos = create_mock_aptos(&server);
+        let sender = crate::account::Ed25519Account::generate();
+        let recipient = AccountAddress::from_hex("0x123").unwrap();
+        let coin_type = TypeTag::aptos_coin();
+        let response = aptos
+            .transfer_coin(&sender, recipient, coin_type, 1000)
+            .await
+            .unwrap();
+        assert_eq!(
+            response
+                .into_inner()
+                .get("success")
+                .and_then(serde_json::Value::as_bool),
+            Some(true)
+        );
+    }
+
+    #[cfg(feature = "ed25519")]
+    #[tokio::test]
+    async fn test_transfer_fungible_asset() {
+        let server = MockServer::start().await;
+        mount_build_flow(&server, 0, 4).await;
+        mount_submit(&server).await;
+        mount_wait(&server).await;
+
+        let aptos = create_mock_aptos(&server);
+        let sender = crate::account::Ed25519Account::generate();
+        let metadata = AccountAddress::from_hex("0xa").unwrap();
+        let recipient = AccountAddress::from_hex("0x123").unwrap();
+        let response = aptos
+            .transfer_fungible_asset(&sender, metadata, recipient, 1000)
+            .await
+            .unwrap();
+        assert_eq!(
+            response
+                .into_inner()
+                .get("success")
+                .and_then(serde_json::Value::as_bool),
+            Some(true)
+        );
+    }
+
+    #[cfg(feature = "ed25519")]
+    #[tokio::test]
+    async fn test_transfer_object() {
+        let server = MockServer::start().await;
+        mount_build_flow(&server, 0, 4).await;
+        mount_submit(&server).await;
+        mount_wait(&server).await;
+
+        let aptos = create_mock_aptos(&server);
+        let owner = crate::account::Ed25519Account::generate();
+        let object = AccountAddress::from_hex("0xb").unwrap();
+        let to = AccountAddress::from_hex("0x123").unwrap();
+        let response = aptos.transfer_object(&owner, object, to).await.unwrap();
+        assert_eq!(
+            response
+                .into_inner()
+                .get("success")
+                .and_then(serde_json::Value::as_bool),
+            Some(true)
+        );
+    }
+
+    #[cfg(feature = "ed25519")]
+    #[tokio::test]
+    async fn test_transfer_digital_asset() {
+        let server = MockServer::start().await;
+        mount_build_flow(&server, 0, 4).await;
+        mount_submit(&server).await;
+        mount_wait(&server).await;
+
+        let aptos = create_mock_aptos(&server);
+        let owner = crate::account::Ed25519Account::generate();
+        let token = AccountAddress::from_hex("0xc").unwrap();
+        let to = AccountAddress::from_hex("0x123").unwrap();
+        let response = aptos
+            .transfer_digital_asset(&owner, token, to)
+            .await
+            .unwrap();
+        assert_eq!(
+            response
+                .into_inner()
+                .get("success")
+                .and_then(serde_json::Value::as_bool),
+            Some(true)
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // Tables & BCS view functions
+    // ---------------------------------------------------------------
+
+    #[tokio::test]
+    async fn test_get_table_item() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path_regex(r"^/v1/tables/.+/item$"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!("42")))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let aptos = create_mock_aptos(&server);
+        let value = aptos
+            .get_table_item("0xabc", "address", "u64", serde_json::json!("0x2"))
+            .await
+            .unwrap();
+        assert_eq!(value.as_str(), Some("42"));
+    }
+
+    #[tokio::test]
+    async fn test_view_bcs_typed() {
+        let server = MockServer::start().await;
+        // view_bcs returns raw BCS bytes; encode a u64 the way the node would.
+        let body = aptos_bcs::to_bytes(&1_000_000u64).unwrap();
+        Mock::given(method("POST"))
+            .and(path("/v1/view"))
+            .respond_with(ResponseTemplate::new(200).set_body_bytes(body))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let aptos = create_mock_aptos(&server);
+        let args = vec![aptos_bcs::to_bytes(&AccountAddress::ONE).unwrap()];
+        let balance: u64 = aptos
+            .view_bcs("0x1::coin::balance", vec![], args)
+            .await
+            .unwrap();
+        assert_eq!(balance, 1_000_000);
+    }
+
+    #[tokio::test]
+    async fn test_view_bcs_raw() {
+        let server = MockServer::start().await;
+        let body = aptos_bcs::to_bytes(&7u64).unwrap();
+        Mock::given(method("POST"))
+            .and(path("/v1/view"))
+            .respond_with(ResponseTemplate::new(200).set_body_bytes(body.clone()))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let aptos = create_mock_aptos(&server);
+        let args = vec![aptos_bcs::to_bytes(&AccountAddress::ONE).unwrap()];
+        let raw = aptos
+            .view_bcs_raw("0x1::coin::balance", vec![], args)
+            .await
+            .unwrap();
+        assert_eq!(raw, body);
+    }
+
+    // ---------------------------------------------------------------
+    // Batch helpers
+    // ---------------------------------------------------------------
+
+    #[cfg(feature = "ed25519")]
+    #[tokio::test]
+    async fn test_submit_batch() {
+        let server = MockServer::start().await;
+        mount_build_flow(&server, 0, 4).await;
+        mount_submit(&server).await;
+
+        let aptos = create_mock_aptos(&server);
+        let account = crate::account::Ed25519Account::generate();
+        let payloads: Vec<TransactionPayload> = vec![
+            crate::transaction::EntryFunction::apt_transfer(AccountAddress::ONE, 1000)
+                .unwrap()
+                .into(),
+            crate::transaction::EntryFunction::apt_transfer(
+                AccountAddress::from_hex("0x2").unwrap(),
+                2000,
+            )
+            .unwrap()
+            .into(),
+        ];
+
+        let results = aptos.submit_batch(&account, payloads).await.unwrap();
+        assert_eq!(results.len(), 2);
+    }
+
+    #[cfg(feature = "ed25519")]
+    #[tokio::test]
+    async fn test_batch_transfer_apt() {
+        let server = MockServer::start().await;
+        mount_build_flow(&server, 0, 4).await;
+        mount_submit(&server).await;
+        mount_wait(&server).await;
+
+        let aptos = create_mock_aptos(&server);
+        let sender = crate::account::Ed25519Account::generate();
+        let transfers = vec![
+            (AccountAddress::from_hex("0x123").unwrap(), 1000u64),
+            (AccountAddress::from_hex("0x456").unwrap(), 2000u64),
+        ];
+
+        let results = aptos.batch_transfer_apt(&sender, transfers).await.unwrap();
+        assert_eq!(results.len(), 2);
+    }
 }

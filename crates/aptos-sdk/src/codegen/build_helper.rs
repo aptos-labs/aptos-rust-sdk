@@ -544,6 +544,37 @@ mod tests {
         }"#
     }
 
+    /// Builds a minimal, valid ABI JSON string for a module with the given name.
+    fn abi_json_with_name(name: &str) -> String {
+        format!(
+            r#"{{
+                "address": "0x1",
+                "name": "{name}",
+                "exposed_functions": [
+                    {{
+                        "name": "transfer",
+                        "visibility": "public",
+                        "is_entry": true,
+                        "is_view": false,
+                        "generic_type_params": [{{"constraints": []}}],
+                        "params": ["&signer", "address", "u64"],
+                        "return": []
+                    }}
+                ],
+                "structs": []
+            }}"#
+        )
+    }
+
+    /// Writes `contents` to `path`, creating parent dirs as needed.
+    fn write_file(path: &Path, contents: &str) {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).unwrap();
+        }
+        let mut file = fs::File::create(path).unwrap();
+        file.write_all(contents.as_bytes()).unwrap();
+    }
+
     #[test]
     fn test_generate_from_abi() {
         let temp_dir = TempDir::new().unwrap();
@@ -587,5 +618,354 @@ mod tests {
 
         assert!(!config.generate_mod_file);
         assert!(!config.print_cargo_instructions);
+    }
+
+    #[test]
+    fn test_build_config_defaults() {
+        let config = BuildConfig::default();
+        assert!(config.generate_mod_file);
+        assert!(config.print_cargo_instructions);
+        // Debug/Clone are derived; exercise them so they are covered.
+        let cloned = config.clone();
+        assert!(cloned.generate_mod_file);
+        assert!(format!("{config:?}").contains("BuildConfig"));
+    }
+
+    #[test]
+    fn test_build_config_with_generator_config() {
+        let gen_config = GeneratorConfig::default();
+        let config = BuildConfig::new().with_generator_config(gen_config);
+        // The builder returns Self; the generator config field is populated.
+        assert!(config.generate_mod_file);
+    }
+
+    // --- validate_module_name ---------------------------------------------
+
+    #[test]
+    fn test_validate_module_name_valid() {
+        assert!(validate_module_name("coin").is_ok());
+        assert!(validate_module_name("_private").is_ok());
+        assert!(validate_module_name("token_v2").is_ok());
+        assert!(validate_module_name("MyModule").is_ok());
+        assert!(validate_module_name("a1b2c3").is_ok());
+    }
+
+    #[test]
+    fn test_validate_module_name_empty() {
+        let err = validate_module_name("").unwrap_err();
+        assert!(matches!(err, AptosError::Config(ref m) if m.contains("empty")));
+    }
+
+    #[test]
+    fn test_validate_module_name_bad_first_char() {
+        // Starts with a digit.
+        let err = validate_module_name("1coin").unwrap_err();
+        assert!(matches!(err, AptosError::Config(ref m) if m.contains("must start with")));
+        // Starts with a non-alphanumeric character (path traversal attempt).
+        let err = validate_module_name("../evil").unwrap_err();
+        assert!(matches!(err, AptosError::Config(ref m) if m.contains("must start with")));
+    }
+
+    #[test]
+    fn test_validate_module_name_bad_inner_char() {
+        // Contains a path separator.
+        let err = validate_module_name("coin/evil").unwrap_err();
+        assert!(matches!(err, AptosError::Config(ref m) if m.contains("only ASCII")));
+        // Contains a non-ASCII character.
+        let err = validate_module_name("café").unwrap_err();
+        assert!(matches!(err, AptosError::Config(ref m) if m.contains("only ASCII")));
+    }
+
+    #[test]
+    fn test_validate_module_name_keyword() {
+        for kw in ["fn", "mod", "struct", "type", "use", "async", "dyn", "move"] {
+            let err = validate_module_name(kw).unwrap_err();
+            assert!(
+                matches!(err, AptosError::Config(ref m) if m.contains("keyword")),
+                "expected keyword rejection for {kw}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_is_rust_keyword() {
+        assert!(is_rust_keyword("fn"));
+        assert!(is_rust_keyword("Self"));
+        assert!(is_rust_keyword("await"));
+        assert!(!is_rust_keyword("coin"));
+        assert!(!is_rust_keyword("self_ish"));
+    }
+
+    // --- generate_from_abi -------------------------------------------------
+
+    #[test]
+    fn test_generate_from_abi_default_wrapper() {
+        let temp_dir = TempDir::new().unwrap();
+        let abi_path = temp_dir.path().join("coin.json");
+        let output_dir = temp_dir.path().join("generated");
+        write_file(&abi_path, sample_abi_json());
+
+        generate_from_abi(&abi_path, &output_dir).unwrap();
+
+        let content = fs::read_to_string(output_dir.join("coin.rs")).unwrap();
+        assert!(content.contains("pub fn transfer"));
+    }
+
+    #[test]
+    fn test_generate_from_abi_missing_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let abi_path = temp_dir.path().join("does_not_exist.json");
+        let output_dir = temp_dir.path().join("generated");
+
+        let err = generate_from_abi(&abi_path, &output_dir).unwrap_err();
+        assert!(matches!(err, AptosError::Config(ref m) if m.contains("Failed to read ABI file")));
+    }
+
+    #[test]
+    fn test_generate_from_abi_invalid_json() {
+        let temp_dir = TempDir::new().unwrap();
+        let abi_path = temp_dir.path().join("bad.json");
+        let output_dir = temp_dir.path().join("generated");
+        write_file(&abi_path, "{ this is not valid json");
+
+        let err = generate_from_abi(&abi_path, &output_dir).unwrap_err();
+        assert!(matches!(err, AptosError::Config(ref m) if m.contains("Failed to parse ABI JSON")));
+    }
+
+    #[test]
+    fn test_generate_from_abi_rejects_bad_module_name() {
+        let temp_dir = TempDir::new().unwrap();
+        let abi_path = temp_dir.path().join("evil.json");
+        let output_dir = temp_dir.path().join("generated");
+        // A path-traversal module name should be rejected before any file is written.
+        write_file(&abi_path, &abi_json_with_name("../../evil"));
+
+        let err = generate_from_abi(&abi_path, &output_dir).unwrap_err();
+        assert!(matches!(err, AptosError::Config(ref m) if m.contains("must start with")));
+        assert!(!output_dir.exists());
+    }
+
+    // --- generate_from_abis ------------------------------------------------
+
+    #[test]
+    fn test_generate_from_abis_multiple_with_mod_file() {
+        let temp_dir = TempDir::new().unwrap();
+        let coin_path = temp_dir.path().join("coin.json");
+        let token_path = temp_dir.path().join("token.json");
+        let output_dir = temp_dir.path().join("generated");
+        write_file(&coin_path, &abi_json_with_name("coin"));
+        write_file(&token_path, &abi_json_with_name("token"));
+
+        let config = BuildConfig::new().with_cargo_instructions(false);
+        generate_from_abis_with_config(&[&coin_path, &token_path], &output_dir, &config).unwrap();
+
+        assert!(output_dir.join("coin.rs").exists());
+        assert!(output_dir.join("token.rs").exists());
+        let mod_content = fs::read_to_string(output_dir.join("mod.rs")).unwrap();
+        assert!(mod_content.contains("pub mod coin;"));
+        assert!(mod_content.contains("pub mod token;"));
+    }
+
+    #[test]
+    fn test_generate_from_abis_no_mod_file_when_disabled() {
+        let temp_dir = TempDir::new().unwrap();
+        let coin_path = temp_dir.path().join("coin.json");
+        let output_dir = temp_dir.path().join("generated");
+        write_file(&coin_path, &abi_json_with_name("coin"));
+
+        let config = BuildConfig::new()
+            .with_mod_file(false)
+            .with_cargo_instructions(false);
+        generate_from_abis_with_config(&[&coin_path], &output_dir, &config).unwrap();
+
+        assert!(output_dir.join("coin.rs").exists());
+        assert!(!output_dir.join("mod.rs").exists());
+    }
+
+    #[test]
+    fn test_generate_from_abis_default_wrapper() {
+        let temp_dir = TempDir::new().unwrap();
+        let coin_path = temp_dir.path().join("coin.json");
+        let output_dir = temp_dir.path().join("generated");
+        write_file(&coin_path, &abi_json_with_name("coin"));
+
+        generate_from_abis(&[&coin_path], &output_dir).unwrap();
+        assert!(output_dir.join("coin.rs").exists());
+        // The default config generates a mod.rs.
+        assert!(output_dir.join("mod.rs").exists());
+    }
+
+    #[test]
+    fn test_generate_from_abis_missing_file_errors() {
+        let temp_dir = TempDir::new().unwrap();
+        let missing = temp_dir.path().join("missing.json");
+        let output_dir = temp_dir.path().join("generated");
+
+        let err = generate_from_abis(&[&missing], &output_dir).unwrap_err();
+        assert!(matches!(err, AptosError::Config(ref m) if m.contains("Failed to read ABI file")));
+    }
+
+    #[test]
+    fn test_generate_from_abis_invalid_json_errors() {
+        let temp_dir = TempDir::new().unwrap();
+        let bad = temp_dir.path().join("bad.json");
+        let output_dir = temp_dir.path().join("generated");
+        write_file(&bad, "not json");
+
+        let err = generate_from_abis(&[&bad], &output_dir).unwrap_err();
+        assert!(
+            matches!(err, AptosError::Config(ref m) if m.contains("Failed to parse ABI JSON from"))
+        );
+    }
+
+    #[test]
+    fn test_generate_from_abis_bad_module_name_errors() {
+        let temp_dir = TempDir::new().unwrap();
+        let evil = temp_dir.path().join("evil.json");
+        let output_dir = temp_dir.path().join("generated");
+        write_file(&evil, &abi_json_with_name("mod"));
+
+        let err = generate_from_abis(&[&evil], &output_dir).unwrap_err();
+        assert!(matches!(err, AptosError::Config(ref m) if m.contains("keyword")));
+    }
+
+    #[test]
+    fn test_generate_from_abis_empty_input_writes_nothing() {
+        let temp_dir = TempDir::new().unwrap();
+        let output_dir = temp_dir.path().join("generated");
+        let empty: [&Path; 0] = [];
+
+        // No ABIs -> succeeds but produces no mod.rs (module_names is empty).
+        generate_from_abis(&empty, &output_dir).unwrap();
+        assert!(!output_dir.join("mod.rs").exists());
+    }
+
+    // --- generate_from_abi_with_source ------------------------------------
+
+    #[test]
+    fn test_generate_from_abi_with_source() {
+        let temp_dir = TempDir::new().unwrap();
+        let abi_path = temp_dir.path().join("coin.json");
+        let source_path = temp_dir.path().join("coin.move");
+        let output_dir = temp_dir.path().join("generated");
+        write_file(&abi_path, sample_abi_json());
+        write_file(
+            &source_path,
+            "module 0x1::coin {\n\
+             /// Transfers coins.\n\
+             public entry fun transfer(from: &signer, to: address, amount: u64) {}\n\
+             }\n",
+        );
+
+        generate_from_abi_with_source(&abi_path, &source_path, &output_dir).unwrap();
+
+        let content = fs::read_to_string(output_dir.join("coin.rs")).unwrap();
+        assert!(content.contains("pub fn transfer"));
+    }
+
+    #[test]
+    fn test_generate_from_abi_with_source_missing_abi() {
+        let temp_dir = TempDir::new().unwrap();
+        let abi_path = temp_dir.path().join("missing.json");
+        let source_path = temp_dir.path().join("coin.move");
+        let output_dir = temp_dir.path().join("generated");
+        write_file(&source_path, "module 0x1::coin {}");
+
+        let err = generate_from_abi_with_source(&abi_path, &source_path, &output_dir).unwrap_err();
+        assert!(matches!(err, AptosError::Config(ref m) if m.contains("Failed to read ABI file")));
+    }
+
+    #[test]
+    fn test_generate_from_abi_with_source_missing_source() {
+        let temp_dir = TempDir::new().unwrap();
+        let abi_path = temp_dir.path().join("coin.json");
+        let source_path = temp_dir.path().join("missing.move");
+        let output_dir = temp_dir.path().join("generated");
+        write_file(&abi_path, sample_abi_json());
+
+        let err = generate_from_abi_with_source(&abi_path, &source_path, &output_dir).unwrap_err();
+        assert!(
+            matches!(err, AptosError::Config(ref m) if m.contains("Failed to read Move source"))
+        );
+    }
+
+    #[test]
+    fn test_generate_from_abi_with_source_bad_module_name() {
+        let temp_dir = TempDir::new().unwrap();
+        let abi_path = temp_dir.path().join("evil.json");
+        let source_path = temp_dir.path().join("evil.move");
+        let output_dir = temp_dir.path().join("generated");
+        write_file(&abi_path, &abi_json_with_name("has space"));
+        write_file(&source_path, "module 0x1::x {}");
+
+        let err = generate_from_abi_with_source(&abi_path, &source_path, &output_dir).unwrap_err();
+        assert!(matches!(err, AptosError::Config(ref m) if m.contains("only ASCII")));
+    }
+
+    // --- generate_from_directory ------------------------------------------
+
+    #[test]
+    fn test_generate_from_directory_success() {
+        let temp_dir = TempDir::new().unwrap();
+        let abi_dir = temp_dir.path().join("abi");
+        let output_dir = temp_dir.path().join("generated");
+        write_file(&abi_dir.join("coin.json"), &abi_json_with_name("coin"));
+        write_file(&abi_dir.join("token.json"), &abi_json_with_name("token"));
+        // A non-JSON file should be ignored by the extension filter.
+        write_file(&abi_dir.join("README.txt"), "ignore me");
+
+        generate_from_directory(&abi_dir, &output_dir).unwrap();
+
+        assert!(output_dir.join("coin.rs").exists());
+        assert!(output_dir.join("token.rs").exists());
+        assert!(output_dir.join("mod.rs").exists());
+    }
+
+    #[test]
+    fn test_generate_from_directory_no_json_files() {
+        let temp_dir = TempDir::new().unwrap();
+        let abi_dir = temp_dir.path().join("abi");
+        let output_dir = temp_dir.path().join("generated");
+        fs::create_dir_all(&abi_dir).unwrap();
+        write_file(&abi_dir.join("notes.txt"), "no abis here");
+
+        let err = generate_from_directory(&abi_dir, &output_dir).unwrap_err();
+        assert!(matches!(err, AptosError::Config(ref m) if m.contains("No JSON files found")));
+    }
+
+    #[test]
+    fn test_generate_from_directory_empty_dir() {
+        let temp_dir = TempDir::new().unwrap();
+        let abi_dir = temp_dir.path().join("abi");
+        let output_dir = temp_dir.path().join("generated");
+        fs::create_dir_all(&abi_dir).unwrap();
+
+        let err = generate_from_directory(&abi_dir, &output_dir).unwrap_err();
+        assert!(matches!(err, AptosError::Config(ref m) if m.contains("No JSON files found")));
+    }
+
+    #[test]
+    fn test_generate_from_directory_unreadable_dir() {
+        let temp_dir = TempDir::new().unwrap();
+        // Point at a path that does not exist -> read_dir fails.
+        let abi_dir = temp_dir.path().join("nonexistent");
+        let output_dir = temp_dir.path().join("generated");
+
+        let err = generate_from_directory(&abi_dir, &output_dir).unwrap_err();
+        assert!(
+            matches!(err, AptosError::Config(ref m) if m.contains("Failed to read ABI directory"))
+        );
+    }
+
+    // --- generate_mod_file -------------------------------------------------
+
+    #[test]
+    fn test_generate_mod_file_header_and_reexports() {
+        let modules = vec!["alpha".to_string()];
+        let content = generate_mod_file(&modules);
+        assert!(content.contains("Auto-generated module exports"));
+        assert!(content.contains("Do not edit manually"));
+        assert!(content.contains("pub mod alpha;"));
+        assert!(content.contains("pub use alpha::*;"));
     }
 }

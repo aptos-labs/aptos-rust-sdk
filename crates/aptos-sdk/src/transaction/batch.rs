@@ -652,6 +652,43 @@ impl<'a> BatchOperations<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::AptosConfig;
+    use wiremock::{
+        Mock, MockServer, ResponseTemplate,
+        matchers::{method, path, path_regex},
+    };
+
+    /// Builds a `FullnodeClient` pointed at a wiremock server, with retries
+    /// disabled so error responses surface immediately.
+    fn create_mock_client(server: &MockServer) -> FullnodeClient {
+        let url = format!("{}/v1", server.uri());
+        let config = AptosConfig::custom(&url).unwrap().without_retry();
+        FullnodeClient::new(config).unwrap()
+    }
+
+    /// JSON body for a `POST /v1/transactions` (submit) response.
+    fn pending_txn_response() -> serde_json::Value {
+        serde_json::json!({
+            "hash": "0x0000000000000000000000000000000000000000000000000000000000000001",
+            "sender": "0x1",
+            "sequence_number": "0",
+            "max_gas_amount": "200000",
+            "gas_unit_price": "100",
+            "expiration_timestamp_secs": "1000000"
+        })
+    }
+
+    /// JSON body for a committed transaction fetched by hash while waiting.
+    fn committed_txn_response() -> serde_json::Value {
+        serde_json::json!({
+            "type": "user_transaction",
+            "version": "12345",
+            "hash": "0x0000000000000000000000000000000000000000000000000000000000000001",
+            "success": true,
+            "vm_status": "Executed successfully",
+            "gas_used": "500"
+        })
+    }
 
     #[test]
     fn test_batch_builder_missing_fields() {
@@ -1285,5 +1322,404 @@ mod tests {
         };
         let debug = format!("{status:?}");
         assert!(debug.contains("Confirmed"));
+    }
+
+    #[tokio::test]
+    async fn test_submit_all_returns_pending() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v1/transactions"))
+            .respond_with(ResponseTemplate::new(202).set_body_json(pending_txn_response()))
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server);
+        let batch =
+            SignedTransactionBatch::new(vec![create_dummy_signed_txn(), create_dummy_signed_txn()]);
+        let results = batch.submit_all(&client).await;
+
+        assert_eq!(results.len(), 2);
+        for (i, r) in results.iter().enumerate() {
+            assert_eq!(r.index, i);
+            let status = r.result.as_ref().unwrap();
+            assert!(matches!(status, BatchTransactionStatus::Pending { .. }));
+            assert_eq!(
+                status.hash(),
+                Some("0x0000000000000000000000000000000000000000000000000000000000000001")
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_submit_all_surfaces_submission_error() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v1/transactions"))
+            .respond_with(ResponseTemplate::new(400).set_body_json(serde_json::json!({
+                "message": "Invalid transaction",
+                "error_code": "invalid_transaction_update"
+            })))
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server);
+        let batch = SignedTransactionBatch::new(vec![create_dummy_signed_txn()]);
+        let results = batch.submit_all(&client).await;
+
+        assert_eq!(results.len(), 1);
+        assert!(results[0].result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_submit_and_wait_all_confirmed() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v1/transactions"))
+            .respond_with(ResponseTemplate::new(202).set_body_json(pending_txn_response()))
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path_regex(r"^/v1/transactions/by_hash/0x[0-9a-f]+$"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(committed_txn_response()))
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server);
+        let batch =
+            SignedTransactionBatch::new(vec![create_dummy_signed_txn(), create_dummy_signed_txn()]);
+        let results = batch
+            .submit_and_wait_all(&client, Some(Duration::from_secs(5)))
+            .await;
+
+        assert_eq!(results.len(), 2);
+        for r in &results {
+            match r.result.as_ref().unwrap() {
+                BatchTransactionStatus::Confirmed {
+                    success,
+                    version,
+                    gas_used,
+                    hash,
+                } => {
+                    assert!(*success);
+                    assert_eq!(*version, 12345);
+                    assert_eq!(*gas_used, 500);
+                    assert_eq!(
+                        hash,
+                        "0x0000000000000000000000000000000000000000000000000000000000000001"
+                    );
+                }
+                other => panic!("expected Confirmed, got {other:?}"),
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_submit_sequential_returns_pending() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v1/transactions"))
+            .respond_with(ResponseTemplate::new(202).set_body_json(pending_txn_response()))
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server);
+        let batch =
+            SignedTransactionBatch::new(vec![create_dummy_signed_txn(), create_dummy_signed_txn()]);
+        let results = batch.submit_sequential(&client).await;
+
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].index, 0);
+        assert_eq!(results[1].index, 1);
+        assert!(results.iter().all(|r| r.result.is_ok()));
+    }
+
+    #[tokio::test]
+    async fn test_submit_and_wait_sequential_confirmed() {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .and(path("/v1/transactions"))
+            .respond_with(ResponseTemplate::new(202).set_body_json(pending_txn_response()))
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path_regex(r"^/v1/transactions/by_hash/0x[0-9a-f]+$"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(committed_txn_response()))
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server);
+        let batch =
+            SignedTransactionBatch::new(vec![create_dummy_signed_txn(), create_dummy_signed_txn()]);
+        let results = batch.submit_and_wait_sequential(&client, None).await;
+
+        // Both succeed, so neither triggers the early break.
+        assert_eq!(results.len(), 2);
+        assert!(results.iter().all(|r| r.result.is_ok()));
+    }
+
+    #[tokio::test]
+    async fn test_submit_and_wait_sequential_stops_on_failure() {
+        let server = MockServer::start().await;
+        // Submission itself fails, so the sequential loop must break after the
+        // first transaction and never submit the second.
+        Mock::given(method("POST"))
+            .and(path("/v1/transactions"))
+            .respond_with(ResponseTemplate::new(400).set_body_json(serde_json::json!({
+                "message": "Invalid transaction",
+                "error_code": "invalid_transaction_update"
+            })))
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server);
+        let batch =
+            SignedTransactionBatch::new(vec![create_dummy_signed_txn(), create_dummy_signed_txn()]);
+        let results = batch.submit_and_wait_sequential(&client, None).await;
+
+        assert_eq!(results.len(), 1, "should stop after first failure");
+        assert!(results[0].result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_resolve_chain_id_uses_cached_value() {
+        // A non-zero cached chain id short-circuits without any network call.
+        let server = MockServer::start().await;
+        let client = create_mock_client(&server);
+        let chain_id = std::sync::atomic::AtomicU8::new(4);
+        let ops = BatchOperations::new(&client, &chain_id);
+
+        let resolved = ops.resolve_chain_id().await.unwrap();
+        assert_eq!(resolved, ChainId::new(4));
+    }
+
+    #[tokio::test]
+    async fn test_resolve_chain_id_fetches_from_node() {
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/v1"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "chain_id": 2,
+                "epoch": "100",
+                "ledger_version": "12345",
+                "oldest_ledger_version": "0",
+                "ledger_timestamp": "1000000",
+                "node_role": "full_node",
+                "oldest_block_height": "0",
+                "block_height": "5000"
+            })))
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server);
+        let chain_id = std::sync::atomic::AtomicU8::new(0);
+        let ops = BatchOperations::new(&client, &chain_id);
+
+        let resolved = ops.resolve_chain_id().await.unwrap();
+        assert_eq!(resolved, ChainId::new(2));
+        // The fetched id must be cached back into the atomic for reuse.
+        assert_eq!(chain_id.load(std::sync::atomic::Ordering::Relaxed), 2);
+    }
+
+    #[cfg(feature = "ed25519")]
+    #[tokio::test]
+    async fn test_batch_operations_build() {
+        use crate::account::Ed25519Account;
+
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path_regex(r"^/v1/accounts/0x[0-9a-f]+$"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "sequence_number": "7",
+                "authentication_key": "0x0000000000000000000000000000000000000000000000000000000000000001"
+            })))
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/v1/estimate_gas_price"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "gas_estimate": 123
+            })))
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server);
+        // Pre-seed the chain id so resolve_chain_id short-circuits.
+        let chain_id = std::sync::atomic::AtomicU8::new(4);
+        let ops = BatchOperations::new(&client, &chain_id);
+        let account = Ed25519Account::generate();
+
+        let payloads = vec![
+            TransactionPayload::Script(crate::transaction::Script {
+                code: vec![],
+                type_args: vec![],
+                args: vec![],
+            }),
+            TransactionPayload::Script(crate::transaction::Script {
+                code: vec![],
+                type_args: vec![],
+                args: vec![],
+            }),
+        ];
+        let batch = ops.build(&account, payloads).await.unwrap();
+
+        // Two payloads -> two signed transactions with incrementing seq numbers
+        // starting at the fetched sequence number (7).
+        assert_eq!(batch.len(), 2);
+        let txns = batch.transactions();
+        assert_eq!(txns[0].raw_txn.sequence_number, 7);
+        assert_eq!(txns[1].raw_txn.sequence_number, 8);
+        // The gas price came from the estimate response.
+        assert_eq!(txns[0].raw_txn.gas_unit_price, 123);
+        assert_eq!(txns[0].raw_txn.chain_id, ChainId::new(4));
+    }
+
+    #[cfg(feature = "ed25519")]
+    #[tokio::test]
+    async fn test_batch_operations_submit() {
+        use crate::account::Ed25519Account;
+
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path_regex(r"^/v1/accounts/0x[0-9a-f]+$"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "sequence_number": "0",
+                "authentication_key": "0x0000000000000000000000000000000000000000000000000000000000000001"
+            })))
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/v1/estimate_gas_price"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "gas_estimate": 100
+            })))
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/v1/transactions"))
+            .respond_with(ResponseTemplate::new(202).set_body_json(pending_txn_response()))
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server);
+        let chain_id = std::sync::atomic::AtomicU8::new(4);
+        let ops = BatchOperations::new(&client, &chain_id);
+        let account = Ed25519Account::generate();
+
+        let payloads = vec![TransactionPayload::Script(crate::transaction::Script {
+            code: vec![],
+            type_args: vec![],
+            args: vec![],
+        })];
+        let results = ops.submit(&account, payloads).await.unwrap();
+
+        assert_eq!(results.len(), 1);
+        assert!(matches!(
+            results[0].result.as_ref().unwrap(),
+            BatchTransactionStatus::Pending { .. }
+        ));
+    }
+
+    #[cfg(feature = "ed25519")]
+    #[tokio::test]
+    async fn test_batch_operations_submit_and_wait() {
+        use crate::account::Ed25519Account;
+
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path_regex(r"^/v1/accounts/0x[0-9a-f]+$"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "sequence_number": "0",
+                "authentication_key": "0x0000000000000000000000000000000000000000000000000000000000000001"
+            })))
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/v1/estimate_gas_price"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "gas_estimate": 100
+            })))
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/v1/transactions"))
+            .respond_with(ResponseTemplate::new(202).set_body_json(pending_txn_response()))
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path_regex(r"^/v1/transactions/by_hash/0x[0-9a-f]+$"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(committed_txn_response()))
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server);
+        let chain_id = std::sync::atomic::AtomicU8::new(4);
+        let ops = BatchOperations::new(&client, &chain_id);
+        let account = Ed25519Account::generate();
+
+        let payloads = vec![TransactionPayload::Script(crate::transaction::Script {
+            code: vec![],
+            type_args: vec![],
+            args: vec![],
+        })];
+        let results = ops
+            .submit_and_wait(&account, payloads, Some(Duration::from_secs(5)))
+            .await
+            .unwrap();
+
+        assert_eq!(results.len(), 1);
+        assert!(matches!(
+            results[0].result.as_ref().unwrap(),
+            BatchTransactionStatus::Confirmed { success: true, .. }
+        ));
+    }
+
+    #[cfg(feature = "ed25519")]
+    #[tokio::test]
+    async fn test_batch_operations_transfer_apt() {
+        use crate::account::Ed25519Account;
+
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path_regex(r"^/v1/accounts/0x[0-9a-f]+$"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "sequence_number": "0",
+                "authentication_key": "0x0000000000000000000000000000000000000000000000000000000000000001"
+            })))
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/v1/estimate_gas_price"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "gas_estimate": 100
+            })))
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/v1/transactions"))
+            .respond_with(ResponseTemplate::new(202).set_body_json(pending_txn_response()))
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path_regex(r"^/v1/transactions/by_hash/0x[0-9a-f]+$"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(committed_txn_response()))
+            .mount(&server)
+            .await;
+
+        let client = create_mock_client(&server);
+        let chain_id = std::sync::atomic::AtomicU8::new(4);
+        let ops = BatchOperations::new(&client, &chain_id);
+        let account = Ed25519Account::generate();
+
+        let transfers = vec![
+            (AccountAddress::ONE, 100u64),
+            (AccountAddress::from_hex("0x2").unwrap(), 200u64),
+        ];
+        let results = ops.transfer_apt(&account, transfers).await.unwrap();
+
+        assert_eq!(results.len(), 2);
+        assert!(results.iter().all(|r| matches!(
+            r.result.as_ref().unwrap(),
+            BatchTransactionStatus::Confirmed { success: true, .. }
+        )));
     }
 }
