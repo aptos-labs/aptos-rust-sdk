@@ -5,7 +5,7 @@ All notable changes to `aptos-sdk` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [unreleased]
+## [0.7.0] - 2026-07-13
 
 ### Removed
 - The `keyless` feature and the entire keyless (OIDC) account surface have been
@@ -566,6 +566,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - This SDK is independent of `aptos-core` for faster compilation
 - Minimum Supported Rust Version (MSRV): 1.90
 
+[0.7.0]: https://github.com/aptos-labs/aptos-rust-sdk/releases/tag/sdk-v0.7.0
 [0.6.0]: https://github.com/aptos-labs/aptos-rust-sdk/releases/tag/sdk-v0.6.0
 [0.5.0]: https://github.com/aptos-labs/aptos-rust-sdk/releases/tag/sdk-v0.5.0
 [0.4.1]: https://github.com/aptos-labs/aptos-rust-sdk/releases/tag/sdk-v0.4.1
