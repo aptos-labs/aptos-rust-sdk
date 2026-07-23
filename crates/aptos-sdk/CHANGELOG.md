@@ -103,6 +103,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stale `Secp256r1Account` migration guidance (now points at `WebAuthnAccount`).
 
 ### Added
+- `AccountAddress::from_static` constructs addresses from hex string literals in
+  constant contexts, with the same optional prefix, zero-padding, and hex-digit
+  rules as `AccountAddress::from_hex`. Invalid literals fail during constant
+  evaluation instead of requiring runtime parsing.
 - `MoveU256` now implements `Deserialize` and `Display`, its `parse` accepts the
   full unsigned 256-bit range (previously only values up to `u128`), and
   `to_decimal_string` returns the canonical decimal form. `Serialize`/`Deserialize`

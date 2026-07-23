@@ -64,6 +64,64 @@ impl AccountAddress {
         Self(bytes)
     }
 
+    /// Creates an address from a static hex string at compile time.
+    ///
+    /// The input follows the same format as [`Self::from_hex`]: the `0x` or
+    /// `0X` prefix is optional, short addresses are left-padded with zeros, and
+    /// both uppercase and lowercase hex digits are accepted.
+    ///
+    /// # Panics
+    ///
+    /// Panics during constant evaluation if the input is empty, contains no
+    /// digits after its prefix, is longer than 64 hex digits, or contains a
+    /// non-hex character.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use aptos_sdk::AccountAddress;
+    ///
+    /// const MODULE_ADDRESS: AccountAddress = AccountAddress::from_static("0x42");
+    ///
+    /// assert_eq!(MODULE_ADDRESS, AccountAddress::from_hex("0x42").unwrap());
+    /// ```
+    pub const fn from_static(hex_str: &'static str) -> Self {
+        let input = hex_str.as_bytes();
+        let digits =
+            if input.len() >= 2 && input[0] == b'0' && (input[1] == b'x' || input[1] == b'X') {
+                input.split_at(2).1
+            } else {
+                input
+            };
+
+        assert!(!digits.is_empty(), "address must contain a hex digit");
+        assert!(
+            digits.len() <= ADDRESS_LENGTH * 2,
+            "address exceeds 64 hex digits"
+        );
+
+        let mut address = [0u8; ADDRESS_LENGTH];
+        let mut source = 0;
+        let mut destination = ADDRESS_LENGTH - digits.len().div_ceil(2);
+
+        // An odd leading digit is the low nibble of the first output byte.
+        if digits.len() % 2 != 0 {
+            address[destination] = decode_hex_digit(digits[source]);
+            source += 1;
+            destination += 1;
+        }
+
+        while source < digits.len() {
+            let high = decode_hex_digit(digits[source]);
+            let low = decode_hex_digit(digits[source + 1]);
+            address[destination] = (high << 4) | low;
+            source += 2;
+            destination += 1;
+        }
+
+        Self(address)
+    }
+
     /// Creates an address from a u64 value (for small addresses like 0x1).
     const fn from_u64(value: u64) -> Self {
         let mut bytes = [0u8; ADDRESS_LENGTH];
@@ -224,6 +282,15 @@ impl AccountAddress {
     }
 }
 
+const fn decode_hex_digit(digit: u8) -> u8 {
+    match digit {
+        b'0'..=b'9' => digit - b'0',
+        b'a'..=b'f' => digit - b'a' + 10,
+        b'A'..=b'F' => digit - b'A' + 10,
+        _ => panic!("address contains a non-hex character"),
+    }
+}
+
 impl Default for AccountAddress {
     fn default() -> Self {
         Self::ZERO
@@ -309,6 +376,48 @@ impl AsRef<[u8]> for AccountAddress {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const STATIC_ADDRESS: AccountAddress = AccountAddress::from_static(
+        "0x1234567890abcdefABCDEF01234567890abcdefABCDEF01234567890abcdef",
+    );
+
+    #[test]
+    fn test_from_static_is_const_and_matches_from_hex() {
+        assert_eq!(
+            STATIC_ADDRESS,
+            AccountAddress::from_hex(
+                "0x1234567890abcdefABCDEF01234567890abcdefABCDEF01234567890abcdef",
+            )
+            .unwrap()
+        );
+
+        for input in ["0", "0x1", "0Xabc", "ABCDEF", "00ff"] {
+            assert_eq!(
+                AccountAddress::from_static(input),
+                AccountAddress::from_hex(input).unwrap()
+            );
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "address must contain a hex digit")]
+    fn test_from_static_rejects_bare_prefix() {
+        let _ = AccountAddress::from_static("0x");
+    }
+
+    #[test]
+    #[should_panic(expected = "address contains a non-hex character")]
+    fn test_from_static_rejects_non_hex_digit() {
+        let _ = AccountAddress::from_static("0xg");
+    }
+
+    #[test]
+    #[should_panic(expected = "address exceeds 64 hex digits")]
+    fn test_from_static_rejects_too_many_digits() {
+        let _ = AccountAddress::from_static(
+            "00000000000000000000000000000000000000000000000000000000000000000",
+        );
+    }
 
     #[test]
     fn test_from_hex() {
