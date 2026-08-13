@@ -66,12 +66,13 @@ check_aptos_cli() {
     echo -e "${GREEN}✓ Aptos CLI found: $(aptos --version)${NC}"
 }
 
-# Check if localnet is already running
+# True when the CLI readiness server, node API, and faucet are all up.
+# Faucet OpenAPI health is GET / ("Ok"), not /health (that 404s).
 check_localnet_running() {
-    if curl -sf http://127.0.0.1:8080/v1 | python3 -c 'import json,sys; d=json.load(sys.stdin); assert isinstance(d.get("chain_id"), int)' >/dev/null 2>&1; then
-        return 0
-    fi
-    return 1
+    curl -sf --max-time 5 http://127.0.0.1:8070/ >/dev/null 2>&1 || return 1
+    curl -sf --max-time 5 http://127.0.0.1:8080/v1 | python3 -c 'import json,sys; d=json.load(sys.stdin); assert isinstance(d.get("chain_id"), int)' >/dev/null 2>&1 || return 1
+    curl -sf --max-time 5 http://127.0.0.1:8081/ >/dev/null 2>&1 || return 1
+    return 0
 }
 
 # Start localnet
@@ -106,18 +107,6 @@ start_localnet() {
         echo "Check logs: /tmp/localnet.log"
         exit 1
     fi
-    
-    # Wait for faucet
-    echo "Waiting for faucet..."
-    elapsed=0
-    while [[ $elapsed -lt 60 ]]; do
-        if curl -sf http://127.0.0.1:8081/health > /dev/null; then
-            echo -e "${GREEN}✓ Faucet is ready${NC}"
-            break
-        fi
-        sleep 2
-        elapsed=$((elapsed + 2))
-    done
 }
 
 # Run E2E tests

@@ -42,33 +42,46 @@ jobs:
         run: |
           aptos node run-localnet --with-faucet --force-restart > "${{ runner.temp }}/localnet.log" 2>&1 &
           echo "LOCALNET_PID=$!" >> $GITHUB_ENV
-          # Wait until the REST API returns a JSON ledger document, not just
-          # any HTTP 200 (a proxy/error page would otherwise start tests early).
+          dump_localnet_probes() {
+            echo "--- GET http://127.0.0.1:8070/ (CLI readiness) ---"
+            curl -sS -D- --max-time 5 http://127.0.0.1:8070/ || true
+            echo "--- GET http://127.0.0.1:8080/v1 (node API) ---"
+            curl -sS -D- --max-time 5 http://127.0.0.1:8080/v1 || true
+            echo "--- GET http://127.0.0.1:8081/ (faucet health is GET /, not /health) ---"
+            curl -sS -D- --max-time 5 http://127.0.0.1:8081/ || true
+            echo "--- GET http://127.0.0.1:8081/health (expected 404) ---"
+            curl -sS -D- --max-time 5 http://127.0.0.1:8081/health || true
+            cat "${{ runner.temp }}/localnet.log"
+          }
+          # The CLI's unified readiness server returns 503 until the node API,
+          # faucet, and other enabled services are up, then 200.
+          # Do not probe 8081/health: faucet OpenAPI health is GET / ("Ok").
+          # `curl -sf /health` 404s forever; the previous `curl -s` (no -f)
+          # treated that 404 as ready once the port accepted TCP.
           for i in $(seq 1 90); do
-            if curl -sf http://127.0.0.1:8080/v1 | python3 -c 'import json,sys; d=json.load(sys.stdin); assert isinstance(d.get("chain_id"), int)' >/dev/null 2>&1; then
-              echo "Localnet is ready after ~$((i * 2))s"
+            if curl -sf --max-time 5 http://127.0.0.1:8070/ >/dev/null; then
+              echo "Localnet readiness endpoint is 200 after ~$((i * 2))s"
               break
             fi
             if [ "$i" -eq 90 ]; then
-              echo "Localnet failed to start within 180s"
-              cat "${{ runner.temp }}/localnet.log"
+              echo "Localnet failed to become ready within 180s"
+              dump_localnet_probes
               exit 1
             fi
             sleep 2
           done
-          # Wait for faucet to be ready
-          for i in $(seq 1 30); do
-            if curl -sf http://127.0.0.1:8081/health > /dev/null; then
-              echo "Faucet is ready"
-              break
-            fi
-            if [ "$i" -eq 30 ]; then
-              echo "Faucet failed to start within 60s"
-              cat "${{ runner.temp }}/localnet.log"
-              exit 1
-            fi
-            sleep 2
-          done
+          # Pin the two endpoints the SDK actually uses, not just 8070.
+          if ! curl -sf --max-time 5 http://127.0.0.1:8080/v1 | python3 -c 'import json,sys; d=json.load(sys.stdin); assert isinstance(d.get("chain_id"), int)'; then
+            echo "Node API did not return a ledger document with integer chain_id"
+            dump_localnet_probes
+            exit 1
+          fi
+          faucet_body=$(curl -sf --max-time 5 http://127.0.0.1:8081/) || {
+            echo "Faucet GET / did not return HTTP 200"
+            dump_localnet_probes
+            exit 1
+          }
+          echo "Faucet health: ${faucet_body}"
 
       - name: Run E2E tests
         env:
