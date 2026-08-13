@@ -1,12 +1,21 @@
 # cargo-deny configuration.
 #
 # Enforced by `.github/workflows/security.yml` (`cargo deny check`).
-# Keep the license allow-list tight enough that a new copyleft or
-# proprietary dependency fails CI, but broad enough for the crates.io
-# licenses this workspace already uses.
+# The license allow-list is the set of SPDX licenses currently in this
+# workspace's dependency graph on the platforms CI builds. A newly added
+# copyleft or proprietary crate fails CI.
 
 [graph]
 all-features = true
+# Only the triples CI actually builds. Unrestricted graphs pull in
+# target-only crates such as `r-efi` (LGPL) for UEFI.
+targets = [
+    { triple = "x86_64-unknown-linux-gnu" },
+    { triple = "aarch64-unknown-linux-gnu" },
+    { triple = "x86_64-apple-darwin" },
+    { triple = "aarch64-apple-darwin" },
+    { triple = "x86_64-pc-windows-msvc" },
+]
 
 [advisories]
 yanked = "deny"
@@ -15,21 +24,18 @@ ignore = []
 [licenses]
 allow = [
     "MIT",
+    "MIT-0",
     "Apache-2.0",
     "Apache-2.0 WITH LLVM-exception",
+    "BSD-1-Clause",
     "BSD-2-Clause",
     "BSD-3-Clause",
+    "CC0-1.0",
+    "CDLA-Permissive-2.0",
     "ISC",
     "Unicode-3.0",
-    "Unicode-DFS-2016",
+    "Unlicense",
     "Zlib",
-    "CC0-1.0",
-    "BSL-1.0",
-    "0BSD",
-    "NCSA",
-    "OpenSSL",
-    "MPL-2.0",
-    "CDDL-1.0",
 ]
 confidence-threshold = 0.8
 
