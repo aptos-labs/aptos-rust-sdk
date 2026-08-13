@@ -16,14 +16,14 @@
 //! aptos node run-localnet --with-faucet
 //!
 //! # In another terminal, run tests:
-//! cargo test -p aptos-sdk --features "e2e,full"
+//! cargo test -p aptos-sdk --features "e2e,full" --tests -- --ignored --test-threads=1
 //! ```
 //!
 //! ### Option 3: Using custom node URLs
 //! ```bash
 //! export APTOS_LOCAL_NODE_URL=http://127.0.0.1:8080/v1
 //! export APTOS_LOCAL_FAUCET_URL=http://127.0.0.1:8081
-//! cargo test -p aptos-sdk --features "e2e,full"
+//! cargo test -p aptos-sdk --features "e2e,full" --tests -- --ignored --test-threads=1
 //! ```
 //!
 //! ## Test Categories
@@ -65,6 +65,20 @@ async fn wait_for_finality() {
     tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 }
 
+/// Parse a view-function u64, which the REST API may encode as a JSON string
+/// or as a JSON number. Anything else is a contract break.
+fn parse_view_u64(value: &serde_json::Value) -> u64 {
+    match value {
+        serde_json::Value::String(s) => s
+            .parse()
+            .unwrap_or_else(|e| panic!("view u64 string {s:?} did not parse: {e}")),
+        serde_json::Value::Number(n) => n
+            .as_u64()
+            .unwrap_or_else(|| panic!("view u64 number {n} does not fit in u64")),
+        other => panic!("view u64 must be a JSON string or number, got {other}"),
+    }
+}
+
 // =============================================================================
 // Account Tests
 // =============================================================================
@@ -85,10 +99,15 @@ mod account_tests {
         println!("Created account: {}", account.address());
 
         // Fund account
+        const FUNDED: u64 = 100_000_000;
         let txn_hashes = aptos
-            .fund_account(account.address(), 100_000_000)
+            .fund_account(account.address(), FUNDED)
             .await
             .expect("failed to fund account");
+        assert!(
+            !txn_hashes.is_empty(),
+            "faucet must return at least one mint transaction hash"
+        );
         println!("Funded with txns: {txn_hashes:?}");
 
         wait_for_finality().await;
@@ -98,7 +117,7 @@ mod account_tests {
             .get_balance(account.address())
             .await
             .expect("failed to get balance");
-        assert!(balance > 0, "balance should be > 0");
+        assert_eq!(balance, FUNDED, "faucet must credit the requested amount");
         println!("Balance: {balance} octas");
     }
 
@@ -109,8 +128,9 @@ mod account_tests {
         let aptos = Aptos::new(config).expect("failed to create client");
 
         // Use helper method
+        const FUNDED: u64 = 50_000_000;
         let account = aptos
-            .create_funded_account(50_000_000)
+            .create_funded_account(FUNDED)
             .await
             .expect("failed to create funded account");
 
@@ -122,7 +142,10 @@ mod account_tests {
             .get_balance(account.address())
             .await
             .expect("failed to get balance");
-        assert!(balance > 0, "balance should be > 0");
+        assert_eq!(
+            balance, FUNDED,
+            "create_funded_account must credit the requested amount"
+        );
     }
 
     #[tokio::test]
@@ -375,11 +398,9 @@ mod view_tests {
         assert!(!result.is_empty(), "should return a value");
         println!("Current timestamp: {result:?}");
 
-        // Parse the timestamp
-        if let Some(timestamp) = result[0].as_str() {
-            let ts: u64 = timestamp.parse().expect("should be a number");
-            assert!(ts > 0, "timestamp should be > 0");
-        }
+        assert_eq!(result.len(), 1, "now_seconds must return a single value");
+        let ts = parse_view_u64(&result[0]);
+        assert!(ts > 0, "timestamp should be > 0, got {ts}");
     }
 
     #[tokio::test]
@@ -805,14 +826,22 @@ mod ledger_tests {
         let config = get_test_config();
         let aptos = Aptos::new(config).expect("failed to create client");
 
-        // Just verify we can get ledger info
-        let _ledger_info = aptos
+        let ledger_info = aptos
             .ledger_info()
             .await
             .expect("failed to get ledger info");
 
-        // Chain ID should be set
-        assert!(aptos.chain_id().id() > 0);
+        // `ledger_info()` resolves an unknown chain ID as a side effect, so
+        // the cached client value must match the node's reported chain ID.
+        assert_eq!(
+            aptos.chain_id().id(),
+            ledger_info.chain_id,
+            "client chain ID must match ledger_info.chain_id"
+        );
+        assert_ne!(
+            ledger_info.chain_id, 0,
+            "node must report a non-zero chain ID"
+        );
         println!("Client chain ID: {}", aptos.chain_id().id());
     }
 }
@@ -2129,56 +2158,78 @@ mod read_endpoint_tests {
             .get_events_by_creation_number(AccountAddress::ONE, 0, None, Some(5))
             .await
             .expect("failed to get events by creation number");
+        // The page may be empty on a fresh localnet, but the response must
+        // still be a decoded event list with ledger metadata headers.
+        assert!(
+            events.ledger_version.is_some(),
+            "events response must include an x-aptos-ledger-version header"
+        );
+        for (i, event) in events.data.iter().enumerate() {
+            assert!(
+                event.is_object(),
+                "event {i} must be a JSON object, got {event}"
+            );
+            assert!(
+                event.get("guid").is_some() || event.get("type").is_some(),
+                "event {i} must have a guid or type field, got {event}"
+            );
+        }
         println!(
             "framework account creation-number-0 events: {}",
             events.data.len()
         );
     }
 
-    /// Exercises `get_table_item` against the on-chain governance voting forum.
+    /// Exercises `get_table_item`. Prefer the on-chain governance voting
+    /// forum when it exists; otherwise still hit the endpoint with a dummy
+    /// handle and assert a structured 4xx (not a parse/panic failure).
     #[tokio::test]
     #[ignore]
     async fn e2e_get_table_item() {
         let aptos = Aptos::new(get_test_config()).expect("failed to create client");
 
         let forum_type = "0x1::voting::VotingForum<0x1::governance_proposal::GovernanceProposal>";
-        let forum = match aptos
+        let handle = match aptos
             .fullnode()
             .get_account_resource(AccountAddress::ONE, forum_type)
             .await
         {
-            Ok(forum) => forum,
-            // Some minimal localnets may not initialize governance; skip cleanly.
+            Ok(forum) => Some(
+                forum.data.data["proposals"]["handle"]
+                    .as_str()
+                    .expect("forum should expose a proposals table handle")
+                    .to_string(),
+            ),
             Err(AptosError::Api {
                 status_code: 404, ..
-            }) => {
-                println!("governance forum not present on this node; skipping");
-                return;
-            }
+            }) => None,
             Err(e) => panic!("unexpected error reading forum: {e}"),
         };
 
-        let handle = forum.data.data["proposals"]["handle"]
-            .as_str()
-            .expect("forum should expose a proposals table handle")
-            .to_string();
-
-        // Reading a possibly-absent key still exercises the endpoint: accept a
-        // successful read OR a 404 (no proposal 0 yet), but nothing else.
-        match aptos
-            .get_table_item(
-                &handle,
-                "u64",
+        let (handle, value_type) = match handle {
+            Some(handle) => (
+                handle,
                 "0x1::voting::Proposal<0x1::governance_proposal::GovernanceProposal>",
-                serde_json::json!("0"),
-            )
+            ),
+            None => ("0x1".to_string(), "u64"),
+        };
+
+        match aptos
+            .get_table_item(&handle, "u64", value_type, serde_json::json!("0"))
             .await
         {
-            Ok(item) => println!("read proposal #0: {item}"),
-            Err(AptosError::Api {
-                status_code: 404, ..
-            }) => {
-                println!("no proposal #0 yet; table-item endpoint reachable");
+            Ok(item) => {
+                assert!(
+                    item.is_object() || item.is_string() || item.is_number(),
+                    "table item must be a JSON value, got {item}"
+                );
+                println!("read table item: {item}");
+            }
+            Err(AptosError::Api { status_code, .. }) => {
+                assert!(
+                    (400u16..500).contains(&status_code),
+                    "table-item must return a 4xx API error for a missing/invalid key, got {status_code}"
+                );
             }
             Err(e) => panic!("unexpected table-item error: {e}"),
         }

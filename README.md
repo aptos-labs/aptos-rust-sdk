@@ -180,10 +180,11 @@ cargo build -p aptos-sdk --release          # Release build
 ```bash
 cargo test -p aptos-sdk                     # Unit tests (default features)
 cargo test -p aptos-sdk --all-features      # Unit tests (all features)
+cargo test --workspace --doc                # rustdoc tests (`--all-targets` does not run these)
 
 # E2E tests (requires a running localnet)
 aptos node run-localnet --with-faucet
-cargo test -p aptos-sdk --features "e2e" -- --ignored
+cargo test -p aptos-sdk --features "e2e,full" --tests -- --ignored --test-threads=1
 ```
 
 ### Linting & Formatting

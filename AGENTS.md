@@ -28,19 +28,22 @@ every one and will reject the PR otherwise.
 ```bash
 cargo fmt
 cargo fmt -- --check                                                 # idempotency check
-cargo clippy -p aptos-sdk --all-targets --all-features -- -D warnings
-cargo clippy -p aptos-sdk --all-targets -- -D warnings               # default features
-cargo clippy -p aptos-sdk --no-default-features -- -D warnings
-cargo test -p aptos-sdk --all-features
+cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+cargo clippy -p aptos-sdk --all-targets --locked -- -D warnings               # default features
+cargo clippy -p aptos-sdk --no-default-features --locked -- -D warnings
+cargo test -p aptos-sdk --all-features --locked
+cargo test --workspace --doc --all-features --locked                         # rustdoc tests
+cargo test -p aptos-sdk-macros --all-targets --locked
 RUSTDOCFLAGS="--cfg docsrs -D warnings" cargo +nightly doc \
-    -p aptos-sdk --all-features --no-deps                            # docs.rs parity
+    -p aptos-sdk --all-features --no-deps --locked                    # docs.rs parity
 ```
 
 The lint job in CI runs the three clippy variants above, not just
 `--all-features`. A clippy error that only fires under `--all-targets`
 or under `--no-default-features` (e.g. unused private functions reachable
 only behind a feature flag) is a real failure -- always run all three
-locally.
+locally. The `--workspace --all-features` variant also lints
+`aptos-sdk-macros`.
 
 The documentation job uses **nightly** with `--cfg docsrs` and treats
 warnings as errors, so broken intra-doc links and `clippy::doc_markdown`
@@ -103,7 +106,7 @@ cargo test -p aptos-sdk                                                   # unit
 cargo test -p aptos-sdk --all-features                                    # all features
 APTOS_LOCAL_NODE_URL=https://fullnode.devnet.aptoslabs.com/v1 \
 APTOS_LOCAL_FAUCET_URL=https://faucet.devnet.aptoslabs.com         \
-    cargo test -p aptos-sdk --features "e2e,full" -- --ignored            # E2E on devnet
+    cargo test -p aptos-sdk --features "e2e,full" --tests -- --ignored --test-threads=1
 ```
 
 The end-to-end tests in `tests/e2e/` are gated behind the `e2e` feature

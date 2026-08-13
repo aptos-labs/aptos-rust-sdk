@@ -175,7 +175,7 @@ E2E tests require a running Aptos localnet:
 aptos node run-localnet
 
 # Terminal 2: Run E2E tests
-cargo test -p aptos-sdk --features "e2e" -- --ignored
+cargo test -p aptos-sdk --features "e2e,full" --tests -- --ignored --test-threads=1
 ```
 
 #### Behavioral Tests

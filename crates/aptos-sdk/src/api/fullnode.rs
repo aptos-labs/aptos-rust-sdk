@@ -1489,10 +1489,15 @@ mod tests {
             .await;
 
         let client = create_mock_client(&server);
-        client
+        let resp = client
             .get_account_resources_paginated(AccountAddress::ONE, Some(opaque), None)
             .await
             .unwrap();
+        assert!(
+            resp.data.is_empty(),
+            "mock returned an empty page, got {} resources",
+            resp.data.len()
+        );
     }
 
     #[tokio::test]
@@ -1509,10 +1514,15 @@ mod tests {
             .await;
 
         let client = create_mock_client(&server);
-        client
+        let resp = client
             .get_account_resources(AccountAddress::ONE)
             .await
             .unwrap();
+        assert!(
+            resp.data.is_empty(),
+            "mock returned an empty page, got {} resources",
+            resp.data.len()
+        );
     }
 
     #[tokio::test]
@@ -1529,10 +1539,15 @@ mod tests {
             .await;
 
         let client = create_mock_client(&server);
-        client
+        let resp = client
             .get_account_resources_paginated(AccountAddress::ONE, Some("1234"), None)
             .await
             .unwrap();
+        assert!(
+            resp.data.is_empty(),
+            "mock returned an empty page, got {} resources",
+            resp.data.len()
+        );
     }
 
     #[tokio::test]
@@ -1548,10 +1563,15 @@ mod tests {
             .await;
 
         let client = create_mock_client(&server);
-        client
+        let resp = client
             .get_account_modules_paginated(AccountAddress::ONE, Some("7"), Some(100))
             .await
             .unwrap();
+        assert!(
+            resp.data.is_empty(),
+            "mock returned an empty page, got {} modules",
+            resp.data.len()
+        );
     }
 
     #[tokio::test]
@@ -1567,10 +1587,15 @@ mod tests {
             .await;
 
         let client = create_mock_client(&server);
-        client
+        let resp = client
             .get_account_modules(AccountAddress::ONE)
             .await
             .unwrap();
+        assert!(
+            resp.data.is_empty(),
+            "mock returned an empty page, got {} modules",
+            resp.data.len()
+        );
     }
 
     #[tokio::test]
@@ -1588,10 +1613,15 @@ mod tests {
             .await;
 
         let client = create_mock_client(&server);
-        client
+        let resp = client
             .get_account_modules_paginated(AccountAddress::ONE, None, Some(25))
             .await
             .unwrap();
+        assert!(
+            resp.data.is_empty(),
+            "mock returned an empty page, got {} modules",
+            resp.data.len()
+        );
     }
 
     #[tokio::test]
