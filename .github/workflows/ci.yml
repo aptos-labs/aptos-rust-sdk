@@ -46,13 +46,14 @@ jobs:
           components: clippy
 
       - name: Run Clippy (default features)
-        run: cargo clippy -p aptos-sdk --all-targets -- -D warnings
+        run: cargo clippy -p aptos-sdk --all-targets --locked -- -D warnings
 
       - name: Run Clippy (all features)
-        run: cargo clippy -p aptos-sdk --all-targets --all-features -- -D warnings
+        # Workspace so aptos-sdk-macros is linted; it is otherwise never clippy'd.
+        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 
       - name: Run Clippy (no default features)
-        run: cargo clippy -p aptos-sdk --no-default-features -- -D warnings
+        run: cargo clippy -p aptos-sdk --no-default-features --locked -- -D warnings
 
   test:
     name: Test
@@ -78,13 +79,14 @@ jobs:
           cache: ${{ matrix.os == 'macos-latest' && 'false' || 'true' }}
 
       - name: Build
-        run: cargo build -p aptos-sdk --all-targets
+        run: cargo build -p aptos-sdk --all-targets --locked
 
       - name: Run tests
-        run: cargo test -p aptos-sdk --all-targets
+        # `--all-targets` does not include rustdoc tests; those run in `doctest`.
+        run: cargo test -p aptos-sdk --all-targets --locked
 
       - name: Run tests (all features)
-        run: cargo test -p aptos-sdk --all-targets --all-features
+        run: cargo test -p aptos-sdk --all-targets --all-features --locked
 
   test-linux-arm:
     name: Test (Linux ARM64)
@@ -101,13 +103,13 @@ jobs:
           toolchain: stable
 
       - name: Build
-        run: cargo build -p aptos-sdk --all-targets
+        run: cargo build -p aptos-sdk --all-targets --locked
 
       - name: Run tests
-        run: cargo test -p aptos-sdk --all-targets
+        run: cargo test -p aptos-sdk --all-targets --locked
 
       - name: Run tests (all features)
-        run: cargo test -p aptos-sdk --all-targets --all-features
+        run: cargo test -p aptos-sdk --all-targets --all-features --locked
 
   test-macos-intel:
     name: Test (macOS x86)
@@ -128,13 +130,13 @@ jobs:
           cache: "false"
 
       - name: Build
-        run: cargo build -p aptos-sdk --all-targets
+        run: cargo build -p aptos-sdk --all-targets --locked
 
       - name: Run tests
-        run: cargo test -p aptos-sdk --all-targets
+        run: cargo test -p aptos-sdk --all-targets --locked
 
       - name: Run tests (all features)
-        run: cargo test -p aptos-sdk --all-targets --all-features
+        run: cargo test -p aptos-sdk --all-targets --all-features --locked
 
   test-no-simd:
     name: Test (Linux No SIMD - Docker Compatible)
@@ -158,16 +160,16 @@ jobs:
           toolchain: stable
 
       - name: Build (default features)
-        run: cargo build -p aptos-sdk --all-targets
+        run: cargo build -p aptos-sdk --all-targets --locked
 
       - name: Run tests (default features)
-        run: cargo test -p aptos-sdk --all-targets
+        run: cargo test -p aptos-sdk --all-targets --locked
 
       - name: Build (all features)
-        run: cargo build -p aptos-sdk --all-targets --all-features
+        run: cargo build -p aptos-sdk --all-targets --all-features --locked
 
       - name: Run tests (all features)
-        run: cargo test -p aptos-sdk --all-targets --all-features
+        run: cargo test -p aptos-sdk --all-targets --all-features --locked
 
   test-features:
     name: Test Feature Combinations
@@ -184,25 +186,65 @@ jobs:
           toolchain: "1.95"
 
       - name: Test with only ed25519
-        run: cargo test -p aptos-sdk --no-default-features --features ed25519
+        run: cargo test -p aptos-sdk --no-default-features --features ed25519 --locked
 
       - name: Test with only secp256k1
-        run: cargo test -p aptos-sdk --no-default-features --features secp256k1
+        run: cargo test -p aptos-sdk --no-default-features --features secp256k1 --locked
 
       - name: Test with secp256r1
-        run: cargo test -p aptos-sdk --features secp256r1
+        run: cargo test -p aptos-sdk --features secp256r1 --locked
 
       - name: Test with bls
-        run: cargo test -p aptos-sdk --features bls
+        run: cargo test -p aptos-sdk --features bls --locked
 
       - name: Test with faucet
-        run: cargo test -p aptos-sdk --features faucet
+        run: cargo test -p aptos-sdk --features faucet --locked
 
       - name: Test with indexer
-        run: cargo test -p aptos-sdk --features indexer
+        run: cargo test -p aptos-sdk --features indexer --locked
 
       - name: Test with full features
-        run: cargo test -p aptos-sdk --features full
+        run: cargo test -p aptos-sdk --features full --locked
+
+  # rustdoc examples. `cargo test --all-targets` does not run these, so they
+  # previously never executed in CI. Keep this job on Ubuntu only; doctests are
+  # not OS-specific.
+  doctest:
+    name: Doctests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-rust
+        with:
+          toolchain: "1.95"
+
+      - name: Run doctests (default features)
+        run: cargo test --workspace --doc --locked
+
+      - name: Run doctests (all features)
+        run: cargo test --workspace --doc --all-features --locked
+
+  test-macros:
+    name: Test Macros
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-rust
+        with:
+          toolchain: "1.95"
+
+      - name: Run aptos-sdk-macros tests
+        run: cargo test -p aptos-sdk-macros --all-targets --locked
 
   # Spec tests (behavioral tests from specifications)
   # TODO: Re-enable once specification tests are stabilized
@@ -239,12 +281,12 @@ jobs:
       - name: Check documentation (docs.rs parity)
         env:
           RUSTDOCFLAGS: --cfg docsrs -D warnings
-        run: cargo +nightly doc -p aptos-sdk --no-deps --all-features
+        run: cargo +nightly doc -p aptos-sdk --no-deps --all-features --locked
 
       - name: Check macros documentation
         env:
           RUSTDOCFLAGS: --cfg docsrs -D warnings
-        run: cargo +nightly doc -p aptos-sdk-macros --no-deps --all-features
+        run: cargo +nightly doc -p aptos-sdk-macros --no-deps --all-features --locked
 
   # Deploy docs to GitHub Pages on main branch
   deploy-docs:
@@ -271,7 +313,7 @@ jobs:
       - name: Build documentation
         env:
           RUSTDOCFLAGS: --cfg docsrs
-        run: cargo +nightly doc -p aptos-sdk --no-deps --all-features
+        run: cargo +nightly doc -p aptos-sdk --no-deps --all-features --locked
 
       - name: Add redirect to main crate
         run: |
@@ -304,7 +346,7 @@ jobs:
           toolchain: "1.95"
           
       - name: Check MSRV
-        run: cargo check -p aptos-sdk --all-features
+        run: cargo check --workspace --all-features --locked
 
   coverage:
     name: Code Coverage
@@ -348,8 +390,16 @@ jobs:
         with:
           persist-credentials: false
 
+      - uses: ./.github/actions/setup-rust
+        with:
+          toolchain: "1.95"
+          cache: 'false'
+
+      # `--locked` is required: an unlocked `cargo install cargo-audit` resolved
+      # kstring 2.0.4 (rustc 1.96+) and failed this repo's MSRV 1.95, turning
+      # the 2026-08-04 main CI red. Keep flags in sync with security.yml.
       - name: Install cargo-audit
-        run: cargo install cargo-audit
+        run: cargo install cargo-audit --locked
 
       - name: Run security audit
         run: cargo audit

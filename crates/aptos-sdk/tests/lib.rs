@@ -11,8 +11,10 @@
 //! # Unit + behavioral tests (default)
 //! cargo test -p aptos-sdk --features "full"
 //!
-//! # Include E2E tests (requires localnet)
-//! cargo test -p aptos-sdk --features "full,e2e" -- --ignored
+//! # Include E2E tests (requires localnet). `--tests` skips rustdoc `ignore`
+//! # examples, which `cargo test -- --ignored` would otherwise report as
+//! # passing without compiling them. `--test-threads=1` avoids localnet races.
+//! cargo test -p aptos-sdk --features "full,e2e" --tests -- --ignored --test-threads=1
 //! ```
 
 mod behavioral;

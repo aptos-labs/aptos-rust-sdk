@@ -42,9 +42,10 @@ jobs:
         run: |
           aptos node run-localnet --with-faucet --force-restart > "${{ runner.temp }}/localnet.log" 2>&1 &
           echo "LOCALNET_PID=$!" >> $GITHUB_ENV
-          # Wait for localnet to be ready
+          # Wait until the REST API returns a JSON ledger document, not just
+          # any HTTP 200 (a proxy/error page would otherwise start tests early).
           for i in $(seq 1 90); do
-            if curl -s http://127.0.0.1:8080/v1 > /dev/null 2>&1; then
+            if curl -sf http://127.0.0.1:8080/v1 | python3 -c 'import json,sys; d=json.load(sys.stdin); assert isinstance(d.get("chain_id"), int)' >/dev/null 2>&1; then
               echo "Localnet is ready after ~$((i * 2))s"
               break
             fi
@@ -57,7 +58,7 @@ jobs:
           done
           # Wait for faucet to be ready
           for i in $(seq 1 30); do
-            if curl -s http://127.0.0.1:8081/health > /dev/null 2>&1; then
+            if curl -sf http://127.0.0.1:8081/health > /dev/null; then
               echo "Faucet is ready"
               break
             fi
@@ -73,7 +74,23 @@ jobs:
         env:
           APTOS_LOCAL_FAUCET_URL: http://127.0.0.1:8081
           APTOS_LOCAL_NODE_URL: http://127.0.0.1:8080/v1
-        run: cargo test -p aptos-sdk --features "e2e,full" -- --ignored
+        run: |
+          set -euo pipefail
+          # Integration tests only. `cargo test -- --ignored` also reports
+          # rustdoc ` ```ignore ` examples as passing in 0.00s without compiling
+          # them. `--test-threads=1` avoids localnet races (shared faucet,
+          # sequence numbers) that show up as flakes under parallel execution.
+          # Disable cargo color so the pass-count grep below is not fooled by
+          # ANSI codes (`CARGO_TERM_COLOR=always` is set workflow-wide).
+          CARGO_TERM_COLOR=never cargo test -p aptos-sdk --locked --features "e2e,full" --tests -- --ignored --test-threads=1 | tee "${{ runner.temp }}/e2e-test.log"
+          if grep -q 'test result: ok. 0 passed; 0 failed' "${{ runner.temp }}/e2e-test.log"; then
+            echo "E2E suite ran 0 tests; refusing to pass"
+            exit 1
+          fi
+          if ! grep -q 'e2e::' "${{ runner.temp }}/e2e-test.log"; then
+            echo "No e2e::* tests executed"
+            exit 1
+          fi
 
       - name: Print localnet logs on failure
         if: failure()

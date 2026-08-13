@@ -90,15 +90,18 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Run Clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings
+        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 
       - name: Run tests
-        run: cargo test --all-targets --all-features
+        run: cargo test --workspace --all-targets --all-features --locked
+
+      - name: Run doctests
+        run: cargo test --workspace --doc --all-features --locked
 
       - name: Build documentation (docs.rs parity)
         env:
           RUSTDOCFLAGS: --cfg docsrs -D warnings
-        run: cargo +nightly doc --no-deps --all-features
+        run: cargo +nightly doc --no-deps --all-features --locked
 
   publish-macros:
     name: Publish aptos-sdk-macros

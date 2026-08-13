@@ -68,7 +68,7 @@ check_aptos_cli() {
 
 # Check if localnet is already running
 check_localnet_running() {
-    if curl -s http://127.0.0.1:8080/v1 > /dev/null 2>&1; then
+    if curl -sf http://127.0.0.1:8080/v1 | python3 -c 'import json,sys; d=json.load(sys.stdin); assert isinstance(d.get("chain_id"), int)' >/dev/null 2>&1; then
         return 0
     fi
     return 1
@@ -92,7 +92,7 @@ start_localnet() {
     # Wait for localnet to be ready
     local elapsed=0
     while [[ $elapsed -lt $TIMEOUT ]]; do
-        if curl -s http://127.0.0.1:8080/v1 > /dev/null 2>&1; then
+        if check_localnet_running; then
             echo -e "${GREEN}✓ Localnet is ready${NC}"
             break
         fi
@@ -111,7 +111,7 @@ start_localnet() {
     echo "Waiting for faucet..."
     elapsed=0
     while [[ $elapsed -lt 60 ]]; do
-        if curl -s http://127.0.0.1:8081/health > /dev/null 2>&1; then
+        if curl -sf http://127.0.0.1:8081/health > /dev/null; then
             echo -e "${GREEN}✓ Faucet is ready${NC}"
             break
         fi
@@ -129,10 +129,10 @@ run_tests() {
     export APTOS_LOCAL_NODE_URL="http://127.0.0.1:8080/v1"
     export APTOS_LOCAL_FAUCET_URL="http://127.0.0.1:8081"
     
-    local test_cmd="cargo test -p aptos-sdk --features 'e2e,full' -- --ignored"
+    local test_cmd="cargo test -p aptos-sdk --features 'e2e,full' --tests -- --ignored --test-threads=1"
     
     if [[ -n "$TEST_FILTER" ]]; then
-        test_cmd="cargo test -p aptos-sdk --features 'e2e,full' -- --ignored $TEST_FILTER"
+        test_cmd="cargo test -p aptos-sdk --features 'e2e,full' --tests -- --ignored --test-threads=1 $TEST_FILTER"
     fi
     
     echo "Running: $test_cmd"

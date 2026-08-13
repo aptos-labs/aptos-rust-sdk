@@ -54,4 +54,3 @@ jobs:
 
       - name: Check dependencies
         run: cargo deny check
-        continue-on-error: true  # Remove this once deny.toml is configured
