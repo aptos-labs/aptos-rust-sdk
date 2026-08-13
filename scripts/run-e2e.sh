@@ -118,10 +118,10 @@ run_tests() {
     export APTOS_LOCAL_NODE_URL="http://127.0.0.1:8080/v1"
     export APTOS_LOCAL_FAUCET_URL="http://127.0.0.1:8081"
     
-    local test_cmd="cargo test -p aptos-sdk --features 'e2e,full' --tests -- --ignored --test-threads=1"
+    local test_cmd="cargo test -p aptos-sdk --features 'e2e,full' --test lib -- --ignored --test-threads=1"
     
     if [[ -n "$TEST_FILTER" ]]; then
-        test_cmd="cargo test -p aptos-sdk --features 'e2e,full' --tests -- --ignored --test-threads=1 $TEST_FILTER"
+        test_cmd="cargo test -p aptos-sdk --features 'e2e,full' --test lib -- --ignored --test-threads=1 $TEST_FILTER"
     fi
     
     echo "Running: $test_cmd"

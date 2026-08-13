@@ -89,19 +89,20 @@ jobs:
           APTOS_LOCAL_NODE_URL: http://127.0.0.1:8080/v1
         run: |
           set -euo pipefail
-          # Integration tests only. `cargo test -- --ignored` also reports
-          # rustdoc ` ```ignore ` examples as passing in 0.00s without compiling
-          # them. `--test-threads=1` avoids localnet races (shared faucet,
-          # sequence numbers) that show up as flakes under parallel execution.
-          # Disable cargo color so the pass-count grep below is not fooled by
-          # ANSI codes (`CARGO_TERM_COLOR=always` is set workflow-wide).
-          CARGO_TERM_COLOR=never cargo test -p aptos-sdk --locked --features "e2e,full" --tests -- --ignored --test-threads=1 | tee "${{ runner.temp }}/e2e-test.log"
-          if grep -q 'test result: ok. 0 passed; 0 failed' "${{ runner.temp }}/e2e-test.log"; then
+          # `tests/lib.rs` only (`--test lib`): `cargo test -- --ignored` also
+          # reports rustdoc ` ```ignore ` examples as passing in 0.00s, and
+          # `--tests -- --ignored` still runs the lib unit-test harness which
+          # prints `ok. 0 passed` (those tests are not #[ignore]).
+          # `--test-threads=1` avoids localnet races. Disable cargo color so
+          # the pass-count grep below is not fooled by ANSI codes
+          # (`CARGO_TERM_COLOR=always` is set workflow-wide).
+          CARGO_TERM_COLOR=never cargo test -p aptos-sdk --locked --features "e2e,full" --test lib -- --ignored --test-threads=1 | tee "${{ runner.temp }}/e2e-test.log"
+          if ! grep -E 'test result: ok\. [1-9][0-9]* passed' "${{ runner.temp }}/e2e-test.log" >/dev/null; then
             echo "E2E suite ran 0 tests; refusing to pass"
             exit 1
           fi
-          if ! grep -q 'e2e::' "${{ runner.temp }}/e2e-test.log"; then
-            echo "No e2e::* tests executed"
+          if ! grep -E '^test e2e::.* \.\.\. ok$' "${{ runner.temp }}/e2e-test.log" >/dev/null; then
+            echo "No e2e::* tests passed"
             exit 1
           fi
 
