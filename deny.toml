@@ -45,6 +45,25 @@ confidence-threshold = 0.8
 multiple-versions = "warn"
 wildcards = "allow"
 highlight = "all"
+# Known crates.io malware / hijacked releases. Entries only fail CI if the
+# crate actually appears in the graph; they do not affect the current lockfile.
+# See: https://www.wiz.io/blog/rust-supply-chain-attack-on-arrayref-significant-overlap-with-dprk-campaigns
+#      https://rustsec.org/advisories/RUSTSEC-2026-0175.html
+deny = [
+    # 2026-08-20: maintainer account hijack. Dropper lived in typosquat
+    # `proc-macro1` `build.rs` (download + exec at compile time).
+    { crate = "arrayref@0.3.10", reason = "hijacked release; pulled in proc-macro1 dropper (2026-08-20)" },
+    { crate = "internment@0.8.7", reason = "hijacked release; pulled in proc-macro1 dropper (2026-08-20)" },
+    { crate = "append-only-vec@0.1.9", reason = "hijacked release; pulled in proc-macro1 dropper (2026-08-20)" },
+    { crate = "proc-macro1", reason = "typosquat of proc-macro2; all versions deleted from crates.io (2026-08-20)" },
+    { crate = "proc-macro-en", reason = "attacker-controlled lookalike; deleted from crates.io (2026-08-20)" },
+    { crate = "aovine", reason = "attacker-controlled crate; deleted from crates.io (2026-08-20)" },
+    { crate = "arone", reason = "attacker-controlled crate; deleted from crates.io (2026-08-20)" },
+    { crate = "aronenao", reason = "attacker-controlled crate; deleted from crates.io (2026-08-20)" },
+    { crate = "tinymember", reason = "attacker-controlled crate; deleted from crates.io (2026-08-20)" },
+    # 2026-06-10: RUSTSEC-2026-0175. Malicious build.rs exfiltrated git diffs.
+    { crate = "onering@1.4.1", reason = "RUSTSEC-2026-0175: malicious build.rs source-exfiltration" },
+]
 
 [sources]
 unknown-registry = "deny"
