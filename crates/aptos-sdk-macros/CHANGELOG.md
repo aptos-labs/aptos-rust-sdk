@@ -5,6 +5,14 @@ All notable changes to `aptos-sdk-macros` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [unreleased]
+
+### Changed
+- Raised the `syn` dependency floor from 2.0 to 2.0.119 (still the 2.x
+  line; generated bindings are unchanged). Workspace pins used by this
+  crate (`proc-macro2`, `quote`, `serde`, `serde_json`) were refreshed
+  in lockstep with `aptos-sdk`.
+
 ## [0.3.1] - 2026-07-13
 
 ### Fixed

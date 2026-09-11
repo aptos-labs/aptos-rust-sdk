@@ -55,7 +55,7 @@ macros = ["dep:aptos-sdk-macros"]
 tokio = { workspace = true }
 reqwest = { workspace = true }
 serde = { workspace = true }
-serde_bytes = "0.11"
+serde_bytes = "0.11.19"
 serde_json = { workspace = true }
 aptos-bcs = { workspace = true }
 aws-lc-sys = { workspace = true }
@@ -63,30 +63,30 @@ thiserror = { workspace = true }
 url = { workspace = true }
 anyhow = { workspace = true }
 const-hex = { workspace = true }
-futures = "0.3"
+futures = "0.3.34"
 
 # Hashing (always needed)
-sha2 = "0.10"
-sha3 = "0.10"
+sha2 = "0.10.9"
+sha3 = "0.10.9"
 
 # URL encoding
-urlencoding = "2.1"
+urlencoding = "2.1.3"
 
 # Randomness - use 0.8 to be compatible with ed25519-dalek and k256
-rand = "0.8"
+rand = "0.8.8"
 
 # Zeroize for secure key handling
-zeroize = { version = "1.8", features = ["derive"] }
+zeroize = { version = "1.9", features = ["derive"] }
 
 # Optional BIP-39/44 for key derivation
-bip39 = { version = "2.1", features = ["rand"], optional = true }
-hmac = { version = "0.12", optional = true }
+bip39 = { version = "2.2", features = ["rand"], optional = true }
+hmac = { version = "0.12.1", optional = true }
 
 # Optional crypto dependencies
-ed25519-dalek = { version = "2.1", features = ["std", "rand_core", "zeroize"], optional = true }
+ed25519-dalek = { version = "2.2", features = ["std", "rand_core", "zeroize"], optional = true }
 k256 = { version = "0.13", features = ["ecdsa", "sha256", "std"], optional = true }
 p256 = { version = "0.13", features = ["ecdsa", "sha256", "std"], optional = true }
-blst = { version = "0.3", optional = true }
+blst = { version = "0.3.17", optional = true }
 
 # (indexer feature uses raw GraphQL queries via reqwest, no extra dep needed)
 
@@ -96,15 +96,15 @@ proptest = { workspace = true, optional = true }
 proptest-derive = { workspace = true, optional = true }
 
 # CLI dependencies (for codegen binary)
-clap = { version = "4.5", features = ["derive"], optional = true }
+clap = { version = "4.6", features = ["derive"], optional = true }
 
 # Proc macro for contract bindings
 aptos-sdk-macros = { workspace = true, optional = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full", "test-util"] }
-tempfile = "3.14"
-wiremock = "0.6"
+tempfile = "3.27"
+wiremock = "0.6.5"
 
 [[example]]
 name = "account_management"
