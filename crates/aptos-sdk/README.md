@@ -17,7 +17,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-aptos-sdk = "0.7.0"
+aptos-sdk = "0.7.1"
 ```
 
 Basic usage:
@@ -63,7 +63,7 @@ For the smallest possible binary:
 
 ```toml
 [dependencies]
-aptos-sdk = { version = "0.7.0", default-features = false, features = ["ed25519"] }
+aptos-sdk = { version = "0.7.1", default-features = false, features = ["ed25519"] }
 ```
 
 ### Full Build
@@ -72,7 +72,7 @@ For all features:
 
 ```toml
 [dependencies]
-aptos-sdk = { version = "0.7.0", features = ["full"] }
+aptos-sdk = { version = "0.7.1", features = ["full"] }
 ```
 
 ## Examples
