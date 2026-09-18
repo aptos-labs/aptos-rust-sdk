@@ -17,6 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `hyper`; library consumers still resolve their own copy, but this repo's
   `Cargo.lock` (CI, examples, and git checkouts) is no longer flagged by
   `cargo audit` / `cargo deny`.
+- Bumped `rustls` from 0.23.44 to 0.23.45, clearing
+  [RUSTSEC-2026-0285](https://rustsec.org/advisories/RUSTSEC-2026-0285)
+  (TLS 1.3 handshake messages accepted across encryption-level
+  boundaries). `rustls` is transitive via `reqwest`; library consumers
+  still resolve their own copy.
 
 ### Changed
 - Refreshed direct dependency floors to the latest compatible crates.io
