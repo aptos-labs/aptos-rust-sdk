@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+## [0.7.1] - 2026-09-18
+
 ### Security
 - Bumped the HTTP/2 stack's `h2` crate from 0.4.13 to 0.4.19, clearing
   [RUSTSEC-2026-0258](https://rustsec.org/advisories/RUSTSEC-2026-0258)
@@ -589,6 +591,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - This SDK is independent of `aptos-core` for faster compilation
 - Minimum Supported Rust Version (MSRV): 1.90
 
+[0.7.1]: https://github.com/aptos-labs/aptos-rust-sdk/releases/tag/sdk-v0.7.1
 [0.7.0]: https://github.com/aptos-labs/aptos-rust-sdk/releases/tag/sdk-v0.7.0
 [0.6.0]: https://github.com/aptos-labs/aptos-rust-sdk/releases/tag/sdk-v0.6.0
 [0.5.0]: https://github.com/aptos-labs/aptos-rust-sdk/releases/tag/sdk-v0.5.0
