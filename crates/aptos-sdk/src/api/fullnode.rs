@@ -95,6 +95,7 @@ impl FullnodeClient {
         // All production Aptos endpoints use HTTPS with valid certificates.
         let mut builder = Client::builder()
             .timeout(config.timeout)
+            .default_headers(config.default_headers()?)
             .pool_max_idle_per_host(pool.max_idle_per_host.unwrap_or(usize::MAX))
             .pool_idle_timeout(pool.idle_timeout)
             .tcp_nodelay(pool.tcp_nodelay);
@@ -1315,6 +1316,43 @@ mod tests {
         assert_eq!(result.data.chain_id, 2);
         assert_eq!(result.data.version().unwrap(), 12345);
         assert_eq!(result.data.height().unwrap(), 5000);
+    }
+
+    /// A configured `api_key` must reach the wire as `Authorization: Bearer`
+    /// (the header the TypeScript SDK sends and node API gateways check). It
+    /// used to be stored on `AptosConfig` and never read, so every request
+    /// went out unauthenticated and gateways answered `403`.
+    #[tokio::test]
+    async fn test_api_key_is_sent_as_bearer_authorization() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/v1"))
+            .and(wiremock::matchers::header(
+                "authorization",
+                "Bearer test-api-key",
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "chain_id": 2,
+                "epoch": "100",
+                "ledger_version": "12345",
+                "oldest_ledger_version": "0",
+                "ledger_timestamp": "1000000",
+                "node_role": "full_node",
+                "oldest_block_height": "0",
+                "block_height": "5000"
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let url = format!("{}/v1", server.uri());
+        let config = AptosConfig::custom(&url)
+            .unwrap()
+            .without_retry()
+            .with_api_key("test-api-key");
+        let client = FullnodeClient::new(config).unwrap();
+        client.get_ledger_info().await.unwrap();
     }
 
     #[tokio::test]

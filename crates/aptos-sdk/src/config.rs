@@ -598,6 +598,27 @@ impl AptosConfig {
         self
     }
 
+    /// Returns the API key, if one was configured.
+    pub fn api_key(&self) -> Option<&str> {
+        self.api_key.as_deref()
+    }
+
+    /// Default headers every fullnode/indexer request carries: the API key
+    /// as `Authorization: Bearer <key>`, matching the TypeScript SDK
+    /// (`@aptos-labs/ts-sdk` `client/core.ts`). Node API gateways such as
+    /// Aptos Build reject unauthenticated requests with `403`, so a key that
+    /// is configured but never sent is indistinguishable from no key at all.
+    pub(crate) fn default_headers(&self) -> Result<reqwest::header::HeaderMap, AptosError> {
+        let mut headers = reqwest::header::HeaderMap::new();
+        if let Some(api_key) = &self.api_key {
+            let mut value = reqwest::header::HeaderValue::from_str(&format!("Bearer {api_key}"))
+                .map_err(|_| AptosError::Config("api_key is not a valid header value".into()))?;
+            value.set_sensitive(true);
+            headers.insert(reqwest::header::AUTHORIZATION, value);
+        }
+        Ok(headers)
+    }
+
     /// Sets a custom indexer URL.
     ///
     /// # Security

@@ -113,6 +113,7 @@ impl IndexerClient {
         // SECURITY: TLS certificate validation is enabled by default via reqwest.
         let mut builder = Client::builder()
             .timeout(config.timeout)
+            .default_headers(config.default_headers()?)
             .pool_max_idle_per_host(pool.max_idle_per_host.unwrap_or(usize::MAX))
             .pool_idle_timeout(pool.idle_timeout)
             .tcp_nodelay(pool.tcp_nodelay);
