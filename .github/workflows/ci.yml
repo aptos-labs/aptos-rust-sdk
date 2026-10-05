@@ -246,6 +246,24 @@ jobs:
       - name: Run aptos-sdk-macros tests
         run: cargo test -p aptos-sdk-macros --all-targets --locked
 
+  wasm:
+    name: Build WASM
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup-rust
+        with:
+          toolchain: "1.95"
+          targets: wasm32-unknown-unknown
+
+      - name: Build aptos-sdk for wasm32-unknown-unknown
+        run: cargo build -p aptos-sdk --target wasm32-unknown-unknown --no-default-features --features ed25519 --locked
+
   # Spec tests (behavioral tests from specifications)
   # TODO: Re-enable once specification tests are stabilized
   # spec-tests:

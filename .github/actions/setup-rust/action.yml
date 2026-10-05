@@ -9,6 +9,10 @@ inputs:
     description: Additional components (e.g. rustfmt, clippy)
     required: false
     default: ''
+  targets:
+    description: Additional target triples to install (e.g. wasm32-unknown-unknown)
+    required: false
+    default: ''
   cache:
     description: Enable cargo caching via Swatinem/rust-cache
     required: false
@@ -21,6 +25,7 @@ runs:
       with:
         toolchain: ${{ inputs.toolchain }}
         components: ${{ inputs.components }}
+        targets: ${{ inputs.targets }}
 
     - name: Cache cargo
       if: inputs.cache == 'true'
