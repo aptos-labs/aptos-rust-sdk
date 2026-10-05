@@ -103,6 +103,9 @@ impl IndexerClient {
     /// Returns an error if the indexer URL is not configured in the config, or if the HTTP client
     /// fails to build (e.g., invalid TLS configuration).
     pub fn new(config: &AptosConfig) -> AptosResult<Self> {
+        #[cfg(not(target_arch = "wasm32"))]
+        crate::rustls_provider::install_default();
+
         let indexer_url = config
             .indexer_url()
             .cloned()

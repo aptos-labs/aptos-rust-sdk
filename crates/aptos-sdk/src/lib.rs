@@ -62,6 +62,24 @@
 // `[workspace.lints]` in the root `Cargo.toml`.
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
+// Install the `ring` crypto provider for `rustls` when the SDK is built with
+// the `rustls-no-provider` reqwest backend. This makes HTTPS clients work on
+// both native targets and `wasm32-unknown-unknown` without callers needing to
+// initialise the provider themselves. The provider is only installed if no
+// default has already been set (e.g. by an application that prefers
+// `aws-lc-rs`).
+#[cfg(not(target_arch = "wasm32"))]
+mod rustls_provider {
+    use rustls::crypto::CryptoProvider;
+
+    /// Installs `ring` as the default `rustls` crypto provider if none is set.
+    pub(crate) fn install_default() {
+        if CryptoProvider::get_default().is_none() {
+            let _ = rustls::crypto::ring::default_provider().install_default();
+        }
+    }
+}
+
 pub mod account;
 pub mod api;
 pub mod codegen;

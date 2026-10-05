@@ -88,20 +88,30 @@ impl FullnodeClient {
     ///
     /// Returns an error if the HTTP client fails to build (e.g., invalid TLS configuration).
     pub fn new(config: AptosConfig) -> AptosResult<Self> {
-        let pool = config.pool_config();
+        #[cfg(not(target_arch = "wasm32"))]
+        crate::rustls_provider::install_default();
 
         // SECURITY: TLS certificate validation is enabled by default via reqwest.
         // The client will reject connections to servers with invalid certificates.
         // All production Aptos endpoints use HTTPS with valid certificates.
-        let mut builder = Client::builder()
-            .timeout(config.timeout)
-            .pool_max_idle_per_host(pool.max_idle_per_host.unwrap_or(usize::MAX))
-            .pool_idle_timeout(pool.idle_timeout)
-            .tcp_nodelay(pool.tcp_nodelay);
+        #[cfg(not(target_arch = "wasm32"))]
+        let builder = {
+            let pool = config.pool_config();
+            let mut builder = Client::builder()
+                .timeout(config.timeout)
+                .pool_max_idle_per_host(pool.max_idle_per_host.unwrap_or(usize::MAX))
+                .pool_idle_timeout(pool.idle_timeout)
+                .tcp_nodelay(pool.tcp_nodelay);
 
-        if let Some(keepalive) = pool.tcp_keepalive {
-            builder = builder.tcp_keepalive(keepalive);
-        }
+            if let Some(keepalive) = pool.tcp_keepalive {
+                builder = builder.tcp_keepalive(keepalive);
+            }
+            builder
+        };
+
+        // WASM `reqwest` only supports a subset of `ClientBuilder` options.
+        #[cfg(target_arch = "wasm32")]
+        let builder = Client::builder();
 
         let client = builder.build().map_err(AptosError::Http)?;
 

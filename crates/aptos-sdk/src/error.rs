@@ -252,7 +252,12 @@ impl AptosError {
     /// Returns true if this is a transient error that might succeed on retry
     pub fn is_retryable(&self) -> bool {
         match self {
-            Self::Http(e) => e.is_timeout() || e.is_connect(),
+            Self::Http(e) => {
+                #[cfg(not(target_arch = "wasm32"))]
+                return e.is_timeout() || e.is_connect();
+                #[cfg(target_arch = "wasm32")]
+                return e.is_timeout();
+            }
             Self::Api { status_code, .. } => {
                 matches!(status_code, 429 | 500 | 502 | 503 | 504)
             }

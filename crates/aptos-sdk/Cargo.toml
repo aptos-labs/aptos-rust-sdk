@@ -52,13 +52,12 @@ macros = ["dep:aptos-sdk-macros"]
 
 [dependencies]
 # Core dependencies
-tokio = { workspace = true }
-reqwest = { workspace = true }
+tokio = { workspace = true, features = ["macros", "time", "sync", "rt"] }
+reqwest = { version = "0.13", default-features = false, features = ["json", "rustls-no-provider", "stream"] }
 serde = { workspace = true }
 serde_bytes = "0.11.19"
 serde_json = { workspace = true }
 aptos-bcs = { workspace = true }
-aws-lc-sys = { workspace = true }
 thiserror = { workspace = true }
 url = { workspace = true }
 anyhow = { workspace = true }
@@ -100,6 +99,15 @@ clap = { version = "4.6", features = ["derive"], optional = true }
 
 # Proc macro for contract bindings
 aptos-sdk-macros = { workspace = true, optional = true }
+
+# WASM-compatible crypto / randomness stack. `getrandom/js` and
+# `ring/wasm32_unknown_unknown_js` provide entropy and crypto on
+# `wasm32-unknown-unknown`; `rustls` with the `ring` provider replaces the
+# C-based `aws-lc-rs` backend that cannot compile to WASM.
+getrandom = { version = "0.2", features = ["js"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+ring = { version = "0.17", features = ["wasm32_unknown_unknown_js"] }
+rustls-pki-types = { version = "1.15", features = ["web"] }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full", "test-util"] }

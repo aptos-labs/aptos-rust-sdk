@@ -50,7 +50,7 @@ pub fn validate_url_scheme(url: &Url) -> AptosResult<()> {
 /// Returns [`AptosError::Api`] with error code `RESPONSE_TOO_LARGE` if the
 /// response body exceeds `max_size` bytes.
 pub async fn read_response_bounded(
-    mut response: reqwest::Response,
+    response: reqwest::Response,
     max_size: usize,
 ) -> AptosResult<Vec<u8>> {
     // Pre-check Content-Length header for early rejection (avoids reading any body)
@@ -69,11 +69,36 @@ pub async fn read_response_bounded(
 
     // Read body incrementally, aborting if accumulated size exceeds the limit.
     // This protects against chunked transfer-encoding that bypasses Content-Length.
-    let mut body = Vec::with_capacity(std::cmp::min(max_size, 1024 * 1024));
-    while let Some(chunk) = response.chunk().await? {
-        if body.len().saturating_add(chunk.len()) > max_size {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let mut body = Vec::with_capacity(std::cmp::min(max_size, 1024 * 1024));
+        let mut response = response;
+        while let Some(chunk) = response.chunk().await? {
+            if body.len().saturating_add(chunk.len()) > max_size {
+                return Err(AptosError::Api {
+                    status_code: response.status().as_u16(),
+                    message: format!(
+                        "response too large: exceeded limit of {max_size} bytes during streaming"
+                    ),
+                    error_code: Some("RESPONSE_TOO_LARGE".into()),
+                    vm_error_code: None,
+                });
+            }
+            body.extend_from_slice(&chunk);
+        }
+        Ok(body)
+    }
+
+    // WASM `reqwest` does not expose chunked streaming, so we buffer the body
+    // and enforce the size limit afterwards. The Content-Length pre-check above
+    // still catches the common case of oversized responses.
+    #[cfg(target_arch = "wasm32")]
+    {
+        let status_code = response.status().as_u16();
+        let body = response.bytes().await?.to_vec();
+        if body.len() > max_size {
             return Err(AptosError::Api {
-                status_code: response.status().as_u16(),
+                status_code,
                 message: format!(
                     "response too large: exceeded limit of {max_size} bytes during streaming"
                 ),
@@ -81,10 +106,8 @@ pub async fn read_response_bounded(
                 vm_error_code: None,
             });
         }
-        body.extend_from_slice(&chunk);
+        Ok(body)
     }
-
-    Ok(body)
 }
 
 /// Configuration for HTTP connection pooling.

@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+### Added
+- WASM build support for `wasm32-unknown-unknown`. The SDK now compiles for
+  WASM targets when the `aws-lc-sys`-based TLS stack is replaced with a
+  `ring`-based `rustls` backend. Callers targeting WASM should disable default
+  features and enable only the cryptographic schemes they need (e.g.
+  `--no-default-features --features ed25519`).
+
+### Changed
+- Switched `reqwest` to `default-features = false` with `rustls-no-provider`,
+  `json`, and `stream` features. This removes the default `aws-lc-rs` TLS
+  provider (which contains C code that cannot compile to WASM) and replaces it
+  with explicit `ring` / `rustls` / `getrandom` / `rustls-pki-types`
+  dependencies configured for WASM compatibility.
+- Added `tokio` features `time`, `sync`, and `rt` to the SDK's runtime
+  dependency so `tokio::time::sleep` and related APIs are available on all
+  targets.
+- `FullnodeClient`, `FaucetClient`, and `IndexerClient` now install `ring` as
+  the default `rustls` crypto provider when built for native targets, so the
+  switch to `rustls-no-provider` remains transparent to callers.
+
+### Fixed
+- Native builds no longer fail with "No rustls crypto provider is configured"
+  after moving `reqwest` to `rustls-no-provider`.
+- WASM builds no longer fail on `aws-lc-sys` C compilation errors.
+
 ## [0.7.1] - 2026-09-18
 
 ### Security
