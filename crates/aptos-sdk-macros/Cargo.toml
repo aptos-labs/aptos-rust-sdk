@@ -1,6 +1,6 @@
 [package]
 name = "aptos-sdk-macros"
-version = "0.3.1"
+version = "0.3.2"
 description = "Procedural macros for type-safe Aptos contract bindings"
 authors.workspace = true
 edition = "2024"
@@ -22,7 +22,7 @@ proc-macro = true
 [dependencies]
 proc-macro2 = { workspace = true }
 quote = { workspace = true }
-syn = { version = "2.0", features = ["full", "parsing"] }
+syn = { version = "2.0.119", features = ["full", "parsing"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 

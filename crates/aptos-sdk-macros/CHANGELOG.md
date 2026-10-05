@@ -5,6 +5,16 @@ All notable changes to `aptos-sdk-macros` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [unreleased]
+
+## [0.3.2] - 2026-09-18
+
+### Changed
+- Raised the `syn` dependency floor from 2.0 to 2.0.119 (still the 2.x
+  line; generated bindings are unchanged). Workspace pins used by this
+  crate (`proc-macro2`, `quote`, `serde`, `serde_json`) were refreshed
+  in lockstep with `aptos-sdk`.
+
 ## [0.3.1] - 2026-07-13
 
 ### Fixed
@@ -54,6 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support for entry functions, view functions, and struct definitions
 - Move-to-Rust type mapping (primitives, vectors, options, objects)
 
+[0.3.2]: https://github.com/aptos-labs/aptos-rust-sdk/releases/tag/macros-v0.3.2
 [0.3.1]: https://github.com/aptos-labs/aptos-rust-sdk/releases/tag/macros-v0.3.1
 [0.3.0]: https://github.com/aptos-labs/aptos-rust-sdk/releases/tag/macros-v0.3.0
 [0.2.1]: https://github.com/aptos-labs/aptos-rust-sdk/releases/tag/macros-v0.2.1

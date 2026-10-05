@@ -5,6 +5,36 @@ All notable changes to `aptos-sdk` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [unreleased]
+
+## [0.7.1] - 2026-09-18
+
+### Security
+- Bumped the HTTP/2 stack's `h2` crate from 0.4.13 to 0.4.19, clearing
+  [RUSTSEC-2026-0258](https://rustsec.org/advisories/RUSTSEC-2026-0258)
+  (unbounded memory growth or a panic when empty DATA frames are queued
+  faster than the stream is drained). `h2` is transitive via `reqwest` /
+  `hyper`; library consumers still resolve their own copy, but this repo's
+  `Cargo.lock` (CI, examples, and git checkouts) is no longer flagged by
+  `cargo audit` / `cargo deny`.
+- Bumped `rustls` from 0.23.44 to 0.23.45, clearing
+  [RUSTSEC-2026-0285](https://rustsec.org/advisories/RUSTSEC-2026-0285)
+  (TLS 1.3 handshake messages accepted across encryption-level
+  boundaries). `rustls` is transitive via `reqwest`; library consumers
+  still resolve their own copy.
+
+### Changed
+- Refreshed direct dependency floors to the latest compatible crates.io
+  releases. Notable pins: `reqwest` 0.13.2 → 0.13.5, `tokio` 1.44.1 →
+  1.53.1, `aws-lc-sys` 0.39.0 → 0.45.0 (keeps a single AWS-LC copy in
+  lockstep with `aws-lc-rs` 1.18, used by `reqwest`'s rustls TLS backend),
+  `anyhow` 1.0.103 → 1.0.104, `thiserror` 2.0.18 → 2.0.20, `serde`
+  1.0.219 → 1.0.229, `serde_json` 1.0.140 → 1.0.151, `clap` 4.5 → 4.6,
+  `zeroize` 1.8 → 1.9, `const-hex` 1.17.0 → 1.19.1. Cryptographic
+  scheme crates stay on their current major lines (`ed25519-dalek` 2.x,
+  `k256`/`p256` 0.13, `rand` 0.8, `sha2`/`sha3` 0.10) so on-wire
+  signatures are unchanged.
+
 ## [0.7.0] - 2026-07-13
 
 ### Removed
@@ -566,6 +596,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - This SDK is independent of `aptos-core` for faster compilation
 - Minimum Supported Rust Version (MSRV): 1.90
 
+[0.7.1]: https://github.com/aptos-labs/aptos-rust-sdk/releases/tag/sdk-v0.7.1
 [0.7.0]: https://github.com/aptos-labs/aptos-rust-sdk/releases/tag/sdk-v0.7.0
 [0.6.0]: https://github.com/aptos-labs/aptos-rust-sdk/releases/tag/sdk-v0.6.0
 [0.5.0]: https://github.com/aptos-labs/aptos-rust-sdk/releases/tag/sdk-v0.5.0
