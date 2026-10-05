@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+## [0.7.2] - 2026-10-05
+
 ### Added
 - WASM build support for `wasm32-unknown-unknown`. The SDK now compiles for
   WASM targets when the `aws-lc-sys`-based TLS stack is replaced with a
