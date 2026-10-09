@@ -47,7 +47,7 @@ use crate::types::AccountAddress;
 /// `router` contract address on mainnet.
 const MAINNET_ROUTER: &str = "0x867ed1f6bf916171b1de3ee92849b8978b7d1b9e0a8cc982a3d19d535dfd9c0c";
 /// `router` contract address on testnet.
-const TESTNET_ROUTER: &str = "0x5f8fd2347449685cf41d4db97926ec3a096eaf381332be4f1318ad4d16a8497c";
+const TESTNET_ROUTER: &str = "0xb1ae61606dfbe0ea5b5c45ffdb4fb08da0dba18c5125182ff63ab280a450ecf4";
 /// Default `router` contract address used by the local ANS test deployment
 /// (matches the TypeScript SDK's `LOCAL_ANS_ACCOUNT_ADDRESS`).
 const LOCAL_ROUTER: &str = "0x585fc9f0f0c54183b039ffc770ca282ebd87307916c215a3e692f2f8e4305e82";
@@ -682,15 +682,32 @@ mod tests {
 
     #[test]
     fn router_address_known_networks() {
+        // Compare against literals, not the constants: `from_hex` zero-pads
+        // short input, so a router constant that lost a digit would still parse
+        // (to a different address) and comparing it with itself would pass.
         let mainnet = AnsClient::new(FullnodeClient::new(AptosConfig::mainnet()).unwrap());
         assert_eq!(
             mainnet.router_address().unwrap(),
-            AccountAddress::from_hex(MAINNET_ROUTER).unwrap()
+            AccountAddress::from_hex(
+                "0x867ed1f6bf916171b1de3ee92849b8978b7d1b9e0a8cc982a3d19d535dfd9c0c"
+            )
+            .unwrap()
         );
         let testnet = AnsClient::new(FullnodeClient::new(AptosConfig::testnet()).unwrap());
         assert_eq!(
             testnet.router_address().unwrap(),
-            AccountAddress::from_hex(TESTNET_ROUTER).unwrap()
+            AccountAddress::from_hex(
+                "0xb1ae61606dfbe0ea5b5c45ffdb4fb08da0dba18c5125182ff63ab280a450ecf4"
+            )
+            .unwrap()
+        );
+        let local = AnsClient::new(FullnodeClient::new(AptosConfig::local()).unwrap());
+        assert_eq!(
+            local.router_address().unwrap(),
+            AccountAddress::from_hex(
+                "0x585fc9f0f0c54183b039ffc770ca282ebd87307916c215a3e692f2f8e4305e82"
+            )
+            .unwrap()
         );
     }
 
