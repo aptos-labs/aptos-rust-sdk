@@ -1,9 +1,8 @@
 # AGENTS.md
 
 Guidance for AI coding agents (Claude, Cursor, Copilot, OpenAI Codex,
-etc.) working on this repository. This is the canonical agent-instruction
-file; `CLAUDE.md` is kept as a thin pointer to this file for backward
-compatibility.
+etc.) working on this repository. This is the single agent-instruction
+file for the repo; there is no separate `CLAUDE.md`.
 
 ## Project Overview
 
