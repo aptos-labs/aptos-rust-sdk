@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+## [0.8.0] - 2026-10-09
+
 ### Fixed
 - `AnsClient::new` on testnet now targets the redeployed ANS `router` at
   `0xb1ae61606dfbe0ea5b5c45ffdb4fb08da0dba18c5125182ff63ab280a450ecf4`. The
@@ -636,6 +638,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - This SDK is independent of `aptos-core` for faster compilation
 - Minimum Supported Rust Version (MSRV): 1.90
 
+[0.8.0]: https://github.com/aptos-labs/aptos-rust-sdk/releases/tag/sdk-v0.8.0
+[0.7.2]: https://github.com/aptos-labs/aptos-rust-sdk/releases/tag/sdk-v0.7.2
 [0.7.1]: https://github.com/aptos-labs/aptos-rust-sdk/releases/tag/sdk-v0.7.1
 [0.7.0]: https://github.com/aptos-labs/aptos-rust-sdk/releases/tag/sdk-v0.7.0
 [0.6.0]: https://github.com/aptos-labs/aptos-rust-sdk/releases/tag/sdk-v0.6.0
