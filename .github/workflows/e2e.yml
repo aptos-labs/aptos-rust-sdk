@@ -17,7 +17,7 @@ env:
 jobs:
   e2e-localnet:
     name: E2E Tests (Localnet)
-    runs-on: ubuntu-latest
+    runs-on: 4cpu-gh-ubuntu24-x64
     permissions:
       contents: read
     timeout-minutes: 30

@@ -30,7 +30,7 @@ jobs:
   # Determine which crates to publish based on the tag or manual input
   resolve:
     name: Resolve Crates
-    runs-on: ubuntu-latest
+    runs-on: 4cpu-gh-ubuntu24-x64
     permissions:
       contents: read
     outputs:
@@ -68,7 +68,7 @@ jobs:
 
   verify:
     name: Verify Release
-    runs-on: ubuntu-latest
+    runs-on: 4cpu-gh-ubuntu24-x64
     permissions:
       contents: read
     steps:
@@ -105,7 +105,7 @@ jobs:
 
   publish-macros:
     name: Publish aptos-sdk-macros
-    runs-on: ubuntu-latest
+    runs-on: 4cpu-gh-ubuntu24-x64
     permissions:
       contents: read
     needs: [resolve, verify]
@@ -135,7 +135,7 @@ jobs:
 
   publish-sdk:
     name: Publish aptos-sdk
-    runs-on: ubuntu-latest
+    runs-on: 4cpu-gh-ubuntu24-x64
     permissions:
       contents: read
     needs: [resolve, verify, publish-macros]
@@ -202,7 +202,7 @@ jobs:
 
   release-notes:
     name: Create Release Notes
-    runs-on: ubuntu-latest
+    runs-on: 4cpu-gh-ubuntu24-x64
     needs: [resolve, publish-macros, publish-sdk]
     if: |
       always() &&
