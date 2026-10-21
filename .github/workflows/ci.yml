@@ -13,7 +13,7 @@ env:
 jobs:
   format:
     name: Format
-    runs-on: ubuntu-latest
+    runs-on: 4cpu-gh-ubuntu24-x64
     permissions:
       contents: read
     steps:
@@ -32,7 +32,7 @@ jobs:
 
   lint:
     name: Lint
-    runs-on: ubuntu-latest
+    runs-on: 4cpu-gh-ubuntu24-x64
     permissions:
       contents: read
     steps:
@@ -63,7 +63,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [4cpu-gh-ubuntu24-x64, macos-latest, windows-latest]
         rust: [stable]
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -140,7 +140,7 @@ jobs:
 
   test-no-simd:
     name: Test (Linux No SIMD - Docker Compatible)
-    runs-on: ubuntu-latest
+    runs-on: 4cpu-gh-ubuntu24-x64
     permissions:
       contents: read
     env:
@@ -173,7 +173,7 @@ jobs:
 
   test-features:
     name: Test Feature Combinations
-    runs-on: ubuntu-latest
+    runs-on: 4cpu-gh-ubuntu24-x64
     permissions:
       contents: read
     steps:
@@ -211,7 +211,7 @@ jobs:
   # not OS-specific.
   doctest:
     name: Doctests
-    runs-on: ubuntu-latest
+    runs-on: 4cpu-gh-ubuntu24-x64
     permissions:
       contents: read
     steps:
@@ -231,7 +231,7 @@ jobs:
 
   test-macros:
     name: Test Macros
-    runs-on: ubuntu-latest
+    runs-on: 4cpu-gh-ubuntu24-x64
     permissions:
       contents: read
     steps:
@@ -248,7 +248,7 @@ jobs:
 
   wasm:
     name: Build WASM
-    runs-on: ubuntu-latest
+    runs-on: 4cpu-gh-ubuntu24-x64
     permissions:
       contents: read
     steps:
@@ -268,7 +268,7 @@ jobs:
   # TODO: Re-enable once specification tests are stabilized
   # spec-tests:
   #   name: Spec Tests
-  #   runs-on: ubuntu-latest
+  #   runs-on: 4cpu-gh-ubuntu24-x64
   #   steps:
   #     - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
   #
@@ -284,7 +284,7 @@ jobs:
 
   docs:
     name: Documentation
-    runs-on: ubuntu-latest
+    runs-on: 4cpu-gh-ubuntu24-x64
     permissions:
       contents: read
     steps:
@@ -309,7 +309,7 @@ jobs:
   # Deploy docs to GitHub Pages on main branch
   deploy-docs:
     name: Deploy Documentation
-    runs-on: ubuntu-latest
+    runs-on: 4cpu-gh-ubuntu24-x64
     needs: [docs, test, lint]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     permissions:
@@ -351,7 +351,7 @@ jobs:
 
   msrv:
     name: Minimum Supported Rust Version
-    runs-on: ubuntu-latest
+    runs-on: 4cpu-gh-ubuntu24-x64
     permissions:
       contents: read
     steps:
@@ -368,7 +368,7 @@ jobs:
 
   coverage:
     name: Code Coverage
-    runs-on: ubuntu-latest
+    runs-on: 4cpu-gh-ubuntu24-x64
     permissions:
       contents: read
     steps:
@@ -400,7 +400,7 @@ jobs:
 
   security-audit:
     name: Security Audit
-    runs-on: ubuntu-latest
+    runs-on: 4cpu-gh-ubuntu24-x64
     permissions:
       contents: read
     steps:

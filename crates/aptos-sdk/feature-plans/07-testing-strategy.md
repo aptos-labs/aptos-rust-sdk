@@ -209,7 +209,7 @@ pub mod fixtures {
 ```yaml
 # .github/workflows/ci.yml
 test:
-  runs-on: ubuntu-latest
+  runs-on: 4cpu-gh-ubuntu24-x64
   steps:
     - uses: actions/checkout@v4
     
@@ -224,7 +224,7 @@ test:
         cargo test -p aptos-sdk --features full
 
 e2e-tests:
-  runs-on: ubuntu-latest
+  runs-on: 4cpu-gh-ubuntu24-x64
   steps:
     - uses: actions/checkout@v4
     

@@ -16,7 +16,7 @@ env:
 jobs:
   audit:
     name: Security Audit
-    runs-on: ubuntu-latest
+    runs-on: 4cpu-gh-ubuntu24-x64
     permissions:
       contents: read
     steps:
@@ -37,7 +37,7 @@ jobs:
   # Optional: cargo-deny for more comprehensive checks
   deny:
     name: Dependency Check
-    runs-on: ubuntu-latest
+    runs-on: 4cpu-gh-ubuntu24-x64
     permissions:
       contents: read
     steps:

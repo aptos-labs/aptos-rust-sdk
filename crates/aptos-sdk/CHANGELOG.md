@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+### Security
+- Bumped `rustls` from 0.23.45 to 0.23.46, clearing
+  [RUSTSEC-2026-0346](https://rustsec.org/advisories/RUSTSEC-2026-0346)
+  (`Debug` impls for client session values could expose TLS secrets in logs),
+  [RUSTSEC-2026-0347](https://rustsec.org/advisories/RUSTSEC-2026-0347)
+  (buffered application data sent to the outer server after ECH rejection),
+  [RUSTSEC-2026-0348](https://rustsec.org/advisories/RUSTSEC-2026-0348)
+  (Brotli certificate decompression could allocate up to 1 GiB before
+  authentication), and
+  [RUSTSEC-2026-0349](https://rustsec.org/advisories/RUSTSEC-2026-0349)
+  (unauthenticated ServerHello could downgrade later connections to classical
+  key exchange). `rustls` is transitive via `reqwest`; library consumers still
+  resolve their own copy, but this repo's `Cargo.lock` (CI, examples, and git
+  checkouts) is no longer flagged by `cargo audit` / `cargo deny`.
+
 ## [0.8.0] - 2026-10-09
 
 ### Fixed
