@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+### Added
+- SLH-DSA-SHA2-128s post-quantum signature support (AIP-137), modeled on
+  `aptos-ts-sdk` PR #802 and matching `aptos-core`'s on-chain types:
+  `SlhDsaSha2128sPrivateKey` / `SlhDsaSha2128sPublicKey` /
+  `SlhDsaSha2128sSignature` (48-byte three-seed private key, 32-byte public
+  key, 7,856-byte signature), `SlhDsaSha2128sAccount` (SingleKey), SLH keys
+  inside `MultiKeyAccount`, and BIP-39 derivation via
+  `Mnemonic::derive_slh_dsa_sha2_128s_key` using the TypeScript SDK's
+  SLIP-0010-style `"SLH-DSA-SHA2-128s seed"` hardened derivation (the TS
+  HD test vectors are ported as tests). Behind the new opt-in
+  `slh-dsa-sha2-128s` feature (also in `full`), mirroring the TS SDK's
+  optional `@noble/post-quantum` dependency. On-chain verification of these
+  transactions is feature-gated (Aptos feature flag 107), so they only
+  verify on networks where that feature is enabled.
+- `AnyPublicKeyVariant::FederatedKeyless` (4) and
+  `AnyPublicKeyVariant::SlhDsaSha2_128s` (5), matching the on-chain
+  `AnyPublicKey` enum.
+
+### Changed
+- `AnySignature.variant` is now typed as the new `AnySignatureVariant`
+  enum instead of `AnyPublicKeyVariant`. `AnyPublicKey` and `AnySignature`
+  are different on-chain enums whose indices diverge (SLH-DSA-SHA2-128s is
+  public-key variant 5 but signature variant 4), so sharing one enum made
+  the SLH wire format unrepresentable. Callers constructing or matching on
+  `AnySignature::new(...)` / `sig.variant` must use `AnySignatureVariant`;
+  BCS bytes for all previously supported schemes are unchanged.
+
 ### Security
 - Bumped `rustls` from 0.23.45 to 0.23.46, clearing
   [RUSTSEC-2026-0346](https://rustsec.org/advisories/RUSTSEC-2026-0346)

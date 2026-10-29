@@ -23,13 +23,28 @@ workspace = true
 
 [features]
 default = ["ed25519", "secp256k1", "secp256r1", "indexer", "faucet", "mnemonic"]
-full = ["ed25519", "secp256k1", "secp256r1", "bls", "indexer", "faucet", "mnemonic"]
+full = [
+    "ed25519",
+    "secp256k1",
+    "secp256r1",
+    "bls",
+    "slh-dsa-sha2-128s",
+    "indexer",
+    "faucet",
+    "mnemonic",
+]
 
 # Cryptographic signature schemes
 ed25519 = ["dep:ed25519-dalek"]
 secp256k1 = ["dep:k256"]
 secp256r1 = ["dep:p256"]
 bls = ["dep:blst"]
+# Post-quantum SLH-DSA-SHA2-128s (AIP-137). Opt-in (not in `default`) to mirror
+# the TypeScript SDK, where `@noble/post-quantum` is an optional dependency
+# loaded only from the SLH entry point: SLH signatures are 7,856 bytes and the
+# implementation is comparatively heavy, so callers who do not use the scheme
+# should not pay for it.
+slh-dsa-sha2-128s = ["dep:slh-dsa", "dep:hmac"]
 
 # BIP-39 mnemonic phrase support
 mnemonic = ["dep:bip39", "dep:hmac"]
@@ -86,6 +101,12 @@ ed25519-dalek = { version = "2.2", features = ["std", "rand_core", "zeroize"], o
 k256 = { version = "0.13", features = ["ecdsa", "sha256", "std"], optional = true }
 p256 = { version = "0.13", features = ["ecdsa", "sha256", "std"], optional = true }
 blst = { version = "0.3.17", optional = true }
+# Same RustCrypto crate aptos-core's `aptos-crypto` uses for SLH-DSA-SHA2-128s,
+# so signatures produced here verify against the on-chain implementation.
+# aptos-core pins `=0.2.0-rc.4`, but that release no longer compiles against
+# the stable `pkcs8` 0.11 it now resolves to; rc.5 is the same FIPS 205
+# implementation with the upstream pkcs8 fix.
+slh-dsa = { version = "=0.2.0-rc.5", optional = true }
 
 # (indexer feature uses raw GraphQL queries via reqwest, no extra dep needed)
 

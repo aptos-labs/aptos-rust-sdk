@@ -9,6 +9,7 @@
 //! - `secp256k1` (default): Secp256k1 ECDSA signatures
 //! - `secp256r1`: Secp256r1 (P-256) ECDSA signatures
 //! - `bls`: BLS12-381 signatures
+//! - `slh-dsa-sha2-128s`: SLH-DSA-SHA2-128s post-quantum signatures (opt-in)
 //!
 //! # Security Considerations
 //!
@@ -73,6 +74,8 @@ pub(crate) mod multi_key;
 mod secp256k1;
 #[cfg(feature = "secp256r1")]
 mod secp256r1;
+#[cfg(feature = "slh-dsa-sha2-128s")]
+mod slh_dsa_sha2_128s;
 
 // Re-export hash functions
 pub use hash::{HashFunction, sha2_256, sha3_256, sha3_256_of, signing_message};
@@ -95,8 +98,17 @@ pub use multi_ed25519::{
 
 // Re-export Multi-Key types
 pub use multi_key::{
-    AnyPublicKey, AnyPublicKeyVariant, AnySignature, MAX_NUM_OF_KEYS as MULTI_KEY_MAX_NUM_OF_KEYS,
-    MIN_THRESHOLD as MULTI_KEY_MIN_THRESHOLD, MultiKeyPublicKey, MultiKeySignature,
+    AnyPublicKey, AnyPublicKeyVariant, AnySignature, AnySignatureVariant,
+    MAX_NUM_OF_KEYS as MULTI_KEY_MAX_NUM_OF_KEYS, MIN_THRESHOLD as MULTI_KEY_MIN_THRESHOLD,
+    MultiKeyPublicKey, MultiKeySignature,
+};
+
+// Re-export SLH-DSA-SHA2-128s (post-quantum) types
+#[cfg(feature = "slh-dsa-sha2-128s")]
+pub use slh_dsa_sha2_128s::{
+    SLH_DSA_SHA2_128S_PRIVATE_KEY_LENGTH, SLH_DSA_SHA2_128S_PUBLIC_KEY_LENGTH,
+    SLH_DSA_SHA2_128S_SIGNATURE_LENGTH, SLH_DSA_SHA2_128S_SLIP0010_SEED, SlhDsaSha2128sPrivateKey,
+    SlhDsaSha2128sPublicKey, SlhDsaSha2128sSignature,
 };
 
 // Re-export Secp256k1 types

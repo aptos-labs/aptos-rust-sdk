@@ -629,6 +629,76 @@ mod tests {
         signed.verify_signature().unwrap();
     }
 
+    #[cfg(feature = "slh-dsa-sha2-128s")]
+    #[test]
+    fn test_sign_transaction_with_slh_dsa_sha2_128s_account() {
+        use crate::account::SlhDsaSha2128sAccount;
+        use crate::transaction::authenticator::{AccountAuthenticator, TransactionAuthenticator};
+
+        let account = SlhDsaSha2128sAccount::generate();
+        let recipient = AccountAddress::from_hex("0x123").unwrap();
+        let payload = EntryFunction::apt_transfer(recipient, 1000).unwrap();
+
+        let txn = TransactionBuilder::new()
+            .sender(account.address())
+            .sequence_number(0)
+            .payload(payload.into())
+            .chain_id(ChainId::testnet())
+            .build()
+            .unwrap();
+
+        let signed = sign_transaction(&txn, &account).unwrap();
+        assert_eq!(signed.sender(), account.address());
+        match &signed.authenticator {
+            TransactionAuthenticator::SingleSender { sender } => {
+                assert!(matches!(sender, AccountAuthenticator::SingleKey { .. }));
+            }
+            _ => panic!("expected SingleSender authenticator"),
+        }
+        signed.verify_signature().unwrap();
+        // The signed transaction must BCS-serialize (7,856-byte signature).
+        assert!(signed.to_bcs().is_ok());
+    }
+
+    #[cfg(feature = "slh-dsa-sha2-128s")]
+    #[test]
+    fn test_sign_multi_agent_and_fee_payer_with_slh_dsa_sha2_128s_account() {
+        use crate::account::SlhDsaSha2128sAccount;
+
+        let sender = SlhDsaSha2128sAccount::generate();
+        let secondary = SlhDsaSha2128sAccount::generate();
+        let fee_payer = SlhDsaSha2128sAccount::generate();
+        let recipient = AccountAddress::from_hex("0x123").unwrap();
+        let payload = EntryFunction::apt_transfer(recipient, 1000).unwrap();
+
+        let raw_txn = TransactionBuilder::new()
+            .sender(sender.address())
+            .sequence_number(0)
+            .payload(payload.into())
+            .chain_id(ChainId::testnet())
+            .build()
+            .unwrap();
+
+        // Multi-agent: SLH sender with an SLH secondary signer.
+        let multi_agent = MultiAgentRawTransaction {
+            raw_txn: raw_txn.clone(),
+            secondary_signer_addresses: vec![secondary.address()],
+        };
+        let secondary_signers: Vec<&dyn crate::account::Account> = vec![&secondary];
+        let signed =
+            sign_multi_agent_transaction(&multi_agent, &sender, &secondary_signers).unwrap();
+        signed.verify_signature().unwrap();
+
+        // Fee payer: SLH sender, SLH fee payer.
+        let fee_payer_txn = FeePayerRawTransaction {
+            raw_txn,
+            secondary_signer_addresses: vec![],
+            fee_payer_address: fee_payer.address(),
+        };
+        let signed = sign_fee_payer_transaction(&fee_payer_txn, &sender, &[], &fee_payer).unwrap();
+        signed.verify_signature().unwrap();
+    }
+
     #[cfg(all(feature = "ed25519", feature = "secp256k1"))]
     #[test]
     fn test_sign_transaction_with_mixed_multi_key_account() {

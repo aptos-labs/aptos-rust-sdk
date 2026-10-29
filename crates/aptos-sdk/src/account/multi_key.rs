@@ -23,6 +23,9 @@ pub enum AnyPrivateKey {
     /// Secp256r1 private key.
     #[cfg(feature = "secp256r1")]
     Secp256r1(crate::crypto::Secp256r1PrivateKey),
+    /// SLH-DSA-SHA2-128s private key.
+    #[cfg(feature = "slh-dsa-sha2-128s")]
+    SlhDsaSha2128s(crate::crypto::SlhDsaSha2128sPrivateKey),
 }
 
 impl AnyPrivateKey {
@@ -36,6 +39,8 @@ impl AnyPrivateKey {
             Self::Secp256k1(_) => AnyPublicKeyVariant::Secp256k1,
             #[cfg(feature = "secp256r1")]
             Self::Secp256r1(_) => AnyPublicKeyVariant::Secp256r1,
+            #[cfg(feature = "slh-dsa-sha2-128s")]
+            Self::SlhDsaSha2128s(_) => AnyPublicKeyVariant::SlhDsaSha2_128s,
             #[allow(unreachable_patterns)]
             _ => unreachable!("AnyPrivateKey requires at least one crypto feature to be enabled"),
         }
@@ -51,6 +56,8 @@ impl AnyPrivateKey {
             Self::Secp256k1(key) => AnyPublicKey::secp256k1(&key.public_key()),
             #[cfg(feature = "secp256r1")]
             Self::Secp256r1(key) => AnyPublicKey::secp256r1(&key.public_key()),
+            #[cfg(feature = "slh-dsa-sha2-128s")]
+            Self::SlhDsaSha2128s(key) => AnyPublicKey::slh_dsa_sha2_128s(&key.public_key()),
             #[allow(unreachable_patterns)]
             _ => unreachable!("AnyPrivateKey requires at least one crypto feature to be enabled"),
         }
@@ -66,6 +73,8 @@ impl AnyPrivateKey {
             Self::Secp256k1(key) => AnySignature::secp256k1(&key.sign(message)),
             #[cfg(feature = "secp256r1")]
             Self::Secp256r1(key) => AnySignature::secp256r1(&key.sign(message)),
+            #[cfg(feature = "slh-dsa-sha2-128s")]
+            Self::SlhDsaSha2128s(key) => AnySignature::slh_dsa_sha2_128s(&key.sign(message)),
             #[allow(unreachable_patterns)]
             _ => unreachable!("AnyPrivateKey requires at least one crypto feature to be enabled"),
         }
@@ -88,6 +97,12 @@ impl AnyPrivateKey {
     pub fn secp256r1(key: crate::crypto::Secp256r1PrivateKey) -> Self {
         Self::Secp256r1(key)
     }
+
+    /// Creates an SLH-DSA-SHA2-128s private key.
+    #[cfg(feature = "slh-dsa-sha2-128s")]
+    pub fn slh_dsa_sha2_128s(key: crate::crypto::SlhDsaSha2128sPrivateKey) -> Self {
+        Self::SlhDsaSha2128s(key)
+    }
 }
 
 impl Clone for AnyPrivateKey {
@@ -100,6 +115,8 @@ impl Clone for AnyPrivateKey {
             Self::Secp256k1(key) => Self::Secp256k1(key.clone()),
             #[cfg(feature = "secp256r1")]
             Self::Secp256r1(key) => Self::Secp256r1(key.clone()),
+            #[cfg(feature = "slh-dsa-sha2-128s")]
+            Self::SlhDsaSha2128s(key) => Self::SlhDsaSha2128s(key.clone()),
             #[allow(unreachable_patterns)]
             _ => unreachable!("AnyPrivateKey requires at least one crypto feature to be enabled"),
         }
@@ -716,6 +733,24 @@ mod tests {
         let debug = format!("{key:?}");
         assert!(debug.contains("AnyPrivateKey"));
         assert!(debug.contains("Ed25519"));
+    }
+
+    #[test]
+    #[cfg(all(feature = "ed25519", feature = "slh-dsa-sha2-128s"))]
+    fn test_create_and_sign_with_slh_key() {
+        use crate::crypto::{Ed25519PrivateKey, SlhDsaSha2128sPrivateKey};
+
+        let keys = vec![
+            AnyPrivateKey::ed25519(Ed25519PrivateKey::generate()),
+            AnyPrivateKey::slh_dsa_sha2_128s(SlhDsaSha2128sPrivateKey::generate()),
+        ];
+        let account = MultiKeyAccount::new(keys, 2).unwrap();
+        assert_eq!(account.key_types()[1], AnyPublicKeyVariant::SlhDsaSha2_128s);
+
+        let message = b"multi-key with pq key";
+        let signature = account.sign_message(message).unwrap();
+        assert!(account.verify(message, &signature).is_ok());
+        assert!(account.verify(b"wrong", &signature).is_err());
     }
 
     #[test]
