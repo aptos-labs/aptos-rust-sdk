@@ -505,7 +505,7 @@ fn derive_ed25519_at_path(seed: &[u8], path: &DerivationPath) -> AptosResult<[u8
 #[cfg(feature = "secp256k1")]
 fn derive_secp256k1_at_path(seed: &[u8], path: &DerivationPath) -> AptosResult<[u8; 32]> {
     use hmac::{Hmac, Mac};
-    use k256::elliptic_curve::sec1::ToEncodedPoint;
+    use k256::elliptic_curve::sec1::ToSec1Point;
     use k256::{NonZeroScalar, ProjectivePoint, PublicKey, Scalar, SecretKey};
     use sha2::Sha512;
 
@@ -538,7 +538,7 @@ fn derive_secp256k1_at_path(seed: &[u8], path: &DerivationPath) -> AptosResult<[
         } else {
             // ser_P(K_par) || ser_32(i)  -- compressed public key (33 bytes)
             let pub_key: PublicKey = parent.public_key();
-            let encoded_point = pub_key.to_encoded_point(true);
+            let encoded_point = pub_key.to_sec1_point(true);
             let mut buf = Vec::with_capacity(33 + 4);
             buf.extend_from_slice(encoded_point.as_bytes());
             buf.extend_from_slice(&encoded.to_be_bytes());
