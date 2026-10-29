@@ -47,23 +47,37 @@ fn signing_key_from_seeds(seeds: &[u8; SLH_DSA_SHA2_128S_PRIVATE_KEY_LENGTH]) ->
 
 /// An SLH-DSA-SHA2-128s private key.
 ///
-/// Holds only the 48-byte three seeds (SK seed || PRF seed || PK seed), the
-/// same representation the TypeScript SDK serializes; the full signing key
-/// (which additionally caches the derived PK root) is recomputed on use,
-/// matching `aptos-crypto`, whose private-key bytes are likewise just the
-/// three seeds. The seeds are zeroized when dropped.
+/// Serializes as only the 48-byte three seeds (SK seed || PRF seed ||
+/// PK seed), the same representation the TypeScript SDK and `aptos-crypto`
+/// use. The expanded signing key (which caches the derived PK root) is
+/// computed once at construction and retained: recomputing it via
+/// `slh_keygen` on every `sign` / `public_key` call is nearly as expensive
+/// as signing itself, which made repeated use (and the test suite under
+/// coverage instrumentation) needlessly slow. The seeds are zeroized when
+/// dropped; the expanded key zeroizes its own seed material on drop (the
+/// `slh-dsa` crate's `ZeroizeOnDrop` impl, pinned by a test below).
 #[derive(Clone, Zeroize)]
 #[zeroize(drop)]
 pub struct SlhDsaSha2128sPrivateKey {
     seeds: [u8; SLH_DSA_SHA2_128S_PRIVATE_KEY_LENGTH],
+    #[zeroize(skip)]
+    #[allow(unused)] // Field is used; lint false positive from Zeroize derive
+    inner: SlhSigningKey,
 }
 
 impl SlhDsaSha2128sPrivateKey {
+    fn from_seeds(seeds: [u8; SLH_DSA_SHA2_128S_PRIVATE_KEY_LENGTH]) -> Self {
+        Self {
+            inner: signing_key_from_seeds(&seeds),
+            seeds,
+        }
+    }
+
     /// Generates a new random SLH-DSA-SHA2-128s private key.
     pub fn generate() -> Self {
         let mut seeds = [0u8; SLH_DSA_SHA2_128S_PRIVATE_KEY_LENGTH];
         rand::RngCore::fill_bytes(&mut rand::rngs::OsRng, &mut seeds);
-        Self { seeds }
+        Self::from_seeds(seeds)
     }
 
     /// Creates a private key from raw bytes.
@@ -82,7 +96,7 @@ impl SlhDsaSha2128sPrivateKey {
         }
         let mut seeds = [0u8; SLH_DSA_SHA2_128S_PRIVATE_KEY_LENGTH];
         seeds.copy_from_slice(bytes);
-        Ok(Self { seeds })
+        Ok(Self::from_seeds(seeds))
     }
 
     /// Creates a private key from a hex string.
@@ -166,9 +180,7 @@ impl SlhDsaSha2128sPrivateKey {
     /// Derives a private key from `seed` at the given hardened path.
     #[cfg(any(feature = "mnemonic", test))]
     pub(crate) fn from_seed_and_path(seed: &[u8], encoded_components: &[u32]) -> Self {
-        Self {
-            seeds: Self::derive_seeds(seed, encoded_components),
-        }
+        Self::from_seeds(Self::derive_seeds(seed, encoded_components))
     }
 
     /// Returns the private key as bytes (the 48-byte three seeds).
@@ -190,9 +202,8 @@ impl SlhDsaSha2128sPrivateKey {
 
     /// Returns the corresponding public key.
     pub fn public_key(&self) -> SlhDsaSha2128sPublicKey {
-        let signing_key = signing_key_from_seeds(&self.seeds);
         let bytes: [u8; SLH_DSA_SHA2_128S_PUBLIC_KEY_LENGTH] =
-            signing_key.verifying_key().to_bytes().into();
+            self.inner.verifying_key().to_bytes().into();
         SlhDsaSha2128sPublicKey { bytes }
     }
 
@@ -205,8 +216,7 @@ impl SlhDsaSha2128sPrivateKey {
     /// implementations cross-verify (checked against
     /// `@noble/post-quantum` 0.5.4 during development).
     pub fn sign(&self, message: &[u8]) -> SlhDsaSha2128sSignature {
-        let signing_key = signing_key_from_seeds(&self.seeds);
-        let signature: SlhSignature = SlhSigner::sign(&signing_key, message);
+        let signature: SlhSignature = SlhSigner::sign(&self.inner, message);
         SlhDsaSha2128sSignature {
             bytes: signature.to_vec(),
         }
@@ -520,8 +530,47 @@ impl<'de> Deserialize<'de> for SlhDsaSha2128sSignature {
     }
 }
 
+/// Shared SLH test fixture: one key and one signature, computed once for
+/// the whole test binary.
+///
+/// SLH-DSA sign/verify each take seconds in a debug build (and far longer
+/// under `cargo-tarpaulin` instrumentation, whose 60s test-response timeout
+/// the un-shared suite tripped in CI). Tests that only need *a* valid
+/// key/signature pair must use this fixture instead of signing again;
+/// only the dedicated sign/verify tests pay for fresh operations.
+#[cfg(test)]
+pub(crate) mod test_support {
+    use super::{SlhDsaSha2128sPrivateKey, SlhDsaSha2128sPublicKey, SlhDsaSha2128sSignature};
+    use std::sync::LazyLock;
+
+    /// Message signed by the shared fixture signature.
+    pub(crate) const MESSAGE: &[u8] = b"hello aptos";
+
+    pub(crate) struct Fixture {
+        pub(crate) private_key: SlhDsaSha2128sPrivateKey,
+        pub(crate) public_key: SlhDsaSha2128sPublicKey,
+        pub(crate) signature: SlhDsaSha2128sSignature,
+    }
+
+    static FIXTURE: LazyLock<Fixture> = LazyLock::new(|| {
+        let private_key = SlhDsaSha2128sPrivateKey::from_bytes(&[7u8; 48]).unwrap();
+        let public_key = private_key.public_key();
+        let signature = private_key.sign(MESSAGE);
+        Fixture {
+            private_key,
+            public_key,
+            signature,
+        }
+    });
+
+    pub(crate) fn fixture() -> &'static Fixture {
+        &FIXTURE
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use super::test_support::{MESSAGE, fixture};
     use super::*;
 
     #[test]
@@ -535,30 +584,23 @@ mod tests {
 
     #[test]
     fn test_wrong_message_fails() {
-        let private_key = SlhDsaSha2128sPrivateKey::generate();
-        let signature = private_key.sign(b"hello aptos");
-        assert!(
-            private_key
-                .public_key()
-                .verify(b"wrong message", &signature)
-                .is_err()
-        );
+        // Reuses the shared fixture signature; only the (failing) verify runs.
+        let f = fixture();
+        assert!(f.public_key.verify(b"wrong message", &f.signature).is_err());
     }
 
     #[test]
     fn test_signing_is_deterministic() {
-        // Both aptos-crypto and the TS SDK sign deterministically (empty
-        // context); two signatures over the same message must be identical.
-        let private_key = SlhDsaSha2128sPrivateKey::from_bytes(&[7u8; 48]).unwrap();
-        assert_eq!(
-            private_key.sign(b"deterministic").bytes,
-            private_key.sign(b"deterministic").bytes
-        );
+        // aptos-crypto signs deterministically (empty context): re-signing
+        // the fixture message with the fixture key must reproduce the
+        // fixture signature byte-for-byte. One fresh sign, not two.
+        let f = fixture();
+        assert_eq!(f.private_key.sign(MESSAGE).bytes, f.signature.bytes);
     }
 
     #[test]
     fn test_from_bytes_roundtrip() {
-        let private_key = SlhDsaSha2128sPrivateKey::generate();
+        let private_key = &fixture().private_key;
         let restored = SlhDsaSha2128sPrivateKey::from_bytes(&private_key.to_bytes()).unwrap();
         assert_eq!(private_key.to_bytes(), restored.to_bytes());
         assert_eq!(private_key.public_key(), restored.public_key());
@@ -574,7 +616,7 @@ mod tests {
 
     #[test]
     fn test_aip80_roundtrip() {
-        let private_key = SlhDsaSha2128sPrivateKey::generate();
+        let private_key = &fixture().private_key;
         let aip80 = private_key.to_aip80();
         assert!(aip80.starts_with("slh-dsa-sha2-128s-priv-0x"));
         assert_eq!(
@@ -585,44 +627,42 @@ mod tests {
         );
         assert!(SlhDsaSha2128sPrivateKey::from_aip80("ed25519-priv-0x01").is_err());
 
-        let public_key = private_key.public_key();
+        let public_key = &fixture().public_key;
         let aip80 = public_key.to_aip80();
         assert!(aip80.starts_with("slh-dsa-sha2-128s-pub-0x"));
         assert_eq!(
             SlhDsaSha2128sPublicKey::from_aip80(&aip80).unwrap(),
-            public_key
+            *public_key
         );
     }
 
     #[test]
     fn test_hex_roundtrip() {
-        let private_key = SlhDsaSha2128sPrivateKey::generate();
+        let f = fixture();
         assert_eq!(
-            SlhDsaSha2128sPrivateKey::from_hex(&private_key.to_hex())
+            SlhDsaSha2128sPrivateKey::from_hex(&f.private_key.to_hex())
                 .unwrap()
                 .to_bytes(),
-            private_key.to_bytes()
+            f.private_key.to_bytes()
         );
-        let signature = private_key.sign(b"hex");
         assert_eq!(
-            SlhDsaSha2128sSignature::from_hex(&signature.to_hex())
+            SlhDsaSha2128sSignature::from_hex(&f.signature.to_hex())
                 .unwrap()
                 .bytes,
-            signature.bytes
+            f.signature.bytes
         );
     }
 
     #[test]
     fn test_bcs_framing() {
-        let private_key = SlhDsaSha2128sPrivateKey::from_bytes(&[3u8; 48]).unwrap();
-        let public_key = private_key.public_key();
-        let bcs_pk = public_key.to_bcs_bytes();
+        // Framing only: reuses the fixture key/signature, no signing.
+        let f = fixture();
+        let bcs_pk = f.public_key.to_bcs_bytes();
         assert_eq!(bcs_pk.len(), 1 + 1 + 32);
         assert_eq!(bcs_pk[0], 5, "AnyPublicKey::SlhDsa_Sha2_128s variant");
         assert_eq!(bcs_pk[1], 32, "ULEB128(32)");
 
-        let signature = private_key.sign(b"bcs");
-        let bcs_sig = signature.to_bcs_bytes();
+        let bcs_sig = f.signature.to_bcs_bytes();
         // ULEB128(7856) = [0xB0, 0x3D]
         assert_eq!(bcs_sig[0], 4, "AnySignature::SlhDsa_Sha2_128s variant");
         assert_eq!(&bcs_sig[1..3], &[0xB0, 0x3D], "ULEB128(7856)");
@@ -631,8 +671,7 @@ mod tests {
 
     #[test]
     fn test_address_derivation() {
-        let private_key = SlhDsaSha2128sPrivateKey::generate();
-        let public_key = private_key.public_key();
+        let public_key = &fixture().public_key;
         let address = public_key.to_address();
         assert!(!address.is_zero());
         assert_eq!(address, public_key.to_address());
@@ -641,20 +680,18 @@ mod tests {
 
     #[test]
     fn test_json_serialization() {
-        let private_key = SlhDsaSha2128sPrivateKey::generate();
-        let public_key = private_key.public_key();
-        let json = serde_json::to_string(&public_key).unwrap();
+        let f = fixture();
+        let json = serde_json::to_string(&f.public_key).unwrap();
         assert_eq!(
             serde_json::from_str::<SlhDsaSha2128sPublicKey>(&json).unwrap(),
-            public_key
+            f.public_key
         );
-        let signature = private_key.sign(b"json");
-        let json = serde_json::to_string(&signature).unwrap();
+        let json = serde_json::to_string(&f.signature).unwrap();
         assert_eq!(
             serde_json::from_str::<SlhDsaSha2128sSignature>(&json)
                 .unwrap()
                 .bytes,
-            signature.bytes
+            f.signature.bytes
         );
     }
 
@@ -662,12 +699,16 @@ mod tests {
     fn test_traits() {
         use crate::crypto::traits::{PublicKey as _, Signature as _};
 
-        let private_key = SlhDsaSha2128sPrivateKey::generate();
-        let signature = <SlhDsaSha2128sPrivateKey as Signer>::sign(&private_key, b"trait test");
-        let public_key = <SlhDsaSha2128sPrivateKey as Signer>::public_key(&private_key);
+        // Trait-object surface over the shared fixture: trait `sign` must
+        // reproduce the (deterministic) fixture signature, and trait
+        // `verify` must accept it. One sign + one verify total.
+        let f = fixture();
+        let signature = <SlhDsaSha2128sPrivateKey as Signer>::sign(&f.private_key, MESSAGE);
+        assert_eq!(signature.bytes, f.signature.bytes);
+        let public_key = <SlhDsaSha2128sPrivateKey as Signer>::public_key(&f.private_key);
+        assert_eq!(public_key, f.public_key);
         assert!(
-            <SlhDsaSha2128sPublicKey as Verifier>::verify(&public_key, b"trait test", &signature)
-                .is_ok()
+            <SlhDsaSha2128sPublicKey as Verifier>::verify(&public_key, MESSAGE, &signature).is_ok()
         );
         assert_eq!(SlhDsaSha2128sPublicKey::LENGTH, 32);
         assert_eq!(SlhDsaSha2128sSignature::LENGTH, 7856);
@@ -675,7 +716,7 @@ mod tests {
 
     #[test]
     fn test_private_key_debug_redacted() {
-        let private_key = SlhDsaSha2128sPrivateKey::generate();
+        let private_key = &fixture().private_key;
         let debug = format!("{private_key:?}");
         assert!(debug.contains("REDACTED"));
         assert!(!debug.contains(&private_key.to_hex()));
@@ -693,6 +734,14 @@ mod tests {
             private_key.public_key().to_hex(),
             "0x202122232425262728292a2b2c2d2e2f990ce6298792b128846a8e4a3a68954c"
         );
+    }
+
+    /// The cached expanded key must zeroize its seed material on drop (the
+    /// reason the `Zeroize` derive above may skip it).
+    #[test]
+    fn test_inner_key_zeroizes_on_drop() {
+        fn assert_zeroize_on_drop<T: zeroize::ZeroizeOnDrop>() {}
+        assert_zeroize_on_drop::<SlhSigningKey>();
     }
 
     /// HD derivation vectors ported from `aptos-ts-sdk`'s `hdKey.test.ts`

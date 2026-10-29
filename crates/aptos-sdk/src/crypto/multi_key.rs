@@ -1832,15 +1832,14 @@ mod tests {
     #[test]
     #[cfg(feature = "slh-dsa-sha2-128s")]
     fn test_slh_any_key_bcs_variant_indices_diverge() {
-        use crate::crypto::SlhDsaSha2128sPrivateKey;
-
-        let private_key = SlhDsaSha2128sPrivateKey::from_bytes(&[9u8; 48]).unwrap();
-        let pk = AnyPublicKey::slh_dsa_sha2_128s(&private_key.public_key());
+        // BCS framing only: reuse the shared SLH fixture, no fresh signing.
+        let f = crate::crypto::slh_dsa_sha2_128s::test_support::fixture();
+        let pk = AnyPublicKey::slh_dsa_sha2_128s(&f.public_key);
         let pk_bcs = pk.to_bcs_bytes();
         assert_eq!(pk_bcs[0], 5, "AnyPublicKey::SlhDsa_Sha2_128s variant");
         assert_eq!(AnyPublicKey::from_bcs_bytes(&pk_bcs).unwrap(), pk);
 
-        let sig = AnySignature::slh_dsa_sha2_128s(&private_key.sign(b"variant check"));
+        let sig = AnySignature::slh_dsa_sha2_128s(&f.signature);
         let sig_bcs = sig.to_bcs_bytes();
         assert_eq!(sig_bcs[0], 4, "AnySignature::SlhDsa_Sha2_128s variant");
         assert_eq!(&sig_bcs[1..3], &[0xB0, 0x3D], "ULEB128(7856)");
@@ -1850,35 +1849,42 @@ mod tests {
     #[test]
     #[cfg(feature = "slh-dsa-sha2-128s")]
     fn test_slh_any_public_key_verify() {
-        use crate::crypto::SlhDsaSha2128sPrivateKey;
-
-        let private_key = SlhDsaSha2128sPrivateKey::generate();
-        let pk = AnyPublicKey::slh_dsa_sha2_128s(&private_key.public_key());
-        let sig = AnySignature::slh_dsa_sha2_128s(&private_key.sign(b"multi-key slh"));
-        assert!(pk.verify(b"multi-key slh", &sig).is_ok());
+        // Reuses the shared fixture signature: 2 verifies, 0 signs/keygens.
+        let f = crate::crypto::slh_dsa_sha2_128s::test_support::fixture();
+        let pk = AnyPublicKey::slh_dsa_sha2_128s(&f.public_key);
+        let sig = AnySignature::slh_dsa_sha2_128s(&f.signature);
+        assert!(
+            pk.verify(
+                crate::crypto::slh_dsa_sha2_128s::test_support::MESSAGE,
+                &sig
+            )
+            .is_ok()
+        );
         assert!(pk.verify(b"wrong", &sig).is_err());
     }
 
     #[test]
     #[cfg(all(feature = "slh-dsa-sha2-128s", feature = "ed25519"))]
     fn test_multi_key_mixed_with_slh_sign_verify_and_roundtrip() {
-        use crate::crypto::{Ed25519PrivateKey, SlhDsaSha2128sPrivateKey};
+        use crate::crypto::Ed25519PrivateKey;
 
         let ed = Ed25519PrivateKey::generate();
-        let slh = SlhDsaSha2128sPrivateKey::generate();
+        // Reuse the shared SLH fixture (key + signature over the shared
+        // message) instead of a fresh SLH keygen+sign: 0 SLH signs here.
+        let f = crate::crypto::slh_dsa_sha2_128s::test_support::fixture();
         let multi_pk = MultiKeyPublicKey::new(
             vec![
                 AnyPublicKey::ed25519(&ed.public_key()),
-                AnyPublicKey::slh_dsa_sha2_128s(&slh.public_key()),
+                AnyPublicKey::slh_dsa_sha2_128s(&f.public_key),
             ],
             2,
         )
         .unwrap();
 
-        let message = b"mixed multi-key";
+        let message = crate::crypto::slh_dsa_sha2_128s::test_support::MESSAGE;
         let multi_sig = MultiKeySignature::new(vec![
             (0, AnySignature::ed25519(&ed.sign(message))),
-            (1, AnySignature::slh_dsa_sha2_128s(&slh.sign(message))),
+            (1, AnySignature::slh_dsa_sha2_128s(&f.signature)),
         ])
         .unwrap();
         assert!(multi_pk.verify(message, &multi_sig).is_ok());

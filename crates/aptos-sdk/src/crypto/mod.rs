@@ -75,7 +75,7 @@ mod secp256k1;
 #[cfg(feature = "secp256r1")]
 mod secp256r1;
 #[cfg(feature = "slh-dsa-sha2-128s")]
-mod slh_dsa_sha2_128s;
+pub(crate) mod slh_dsa_sha2_128s;
 
 // Re-export hash functions
 pub use hash::{HashFunction, sha2_256, sha3_256, sha3_256_of, signing_message};

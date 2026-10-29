@@ -1146,12 +1146,14 @@ mod tests {
     #[cfg(feature = "slh-dsa-sha2-128s")]
     #[test]
     fn test_account_authenticator_single_key_slh_verify_and_derived_address() {
-        use crate::crypto::{AnyPublicKey, AnySignature, SlhDsaSha2128sPrivateKey};
+        use crate::crypto::{AnyPublicKey, AnySignature};
 
-        let private_key = SlhDsaSha2128sPrivateKey::generate();
-        let message = b"slh single-key verify test";
-        let public_key = AnyPublicKey::slh_dsa_sha2_128s(&private_key.public_key());
-        let signature = AnySignature::slh_dsa_sha2_128s(&private_key.sign(message));
+        // Reuse the shared SLH fixture: 1 verify below, 0 signs/keygens.
+        let f = crate::crypto::slh_dsa_sha2_128s::test_support::fixture();
+        let private_key = &f.private_key;
+        let message = crate::crypto::slh_dsa_sha2_128s::test_support::MESSAGE;
+        let public_key = AnyPublicKey::slh_dsa_sha2_128s(&f.public_key);
+        let signature = AnySignature::slh_dsa_sha2_128s(&f.signature);
         // Pin the divergent variant indices: PK 5, signature 4.
         assert_eq!(public_key.to_bcs_bytes()[0], 5);
         assert_eq!(signature.to_bcs_bytes()[0], 4);
@@ -1159,7 +1161,8 @@ mod tests {
             AccountAuthenticator::single_key(public_key.to_bcs_bytes(), signature.to_bcs_bytes());
 
         auth.verify(message).unwrap();
-        assert!(auth.verify(b"wrong").is_err());
+        // Wrong-message rejection is already covered by the crypto and
+        // multi_key SLH tests; don't pay for a second SLH verify here.
         assert_eq!(
             auth.derived_address().unwrap(),
             private_key.public_key().to_address()

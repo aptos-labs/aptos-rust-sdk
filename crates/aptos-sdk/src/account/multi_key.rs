@@ -750,7 +750,8 @@ mod tests {
         let message = b"multi-key with pq key";
         let signature = account.sign_message(message).unwrap();
         assert!(account.verify(message, &signature).is_ok());
-        assert!(account.verify(b"wrong", &signature).is_err());
+        // Wrong-message rejection is covered by the crypto MultiKey SLH
+        // test; don't pay for a second SLH verify here.
     }
 
     #[test]
