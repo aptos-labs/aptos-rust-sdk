@@ -8,6 +8,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [unreleased]
 
 ### Security
+- Bumped `k256` / `p256` from 0.13 to 0.14 (pulling `elliptic-curve` 0.14,
+  `ecdsa` 0.17, and `crypto-bigint` 0.7), `rustls-webpki` to 0.103.16,
+  `webpki-root-certs` to 1.0.11, and `tokio` to 1.53.3, clearing
+  [RUSTSEC-2026-0387](https://rustsec.org/advisories/RUSTSEC-2026-0387)
+  (`crypto-bigint` 0.5 timing variability in constant-time operations),
+  [RUSTSEC-2026-0382](https://rustsec.org/advisories/RUSTSEC-2026-0382)
+  (`rustls-webpki` could accept distrusted intermediates),
+  [RUSTSEC-2026-0383](https://rustsec.org/advisories/RUSTSEC-2026-0383)
+  (`webpki-root-certs` bundled distrusted emSign intermediates), and
+  [RUSTSEC-2026-0386](https://rustsec.org/advisories/RUSTSEC-2026-0386)
+  (`tokio` `AsyncFd` I/O-safety unsoundness). These advisories were
+  pre-existing on `main`; the SDK's public API is unchanged, with the
+  secp256k1/secp256r1 internals adapted to the `ecdsa` 0.17 API
+  (`normalize_s` now returns the normalized signature, `to_sec1_point`
+  replaces `to_encoded_point`, and key generation uses the `Generate`
+  trait). `cargo audit` and `cargo deny check` are now clean.
 - Bumped `rustls` from 0.23.45 to 0.23.46, clearing
   [RUSTSEC-2026-0346](https://rustsec.org/advisories/RUSTSEC-2026-0346)
   (`Debug` impls for client session values could expose TLS secrets in logs),
