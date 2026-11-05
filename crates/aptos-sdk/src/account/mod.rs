@@ -18,6 +18,8 @@
 //!   envelope; the supported path for signing Aptos transactions with a P-256 key
 //!   (requires `secp256r1` feature)
 //! - [`MultiKeyAccount`] - M-of-N multi-signature account with mixed key types
+//! - [`SlhDsaSha2128sAccount`] - Single-key SLH-DSA-SHA2-128s post-quantum
+//!   account (requires `slh-dsa-sha2-128s` feature)
 //!
 //! # Ed25519 example
 //!
@@ -46,6 +48,8 @@ mod rotation;
 mod secp256k1;
 #[cfg(feature = "secp256r1")]
 mod secp256r1;
+#[cfg(feature = "slh-dsa-sha2-128s")]
+mod slh_dsa_sha2_128s;
 #[cfg(feature = "secp256r1")]
 mod webauthn;
 
@@ -63,5 +67,7 @@ pub use secp256k1::Secp256k1Account;
 #[cfg(feature = "secp256r1")]
 #[allow(deprecated)] // Re-exported for back-compat; the type itself is deprecated.
 pub use secp256r1::Secp256r1Account;
+#[cfg(feature = "slh-dsa-sha2-128s")]
+pub use slh_dsa_sha2_128s::SlhDsaSha2128sAccount;
 #[cfg(feature = "secp256r1")]
 pub use webauthn::{DEFAULT_WEBAUTHN_ORIGIN, DEFAULT_WEBAUTHN_RP_ID, WebAuthnAccount};

@@ -11,7 +11,7 @@ A user-friendly, idiomatic Rust SDK for the [Aptos](https://aptos.dev) blockchai
 ## Features
 
 - **Full Blockchain Interaction** &mdash; Connect, explore, and transact on the Aptos blockchain
-- **Multiple Signature Schemes** &mdash; Ed25519, Secp256k1, Secp256r1 (P-256), and BLS12-381
+- **Multiple Signature Schemes** &mdash; Ed25519, Secp256k1, Secp256r1 (P-256), BLS12-381, and SLH-DSA-SHA2-128s (post-quantum, opt-in)
 - **Transaction Building** &mdash; Fluent builder pattern for entry functions, scripts, and multi-agent transactions
 - **Account Management** &mdash; Single-key, multi-key, and multi-sig accounts
 - **Type-Safe Contract Bindings** &mdash; Proc macros for generating Rust bindings from Move ABIs
@@ -73,11 +73,12 @@ async fn main() -> anyhow::Result<()> {
 | `indexer` | Yes | GraphQL indexer client |
 | `faucet` | Yes | Faucet integration for testnets |
 | `bls` | &mdash; | BLS12-381 signatures |
+| `slh-dsa-sha2-128s` | &mdash; | SLH-DSA-SHA2-128s post-quantum signatures (AIP-137) |
 | `macros` | &mdash; | Procedural macros for type-safe contract bindings |
 | `cli` | &mdash; | Enables the `aptos-codegen` binary for Move ABI code generation |
 | `e2e` | &mdash; | Enables end-to-end tests against a live network (`ed25519,secp256k1,faucet`) |
 | `fuzzing` | &mdash; | Enables `proptest`/`arbitrary` property-testing infrastructure |
-| `full` | &mdash; | Enable all signature/account/API features (`ed25519,secp256k1,secp256r1,bls,indexer,faucet,mnemonic`) |
+| `full` | &mdash; | Enable all signature/account/API features (`ed25519,secp256k1,secp256r1,bls,slh-dsa-sha2-128s,indexer,faucet,mnemonic`) |
 
 ### Minimal Build
 

@@ -172,6 +172,21 @@ impl DerivationPath {
         })
     }
 
+    /// Builds the canonical Aptos SLH-DSA-SHA2-128s derivation path
+    /// `m/44'/637'/0'/0'/{address_index}'`.
+    ///
+    /// All five components are hardened: SLH-DSA has no key homomorphism, so
+    /// non-hardened derivation is impossible (matching the TypeScript SDK,
+    /// which rejects non-hardened paths for this scheme).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AptosError::KeyDerivation`] if `address_index >= 2^31`.
+    #[cfg(feature = "slh-dsa-sha2-128s")]
+    pub fn aptos_slh_dsa_sha2_128s(address_index: u32) -> AptosResult<Self> {
+        Self::aptos_ed25519(address_index)
+    }
+
     /// Parses a derivation path of the form `m/44'/637'/0'/0'/0'`.
     ///
     /// Apostrophes (`'`) and lowercase `h` are accepted as hardened markers.
@@ -452,6 +467,48 @@ impl Mnemonic {
         let key = crate::crypto::Secp256k1PrivateKey::from_bytes(&bytes);
         zeroize::Zeroize::zeroize(&mut bytes);
         key
+    }
+
+    /// Derives an SLH-DSA-SHA2-128s private key using the Aptos default path
+    /// `m/44'/637'/0'/0'/{address_index}'`, where `index` selects the 5th
+    /// (address) component.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if key derivation fails.
+    #[cfg(feature = "slh-dsa-sha2-128s")]
+    pub fn derive_slh_dsa_sha2_128s_key(
+        &self,
+        index: u32,
+    ) -> AptosResult<crate::crypto::SlhDsaSha2128sPrivateKey> {
+        self.derive_slh_dsa_sha2_128s_key_at_path(&DerivationPath::aptos_slh_dsa_sha2_128s(index)?)
+    }
+
+    /// Derives an SLH-DSA-SHA2-128s private key at a custom path.
+    ///
+    /// All components of `path` must be hardened (SLH-DSA admits no
+    /// non-hardened child derivation), matching the TypeScript SDK's
+    /// `fromDerivationPath`, which rejects non-hardened paths.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the path contains a non-hardened component or if
+    /// key derivation fails.
+    #[cfg(feature = "slh-dsa-sha2-128s")]
+    pub fn derive_slh_dsa_sha2_128s_key_at_path(
+        &self,
+        path: &DerivationPath,
+    ) -> AptosResult<crate::crypto::SlhDsaSha2128sPrivateKey> {
+        if !path.is_fully_hardened() {
+            return Err(AptosError::KeyDerivation(format!(
+                "SLH-DSA-SHA2-128s derivation requires every path component to be hardened; got {path}"
+            )));
+        }
+        let mut seed = self.to_seed()?;
+        let encoded: Vec<u32> = path.components().iter().map(|c| c.encoded()).collect();
+        let key = crate::crypto::SlhDsaSha2128sPrivateKey::from_seed_and_path(&seed, &encoded);
+        zeroize::Zeroize::zeroize(&mut seed);
+        Ok(key)
     }
 }
 
@@ -903,6 +960,36 @@ mod tests {
         assert_ne!(k0.to_bytes(), k1.to_bytes());
         assert_ne!(k0.to_bytes(), k_bitcoin.to_bytes());
         assert_ne!(k1.to_bytes(), k_bitcoin.to_bytes());
+    }
+
+    #[test]
+    #[cfg(feature = "slh-dsa-sha2-128s")]
+    fn test_derive_slh_dsa_sha2_128s_deterministic() {
+        let mnemonic = Mnemonic::from_phrase(TEST_PHRASE).unwrap();
+        let key1 = mnemonic.derive_slh_dsa_sha2_128s_key(0).unwrap();
+        let key2 = mnemonic.derive_slh_dsa_sha2_128s_key(0).unwrap();
+        assert_eq!(key1.to_bytes(), key2.to_bytes());
+        let key3 = mnemonic.derive_slh_dsa_sha2_128s_key(1).unwrap();
+        assert_ne!(key1.to_bytes(), key3.to_bytes());
+        // The SLIP-0010 seed string differs from Ed25519's, so the derived
+        // material must not coincide with the Ed25519 derivation.
+        assert_eq!(
+            DerivationPath::aptos_slh_dsa_sha2_128s(5)
+                .unwrap()
+                .to_string(),
+            "m/44'/637'/0'/0'/5'"
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "slh-dsa-sha2-128s")]
+    fn test_derive_slh_dsa_sha2_128s_rejects_unhardened() {
+        let mnemonic = Mnemonic::from_phrase(TEST_PHRASE).unwrap();
+        let path = DerivationPath::from_str("m/44'/637'/0'/0/0").unwrap();
+        let err = mnemonic
+            .derive_slh_dsa_sha2_128s_key_at_path(&path)
+            .unwrap_err();
+        assert!(matches!(err, AptosError::KeyDerivation(_)));
     }
 
     #[test]
