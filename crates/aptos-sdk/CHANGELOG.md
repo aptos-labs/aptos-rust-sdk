@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+## [0.8.1] - 2026-11-05
+
 ### Security
 - Bumped `k256` / `p256` from 0.13 to 0.14 (pulling `elliptic-curve` 0.14,
   `ecdsa` 0.17, and `crypto-bigint` 0.7), `rustls-webpki` to 0.103.16,
@@ -669,6 +671,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - This SDK is independent of `aptos-core` for faster compilation
 - Minimum Supported Rust Version (MSRV): 1.90
 
+[0.8.1]: https://github.com/aptos-labs/aptos-rust-sdk/releases/tag/sdk-v0.8.1
 [0.8.0]: https://github.com/aptos-labs/aptos-rust-sdk/releases/tag/sdk-v0.8.0
 [0.7.2]: https://github.com/aptos-labs/aptos-rust-sdk/releases/tag/sdk-v0.7.2
 [0.7.1]: https://github.com/aptos-labs/aptos-rust-sdk/releases/tag/sdk-v0.7.1
