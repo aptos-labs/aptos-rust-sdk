@@ -23,6 +23,7 @@ use p256::ecdsa::{
     signature::Verifier as P256Verifier,
     signature::hazmat::{PrehashSigner, PrehashVerifier},
 };
+use p256::elliptic_curve::Generate;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use zeroize::Zeroize;
@@ -48,7 +49,7 @@ pub struct Secp256r1PrivateKey {
 impl Secp256r1PrivateKey {
     /// Generates a new random Secp256r1 private key.
     pub fn generate() -> Self {
-        let signing_key = SigningKey::random(&mut rand::rngs::OsRng);
+        let signing_key = SigningKey::generate();
         Self { inner: signing_key }
     }
 
@@ -140,7 +141,7 @@ impl Secp256r1PrivateKey {
         let signature: P256Signature = self.inner.sign(message);
         // SECURITY: Normalize to low-S to match Aptos on-chain verification.
         // The p256 crate does not guarantee low-S output from signing.
-        let normalized = signature.normalize_s().unwrap_or(signature);
+        let normalized = signature.normalize_s();
         Secp256r1Signature { inner: normalized }
     }
 
@@ -169,7 +170,7 @@ impl Secp256r1PrivateKey {
             .sign_prehash(hash)
             .expect("32-byte digest is a valid ECDSA prehash");
         // SECURITY: Normalize to low-S to match Aptos on-chain verification.
-        let normalized = signature.normalize_s().unwrap_or(signature);
+        let normalized = signature.normalize_s();
         Secp256r1Signature { inner: normalized }
     }
 }
@@ -262,9 +263,7 @@ impl Secp256r1PublicKey {
 
     /// Returns the public key as compressed bytes (33 bytes).
     pub fn to_bytes(&self) -> Vec<u8> {
-        #[allow(unused_imports)]
-        use p256::elliptic_curve::sec1::ToEncodedPoint;
-        self.inner.to_encoded_point(true).as_bytes().to_vec()
+        self.inner.to_sec1_point(true).as_bytes().to_vec()
     }
 
     /// Returns the public key in SEC1 uncompressed encoding (65 bytes, leading 0x04 marker).
@@ -273,9 +272,7 @@ impl Secp256r1PublicKey {
     /// coordinates with the 0x04 marker dropped); see [`Self::to_raw_bytes`].
     /// This method is retained for callers that need the SEC1 form.
     pub fn to_uncompressed_bytes(&self) -> Vec<u8> {
-        #[allow(unused_imports)]
-        use p256::elliptic_curve::sec1::ToEncodedPoint;
-        self.inner.to_encoded_point(false).as_bytes().to_vec()
+        self.inner.to_sec1_point(false).as_bytes().to_vec()
     }
 
     /// Returns the public key as the raw 64 bytes of the `X || Y` affine
@@ -319,7 +316,7 @@ impl Secp256r1PublicKey {
     /// a high-S value, is invalid, or does not match the message.
     pub fn verify(&self, message: &[u8], signature: &Secp256r1Signature) -> AptosResult<()> {
         // SECURITY: Reject high-S signatures (matches aptos-core behavior)
-        if signature.inner.normalize_s().is_some() {
+        if signature.inner.normalize_s() != signature.inner {
             return Err(AptosError::SignatureVerificationFailed);
         }
         // `Verifier::verify` SHA-256s the message internally, mirroring how
@@ -346,7 +343,7 @@ impl Secp256r1PublicKey {
         signature: &Secp256r1Signature,
     ) -> AptosResult<()> {
         // SECURITY: Reject high-S signatures (matches aptos-core behavior)
-        if signature.inner.normalize_s().is_some() {
+        if signature.inner.normalize_s() != signature.inner {
             return Err(AptosError::SignatureVerificationFailed);
         }
         // Verify against the digest directly via `verify_prehash`; the ordinary
@@ -471,8 +468,8 @@ impl Secp256r1Signature {
             .map_err(|e| AptosError::InvalidSignature(e.to_string()))?;
         // SECURITY: Reject high-S signatures. Aptos on-chain verification only
         // accepts low-S (canonical) signatures to prevent malleability.
-        // normalize_s() returns Some(_) if the signature was high-S.
-        if signature.normalize_s().is_some() {
+        // normalize_s() changes the signature iff it was high-S.
+        if signature.normalize_s() != signature {
             return Err(AptosError::InvalidSignature(
                 "high-S signature rejected: Aptos requires low-S (canonical) ECDSA signatures"
                     .into(),
@@ -710,9 +707,9 @@ mod tests {
         let (r, s) = low_s_sig.split_scalars();
         let neg_s = s.neg();
         let high_s_sig = P256Signature::from_scalars(r, neg_s).unwrap();
-        // Confirm it really is high-S (normalize_s returns Some for high-S)
+        // Confirm it really is high-S (normalize_s changes high-S signatures)
         assert!(
-            high_s_sig.normalize_s().is_some(),
+            high_s_sig.normalize_s() != high_s_sig,
             "constructed signature should be high-S"
         );
         let high_s_bytes = high_s_sig.to_bytes();
@@ -741,9 +738,9 @@ mod tests {
         for _ in 0..20 {
             let private_key = Secp256r1PrivateKey::generate();
             let signature = private_key.sign(b"test low-s");
-            // normalize_s returns None if already low-S
+            // normalize_s leaves already low-S signatures unchanged
             assert!(
-                signature.inner.normalize_s().is_none(),
+                signature.inner.normalize_s() == signature.inner,
                 "signing must always produce low-S signatures"
             );
         }
