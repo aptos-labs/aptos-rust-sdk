@@ -45,9 +45,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - `AnsClient::new` on testnet now targets the redeployed ANS `router` at
   `0xb1ae61606dfbe0ea5b5c45ffdb4fb08da0dba18c5125182ff63ab280a450ecf4`. The
-  previous router
-  (`0x5f8fd2347449685cf41d4db97926ec3a096eaf381332be4f1318ad4d16a8497c`) was
-  wiped in the testnet reset, so testnet reads failed with
+  previous testnet router was wiped in the testnet reset, so testnet reads
+  failed with
   `API error (400): Linker Error: Module <old router>::router doesn't exist`,
   `get_expiration` returned `Ok(None)` for every name, and transactions built
   from the `*_payload` helpers targeted a module that no longer exists. On
