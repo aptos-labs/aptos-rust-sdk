@@ -27,6 +27,10 @@ homepage = "https://aptoslabs.com"
 license = "Apache-2.0"
 publish = false
 repository = "https://github.com/aptos-labs/aptos-rust-sdk"
+# MSRV for downstream consumers. Deliberately lower than the pinned
+# development toolchain in rust-toolchain.toml (1.99.1, matching
+# aptos-labs/aptos-core, whose workspace rust-version is also 1.95):
+# contributors build/test with 1.99.1, the MSRV CI job verifies 1.95.
 rust-version = "1.95.0"
 
 # Centralised lint configuration. Member crates inherit this block via
@@ -96,6 +100,12 @@ unused_async = "allow"
 # state. None of them are awaited in hot paths so the size warning is
 # noise.
 large_futures = "allow"
+# New in Clippy 1.99 (the aptos-core-matched toolchain): fires on
+# `assert!(x.is_empty())` / `assert!(!x.is_empty())` in tests and suggests
+# `assert_eq!(x, [] as [T; 0])`, which is less readable than `is_empty()`
+# and type-dependent (Vec vs String vs slice). Test asserts on emptiness
+# are idiomatic as-is; the length is not useful failure context here.
+assert_is_empty = "allow"
 
 [workspace.dependencies]
 # Internal crate dependencies.

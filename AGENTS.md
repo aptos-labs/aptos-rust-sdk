@@ -236,10 +236,14 @@ point:
 
 ## Rust Toolchain
 
-- **Version**: 1.95+ (specified in both `rust-toolchain.toml` and the
-  workspace `rust-version` field in the root `Cargo.toml`). The MSRV
-  CI job pins to exactly this version, so accidentally using a feature
-  that lands in a later stable release will fail CI.
+- **Development toolchain**: 1.99.1 (pinned in `rust-toolchain.toml`,
+  matching `aptos-labs/aptos-core`). Every CI job except MSRV follows
+  this pin (directly, or via `stable`/`nightly` where noted).
+- **MSRV**: 1.95 (the workspace `rust-version` field in the root
+  `Cargo.toml`, also aptos-core's `rust-version`). The MSRV CI job pins
+  to exactly 1.95, so accidentally using a feature that lands in a
+  later stable release will fail CI. Do not raise `rust-version` when
+  bumping the toolchain unless the change is explicitly an MSRV bump.
 - **Edition**: 2024 with `resolver = "3"` (the recommended resolver for
   edition-2024 packages; tightens `--no-default-features` unification).
 - **Components**: cargo, clippy, rustfmt, rustc, rust-docs, rust-std.
