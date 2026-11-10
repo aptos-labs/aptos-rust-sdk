@@ -83,7 +83,7 @@ jobs:
 
       - uses: ./.github/actions/setup-rust
         with:
-          toolchain: "1.95"
+          toolchain: "1.99.1"
           components: clippy, rustfmt
 
       - name: Check formatting
@@ -117,7 +117,7 @@ jobs:
 
       - uses: ./.github/actions/setup-rust
         with:
-          toolchain: "1.95"
+          toolchain: "1.99.1"
 
       # --no-verify: The aptos-sdk dev-dependency is path-only (dropped from the
       # published crate to break the circular publish dependency), so the
@@ -152,7 +152,7 @@ jobs:
 
       - uses: ./.github/actions/setup-rust
         with:
-          toolchain: "1.95"
+          toolchain: "1.99.1"
 
       # If macros was just published, poll crates.io until it's indexed
       - name: Wait for crates.io to index aptos-sdk-macros

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+### Changed
+- Development toolchain pinned to Rust 1.99.1 (in `rust-toolchain.toml`
+  and every toolchain-following CI/release/e2e job), matching
+  `aptos-labs/aptos-core`. The MSRV is unchanged at Rust 1.95
+  (workspace `rust-version`, verified by the MSRV CI job, which stays
+  pinned to 1.95), so downstream consumers on Rust 1.95+ are
+  unaffected; contributors will pick up 1.99.1 automatically via
+  rustup on their next build.
+
 ## [0.8.1] - 2026-11-05
 
 ### Security
