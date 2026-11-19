@@ -23,7 +23,7 @@ jobs:
 
       - uses: ./.github/actions/setup-rust
         with:
-          toolchain: "1.95"
+          toolchain: "1.99.1"
           components: rustfmt
           cache: 'false'
 
@@ -42,7 +42,7 @@ jobs:
 
       - uses: ./.github/actions/setup-rust
         with:
-          toolchain: "1.95"
+          toolchain: "1.99.1"
           components: clippy
 
       - name: Run Clippy (default features)
@@ -73,9 +73,9 @@ jobs:
       - uses: ./.github/actions/setup-rust
         with:
           # `macos-latest` + rust-cache has intermittently restored a broken `cargo`
-          # shim (rustup-init with "unexpected argument 'build'"). Match MSRV and
-          # skip cache there; other OSes keep stable + cache.
-          toolchain: ${{ matrix.os == 'macos-latest' && '1.95' || matrix.rust }}
+          # shim (rustup-init with "unexpected argument 'build'"). Match
+          # rust-toolchain.toml and skip cache there; other OSes keep stable + cache.
+          toolchain: ${{ matrix.os == 'macos-latest' && '1.99.1' || matrix.rust }}
           cache: ${{ matrix.os == 'macos-latest' && 'false' || 'true' }}
 
       - name: Build
@@ -123,10 +123,10 @@ jobs:
 
       - uses: ./.github/actions/setup-rust
         with:
-          # Match rust-toolchain.toml / MSRV jobs. `stable` on this runner has
+          # Match rust-toolchain.toml. `stable` on this runner has
           # intermittently left a broken `cargo` shim (invoking rustup-init with
           # "build"), especially after rust-cache restores a mismatched tree.
-          toolchain: "1.95"
+          toolchain: "1.99.1"
           cache: "false"
 
       - name: Build
@@ -183,7 +183,7 @@ jobs:
 
       - uses: ./.github/actions/setup-rust
         with:
-          toolchain: "1.95"
+          toolchain: "1.99.1"
 
       - name: Test with only ed25519
         run: cargo test -p aptos-sdk --no-default-features --features ed25519 --locked
@@ -221,7 +221,7 @@ jobs:
 
       - uses: ./.github/actions/setup-rust
         with:
-          toolchain: "1.95"
+          toolchain: "1.99.1"
 
       - name: Run doctests (default features)
         run: cargo test --workspace --doc --locked
@@ -241,7 +241,7 @@ jobs:
 
       - uses: ./.github/actions/setup-rust
         with:
-          toolchain: "1.95"
+          toolchain: "1.99.1"
 
       - name: Run aptos-sdk-macros tests
         run: cargo test -p aptos-sdk-macros --all-targets --locked
@@ -258,7 +258,7 @@ jobs:
 
       - uses: ./.github/actions/setup-rust
         with:
-          toolchain: "1.95"
+          toolchain: "1.99.1"
           targets: wasm32-unknown-unknown
 
       - name: Build aptos-sdk for wasm32-unknown-unknown
@@ -361,8 +361,11 @@ jobs:
 
       - uses: ./.github/actions/setup-rust
         with:
+          # MSRV (workspace `rust-version` in the root Cargo.toml), not the
+          # pinned development toolchain in rust-toolchain.toml. Keep at 1.95
+          # even though every other job follows the toolchain (1.99.1).
           toolchain: "1.95"
-          
+
       - name: Check MSRV
         run: cargo check --workspace --all-features --locked
 
@@ -378,7 +381,7 @@ jobs:
 
       - uses: ./.github/actions/setup-rust
         with:
-          toolchain: "1.95"
+          toolchain: "1.99.1"
 
       - name: Install cargo-tarpaulin
         run: cargo install --locked cargo-tarpaulin
@@ -410,12 +413,13 @@ jobs:
 
       - uses: ./.github/actions/setup-rust
         with:
-          toolchain: "1.95"
+          toolchain: "1.99.1"
           cache: 'false'
 
-      # `--locked` is required: an unlocked `cargo install cargo-audit` resolved
-      # kstring 2.0.4 (rustc 1.96+) and failed this repo's MSRV 1.95, turning
-      # the 2026-08-04 main CI red. Keep flags in sync with security.yml.
+      # `--locked` is required for reproducibility: an unlocked
+      # `cargo install cargo-audit` resolved kstring 2.0.4 (rustc 1.96+) and
+      # failed when this job ran on the old 1.95 toolchain, turning the
+      # 2026-08-04 main CI red. Keep flags in sync with security.yml.
       - name: Install cargo-audit
         run: cargo install cargo-audit --locked
 

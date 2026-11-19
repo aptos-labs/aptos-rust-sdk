@@ -3,7 +3,7 @@
 [![CI](https://github.com/aptos-labs/aptos-rust-sdk/actions/workflows/ci.yml/badge.svg)](https://github.com/aptos-labs/aptos-rust-sdk/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/aptos-labs/aptos-rust-sdk/graph/badge.svg)](https://codecov.io/gh/aptos-labs/aptos-rust-sdk)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![Rust](https://img.shields.io/badge/rust-1.95%2B-orange.svg)](rust-toolchain.toml)
+[![Rust](https://img.shields.io/badge/rust-1.95%2B%20MSRV-orange.svg)](rust-toolchain.toml)
 [![API Docs](https://img.shields.io/badge/docs-aptos--labs.github.io-blue)](https://aptos-labs.github.io/aptos-rust-sdk/aptos_sdk/index.html)
 
 A user-friendly, idiomatic Rust SDK for the [Aptos](https://aptos.dev) blockchain with feature parity to the [TypeScript SDK](https://github.com/aptos-labs/aptos-ts-sdk).
@@ -27,7 +27,7 @@ A user-friendly, idiomatic Rust SDK for the [Aptos](https://aptos.dev) blockchai
 
 ## Prerequisites
 
-- **Rust** 1.95+ (pinned in [`rust-toolchain.toml`](rust-toolchain.toml))
+- **Rust** 1.95+ (MSRV; development is pinned to Rust 1.99.1 in [`rust-toolchain.toml`](rust-toolchain.toml), matching [aptos-core](https://github.com/aptos-labs/aptos-core))
 - An Aptos fullnode REST endpoint (mainnet / testnet / devnet / localnet)
 
 ## Quick Start
