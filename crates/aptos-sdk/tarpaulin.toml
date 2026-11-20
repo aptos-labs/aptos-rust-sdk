@@ -22,6 +22,10 @@ output-dir = "target/coverage"
 # Full features profile - unit tests with all features
 [full]
 features = "full"
+# SLH-DSA-SHA2-128s signing takes seconds in a debug build and much
+# longer under tarpaulin instrumentation; the default 60s per-test
+# timeout is too short for the (fixture-shared, minimized) SLH tests.
+timeout = "300s"
 skip-clean = true
 verbose = false
 output-dir = "target/coverage"
@@ -52,6 +56,7 @@ timeout = "300s"
 # CI profile - for GitHub Actions (no E2E)
 [ci]
 features = "full"
+timeout = "300s"
 skip-clean = true
 verbose = false
 output-dir = "target/coverage"

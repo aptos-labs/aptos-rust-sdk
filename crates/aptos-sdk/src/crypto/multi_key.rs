@@ -18,6 +18,9 @@ const _: () = assert!(MAX_NUM_OF_KEYS <= u8::MAX as usize);
 pub const MIN_THRESHOLD: u8 = 1;
 
 /// Supported signature schemes for multi-key.
+///
+/// Variant indices must match the on-chain `AnyPublicKey` enum in
+/// `aptos-core` (`types/src/transaction/authenticator.rs`) exactly.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum AnyPublicKeyVariant {
@@ -29,6 +32,10 @@ pub enum AnyPublicKeyVariant {
     Secp256r1 = 2,
     /// Keyless public key.
     Keyless = 3,
+    /// Federated keyless public key.
+    FederatedKeyless = 4,
+    /// SLH-DSA-SHA2-128s (post-quantum) public key.
+    SlhDsaSha2_128s = 5,
 }
 
 impl AnyPublicKeyVariant {
@@ -36,13 +43,15 @@ impl AnyPublicKeyVariant {
     ///
     /// # Errors
     ///
-    /// Returns [`AptosError::InvalidPublicKey`] if the byte value is not a valid variant (0-3).
+    /// Returns [`AptosError::InvalidPublicKey`] if the byte value is not a valid variant (0-5).
     pub fn from_byte(byte: u8) -> AptosResult<Self> {
         match byte {
             0 => Ok(Self::Ed25519),
             1 => Ok(Self::Secp256k1),
             2 => Ok(Self::Secp256r1),
             3 => Ok(Self::Keyless),
+            4 => Ok(Self::FederatedKeyless),
+            5 => Ok(Self::SlhDsaSha2_128s),
             _ => Err(AptosError::InvalidPublicKey(format!(
                 "unknown public key variant: {byte}"
             ))),
@@ -52,6 +61,68 @@ impl AnyPublicKeyVariant {
     /// Get the byte representation.
     pub fn as_byte(&self) -> u8 {
         *self as u8
+    }
+}
+
+/// Signature-scheme variants for [`AnySignature`].
+///
+/// These indices match the on-chain `AnySignature` enum, which is a
+/// **different** enum from `AnyPublicKey`: variant 2 is `WebAuthn` (the SDK
+/// uses the `Secp256r1` name for the bare-signature shape it has historically
+/// carried under that tag), and SLH-DSA-SHA2-128s is variant **4** here while
+/// it is variant **5** in [`AnyPublicKeyVariant`]. Keeping the two enums
+/// distinct is what makes the SLH-DSA wire format representable.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[repr(u8)]
+pub enum AnySignatureVariant {
+    /// Ed25519 signature.
+    Ed25519 = 0,
+    /// Secp256k1 ECDSA signature.
+    Secp256k1 = 1,
+    /// Secp256r1 ECDSA signature (on-chain: the `WebAuthn` variant tag).
+    Secp256r1 = 2,
+    /// Keyless signature.
+    Keyless = 3,
+    /// SLH-DSA-SHA2-128s (post-quantum) signature.
+    SlhDsaSha2_128s = 4,
+}
+
+impl AnySignatureVariant {
+    /// Get the variant from a byte.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`AptosError::InvalidSignature`] if the byte value is not a valid variant (0-4).
+    pub fn from_byte(byte: u8) -> AptosResult<Self> {
+        match byte {
+            0 => Ok(Self::Ed25519),
+            1 => Ok(Self::Secp256k1),
+            2 => Ok(Self::Secp256r1),
+            3 => Ok(Self::Keyless),
+            4 => Ok(Self::SlhDsaSha2_128s),
+            _ => Err(AptosError::InvalidSignature(format!(
+                "unknown signature variant: {byte}"
+            ))),
+        }
+    }
+
+    /// Get the byte representation.
+    pub fn as_byte(&self) -> u8 {
+        *self as u8
+    }
+
+    /// The public-key variant a signature of this variant pairs with, if the
+    /// pairing is one-to-one. `Keyless` signatures also pair with
+    /// `FederatedKeyless` public keys on-chain; callers needing that pairing
+    /// must special-case it (as [`AnyPublicKey::verify`] does).
+    pub fn public_key_variant(&self) -> AnyPublicKeyVariant {
+        match self {
+            Self::Ed25519 => AnyPublicKeyVariant::Ed25519,
+            Self::Secp256k1 => AnyPublicKeyVariant::Secp256k1,
+            Self::Secp256r1 => AnyPublicKeyVariant::Secp256r1,
+            Self::Keyless => AnyPublicKeyVariant::Keyless,
+            Self::SlhDsaSha2_128s => AnyPublicKeyVariant::SlhDsaSha2_128s,
+        }
     }
 }
 
@@ -99,6 +170,15 @@ impl AnyPublicKey {
         Self {
             variant: AnyPublicKeyVariant::Secp256r1,
             bytes: public_key.to_uncompressed_bytes(),
+        }
+    }
+
+    /// Creates an SLH-DSA-SHA2-128s public key (32 raw bytes).
+    #[cfg(feature = "slh-dsa-sha2-128s")]
+    pub fn slh_dsa_sha2_128s(public_key: &crate::crypto::SlhDsaSha2128sPublicKey) -> Self {
+        Self {
+            variant: AnyPublicKeyVariant::SlhDsaSha2_128s,
+            bytes: public_key.to_bytes().to_vec(),
         }
     }
 
@@ -161,7 +241,13 @@ impl AnyPublicKey {
     /// - Verification is not supported for the variant
     #[allow(unused_variables)]
     pub fn verify(&self, message: &[u8], signature: &AnySignature) -> AptosResult<()> {
-        if signature.variant != self.variant {
+        // `AnyPublicKey` and `AnySignature` are different on-chain enums, so
+        // compare through the signature variant's paired public-key variant.
+        // Keyless signatures additionally pair with FederatedKeyless keys.
+        let paired = signature.variant.public_key_variant();
+        let keyless_federated = self.variant == AnyPublicKeyVariant::FederatedKeyless
+            && signature.variant == AnySignatureVariant::Keyless;
+        if paired != self.variant && !keyless_federated {
             return Err(AptosError::InvalidSignature(format!(
                 "signature variant {:?} doesn't match public key variant {:?}",
                 signature.variant, self.variant
@@ -187,6 +273,12 @@ impl AnyPublicKey {
                 // Public key can be either compressed (33 bytes) or uncompressed (65 bytes)
                 let pk = crate::crypto::Secp256r1PublicKey::from_bytes(&self.bytes)?;
                 let sig = crate::crypto::Secp256r1Signature::from_bytes(&signature.bytes)?;
+                pk.verify(message, &sig)
+            }
+            #[cfg(feature = "slh-dsa-sha2-128s")]
+            AnyPublicKeyVariant::SlhDsaSha2_128s => {
+                let pk = crate::crypto::SlhDsaSha2128sPublicKey::from_bytes(&self.bytes)?;
+                let sig = crate::crypto::SlhDsaSha2128sSignature::from_bytes(&signature.bytes)?;
                 pk.verify(message, &sig)
             }
             #[allow(unreachable_patterns)]
@@ -224,14 +316,14 @@ impl fmt::Display for AnyPublicKey {
 #[derive(Clone, PartialEq, Eq)]
 pub struct AnySignature {
     /// The signature scheme variant.
-    pub variant: AnyPublicKeyVariant,
+    pub variant: AnySignatureVariant,
     /// The raw signature bytes.
     pub bytes: Vec<u8>,
 }
 
 impl AnySignature {
     /// Creates a new `AnySignature`.
-    pub fn new(variant: AnyPublicKeyVariant, bytes: Vec<u8>) -> Self {
+    pub fn new(variant: AnySignatureVariant, bytes: Vec<u8>) -> Self {
         Self { variant, bytes }
     }
 
@@ -239,7 +331,7 @@ impl AnySignature {
     #[cfg(feature = "ed25519")]
     pub fn ed25519(signature: &crate::crypto::Ed25519Signature) -> Self {
         Self {
-            variant: AnyPublicKeyVariant::Ed25519,
+            variant: AnySignatureVariant::Ed25519,
             bytes: signature.to_bytes().to_vec(),
         }
     }
@@ -248,7 +340,7 @@ impl AnySignature {
     #[cfg(feature = "secp256k1")]
     pub fn secp256k1(signature: &crate::crypto::Secp256k1Signature) -> Self {
         Self {
-            variant: AnyPublicKeyVariant::Secp256k1,
+            variant: AnySignatureVariant::Secp256k1,
             bytes: signature.to_bytes().to_vec(),
         }
     }
@@ -257,8 +349,17 @@ impl AnySignature {
     #[cfg(feature = "secp256r1")]
     pub fn secp256r1(signature: &crate::crypto::Secp256r1Signature) -> Self {
         Self {
-            variant: AnyPublicKeyVariant::Secp256r1,
+            variant: AnySignatureVariant::Secp256r1,
             bytes: signature.to_bytes().to_vec(),
+        }
+    }
+
+    /// Creates an SLH-DSA-SHA2-128s signature (7,856 raw bytes).
+    #[cfg(feature = "slh-dsa-sha2-128s")]
+    pub fn slh_dsa_sha2_128s(signature: &crate::crypto::SlhDsaSha2128sSignature) -> Self {
+        Self {
+            variant: AnySignatureVariant::SlhDsaSha2_128s,
+            bytes: signature.to_bytes(),
         }
     }
 
@@ -273,7 +374,7 @@ impl AnySignature {
     /// For that shape we serialize as `0x02 || payload` to match the chain and
     /// [`crate::account::WebAuthnAccount`].
     pub fn to_bcs_bytes(&self) -> Vec<u8> {
-        if self.variant == AnyPublicKeyVariant::Secp256r1 && self.bytes.len() != 64 {
+        if self.variant == AnySignatureVariant::Secp256r1 && self.bytes.len() != 64 {
             let mut result = Vec::with_capacity(1 + self.bytes.len());
             result.push(self.variant.as_byte());
             result.extend_from_slice(&self.bytes);
@@ -311,10 +412,10 @@ impl AnySignature {
                 "AnySignature BCS empty".into(),
             ));
         }
-        let variant = AnyPublicKeyVariant::from_byte(bytes[0]).map_err(|e| {
+        let variant = AnySignatureVariant::from_byte(bytes[0]).map_err(|e| {
             AptosError::InvalidSignature(format!("AnySignature BCS bad variant: {e}"))
         })?;
-        if variant == AnyPublicKeyVariant::Secp256r1 && bytes.len() > 1 && bytes[1] == 0x00 {
+        if variant == AnySignatureVariant::Secp256r1 && bytes.len() > 1 && bytes[1] == 0x00 {
             return Ok(Self::new(variant, bytes[1..].to_vec()));
         }
         let (len, len_bytes) = uleb128_decode(&bytes[1..]).ok_or_else(|| {
@@ -757,9 +858,9 @@ impl MultiKeySignature {
     /// - Any signature variant byte is invalid
     /// - Any signature length or data is invalid
     pub fn from_bytes(bytes: &[u8]) -> AptosResult<Self> {
-        // SECURITY: Limit individual signature size to prevent DoS via large allocations
-        // Largest supported signature is ~72 bytes for ECDSA DER format
-        const MAX_SIGNATURE_SIZE: usize = 128;
+        // SECURITY: Limit individual signature size to prevent DoS via large allocations.
+        // Largest supported signature is SLH-DSA-SHA2-128s at 7,856 bytes.
+        const MAX_SIGNATURE_SIZE: usize = 7856;
 
         // Wire layout (matches `to_bytes`):
         //   ULEB128(num_sigs) || sigs... || ULEB128(4) || 4 bitmap bytes
@@ -818,7 +919,7 @@ impl MultiKeySignature {
                 return Err(AptosError::InvalidSignature("bytes too short".into()));
             }
 
-            let variant = AnyPublicKeyVariant::from_byte(bytes[offset])?;
+            let variant = AnySignatureVariant::from_byte(bytes[offset])?;
             offset += 1;
 
             // Decode ULEB128 length
@@ -888,7 +989,15 @@ mod tests {
             AnyPublicKeyVariant::from_byte(3).unwrap(),
             AnyPublicKeyVariant::Keyless
         );
-        assert!(AnyPublicKeyVariant::from_byte(4).is_err());
+        assert_eq!(
+            AnyPublicKeyVariant::from_byte(4).unwrap(),
+            AnyPublicKeyVariant::FederatedKeyless
+        );
+        assert_eq!(
+            AnyPublicKeyVariant::from_byte(5).unwrap(),
+            AnyPublicKeyVariant::SlhDsaSha2_128s
+        );
+        assert!(AnyPublicKeyVariant::from_byte(6).is_err());
         assert!(AnyPublicKeyVariant::from_byte(255).is_err());
     }
 
@@ -898,6 +1007,15 @@ mod tests {
         assert_eq!(AnyPublicKeyVariant::Secp256k1.as_byte(), 1);
         assert_eq!(AnyPublicKeyVariant::Secp256r1.as_byte(), 2);
         assert_eq!(AnyPublicKeyVariant::Keyless.as_byte(), 3);
+        assert_eq!(AnyPublicKeyVariant::FederatedKeyless.as_byte(), 4);
+        assert_eq!(AnyPublicKeyVariant::SlhDsaSha2_128s.as_byte(), 5);
+        // AnySignature is a different on-chain enum: SLH-DSA is variant 4 there.
+        assert_eq!(AnySignatureVariant::SlhDsaSha2_128s.as_byte(), 4);
+        assert_eq!(
+            AnySignatureVariant::SlhDsaSha2_128s.public_key_variant(),
+            AnyPublicKeyVariant::SlhDsaSha2_128s
+        );
+        assert!(AnySignatureVariant::from_byte(5).is_err());
     }
 
     #[test]
@@ -930,14 +1048,14 @@ mod tests {
 
     #[test]
     fn test_any_signature_new() {
-        let sig = AnySignature::new(AnyPublicKeyVariant::Ed25519, vec![0xcc; 64]);
-        assert_eq!(sig.variant, AnyPublicKeyVariant::Ed25519);
+        let sig = AnySignature::new(AnySignatureVariant::Ed25519, vec![0xcc; 64]);
+        assert_eq!(sig.variant, AnySignatureVariant::Ed25519);
         assert_eq!(sig.bytes.len(), 64);
     }
 
     #[test]
     fn test_any_signature_to_bcs_bytes() {
-        let sig = AnySignature::new(AnyPublicKeyVariant::Ed25519, vec![0xdd; 64]);
+        let sig = AnySignature::new(AnySignatureVariant::Ed25519, vec![0xdd; 64]);
         let bcs = sig.to_bcs_bytes();
 
         // Format: variant_byte || ULEB128(length) || bytes
@@ -953,7 +1071,7 @@ mod tests {
         let mut wire = vec![0x02, 0x40];
         wire.extend_from_slice(&inner);
         let sig = AnySignature::from_bcs_bytes(&wire).expect("parse bare Secp256r1");
-        assert_eq!(sig.variant, AnyPublicKeyVariant::Secp256r1);
+        assert_eq!(sig.variant, AnySignatureVariant::Secp256r1);
         assert_eq!(sig.bytes, inner);
         assert_eq!(sig.to_bcs_bytes(), wire);
     }
@@ -967,14 +1085,14 @@ mod tests {
         let mut wire = vec![0x02];
         wire.extend_from_slice(&paar);
         let sig = AnySignature::from_bcs_bytes(&wire).expect("parse WebAuthn-style");
-        assert_eq!(sig.variant, AnyPublicKeyVariant::Secp256r1);
+        assert_eq!(sig.variant, AnySignatureVariant::Secp256r1);
         assert_eq!(sig.bytes, paar);
         assert_eq!(sig.to_bcs_bytes(), wire);
     }
 
     #[test]
     fn test_any_signature_debug() {
-        let sig = AnySignature::new(AnyPublicKeyVariant::Secp256r1, vec![0xee; 64]);
+        let sig = AnySignature::new(AnySignatureVariant::Secp256r1, vec![0xee; 64]);
         let debug = format!("{sig:?}");
         assert!(debug.contains("Secp256r1"));
         assert!(debug.contains("64 bytes"));
@@ -983,7 +1101,7 @@ mod tests {
     #[test]
     fn test_any_public_key_verify_mismatched_variant() {
         let pk = AnyPublicKey::new(AnyPublicKeyVariant::Ed25519, vec![0; 32]);
-        let sig = AnySignature::new(AnyPublicKeyVariant::Secp256k1, vec![0; 64]);
+        let sig = AnySignature::new(AnySignatureVariant::Secp256k1, vec![0; 64]);
 
         let result = pk.verify(b"message", &sig);
         assert!(result.is_err());
@@ -999,8 +1117,8 @@ mod tests {
 
     #[test]
     fn test_multi_key_signature_duplicate_indices() {
-        let sig1 = AnySignature::new(AnyPublicKeyVariant::Ed25519, vec![0; 64]);
-        let sig2 = AnySignature::new(AnyPublicKeyVariant::Ed25519, vec![1; 64]);
+        let sig1 = AnySignature::new(AnySignatureVariant::Ed25519, vec![0; 64]);
+        let sig2 = AnySignature::new(AnySignatureVariant::Ed25519, vec![1; 64]);
 
         // Duplicate index should fail
         let result = MultiKeySignature::new(vec![(0, sig1.clone()), (0, sig2)]);
@@ -1009,7 +1127,7 @@ mod tests {
 
     #[test]
     fn test_multi_key_signature_index_out_of_range() {
-        let sig = AnySignature::new(AnyPublicKeyVariant::Ed25519, vec![0; 64]);
+        let sig = AnySignature::new(AnySignatureVariant::Ed25519, vec![0; 64]);
 
         // Index 32 is out of range (0-31)
         let result = MultiKeySignature::new(vec![(32, sig)]);
@@ -1018,8 +1136,8 @@ mod tests {
 
     #[test]
     fn test_multi_key_signature_basic() {
-        let sig1 = AnySignature::new(AnyPublicKeyVariant::Ed25519, vec![0xaa; 64]);
-        let sig2 = AnySignature::new(AnyPublicKeyVariant::Ed25519, vec![0xbb; 64]);
+        let sig1 = AnySignature::new(AnySignatureVariant::Ed25519, vec![0xaa; 64]);
+        let sig2 = AnySignature::new(AnySignatureVariant::Ed25519, vec![0xbb; 64]);
 
         let multi_sig = MultiKeySignature::new(vec![(0, sig1), (5, sig2)]).unwrap();
 
@@ -1031,7 +1149,7 @@ mod tests {
 
     #[test]
     fn test_multi_key_signature_debug_display() {
-        let sig = AnySignature::new(AnyPublicKeyVariant::Ed25519, vec![0; 64]);
+        let sig = AnySignature::new(AnySignatureVariant::Ed25519, vec![0; 64]);
         let multi_sig = MultiKeySignature::new(vec![(0, sig)]).unwrap();
 
         let debug = format!("{multi_sig:?}");
@@ -1456,7 +1574,7 @@ mod tests {
         // Keyless has no verification arm; matching variants still hit the
         // "verification not supported" fallthrough.
         let pk = AnyPublicKey::new(AnyPublicKeyVariant::Keyless, vec![0u8; 32]);
-        let sig = AnySignature::new(AnyPublicKeyVariant::Keyless, vec![0u8; 64]);
+        let sig = AnySignature::new(AnySignatureVariant::Keyless, vec![0u8; 64]);
         let err = pk.verify(b"msg", &sig).unwrap_err();
         assert!(err.to_string().contains("verification not supported"));
     }
@@ -1610,7 +1728,7 @@ mod tests {
         let pk = AnyPublicKey::new(AnyPublicKeyVariant::Ed25519, vec![0u8; 32]);
         let multi_pk = MultiKeyPublicKey::new(vec![pk], 1).unwrap();
         // A signature claiming signer index 5 while only one key exists.
-        let sig = AnySignature::new(AnyPublicKeyVariant::Ed25519, vec![0u8; 64]);
+        let sig = AnySignature::new(AnySignatureVariant::Ed25519, vec![0u8; 64]);
         let multi_sig = MultiKeySignature::new(vec![(5, sig)]).unwrap();
         let err = multi_pk.verify(b"msg", &multi_sig).unwrap_err();
         assert!(err.to_string().contains("out of bounds"));
@@ -1624,7 +1742,7 @@ mod tests {
             .map(|i| {
                 (
                     i as u8,
-                    AnySignature::new(AnyPublicKeyVariant::Ed25519, vec![0u8; 64]),
+                    AnySignature::new(AnySignatureVariant::Ed25519, vec![0u8; 64]),
                 )
             })
             .collect();
@@ -1634,7 +1752,7 @@ mod tests {
 
     #[test]
     fn test_multi_key_signature_has_signature_out_of_bounds() {
-        let sig = AnySignature::new(AnyPublicKeyVariant::Ed25519, vec![0u8; 64]);
+        let sig = AnySignature::new(AnySignatureVariant::Ed25519, vec![0u8; 64]);
         let multi_sig = MultiKeySignature::new(vec![(0, sig)]).unwrap();
         assert!(!multi_sig.has_signature(255));
         assert!(!multi_sig.has_signature(MAX_NUM_OF_KEYS as u8));
@@ -1685,7 +1803,7 @@ mod tests {
     fn test_multi_key_signature_from_bytes_bad_sig_variant() {
         // [num_sigs=1][variant=9][len=0][bitvec prefix=4][bitmap index0]
         let err = MultiKeySignature::from_bytes(&[1, 9, 0, 4, 0x80, 0, 0, 0]).unwrap_err();
-        assert!(err.to_string().contains("unknown public key variant"));
+        assert!(err.to_string().contains("unknown signature variant"));
     }
 
     #[test]
@@ -1697,8 +1815,8 @@ mod tests {
 
     #[test]
     fn test_multi_key_signature_from_bytes_sig_too_large() {
-        // ULEB128(200) exceeds the 128-byte MAX_SIGNATURE_SIZE cap.
-        let err = MultiKeySignature::from_bytes(&[1, 0, 0xC8, 0x01, 4, 0x80, 0, 0, 0]).unwrap_err();
+        // ULEB128(8000) exceeds the 7,856-byte MAX_SIGNATURE_SIZE cap (SLH-DSA size).
+        let err = MultiKeySignature::from_bytes(&[1, 0, 0xC0, 0x3E, 4, 0x80, 0, 0, 0]).unwrap_err();
         assert!(err.to_string().contains("exceeds maximum"));
     }
 
@@ -1707,5 +1825,76 @@ mod tests {
         // Declares a 64-byte signature but the body is absent.
         let err = MultiKeySignature::from_bytes(&[1, 0, 0x40, 4, 0x80, 0, 0, 0]).unwrap_err();
         assert!(err.to_string().contains("bytes too short for signature"));
+    }
+
+    // ---- SLH-DSA-SHA2-128s (post-quantum) ----
+
+    #[test]
+    #[cfg(feature = "slh-dsa-sha2-128s")]
+    fn test_slh_any_key_bcs_variant_indices_diverge() {
+        // BCS framing only: reuse the shared SLH fixture, no fresh signing.
+        let f = crate::crypto::slh_dsa_sha2_128s::test_support::fixture();
+        let pk = AnyPublicKey::slh_dsa_sha2_128s(&f.public_key);
+        let pk_bcs = pk.to_bcs_bytes();
+        assert_eq!(pk_bcs[0], 5, "AnyPublicKey::SlhDsa_Sha2_128s variant");
+        assert_eq!(AnyPublicKey::from_bcs_bytes(&pk_bcs).unwrap(), pk);
+
+        let sig = AnySignature::slh_dsa_sha2_128s(&f.signature);
+        let sig_bcs = sig.to_bcs_bytes();
+        assert_eq!(sig_bcs[0], 4, "AnySignature::SlhDsa_Sha2_128s variant");
+        assert_eq!(&sig_bcs[1..3], &[0xB0, 0x3D], "ULEB128(7856)");
+        assert_eq!(AnySignature::from_bcs_bytes(&sig_bcs).unwrap(), sig);
+    }
+
+    #[test]
+    #[cfg(feature = "slh-dsa-sha2-128s")]
+    fn test_slh_any_public_key_verify() {
+        // Reuses the shared fixture signature: 2 verifies, 0 signs/keygens.
+        let f = crate::crypto::slh_dsa_sha2_128s::test_support::fixture();
+        let pk = AnyPublicKey::slh_dsa_sha2_128s(&f.public_key);
+        let sig = AnySignature::slh_dsa_sha2_128s(&f.signature);
+        assert!(
+            pk.verify(
+                crate::crypto::slh_dsa_sha2_128s::test_support::MESSAGE,
+                &sig
+            )
+            .is_ok()
+        );
+        assert!(pk.verify(b"wrong", &sig).is_err());
+    }
+
+    #[test]
+    #[cfg(all(feature = "slh-dsa-sha2-128s", feature = "ed25519"))]
+    fn test_multi_key_mixed_with_slh_sign_verify_and_roundtrip() {
+        use crate::crypto::Ed25519PrivateKey;
+
+        let ed = Ed25519PrivateKey::generate();
+        // Reuse the shared SLH fixture (key + signature over the shared
+        // message) instead of a fresh SLH keygen+sign: 0 SLH signs here.
+        let f = crate::crypto::slh_dsa_sha2_128s::test_support::fixture();
+        let multi_pk = MultiKeyPublicKey::new(
+            vec![
+                AnyPublicKey::ed25519(&ed.public_key()),
+                AnyPublicKey::slh_dsa_sha2_128s(&f.public_key),
+            ],
+            2,
+        )
+        .unwrap();
+
+        let message = crate::crypto::slh_dsa_sha2_128s::test_support::MESSAGE;
+        let multi_sig = MultiKeySignature::new(vec![
+            (0, AnySignature::ed25519(&ed.sign(message))),
+            (1, AnySignature::slh_dsa_sha2_128s(&f.signature)),
+        ])
+        .unwrap();
+        assert!(multi_pk.verify(message, &multi_sig).is_ok());
+        assert!(multi_pk.verify(b"wrong", &multi_sig).is_err());
+
+        // BCS roundtrip must survive the 7,856-byte SLH signature.
+        let restored = MultiKeySignature::from_bytes(&multi_sig.to_bytes()).unwrap();
+        assert_eq!(restored, multi_sig);
+
+        let restored_pk = MultiKeyPublicKey::from_bytes(&multi_pk.to_bytes()).unwrap();
+        assert_eq!(restored_pk.to_bytes(), multi_pk.to_bytes());
     }
 }

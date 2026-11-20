@@ -42,6 +42,7 @@
 //! | `indexer` | Yes | GraphQL indexer client |
 //! | `faucet` | Yes | Faucet integration for testnets |
 //! | `bls` | No | BLS12-381 signatures |
+//! | `slh-dsa-sha2-128s` | No | SLH-DSA-SHA2-128s post-quantum signatures |
 //! | `macros` | No | Proc macros for type-safe contract bindings |
 //! | `cli` | No | Enables the `aptos-codegen` binary for Move ABI codegen |
 //!

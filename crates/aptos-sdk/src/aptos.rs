@@ -1421,6 +1421,15 @@ fn zero_any_signature_for_variant(variant: u8) -> Option<Vec<u8>> {
             out.extend(std::iter::repeat_n(0u8, 64));
             Some(out)
         }
+        // AnyPublicKey::SlhDsa_Sha2_128s (5) pairs with
+        // AnySignature::SlhDsa_Sha2_128s (4) and a 7,856-byte zero payload.
+        5 => {
+            let mut out = Vec::with_capacity(1 + 2 + 7856);
+            out.push(4);
+            out.extend_from_slice(&[0xB0, 0x3D]); // ULEB128(7856)
+            out.extend(std::iter::repeat_n(0u8, 7856));
+            Some(out)
+        }
         _ => None,
     }
 }

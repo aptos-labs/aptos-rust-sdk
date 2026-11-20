@@ -138,7 +138,9 @@ pub trait Account: Send + Sync {
 /// [`Secp256k1`](AnyAccount::Secp256k1). It cannot hold
 /// [`Ed25519SingleKeyAccount`](super::Ed25519SingleKeyAccount),
 /// [`Secp256r1Account`](super::Secp256r1Account), or
-/// [`WebAuthnAccount`](super::WebAuthnAccount).
+/// [`WebAuthnAccount`](super::WebAuthnAccount). The
+/// [`SlhDsaSha2128s`](AnyAccount::SlhDsaSha2128s) variant is present only
+/// with the `slh-dsa-sha2-128s` feature.
 #[derive(Debug)]
 pub enum AnyAccount {
     /// An Ed25519 account.
@@ -152,6 +154,9 @@ pub enum AnyAccount {
     /// A Secp256k1 account.
     #[cfg(feature = "secp256k1")]
     Secp256k1(super::Secp256k1Account),
+    /// An SLH-DSA-SHA2-128s (post-quantum) account.
+    #[cfg(feature = "slh-dsa-sha2-128s")]
+    SlhDsaSha2128s(super::SlhDsaSha2128sAccount),
 }
 
 impl Account for AnyAccount {
@@ -164,6 +169,8 @@ impl Account for AnyAccount {
             AnyAccount::MultiKey(account) => account.address(),
             #[cfg(feature = "secp256k1")]
             AnyAccount::Secp256k1(account) => account.address(),
+            #[cfg(feature = "slh-dsa-sha2-128s")]
+            AnyAccount::SlhDsaSha2128s(account) => account.address(),
         }
     }
 
@@ -176,6 +183,8 @@ impl Account for AnyAccount {
             AnyAccount::MultiKey(account) => account.authentication_key(),
             #[cfg(feature = "secp256k1")]
             AnyAccount::Secp256k1(account) => account.authentication_key(),
+            #[cfg(feature = "slh-dsa-sha2-128s")]
+            AnyAccount::SlhDsaSha2128s(account) => account.authentication_key(),
         }
     }
 
@@ -188,6 +197,8 @@ impl Account for AnyAccount {
             AnyAccount::MultiKey(account) => Account::sign(account, message),
             #[cfg(feature = "secp256k1")]
             AnyAccount::Secp256k1(account) => Account::sign(account, message),
+            #[cfg(feature = "slh-dsa-sha2-128s")]
+            AnyAccount::SlhDsaSha2128s(account) => Account::sign(account, message),
         }
     }
 
@@ -200,6 +211,8 @@ impl Account for AnyAccount {
             AnyAccount::MultiKey(account) => account.public_key_bytes(),
             #[cfg(feature = "secp256k1")]
             AnyAccount::Secp256k1(account) => account.public_key_bytes(),
+            #[cfg(feature = "slh-dsa-sha2-128s")]
+            AnyAccount::SlhDsaSha2128s(account) => account.public_key_bytes(),
         }
     }
 
@@ -212,6 +225,8 @@ impl Account for AnyAccount {
             AnyAccount::MultiKey(account) => account.signature_scheme(),
             #[cfg(feature = "secp256k1")]
             AnyAccount::Secp256k1(account) => account.signature_scheme(),
+            #[cfg(feature = "slh-dsa-sha2-128s")]
+            AnyAccount::SlhDsaSha2128s(account) => account.signature_scheme(),
         }
     }
 }
@@ -234,6 +249,13 @@ impl From<super::MultiEd25519Account> for AnyAccount {
 impl From<super::Secp256k1Account> for AnyAccount {
     fn from(account: super::Secp256k1Account) -> Self {
         AnyAccount::Secp256k1(account)
+    }
+}
+
+#[cfg(feature = "slh-dsa-sha2-128s")]
+impl From<super::SlhDsaSha2128sAccount> for AnyAccount {
+    fn from(account: super::SlhDsaSha2128sAccount) -> Self {
+        AnyAccount::SlhDsaSha2128s(account)
     }
 }
 

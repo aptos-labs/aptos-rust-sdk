@@ -1143,6 +1143,41 @@ mod tests {
         assert_eq!(auth.derived_address().unwrap(), expected);
     }
 
+    #[cfg(feature = "slh-dsa-sha2-128s")]
+    #[test]
+    fn test_account_authenticator_single_key_slh_verify_and_derived_address() {
+        use crate::crypto::{AnyPublicKey, AnySignature};
+
+        // Reuse the shared SLH fixture: 1 verify below, 0 signs/keygens.
+        let f = crate::crypto::slh_dsa_sha2_128s::test_support::fixture();
+        let private_key = &f.private_key;
+        let message = crate::crypto::slh_dsa_sha2_128s::test_support::MESSAGE;
+        let public_key = AnyPublicKey::slh_dsa_sha2_128s(&f.public_key);
+        let signature = AnySignature::slh_dsa_sha2_128s(&f.signature);
+        // Pin the divergent variant indices: PK 5, signature 4.
+        assert_eq!(public_key.to_bcs_bytes()[0], 5);
+        assert_eq!(signature.to_bcs_bytes()[0], 4);
+        let auth =
+            AccountAuthenticator::single_key(public_key.to_bcs_bytes(), signature.to_bcs_bytes());
+
+        auth.verify(message).unwrap();
+        // Wrong-message rejection is already covered by the crypto and
+        // multi_key SLH tests; don't pay for a second SLH verify here.
+        assert_eq!(
+            auth.derived_address().unwrap(),
+            private_key.public_key().to_address()
+        );
+
+        // Wire format: variant tag 2, then PK BCS inline, then signature BCS inline.
+        let serialized = aptos_bcs::to_bytes(&auth).unwrap();
+        assert_eq!(serialized[0], 2, "AccountAuthenticator::SingleKey variant");
+        assert_eq!(serialized[1], 5, "AnyPublicKey::SlhDsa_Sha2_128s variant");
+        assert_eq!(
+            serialized.len(),
+            1 + public_key.to_bcs_bytes().len() + signature.to_bcs_bytes().len()
+        );
+    }
+
     #[cfg(feature = "ed25519")]
     #[test]
     fn test_account_authenticator_multi_ed25519_verify_and_derived_address() {
@@ -1425,7 +1460,7 @@ mod tests {
         .unwrap();
         let mk_sig = MultiKeySignature::new(vec![(
             0,
-            AnySignature::new(crate::crypto::AnyPublicKeyVariant::Ed25519, vec![0x66; 64]),
+            AnySignature::new(crate::crypto::AnySignatureVariant::Ed25519, vec![0x66; 64]),
         )])
         .unwrap();
         let auth = AccountAuthenticator::multi_key(mk_pk.to_bytes(), mk_sig.to_bytes());
