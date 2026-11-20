@@ -23,6 +23,12 @@ on:
         default: true
         type: boolean
 
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   CARGO_TERM_COLOR: always
 
@@ -39,9 +45,13 @@ jobs:
     steps:
       - name: Resolve which crates to publish
         id: resolve
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_CRATE: ${{ inputs.crate }}
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            case "${{ inputs.crate }}" in
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            case "$INPUT_CRATE" in
               aptos-sdk-macros)
                 echo "publish_macros=true" >> "$GITHUB_OUTPUT"
                 echo "publish_sdk=false" >> "$GITHUB_OUTPUT"
@@ -54,6 +64,10 @@ jobs:
                 echo "publish_macros=true" >> "$GITHUB_OUTPUT"
                 echo "publish_sdk=true" >> "$GITHUB_OUTPUT"
                 ;;
+              *)
+                echo "::error::Unsupported crate selection: $INPUT_CRATE"
+                exit 1
+                ;;
             esac
           else
             TAG="${GITHUB_REF#refs/tags/}"
@@ -63,6 +77,9 @@ jobs:
             elif [[ "$TAG" == sdk-v* ]]; then
               echo "publish_macros=false" >> "$GITHUB_OUTPUT"
               echo "publish_sdk=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "::error::Unrecognized release tag: $TAG"
+              exit 1
             fi
           fi
 
@@ -74,7 +91,35 @@ jobs:
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
+          fetch-depth: 0
           persist-credentials: false
+
+      - name: Verify commit is on main and tag matches Cargo.toml
+        if: github.event_name == 'push'
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor HEAD FETCH_HEAD; then
+            echo "::error::Tagged commit $(git rev-parse HEAD) is not an ancestor of origin/main."
+            exit 1
+          fi
+
+          TAG="${GITHUB_REF#refs/tags/}"
+          if [[ "$TAG" == macros-v* ]]; then
+            EXPECTED="${TAG#macros-v}"
+            ACTUAL=$(grep '^version' crates/aptos-sdk-macros/Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
+            if [[ "$ACTUAL" != "$EXPECTED" ]]; then
+              echo "::error::Tag ${TAG} does not match crates/aptos-sdk-macros/Cargo.toml version ${ACTUAL}"
+              exit 1
+            fi
+          elif [[ "$TAG" == sdk-v* ]]; then
+            EXPECTED="${TAG#sdk-v}"
+            ACTUAL=$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
+            if [[ "$ACTUAL" != "$EXPECTED" ]]; then
+              echo "::error::Tag ${TAG} does not match workspace version ${ACTUAL}"
+              exit 1
+            fi
+          fi
 
       - uses: ./.github/actions/setup-rust
         with:
@@ -103,15 +148,13 @@ jobs:
           RUSTDOCFLAGS: --cfg docsrs -D warnings
         run: cargo +nightly doc --no-deps --all-features --locked
 
-  publish-macros:
-    name: Publish aptos-sdk-macros
+  dry-run:
+    name: Publish Dry Run
     runs-on: 4cpu-gh-ubuntu24-x64
+    needs: [resolve, verify]
+    if: github.event_name == 'workflow_dispatch' && inputs.dry_run == true
     permissions:
       contents: read
-      id-token: write
-      attestations: write
-    needs: [resolve, verify]
-    if: needs.resolve.outputs.publish_macros == 'true'
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -125,36 +168,28 @@ jobs:
       # published crate to break the circular publish dependency), so the
       # verification build would fail. The verify job already runs full tests
       # with workspace path resolution.
-      - name: Publish aptos-sdk-macros (dry run)
-        if: github.event_name == 'workflow_dispatch' && inputs.dry_run == true
+      - name: Dry-run publish aptos-sdk-macros
+        if: needs.resolve.outputs.publish_macros == 'true'
         run: cargo publish -p aptos-sdk-macros --no-verify --dry-run
 
-      - name: Publish aptos-sdk-macros
-        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.dry_run != true)
-        run: cargo publish -p aptos-sdk-macros --no-verify
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      - name: Dry-run publish aptos-sdk
+        if: needs.resolve.outputs.publish_sdk == 'true'
+        run: |
+          cargo package -p aptos-sdk --locked
+          cargo publish -p aptos-sdk --locked --dry-run
 
-      - name: Attest build provenance for aptos-sdk-macros
-        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.dry_run != true)
-        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
-        with:
-          subject-path: 'target/package/aptos-sdk-macros-[0-9]*.crate'
-
-  publish-sdk:
-    name: Publish aptos-sdk
+  publish:
+    name: Publish to crates.io
     runs-on: 4cpu-gh-ubuntu24-x64
+    environment: crates-io
     permissions:
       contents: read
       id-token: write
       attestations: write
-    needs: [resolve, verify, publish-macros]
-    # Run if SDK should be published, AND either macros wasn't needed or macros succeeded
+    needs: [resolve, verify]
     if: |
-      always() &&
-      needs.resolve.outputs.publish_sdk == 'true' &&
-      needs.verify.result == 'success' &&
-      (needs.publish-macros.result == 'success' || needs.publish-macros.result == 'skipped')
+      (needs.resolve.outputs.publish_macros == 'true' || needs.resolve.outputs.publish_sdk == 'true') &&
+      (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.dry_run != true))
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -164,10 +199,31 @@ jobs:
         with:
           toolchain: "1.99.1"
 
-      # If macros was just published, poll crates.io until it's indexed
+      # Exchanges GitHub OIDC JWT for a short-lived crates.io token (auto-revoked
+      # in the post-job hook). Requires one-time Trusted Publisher setup on
+      # crates.io for `aptos-sdk` and `aptos-sdk-macros` (repo aptos-labs/aptos-rust-sdk,
+      # workflow release.yml, environment crates-io).
+      - name: Authenticate with crates.io (Trusted Publishing)
+        id: crates-auth
+        uses: rust-lang/crates-io-auth-action@3268eb413133e2960fa4ae0e963ca76380c54cd9 # v1.0.6
+
+      - name: Publish aptos-sdk-macros
+        if: needs.resolve.outputs.publish_macros == 'true'
+        run: cargo publish -p aptos-sdk-macros --no-verify
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.crates-auth.outputs.token }}
+
+      - name: Attest build provenance for aptos-sdk-macros
+        if: needs.resolve.outputs.publish_macros == 'true'
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: 'target/package/aptos-sdk-macros-[0-9]*.crate'
+
+      # If macros was just published alongside sdk, poll crates.io until indexed
       - name: Wait for crates.io to index aptos-sdk-macros
-        if: needs.publish-macros.result == 'success'
+        if: needs.resolve.outputs.publish_macros == 'true' && needs.resolve.outputs.publish_sdk == 'true'
         run: |
+          set -euo pipefail
           MACROS_VERSION=$(grep '^version' crates/aptos-sdk-macros/Cargo.toml | head -1 | sed 's/.*"\(.*\)"/\1/')
           echo "Waiting for aptos-sdk-macros ${MACROS_VERSION} to appear on crates.io..."
           for i in $(seq 1 30); do
@@ -185,8 +241,9 @@ jobs:
 
       # When publishing SDK alone, verify the macros dependency is already on crates.io
       - name: Verify aptos-sdk-macros dependency is available
-        if: needs.publish-macros.result == 'skipped'
+        if: needs.resolve.outputs.publish_macros != 'true' && needs.resolve.outputs.publish_sdk == 'true'
         run: |
+          set -euo pipefail
           MACROS_VERSION=$(grep 'aptos-sdk-macros.*version' Cargo.toml | head -1 | sed 's/.*version = "\([^"]*\)".*/\1/')
           echo "Checking that aptos-sdk-macros ${MACROS_VERSION} exists on crates.io..."
           if ! curl -sf -H "User-Agent: aptos-rust-sdk-ci" \
@@ -197,21 +254,18 @@ jobs:
           fi
           echo "aptos-sdk-macros ${MACROS_VERSION} is available."
 
-      - name: Verify crate can be packaged
+      - name: Verify aptos-sdk can be packaged
+        if: needs.resolve.outputs.publish_sdk == 'true'
         run: cargo package -p aptos-sdk --locked
 
-      - name: Publish aptos-sdk (dry run)
-        if: github.event_name == 'workflow_dispatch' && inputs.dry_run == true
-        run: cargo publish -p aptos-sdk --locked --dry-run
-
       - name: Publish aptos-sdk
-        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.dry_run != true)
+        if: needs.resolve.outputs.publish_sdk == 'true'
         run: cargo publish -p aptos-sdk --locked
         env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ steps.crates-auth.outputs.token }}
 
       - name: Attest build provenance for aptos-sdk
-        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.dry_run != true)
+        if: needs.resolve.outputs.publish_sdk == 'true'
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: 'target/package/aptos-sdk-[0-9]*.crate'
@@ -219,11 +273,8 @@ jobs:
   release-notes:
     name: Create Release Notes
     runs-on: 4cpu-gh-ubuntu24-x64
-    needs: [resolve, publish-macros, publish-sdk]
-    if: |
-      always() &&
-      github.event_name == 'push' &&
-      (needs.publish-macros.result == 'success' || needs.publish-sdk.result == 'success')
+    needs: [resolve, publish]
+    if: github.event_name == 'push' && needs.publish.result == 'success'
     permissions:
       contents: write
     steps:
