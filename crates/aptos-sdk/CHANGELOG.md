@@ -8,6 +8,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [unreleased]
 
 ### Changed
+- Updated all dependencies to their latest versions, including the
+  breaking (major / 0.x) upgrades `rand` 0.8 → 0.10, `ed25519-dalek`
+  2.2 → 3.0, `bip39` 2.2 → 3.0, `sha2` 0.10 → 0.11, `sha3` 0.10 → 0.12,
+  `hmac` 0.12 → 0.13, `getrandom` 0.2 → 0.4 (feature `js` renamed to
+  `wasm_js`), and `proptest-derive` 0.5 → 0.9. Internal call sites were
+  adapted (`rand::rngs::OsRng` → `SysRng` via `TryRng`/`UnwrapErr`,
+  `hmac::KeyInit` import, dropped `ed25519-dalek`'s removed `std`
+  feature and `bip39`'s unused `rand` feature, which pins `rand` < 0.9;
+  the SDK supplies its own entropy). **The SDK's public API is
+  unchanged**: none of the upgraded crates are re-exported, and all
+  wrappers keep their existing signatures. `Mnemonic::generate` now
+  returns its documented error instead of panicking if OS entropy
+  generation fails. Held back: `trybuild` stays at 1.0.121 (see the
+  macros changelog).
 - Development toolchain pinned to Rust 1.99.1 (in `rust-toolchain.toml`
   and every toolchain-following CI/release/e2e job), matching
   `aptos-labs/aptos-core`. The MSRV is unchanged at Rust 1.95

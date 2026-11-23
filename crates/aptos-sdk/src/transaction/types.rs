@@ -129,7 +129,10 @@ impl RawTransactionOrderless {
     ) -> Self {
         // Generate a random 32-byte nonce
         let mut nonce = vec![0u8; 32];
-        rand::RngCore::fill_bytes(&mut rand::rngs::OsRng, &mut nonce);
+        rand::rand_core::Rng::fill_bytes(
+            &mut rand::rand_core::UnwrapErr(rand::rngs::SysRng),
+            &mut nonce,
+        );
         Self {
             sender,
             nonce,
