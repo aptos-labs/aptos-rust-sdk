@@ -133,7 +133,7 @@ serde_json = { version = "1.0.151", features = [
 thiserror = "2.0.20"
 trybuild = "1.0.121"
 tokio = { version = "1.53.1", features = ["macros"] }
-url = "2.5.8"
+url = "2.5.9"
 
 [profile.release]
 debug = false

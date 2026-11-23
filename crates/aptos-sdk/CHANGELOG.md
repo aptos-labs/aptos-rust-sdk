@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+### Security
+- Bumped `url` from 2.5.8 to 2.5.9 (with `form_urlencoded` 1.2.3) and
+  `rustix` from 1.1.4 to 1.1.6 (transitive via the `tempfile` dev-dependency),
+  clearing [RUSTSEC-2026-0592](https://rustsec.org/advisories/RUSTSEC-2026-0592)
+  (stack overflow in `Url::origin()` on nested `blob:` URLs) and
+  [RUSTSEC-2026-0486](https://rustsec.org/advisories/RUSTSEC-2026-0486)
+  (`rustix` xattr functions could mark unwritten bytes as initialized with a
+  zero-length buffer). The SDK's public API is unchanged. `cargo audit` and
+  `cargo deny check` are now clean.
+
 ### Changed
 - Development toolchain pinned to Rust 1.99.1 (in `rust-toolchain.toml`
   and every toolchain-following CI/release/e2e job), matching
