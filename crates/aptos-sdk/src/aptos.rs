@@ -375,7 +375,9 @@ impl Aptos {
         let gas_estimation = gas_estimation?;
         let chain_id = chain_id?;
 
-        let nonce = nonce.unwrap_or_else(|| rand::RngCore::next_u64(&mut rand::rngs::OsRng));
+        let nonce = nonce.unwrap_or_else(|| {
+            rand::rand_core::Rng::next_u64(&mut rand::rand_core::UnwrapErr(rand::rngs::SysRng))
+        });
         let orderless_payload = payload.into_orderless(nonce)?;
 
         TransactionBuilder::new()

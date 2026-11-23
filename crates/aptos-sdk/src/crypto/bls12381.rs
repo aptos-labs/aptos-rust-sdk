@@ -7,7 +7,7 @@ use crate::crypto::traits::{PublicKey, Signature, Signer, Verifier};
 use crate::error::{AptosError, AptosResult};
 use blst::BLST_ERROR;
 use blst::min_pk::{PublicKey as BlstPublicKey, SecretKey, Signature as BlstSignature};
-use rand::RngCore;
+use rand::TryRng;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use zeroize::Zeroize;
@@ -49,7 +49,9 @@ impl Bls12381PrivateKey {
     /// we always provide exactly 32 bytes of random data, this cannot fail.
     pub fn generate() -> Self {
         let mut ikm = [0u8; 32];
-        rand::rngs::OsRng.fill_bytes(&mut ikm);
+        rand::rngs::SysRng
+            .try_fill_bytes(&mut ikm)
+            .expect("OS RNG failure while generating BLS key");
         // SAFETY: key_gen only fails if IKM is < 32 bytes. We provide exactly 32.
         let secret_key = SecretKey::key_gen(&ikm, &[])
             .expect("internal error: BLS key generation failed with 32-byte IKM");

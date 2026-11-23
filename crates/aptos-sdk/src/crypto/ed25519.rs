@@ -46,7 +46,7 @@ pub struct Ed25519PrivateKey {
 impl Ed25519PrivateKey {
     /// Generates a new random Ed25519 private key.
     pub fn generate() -> Self {
-        let mut csprng = rand::rngs::OsRng;
+        let mut csprng = rand::rand_core::UnwrapErr(rand::rngs::SysRng);
         let signing_key = ed25519_dalek::SigningKey::generate(&mut csprng);
         Self { inner: signing_key }
     }

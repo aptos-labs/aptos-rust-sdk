@@ -115,25 +115,25 @@ aptos-sdk-macros = { version = "0.3.0", path = "crates/aptos-sdk-macros" }
 
 # External crate dependencies.
 # Please do not add any test features here: they should be declared by the individual crate.
-anyhow = "1.0.104"
-arbitrary = { version = "1.4.2", features = ["derive"] }
+anyhow = "1.0.105"
+arbitrary = { version = "1.5.0", features = ["derive"] }
 aptos-bcs = "0.1.4"
-aws-lc-sys = "0.45.0"
-const-hex = { version = "1.19.1", features = ["serde"] }
+aws-lc-sys = "0.47.0"
+const-hex = { version = "1.19.3", features = ["serde"] }
 proc-macro2 = "1.0.107"
-proptest = "1.11.0"
-proptest-derive = "0.5.1"
+proptest = "1.12.0"
+proptest-derive = "0.9.0"
 quote = "1.0.47"
 reqwest = { version = "0.13.5", features = ["json"] }
 serde = { version = "1.0.229", features = ["derive"] }
-serde_json = { version = "1.0.151", features = [
+serde_json = { version = "1.0.154", features = [
     "preserve_order",
     "arbitrary_precision",
 ] } # Note: arbitrary_precision is required to parse u256 in JSON
-thiserror = "2.0.20"
+thiserror = "2.0.21"
 trybuild = "1.0.121"
-tokio = { version = "1.53.1", features = ["macros"] }
-url = "2.5.8"
+tokio = { version = "1.54.1", features = ["macros"] }
+url = "2.5.9"
 
 [profile.release]
 debug = false

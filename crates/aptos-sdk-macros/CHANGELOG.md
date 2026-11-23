@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+### Changed
+- Bumped `syn` from 2.0 to 3.0.10 (major). Generated bindings are
+  unchanged and the crate's public API is unaffected; the macro's
+  internal parser/codegen uses only `syn` APIs that carried over.
+- Held back `trybuild` at 1.0.121: 1.0.125 mis-serializes the
+  workspace `Cargo.toml` profile section (`codegen-units` becomes a
+  `$serde_json::private::Number` map, an interaction with
+  `serde_json`'s `arbitrary_precision` feature), which makes the
+  trybuild UI tests fail before compilation. Revisit once upstream
+  fixes the manifest round-trip.
+
 ## [0.3.2] - 2026-09-18
 
 ### Changed

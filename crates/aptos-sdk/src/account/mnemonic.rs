@@ -305,7 +305,8 @@ impl Mnemonic {
         };
 
         let mut entropy = vec![0u8; entropy_bytes];
-        rand::RngCore::fill_bytes(&mut rand::rngs::OsRng, &mut entropy);
+        rand::TryRng::try_fill_bytes(&mut rand::rngs::SysRng, &mut entropy)
+            .map_err(|e| AptosError::InvalidMnemonic(format!("entropy generation failed: {e}")))?;
 
         let mnemonic = bip39::Mnemonic::from_entropy(&entropy)
             .map_err(|e| AptosError::InvalidMnemonic(e.to_string()));
@@ -458,7 +459,7 @@ impl Mnemonic {
 /// Derives an Ed25519 key from a seed using SLIP-0010 along the given path.
 #[cfg(feature = "ed25519")]
 fn derive_ed25519_at_path(seed: &[u8], path: &DerivationPath) -> AptosResult<[u8; 32]> {
-    use hmac::{Hmac, Mac};
+    use hmac::{Hmac, KeyInit, Mac};
     use sha2::Sha512;
 
     type HmacSha512 = Hmac<Sha512>;
@@ -504,7 +505,7 @@ fn derive_ed25519_at_path(seed: &[u8], path: &DerivationPath) -> AptosResult<[u8
 /// scalar is `(I_L + k_par) mod n`.
 #[cfg(feature = "secp256k1")]
 fn derive_secp256k1_at_path(seed: &[u8], path: &DerivationPath) -> AptosResult<[u8; 32]> {
-    use hmac::{Hmac, Mac};
+    use hmac::{Hmac, KeyInit, Mac};
     use k256::elliptic_curve::sec1::ToSec1Point;
     use k256::{NonZeroScalar, ProjectivePoint, PublicKey, Scalar, SecretKey};
     use sha2::Sha512;
