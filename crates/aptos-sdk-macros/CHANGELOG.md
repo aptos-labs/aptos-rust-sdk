@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [unreleased]
 
+### Changed
+- Raised the `syn` dependency from 2.0.119 to 3.0.10. Generated
+  bindings are unchanged and the macro's public API is unaffected;
+  `syn` types are not re-exported. The dev-only `trybuild` dependency
+  is held at `=1.0.122` (see the `aptos-sdk` changelog entry) because
+  trybuild ≥ 1.0.123 cannot parse the workspace's custom
+  `[profile.cli]`.
+
 ## [0.3.2] - 2026-09-18
 
 ### Changed

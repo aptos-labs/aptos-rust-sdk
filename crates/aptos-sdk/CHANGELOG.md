@@ -8,6 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [unreleased]
 
 ### Changed
+- Updated all dependencies to their latest versions, including major
+  upgrades: `rand` 0.8 → 0.10, `ed25519-dalek` 2 → 3, `sha2` 0.10 →
+  0.11, `sha3` 0.10 → 0.12, `bip39` 2 → 3, `hmac` 0.12 → 0.13,
+  `getrandom` 0.2 → 0.4 (feature `js` renamed to `wasm_js`), and
+  `aws-lc-sys` 0.45 → 0.47, plus compatible updates (`tokio` 1.54,
+  `serde_json` 1.0.154, `thiserror` 2.0.21, and the full transitive
+  graph in `Cargo.lock`). Internal call sites were adapted to the new
+  APIs (`rand::rng()` / `rand::Rng` replacing `OsRng` / `RngCore`,
+  `hmac::KeyInit` in scope for `new_from_slice`, `ed25519-dalek` 3
+  dropping the `std` feature). **The SDK's public API is unchanged**:
+  none of the bumped crates are re-exported, so no major bump forces a
+  public API change; downstream consumers only see newer transitive
+  versions. The one holdback is the dev-only `trybuild`, pinned to
+  `=1.0.122` because trybuild ≥ 1.0.123 fails to parse this workspace's
+  custom `[profile.cli]` and breaks the macros UI tests.
 - Development toolchain pinned to Rust 1.99.1 (in `rust-toolchain.toml`
   and every toolchain-following CI/release/e2e job), matching
   `aptos-labs/aptos-core`. The MSRV is unchanged at Rust 1.95
